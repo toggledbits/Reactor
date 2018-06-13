@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<implementation>
+    <functions>
+        -- -------------------------------------------------------------------------------------------------------------------------
+        -- Reactor
+        -- Copyright 2018 Patrick H. Rigney, All Rights Reserved.
+        -- This file is part of Reactor. For license info, see LICENSE at https://github.com/toggledbits/Reactor
+        -- -------------------------------------------------------------------------------------------------------------------------
+        function startupReactor(devNum)
+            luup.log("Reactor STARTUP!")
+            Reactor = require("L_Reactor")
+            reactorTick = Reactor.tick
+            reactorWatch = Reactor.watch
+            reactorRequestHandler = Reactor.request
+            luup.register_handler("reactorRequestHandler", "Reactor")
+            return Reactor.startPlugin(devNum)
+        end
+    </functions>
+    <startup>startupReactor</startup>
+    <actionList>
+        <action>
+            <serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
+            <name>SetEnabled</name>
+            <run>
+                Reactor.setEnabled( lul_settings.newEnabledValue, lul_device )
+                return true
+            </run>
+        </action>
+        <action>
+            <serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
+            <name>Reset</name>
+            <run>
+                Reactor.actionReset( true, lul_device )
+                return true
+            </run>
+        </action>
+        <action>
+            <serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
+            <name>Trigger</name>
+            <run>
+                Reactor.actionTrigger( Reactor.STATE_AUTO, lul_device )
+                return true
+            </run>
+        </action>
+        <action>
+            <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
+            <name>AddSensor</name>
+            <run>
+                Reactor.addSensor( lul_device )
+                return true
+            </run>
+        </action>
+        <action>
+            <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
+            <name>GetPluginVersion</name>
+            <run>
+                -- Ugly hack. Luup seems to only be able to return values from related state variables (see S_), so use a temp
+                -- one to store the result we want to pass back. Blech. C'mon guys. Amateur hour. Add an extra return argument
+                -- for a table of return values or something, please?
+                local vs, vn = Reactor.getPluginVersion()
+                luup.variable_set("urn:toggledbits-com:serviceId:Reactor", "TempStorage", vs, lul_device)
+                return true
+            </run>
+        </action>
+        <action>
+            <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
+            <name>SetDebug</name>
+            <run>
+                local newDebugValue = tonumber(lul_settings.debug or "0", 10)
+                Reactor.setDebug( debug ~= 0, lul_device )
+                return true
+            </run>
+        </action>
+    </actionList>
+</implementation>

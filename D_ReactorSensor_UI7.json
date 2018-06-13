@@ -1,0 +1,345 @@
+{
+	"default_icon": "https://www.toggledbits.com/assets/reactor/reactor-default.png",
+	"state_icons": [{
+		"img": "https://www.toggledbits.com/assets/reactor/reactor-timing.png",
+		"conditions": [{
+			"service": "urn:toggledbits-com:serviceId:ReactorSensor",
+			"variable": "Timing",
+			"operator": "!=",
+			"value": "0"
+		}]
+	}],
+	"x": "2",
+	"y": "4",
+	"inScene": "1",
+	"Tabs": [{
+			"Label": {
+				"lang_tag": "tabname_control",
+				"text": "Control"
+			},
+			"Position": "0",
+			"TabType": "flash",
+            "top_navigation_tab": 1,
+			"ControlGroup": [{
+					"id": "1",
+					"scenegroup": "1"
+				},
+				{
+					"id": "2",
+					"scenegroup": "2"
+				}
+			],
+			"SceneGroup": [{
+					"id": "1",
+					"top": "0",
+					"left": "0",
+					"x": "1",
+					"y": "4"
+				},
+				{
+					"id": "2",
+					"top": "1",
+					"left": "0",
+					"x": "1",
+					"y": "3"
+				}
+			],
+			"Control": [{
+					"ControlType": "label",
+					"top": "0",
+					"left": "0",
+					"Label": {
+						"lang_tag": "tb_reactor_tag",
+						"text": "Reactor Load Timing Control"
+					},
+					"Display": {
+						"Top": 8,
+						"Left": 30,
+						"Width": 100,
+						"Height": 25
+					}
+				},
+				{
+					"ControlGroup": "1",
+					"ControlType": "button",
+					"top": "0",
+					"left": "0",
+					"Label": {
+						"lang_tag": "cmd_reset",
+						"text": "Reset"
+					},
+					"Display": {
+						"Top": 30,
+						"Left": 50,
+						"Width": 75,
+						"Height": 20,
+						"Service": "urn:toggledbits-com:serviceId:ReactorSensor",
+						"Variable": "Status",
+						"Value": "idle"
+					},
+					"Command": {
+						"Service": "urn:toggledbits-com:serviceId:ReactorSensor",
+						"Action": "Reset",
+						"Parameters": []
+					},
+					"ControlCode": "reset"
+				},
+				{
+					"ControlGroup": "1",
+					"ControlType": "button",
+					"top": "0",
+					"left": "1",
+					"Label": {
+						"lang_tag": "cmd_auto",
+						"text": "Auto"
+					},
+					"Display": {
+						"Top": 30,
+						"Left": 150,
+						"Width": 75,
+						"Height": 20
+					},
+					"Command": {
+						"Service": "urn:toggledbits-com:serviceId:ReactorSensor",
+						"Action": "Trigger",
+						"Parameters": []
+					},
+					"ControlCode": "trigger"
+				},
+                {
+					"ControlGroup": "1",
+					"ControlType": "multi_state_button",
+					"top": "0",
+					"left": "0",
+                    "Display": {
+                        "Top": 30,
+                        "Left": 255,
+                        "Width": 70,
+                        "Height": 24
+                    },
+					"states": [{
+							"Label": {
+								"lang_tag": "tb_enabled",
+								"text": "Enabled"
+							},
+							"Display": {
+								"Service": "urn:toggledbits-com:serviceId:ReactorSensor",
+								"Variable": "Enabled",
+								"Value": "1"
+							},
+							"Command": {
+								"Service": "urn:toggledbits-com:serviceId:ReactorSensor",
+								"Action": "SetEnabled",
+								"Parameters": [{
+									"Name": "newEnabledValue",
+									"Value": "1"
+								}]
+							},
+							"ControlCode": "tbcmd_enable"
+						},
+						{
+							"Label": {
+								"lang_tag": "tb_disabled",
+								"text": "Disabled"
+							},
+							"Display": {
+								"Service": "urn:toggledbits-com:serviceId:ReactorSensor",
+								"Variable": "Enabled",
+								"Value": "0"
+							},
+							"Command": {
+								"Service": "urn:toggledbits-com:serviceId:ReactorSensor",
+								"Action": "SetEnabled",
+								"Parameters": [{
+									"Name": "newEnabledValue",
+									"Value": "0"
+								}]
+							},
+							"ControlCode": "tbcmd_disable"
+						}
+					]
+				},
+				{
+					"ControlGroup": "2",
+					"ControlType": "variable",
+					"top": "1",
+					"left": "0",
+					"Display": {
+						"Top": 60,
+						"Left": 60,
+						"Width": 240,
+						"Height": 25,
+						"Service": "urn:toggledbits-com:serviceId:ReactorSensor",
+						"Variable": "Message"
+					},
+					"ControlCode": "message"
+				}
+			]
+		},
+		{
+			"Label": {
+				"lang_tag": "tb_reactorsensor_settings",
+				"text": "Settings"
+			},
+			"Position": "1",
+			"TabType": "javascript",
+			"ScriptName": "J_ReactorSensor_UI7.js",
+			"Function": "ReactorSensor.doSettings"
+		},
+		{
+			"Label": {
+				"lang_tag": "ui7_advanced",
+				"text": "Advanced"
+			},
+			"Position": "2",
+			"TabType": "javascript",
+			"ScriptName": "shared.js",
+			"Function": "advanced_device"
+		},
+		{
+			"Label": {
+				"lang_tag": "ui7_logs",
+				"text": "Logs"
+			},
+			"Position": "3",
+			"TabType": "javascript",
+			"ScriptName": "shared.js",
+			"Function": "device_logs"
+		},
+		{
+			"Label": {
+				"lang_tag": "ui7_notifications",
+				"text": "Notifications"
+			},
+			"Position": "4",
+			"TabType": "javascript",
+			"ScriptName": "shared.js",
+			"Function": "device_notifications"
+		},
+		{
+			"Label": {
+				"lang_tag": "ui7_device_scenes",
+				"text": "Scenes"
+			},
+			"Position": "5",
+			"TabType": "javascript",
+			"ScriptName": "shared.js",
+			"Function": "device_scenes"
+		}
+	],
+	"eventList2": [
+        {
+            "id": 1,
+            "label": {
+                "lang_tag": "tb_mode_changes",
+                "text": "Mode Changes"
+            },
+            "serviceId": "urn:toggledbits-com:serviceId:ReactorSensor",
+            "argumentList": [{
+                "id": 1,
+                "name": "Status",
+                "comparisson": "=",
+                "dataType": "string",
+                "defaultValue": "",
+                "allowedValueList": [{
+                        "idle": "idle",
+                        "HumanFriendlyText": {
+                            "lang_tag": "tb_dl_idle",
+                            "text": "_DEVICE_NAME_ mode is idle"
+                        }
+                    },
+                    {
+                        "Manual": "man",
+                        "HumanFriendlyText": {
+                            "lang_tag": "tb_dl_man",
+                            "text": "_DEVICE_NAME_ mode in manual timing"
+                        }
+                    },
+                    {
+                        "Automatic": "auto",
+                        "HumanFriendlyText": {
+                            "lang_tag": "tb_dl_auto",
+                            "text": "_DEVICE_NAME_ mode in automatic timing"
+                        }
+                    }
+                ],
+                "prefix": {
+                    "lang_tag": "mode",
+                    "text": "Mode"
+                },
+                "suffix": {}
+            }]
+        },
+        {
+            "id": 2,
+            "label": {
+                "lang_tag": "tb_runstate_changes",
+                "text": "Timing State Changes"
+            },
+            "serviceId": "urn:toggledbits-com:serviceId:ReactorSensor",
+            "argumentList": [{
+                "id": 1,
+                "name": "Timing",
+                "comparisson": "=",
+                "dataType": "string",
+                "defaultValue": "",
+                "allowedValueList": [{
+                        "not timing": "0",
+                        "HumanFriendlyText": {
+                            "lang_tag": "tb_st_notiming",
+                            "text": "_DEVICE_NAME_ stops timing"
+                        }
+                    },
+                    {
+                        "timing": "1",
+                        "HumanFriendlyText": {
+                            "lang_tag": "tb_st_timing",
+                            "text": "_DEVICE_NAME_ starts timing"
+                        }
+                    }
+                ],
+                "prefix": {
+                    "lang_tag": "tb_state",
+                    "text": "State"
+                },
+                "suffix": {}
+            }]
+        },
+        {
+            "id": 3,
+            "label": {
+                "lang_tag": "tb_opstate_changes",
+                "text": "Enabled State Changes"
+            },
+            "serviceId": "urn:toggledbits-com:serviceId:ReactorSensor",
+            "argumentList": [{
+                "id": 1,
+                "name": "Enabled",
+                "comparisson": "=",
+                "dataType": "string",
+                "defaultValue": "1",
+                "allowedValueList": [{
+                        "enabled": "1",
+                        "HumanFriendlyText": {
+                            "lang_tag": "tb_ost_enabled",
+                            "text": "_DEVICE_NAME_ is enabled"
+                        }
+                    },
+                    {
+                        "disabled": "0",
+                        "HumanFriendlyText": {
+                            "lang_tag": "tb_ost_disabled",
+                            "text": "_DEVICE_NAME_ is disabled"
+                        }
+                    }
+                ],
+                "prefix": {
+                    "lang_tag": "tb_state",
+                    "text": "State"
+                },
+                "suffix": {}
+            }]
+        }
+    ],
+	"device_type": "urn:schemas-toggledbits-com:device:ReactorSensor:1"
+}

@@ -1,0 +1,53 @@
+<?xml version="1.0"?>
+<scpd xmlns="urn:schemas-upnp-org:service-1-0">
+    <specVersion>
+        <major>1</major>
+        <minor>0</minor>
+    </specVersion>
+    <serviceStateTable>
+        <stateVariable sendEvents="yes">
+            <name>Message</name>
+            <dataType>string</dataType>
+            <defaultValue></defaultValue>
+            <shortCode>message</shortCode>
+        </stateVariable>
+        <stateVariable sendEvents="no">
+            <name>NumChildren</name>
+            <dataType>ui4</dataType>
+            <defaultValue>0</defaultValue>
+            <shortCode>children</shortCode>
+        </stateVariable>
+        <stateVariable sendEvents="no">
+            <name>NumRunning</name>
+            <dataType>ui4</dataType>
+            <defaultValue>0</defaultValue>
+            <shortCode>running</shortCode>
+        </stateVariable>
+    </serviceStateTable>
+    <actionList>
+        <action>
+            <name>AddTimer</name>
+            <argumentList>
+            </argumentList>
+        </action>
+        <action>
+            <name>GetPluginVersion</name>
+            <argumentList>
+                <argument>
+                    <name>ResultVersion</name>
+                    <direction>out</direction>
+                    <relatedStateVariable>TempStorage</relatedStateVariable>
+                </argument>
+            </argumentList>
+        </action>
+        <action>
+            <name>SetDebug</name>
+            <argumentList>
+                <argument>
+                    <name>debug</name>
+                    <direction>in</direction>
+                </argument>
+            </argumentList>
+        </action>
+    </actionList>
+</scpd>

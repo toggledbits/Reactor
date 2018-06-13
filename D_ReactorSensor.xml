@@ -1,0 +1,36 @@
+<?xml version="1.0"?>
+<root xmlns="urn:schemas-upnp-org:device-1-0">
+    <specVersion>
+        <major>1</major>
+        <minor>0</minor>
+    </specVersion>
+    <device>
+        <deviceType>urn:schemas-toggledbits-com:device:ReactorSensor:1</deviceType>
+        <staticJson>D_ReactorSensor_UI7.json</staticJson>
+        <friendlyName>Reactor Sensor</friendlyName>
+        <manufacturer>rigpapa</manufacturer>
+        <manufacturerURL>http://www.toggledbits.com/reactor/</manufacturerURL>
+        <modelDescription></modelDescription>
+        <modelName>Reactor Sensor</modelName>
+        <handleChildren>0</handleChildren>
+        <Category_Num>4</Category_Num>
+        <Subcategory_Num>1</Subcategory_Num>
+        <serviceList>
+          <service>
+            <serviceType>urn:schemas-micasaverde-com:service:SecuritySensor:1</serviceType>
+            <serviceId>urn:micasaverde-com:serviceId:SecuritySensor1</serviceId>
+            <SCPDURL>S_SecuritySensor1.xml</SCPDURL>
+          </service>
+          <service>
+            <serviceType>urn:schemas-toggledbits-com:service:ReactorSensor:1</serviceType>
+            <serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
+            <SCPDURL>S_ReactorSensor.xml</SCPDURL>
+          </service>
+          <service>
+            <serviceType>urn:schemas-micasaverde-com:service:HaDevice:1</serviceType>
+            <serviceId>urn:micasaverde-com:serviceId:HaDevice1</serviceId>
+            <SCPDURL>S_HaDevice1.xml</SCPDURL>
+          </service>
+        </serviceList>
+    </device>
+</root>
