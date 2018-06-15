@@ -1,10 +1,10 @@
 {
-	"default_icon": "https://www.toggledbits.com/assets/reactor/reactor-default.png",
+	"default_icon": "https://www.toggledbits.com/assets/reactor/reactorsensor-default.png",
 	"state_icons": [{
-		"img": "https://www.toggledbits.com/assets/reactor/reactor-timing.png",
+		"img": "https://www.toggledbits.com/assets/reactor/reactorsensor-tripped.png",
 		"conditions": [{
-			"service": "urn:toggledbits-com:serviceId:ReactorSensor",
-			"variable": "Timing",
+			"service": "urn:micasaverde-com:serviceId:SecuritySensor1",
+			"variable": "Tripped",
 			"operator": "!=",
 			"value": "0"
 		}]
