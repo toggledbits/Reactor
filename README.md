@@ -36,6 +36,22 @@ it's functions are basic. It can respond to:
 
 More conditions are expected as the user community makes its needs clear.
 
+## Installing ##
+
+Currently, Reactor is not in the Vera store. To install it, download a release ZIP file
+from the Github repository "releases" tab, and unzip it. Then upload each of the unzipped
+files to your Vera or openLuup. Then, use the "Create Device" command (under Apps > Develop apps on Vera)
+to create a base Reactor device. You only need to provide a device name (use "Reactor"),
+a device filename (must be `D_Reactor.xml`) and an implementation filename (must be
+`I_Reactor.xml`).
+
+Then, reload Luup (I like to enter `luup.reload()` under Apps > Develop apps > Test Luup code),
+and then hard-refresh your browser (Ctrl-F5 on Windows, whatever similar on Mac).
+
+Finally, when you see the Reactor device on your dashboard, go into the control panel, and hit
+the "Add Sensor" button to add your first sensor. You'll need to reload Luup and hard refresh
+your browser again. It's a Vera thing.
+
 ## Using Reactor ##
 
 ### Adding Sensors ###
