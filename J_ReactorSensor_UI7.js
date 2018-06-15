@@ -336,6 +336,69 @@ var ReactorSensor = (function(api) {
         jQuery("select.varmenu", row).replaceWith( newMenu );
         updateConditionRow( row ); /* pass it on */
     }
+    
+    function handleOptionChange( ev ) {
+        var el = ev.currentTarget;
+        var row = jQuery( el ).closest('div.conditionrow');
+        var cond = ixCond[ row.attr("id") ];
+        
+        var dd = jQuery('input.duration', row);
+        if ( "" === dd.val() ) {
+            if ( undefined !== cond.duration ) {
+                delete cond.duration;
+                configModified = true;
+            }
+        } else {
+            var n = parseInt( dd.val() );
+            if ( isNaN( n ) || n < 0 ) {
+                dd.addClass('tberror');
+            } else {
+                dd.removeClass('tberror');
+                if ( (cond.duration||0) !== n ) {
+                    /* Changed */
+                    if ( n == 0 ) {
+                        delete cond.duration;
+                    } else {
+                        cond.duration = n;
+                    }
+                    configModified = true;
+                }
+            }
+        }
+        
+        updateControls();
+    }
+    
+    function handleCloseOptionsClick( ev ) {
+        var el = ev.currentTarget;
+        var row = jQuery( el ).closest('div.conditionrow');
+        
+        /* Remove the options block */
+        jQuery('div.params div.condopts', row).remove();
+        
+        /* Put the open tool back */
+        jQuery('div.params i.condmore').show();
+    }
+    
+    function handleExpandOptionsClick( ev ) {
+        var el = ev.currentTarget;
+        var row = jQuery( el ).closest('div.conditionrow');
+        var cond = ixCond[ row.attr("id") ];
+        
+        /* Remove the open tool */
+        jQuery( el ).hide();
+        
+        /* Create the options container and add options */
+        var container = jQuery('<div class="condopts"></div>');
+        container.append('<form class="form-inline"><label>Sustained for </label><input type="text" class="duration form-control form-control-sm narrow"><label>seconds</label></form>');
+        container.append('<i class="material-icons closeopts">expand_less</i>');
+        jQuery('input', container).on( 'change.reactor', handleOptionChange );
+        jQuery('i.closeopts', container).on( 'click.reactor', handleCloseOptionsClick );
+        jQuery('input.duration', container).val( cond.duration || "0" );
+
+        /* Add it to the params */
+        jQuery('div.params', row).append( container );
+    }
 
     /**
      * Set condition for type
@@ -369,11 +432,13 @@ var ReactorSensor = (function(api) {
                 pp = makeServiceConditionMenu( cond.condition );
                 container.append(pp);
                 container.append('<input type="text" id="value" class="form-control form-control-sm">');
+                container.append('<i class="material-icons condmore">expand_more</i>');
                 jQuery("input#value", container).val( cond.value );
                 jQuery("select.varmenu", container).on( 'change.reactor', handleRowChange );
                 jQuery("select.condmenu", container).on( 'change.reactor', handleRowChange );
                 jQuery("input#value", container).on( 'change.reactor', handleRowChange );
                 jQuery("select.devicemenu", container).on( 'change.reactor', handleDeviceChange );
+                jQuery("i.condmore", container).on( 'click.reactor', handleExpandOptionsClick );
                 break;
             case 'housemode':
                 container.append(
@@ -433,12 +498,12 @@ var ReactorSensor = (function(api) {
                 container.append('<div class="start"></div> and ').append('<div class="end"></div>');
                 jQuery("div.start", container).append( months.clone() )
                     .append( days.clone() )
-                    .append('<input type="text" placeholder="yyyy" class="year form-control form-control-sm">')
+                    .append('<input type="text" placeholder="yyyy" class="year narrow form-control form-control-sm">')
                     .append( hours.clone() )
                     .append( mins.clone() );
                 jQuery("div.end", container).append( months )
                     .append( days )
-                    .append('<input type="text" placeholder="yyyy" class="year form-control form-control-sm">')
+                    .append('<input type="text" placeholder="yyyy" class="year narrow form-control form-control-sm">')
                     .append( hours )
                     .append( mins );
                 /* Restore values */
@@ -838,7 +903,7 @@ var ReactorSensor = (function(api) {
             //html += 'div.params .devicemenu,.varmenu { max-width: 30%; }';
             //html += 'div.params .condmenu { max-width: 20%; }';
             //html += 'div.params input#value { max-width: 20%; }';
-            html += 'input.year { max-width: 6em; }';
+            html += 'input.narrow { max-width: 6em; }';
             html += 'div.conditiongroup { border-radius: 8px; border: 2px solid #73ad21; padding: 8px; }';
             html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
             html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
