@@ -12,8 +12,8 @@ Vera did not address natively: delay-off (and/or delay-on) of loads in response
 to triggers. It quickly became apparent that the trigger capabilities of DelayLight
 needed some enhancement, but I didn't want the plugin to become overly complex,
 so I decided to implement a more advanced triggering mechanism in a separate
-plugin that could be companion to DelayLight or use standalone (for example, to
-trigger standard Vera scenes).
+plugin that could be a companion to DelayLight or used standalone (for example, to
+trigger standard Vera scenes, Lua, other plugins, etc.).
 
 ## Features and Operation ##
 
@@ -45,18 +45,17 @@ to create a base Reactor device. You only need to provide a device name (use "Re
 a device filename (must be `D_Reactor.xml`) and an implementation filename (must be
 `I_Reactor.xml`).
 
-Then, reload Luup (I like to enter `luup.reload()` under Apps > Develop apps > Test Luup code),
+Then, reload Luup (on Vera, I like to enter `luup.reload()` under Apps > Develop apps > Test Luup code),
 and then hard-refresh your browser (Ctrl-F5 on Windows, whatever similar on Mac).
 
-Finally, when you see the Reactor device on your dashboard, go into the control panel, and hit
-the "Add Sensor" button to add your first sensor. You'll need to reload Luup and hard refresh
-your browser again. It's a Vera thing.
+You should then see the Reactor master device on your devices list (dashboard). Continue to
+"Adding Sensors" below to create and configure your first ReactorSensor.
 
 ## Using Reactor ##
 
 ### Adding Sensors ###
 
-When Reactor is first installed, only the master plugin (Reactors) device is visible, usually with the text "Open control panel!"
+When Reactor is first installed, only the master plugin (Reactor) device is visible, usually with the text "Open control panel!"
 displayed on its dashboard card. This is your call to action, to open the plugin's control panel (click the arrow on the device card in the Vera dashboard).
 On the control panel, you'll see an "Add Sensor" button. This creates a new child timer device. Child timers, while they appear as
 separate devices, run entirely within the plugin device's environment. However, you can still give them a descriptive name, and assign them
@@ -83,17 +82,21 @@ TBD
 Currently, there is no loop detection. So, if you create a series of ReactorSensors and they end up triggering each other in a loop,
 you will overwhelm system resources and have one heck of a time. Hint: disable (on the Vera dashboard) any of the sensors in the
 circuit and the looping should stop.
-not trigger a manual timing cycle, as a standard switch or dimmer would if it were switched on manually.
 
 ## Actions and Triggers ##
 
-Reactor's service ID `urn:toggledbits.com:serviceId:ReactorSensor` provides the following triggers and actions:
+A ReactorSensor implements the basic interface of `urn:micasaverde-com:serviceId:SecuritySensor1`, so to 
+other devices in your system, it looks like a door or motion sensor, and has the triggers and actions
+associated with that service.
+
+Reactor's own service ID `urn:toggledbits.com:serviceId:ReactorSensor` provides the following 
+additional triggers and actions:
 
 ### Triggers ###
 
 #### Enabled State ####
 
-The Enabled State trigger signals that a Reactor device has been enabled or disabled.
+The Enabled State trigger signals that a ReactorSensor has been enabled or disabled.
 
 ### Actions ###
 
@@ -105,8 +108,13 @@ system behavior (i.e. you can trip the sensor to see what it triggers, without h
 otherwise met, which sometimes can be difficult).
 
 <code>
-    luup.call_action( "urn:toggledbits.com:serviceId:ReactorSensor", "Trigp", { }, deviceNum )
+    luup.call_action( "urn:toggledbits.com:serviceId:ReactorSensor", "Trip", { }, deviceNum )
 </code>
+
+Note that tripping a ReactorSensor that is enabled may be temporary. If any of the devices or conditions
+associated with the sensor's logic changes, the tripped state will be set to whatever is appropriate for
+the conditions at that time. If you want the tripped state to stick until you reset, you must first
+disable the ReactorSensor.
 
 #### Reset ####
 
@@ -116,11 +124,16 @@ The Reset action, which takes no parameters, untrips the ReactorSensor on which 
     luup.call_action( "urn:toggledbits.com:serviceId:ReactorSensor", "Reset", { }, deviceNum )
 </code>
 
+Note that resetting a ReactorSensor that is enabled may be temporary. If any of the devices or conditions
+associated with the sensor's logic changes, the tripped state will be set to whatever is appropriate for
+the conditions at that time. If you want the untripped state to stick, you must first
+disable the ReactorSensor.
+
 #### SetEnabled ####
 
 The SetEnabled action takes a single parameter, `newEnabledValue`, and enables or disables the ReactorSensor. The value must be 0 or 1 only.
-When disabled, the sensor will complete any in-progress condition cycle and go to idle state. It will not automatically trip until re-enabled,
-although manual tripping/untripping with the `Trip` and `Reset` actions is still possible.
+When disabled, the sensor will complete any in-progress condition cycle and go to idle state. It will not automatically trip or untrip
+until re-enabled, although manual tripping/untripping with the `Trip` and `Reset` actions is still possible.
 
 <code>
     luup.call_action( "urn:toggledbits.com:serviceId:ReactorSensor", "SetEnabled", { newEnabledValue="1" }, deviceNum )
