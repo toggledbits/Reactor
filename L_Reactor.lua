@@ -640,6 +640,8 @@ end
 -- Start an instance
 local function startSensor( tdev, pdev )
     D("startSensor(%1,%2)", tdev, pdev)
+    
+    sensorState[tostring(tdev)] = { eventList={} }
 
     -- Instance initialization
     sensor_runOnce( tdev )
