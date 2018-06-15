@@ -205,7 +205,10 @@ local function deleteVar( sid, name, devid )
     D("deleteVar(%1,%2) status=%3, result=%4", name, devid, status, result)
 end
 
--- Schedule a timer tick for a future (absolute) time.
+-- Schedule a timer tick for a future (absolute) time. If the time is sooner than
+-- any currently scheduled time, the task tick is advanced; otherwise, it is
+-- ignored (as the existing task will come sooner), unless repl=true, in which
+-- case the existing task will be deferred until the provided time.
 local function scheduleTick( timeTick, repl, tdev )
     D("scheduleTick(%1,%2,%3)", timeTick, repl, tdev)
     local tkey = tostring(tdev)
@@ -231,7 +234,8 @@ local function scheduleTick( timeTick, repl, tdev )
     end
 end
 
--- Schedule a timer tick for after a delay (seconds)
+-- Schedule a timer tick for after a delay (seconds). See scheduleTick above
+-- for additional info.
 local function scheduleDelay( delay, repl, tdev )
     D("scheduleDelay(%1,%2,%3)", delay, repl, tdev)
     scheduleTick( delay+os.time(), repl, tdev )
@@ -378,7 +382,7 @@ function setEnabled( enabled, tdev )
         -- If disabling, do nothing else, so current actions complete/expire.
         if enabled then
             -- Kick off a new timer thread, which will also re-eval.
-            scheduleDelay( 2, true, tdev )
+            scheduleDelay( 2, false, tdev )
             setMessage( "Enabling...", tdev )
         else
             setMessage( "Disabled", tdev )
@@ -621,18 +625,24 @@ local function evaluateGroup( grp, cdata, tdev )
                 sensorState[skey].condState[cond.id].lastvalue = cond.lastvalue.value
                 sensorState[skey].condState[cond.id].valuestamp = now
             end
-            
+
             -- Now, check to see if duration restriction is in effect.
             if not state then 
                 passed = false
-            elseif cond.duration ~= nil then
+            elseif ( cond.duration or 0 ) > 0 then
                 -- Condition value matched. See if there's a duration restriction.
                 hasTimer = true
                 -- Age is seconds since last state change.
                 local age = now - sensorState[skey].condState[cond.id].statestamp
                 if age < cond.duration then
+                    D("evaluateGroup() cond %1 suppressed, age %2 has not met duration requirement %3",
+                        cond.id, age, cond.duration)
                     state = false
                     passed = false
+                    local rem = math.max( 2, cond.duration - age )
+                    scheduleDelay( rem, false, tdev )
+                else
+                    D("evaluateGroup() cond %1 age %2 (>=%3) success", cond.id, age, cond.duration)
                 end
             end
             
@@ -703,7 +713,7 @@ local function updateSensor( tdev )
     
     if hasTimer then
         local v = 60 - ( os.time() % 60 )
-        scheduleDelay( v, true, tdev )
+        scheduleDelay( v, false, tdev )
     end
 end
 
