@@ -273,7 +273,7 @@ var ReactorSensor = (function(api) {
                 cond.value = jQuery("input#value", row).val();
                 break;
             case 'weekday':
-                cond.condition = jQuery("div.params select.condmenu", row).val();
+                cond.condition = jQuery("div.params select.wdcond", row).val() || "";
                 /* fall through */
             case 'housemode':
                 var res = [];
@@ -390,7 +390,7 @@ var ReactorSensor = (function(api) {
             case 'weekday':
                 // ??? first, 2nd, 3rd, 4th, 5th, last ???
                 container.append(
-                    '<select class="wdcond form-control form-control-sm"><option value="">Every</option><option value="1">First</option><option value="2">2nd</option><option value="3">Third</option><option value="4">Fourth</option><option value="5">Fifth</option><option value="last">Last</option></select>' +
+                    '<select class="wdcond form-control form-control-sm"><option value="">Every</option><option value="1">First</option><option value="2">2nd</option><option value="3">3rd</option><option value="4">4th</option><option value="5">5th</option><option value="last">Last</option></select>' +
                     '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="1"><label class="form-check-label">Sun</label></div>' +
                     '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="2"><label class="form-check-label">Mon</label></div>' +
                     '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="3"><label class="form-check-label">Tue<label></div>' +
@@ -400,6 +400,7 @@ var ReactorSensor = (function(api) {
                     '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="7"><label class="form-check-label">Sat</label></div>'
                 );
                 jQuery("input", container).on( 'change.reactor', handleRowChange );
+                jQuery("select.wdcond", container).on( 'change.reactor', handleRowChange ).val( cond.condition || "" );
                 (cond.value || "").split(',').forEach( function( val ) {
                     jQuery('input#opts[value="' + val + '"]', container).prop('checked', true);
                 });
