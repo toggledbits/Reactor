@@ -26,7 +26,7 @@
     </serviceStateTable>
     <actionList>
         <action>
-            <name>AddTimer</name>
+            <name>AddSensor</name>
             <argumentList>
             </argumentList>
         </action>

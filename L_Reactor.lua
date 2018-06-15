@@ -391,14 +391,16 @@ function setEnabled( enabled, tdev )
     end
 end
 
-function actionTrigger( state, dev )
+function actionTrip( force, dev )
     L("Sensor %1 (%2) trigger action!", dev, luup.devices[dev].description)
-    trigger( state, dev )
+    luup.variable_set( SENSOR_SID, "Tripped", 1, dev );
+    setMessage("Tripped", dev);
 end
 
 function actionReset( force, dev )
     L("Sensor %1 (%2) reset action!", dev, luup.devices[dev].description)
-    reset( force, dev )
+    luup.variable_set( SENSOR_SID, "Tripped", 0, dev );
+    setMessage("Not tripped", dev)
 end
 
 function setDebug( state, tdev )
@@ -419,11 +421,15 @@ end
 local function evaluateGroup( grp, tdev )
     D("evaluateGroup(%1,%2)", grp.groupid, tdev)
     if grp.groupconditions == nil or #grp.groupconditions == 0 then return false end -- empty group always false
+    valid = false;
+    timerParent = false;
+    local now = os.time()
     for nc,cond in ipairs( grp.groupconditions ) do
         D("evaluateGroup() eval group %1 cond %2 (%3)", grp.groupid, cond.id, cond)
         
         if cond.type == "service" then
             -- Can't succeed if referenced device doesn't exist.
+            valid = true;
             if luup.devices[cond.device or 0] == nil then return false end
             
             -- If we're not watching this variable yet, start watching it.
@@ -490,15 +496,69 @@ local function evaluateGroup( grp, tdev )
             else
                 L("evaluateGroup() unknown condition %1 in cond %2 of group", cond.condition, vc)
             end
-        elseif cond.type == "housemodes" then
+        elseif cond.type == "housemode" then
+            valid = true    
             local modes = split( cond.value )
-            local mode = luup.attr_get( "Mode", 0 )
+            local mode = tostring( luup.attr_get( "Mode", 0 ) )
+            D("evaluateGroup() housemode %1 among %2?", mode, modes)
             if not isOnList( modes, mode ) then return false end
+        elseif cond.type == "weekday" then
+            -- Weekday; Lua 1=Sunday, 2=Monday, ..., 7=Saturday
+            valid = true
+            timerPart = true
+            local tt = os.date("*t", now)
+            local wd = split( cond.value )
+            D("evaluateGroup() weekday %1 among %2", tt.wday, wd)
+            if not isOnList( wd, tostring( tt.wday ) ) then return false end
+        elseif cond.type == "time" then 
+            -- Time, with various components specified, or not.
+            valid = true
+            timerPart = true
+            local dt = os.date("*t", now)
+            local xt = os.date("*t", luup.sunrise())
+            local sunrise = xt.hour * 60 + xt.min
+            xt = os.date("*t", luup.sunset())
+            local sunset = xt.hour * 60 + xt.min
+            local hm = dt.hour * 60 + dt.min
+            local tparam = split( cond.value, ',' )
+            for ix = #tparam+1,10 do tparam[ix] = "" end -- pad
+            local cp = cond.condition
+            D("evaluateGroup() time check now %1 vs config %2", dt, tparam)
+            if tparam[1] ~= "" and dt.year < tonumber( tparam[1] ) then return false end
+            if tparam[6] ~= "" and dt.year > tonumber( tparam[6] ) then return false end
+            if tparam[2] ~= "" and dt.month < tonumber( tparam[2] ) then return false end
+            if tparam[7] ~= "" and dt.month > tonumber( tparam[7] ) then return false end
+            if tparam[3] ~= "" and dt.day < tonumber( tparam[3] ) then return false end
+            if tparam[8] ~= "" and dt.day > tonumber( tparam[8] ) then return false end
+            if tparam[4] == "sunrise" then
+                if hm < sunrise then return false end
+            elseif tparam[4] == "sunset" then
+                if hm < sunset then return false end 
+            elseif tparam[4] ~= "" then
+                local shm = tonumber( tparam[4] ) * 60;
+                if tparam[5] ~= "" then shm = shm + tonumber( tparam[5] ) end
+                if hm < shn then return false end
+            elseif tparam[5] ~= "" and dt.min < tonumber( tparam[5] ) then return false
+            end
+            if tparam[9] == "sunrise" then 
+                if hm > sunrise then return false end
+            elseif tparam[9] == "sunset" then
+                if hm > sunset then return false end
+            elseif tparam[9] ~= "" then
+                local ehm = tonumber( tparam[9] ) * 60;
+                if tparam[10] ~= "" then ehm = ehm + tonumber( tparam[10] ) else ehm = ehm + 59 end
+                if hm > ehm then return false end
+            elseif tparam[10] ~= "" and dt.min > tonumber( tparam[10] ) then return false
+            end
+        elseif cond.type == "comment" then
+            -- Ignore.
         else
             L({level=2,msg="Sensor %1 (%2) unknown condition type %3 for cond %4 in group %5; fails."},
                 tdev, luup.devices[tdev].description, cond.type, cond.id, grp.groupid)
             return false
         end
+        
+        cond.lastmatch = now
         
         -- Condition value matched. See if there's a duration restriction.
         --[[ PHR??? TO-DO The existence of duration, or any time-based condition or house mode, 
@@ -506,13 +566,16 @@ local function evaluateGroup( grp, tdev )
              where if needed.
         --]]
         if cond.duration ~= nil then
-            local age = os.time() - ts
+            timerPart = true
+            local age = now - ts
             if age < cond.duration then return false end
         end
+        
+        D("evaluateGroup() cond %1 %2 match succeeded", cond.id, cond.type)
     end
     
     -- If we've run the gauntlet, we're good!
-    return true
+    return valid, timerPart -- true if non-comment condition found
 end
 
 -- 
@@ -529,8 +592,11 @@ local function evaluateConditions( tdev )
     -- Each group is an "OR", so the success of any group is a successful match
     -- to condition. Within each group the conditions are AND, so all conditions
     -- within the group must be met for the group to be match successfully.
+    local timerPart = false
     for ng,grp in ipairs( cdata.conditions ) do
-        if evaluateGroup( grp, tdev ) then
+        local match, t = evaluateGroup( grp, tdev )
+        timerPart = timerPart or t -- early exit botches this up ??? FIXME
+        if match then
             D("evaluateConditions() group %1 success, returning success", grp.groupid)
             return true
         end
@@ -544,6 +610,13 @@ end
 --
 local function updateSensor( tdev )
     D("updateSensor(%1)", tdev)
+    
+    -- If not enabled, no work to do.
+    if not isEnabled( tdev ) then
+        D("updateSensor() disabled; no action")
+        return
+    end
+    
     local currTrip = getVarNumeric( "Tripped", 0, tdev, SENSOR_SID ) ~= 0
     local newTrip = evaluateConditions( tdev )
     local retrig = getVarNumeric( "Retrigger", 0, tdev, RSSID ) ~= 0
@@ -553,8 +626,8 @@ local function updateSensor( tdev )
     if currTrip ~= newTrip or ( newTrip and retrig ) then
         -- Changed, or retriggerable.
         luup.variable_set( SENSOR_SID, "Tripped", iif( newTrip, 1, 0 ), tdev )
-        setMessage( iif( newTrip, "Tripped", "Not tripped" ), tdev )
     end
+    setMessage( iif( newTrip, "Tripped", "Not tripped" ), tdev )
 end
 
 -- Start an instance
@@ -566,8 +639,8 @@ local function startSensor( tdev, pdev )
     
     setMessage("Starting...", tdev)
 
-    -- Update (maybe) sensor state.
-    updateSensor( tdev )
+    -- Start tick task
+    scheduleDelay( 5, tdev )
 end
 
 -- Start plugin running.
@@ -640,7 +713,6 @@ function startPlugin( pdev )
         if v.device_type == RSTYPE and v.device_num_parent == pdev then
             count = count + 1
             L("Starting sensor %1 (%2)", k, luup.devices[k].description)
-            startSensor( k, pdev )
             local success, err = pcall( startSensor, k, pdev )
             if not success then
                 L({level=2,msg="Failed to start %1 (%2): %3"}, k, luup.devices[k].description, err)
@@ -664,6 +736,12 @@ local function sensorTick(tdev)
     D("sensorTick(%1)", tdev)
     local now = os.time()
     local nextTick = 60
+    
+    if isEnabled( tdev ) then
+        updateSensor( tdev )
+    else
+        nextTick = nil
+    end
 
     if nextTick == nil then
         D("sensorTick() sensor %1 (%2) nothing more to do, not rescheduling.", tdev, luup.devices[tdev].description)

@@ -6,7 +6,7 @@
  * Copyright 2016,2017,2018 Patrick H. Rigney, All Rights Reserved.
  * This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
  */
-/* globals api,jQuery,$,jsonp */
+/* globals api,jQuery */
 
 //"use strict"; // fails on UI7, works fine with ALTUI
 
@@ -27,14 +27,10 @@ var ReactorSensor = (function(api) {
     var cdata;
     var ixCond = {}, ixGroup = {};
     var roomsByName = [];
-    var devCap = {};
     var configModified = false;
     var lastx = 0;
 
-    function enquote( s ) {
-        return JSON.stringify( s );
-    }
-
+    /* Create an ID that's functionally unique for our purposes. */
     function getUID( prefix ) {
         /* Not good, but enough. */
         var newx = new Date().getTime();
@@ -43,11 +39,13 @@ var ReactorSensor = (function(api) {
         return ( prefix === undefined ? "" : prefix ) + newx.toString(16);
     }
 
+    /* Closing the control panel. */
     function onBeforeCpanelClose(args) {
         if ( configModified ) alert("Unsaved changes! Guess you'll remember to hit SAVE next time...");
     }
 
-    function initPlugin() {
+    /* Initialize the module */
+    function initModule() {
         configModified = false;
         myDevice = api.getCpanelDeviceId();
 
@@ -61,10 +59,17 @@ var ReactorSensor = (function(api) {
         /* Get the config and parse it */
         var s = api.getDeviceState( myDevice, serviceId, "cdata" ) || "";
         if ( s.length === 0 ) {
-            s = '{ "conditions": [] }';
+            cdata = { version: 1, conditions: [ 
+                { groupid: getUID('grp'), groupconditions: [
+                    { id: getUID('cond'), type: "comment", comment: "Enter your AND conditions here" }
+                    ]
+                }
+            ]};
+        } else {
+            cdata = JSON.parse( s );
         }
-        cdata = JSON.parse( s );
     }
+    
 
     /**
      * Find cdata group
@@ -97,7 +102,7 @@ var ReactorSensor = (function(api) {
      * Create a device menu from available devices, sorted alpha with room
      * names sorted alpha.
      */
-    function makeDeviceSelector( val, name ) {
+    function makeDeviceMenu( val, name ) {
         var el = jQuery('<select class="devicemenu form-control form-control-sm pull-left"></select>');
         roomsByName.forEach( function( roomObj ) {
             if ( roomObj.devices && roomObj.devices.length ) {
@@ -117,7 +122,7 @@ var ReactorSensor = (function(api) {
 
         if ( ( val || "" ) !== "" ) {
             var opt = jQuery( 'option[value="' + val + '"]', el );
-            if ( opt.length == 0 ) {
+            if ( 0 === opt.length ) {
                 el.append( '<option value="' + val + '" selected>(missing) #' + val + ' ' + name + '</option>' );
             } else {
                 el.val( val );
@@ -132,7 +137,7 @@ var ReactorSensor = (function(api) {
      * used by multiple services, in which case the last component of the
      * serviceId is added parenthetically to draw the distinction.
      */
-    function makeVariableSelector( device, service, variable ) {
+    function makeVariableMenu( device, service, variable ) {
         var el = jQuery('<select class="varmenu form-control form-control-sm pull-left"></select>');
 
         var devobj = udByDevNum[parseInt(device)];
@@ -193,13 +198,19 @@ var ReactorSensor = (function(api) {
         el.append( '<option value="contains">Contains</option>' );
         el.append( '<option value="in">in</option>' );
 
-        if ( ( cond || "" ) !== "" ) {
-            var opt = jQuery( 'option[value="' + cond + '"]', el );
-            if ( opt.length == 0 ) {
-                el.append( '<option value="' + cond + '" selected>' + cond + '???</option>' );
-            } else {
-                el.val( cond );
-            }
+        if ( undefined !== cond ) {
+            el.val( cond );
+        }
+        return el;
+    }
+
+    function makeDateTimeConditionMenu( cond ) {
+        var el = jQuery('<select class="condmenu form-control form-control-sm pull-left"></select>');
+        el.append('<option value="bet">between</option>');
+        el.append( '<option value="nob">not between</option>' );
+
+        if ( undefined !== cond ) {
+            el.val( cond );
         }
         return el;
     }
@@ -250,25 +261,41 @@ var ReactorSensor = (function(api) {
         var typ = jQuery("div.condtype select", row).val();
         cond.type = typ;
         switch (typ) {
+            case 'comment':
+                cond.comment = jQuery("div.params input", row).val();
+                break;
             case 'service':
-                cond.device = jQuery("div.params select.devicemenu", row).val();
+                cond.device = parseInt( jQuery("div.params select.devicemenu", row).val() );
                 cond.service = jQuery("div.params select.varmenu", row).val();
                 cond.variable = cond.service.replace( /^[^\/]+\//, "" );
                 cond.service = cond.service.replace(/\/.*$/, "");
                 cond.condition = jQuery("div.params select.condmenu", row).val();
                 cond.value = jQuery("input#value", row).val();
                 break;
+            case 'weekday':
+                cond.condition = jQuery("div.params select.condmenu", row).val();
+                /* fall through */
             case 'housemode':
                 var res = [];
-                jQuery("input#housemode:checked", row).each( function( ix, control ) {
+                jQuery("input#opts:checked", row).each( function( ix, control ) {
                     res.push( control.value /* DOM element */ );
                 });
                 cond.value = res.join(',');
                 break;
-            case 'comment':
-                cond.comment = jQuery("div.params input", row).val();
-                break;
             case 'time':
+                cond.condition = jQuery("div.params select.condmenu", row).val();
+                res = [];
+                res.push( jQuery("div.start input.year", row).val() || "" );
+                res.push( jQuery("div.start select.monthmenu", row).val() || "" );
+                res.push( jQuery("div.start select.daymenu", row).val() || "" );
+                res.push( jQuery("div.start select.hourmenu", row).val() || "" );
+                res.push( jQuery("div.start select.minmenu", row).val() || "" );
+                res.push( jQuery("div.end input.year", row).val() || "" );
+                res.push( jQuery("div.end select.monthmenu", row).val() || "" );
+                res.push( jQuery("div.end select.daymenu", row).val() || "" );
+                res.push( jQuery("div.end select.hourmenu", row).val() || "" );
+                res.push( jQuery("div.end select.minmenu", row).val() || "" );
+                cond.value = res.join(',');
                 break;
             default:
                 break;
@@ -303,7 +330,7 @@ var ReactorSensor = (function(api) {
         configModified = true;
 
         // Make a new service/variable menu and replace it on the row.
-        var newMenu = makeVariableSelector( cond.device, cond.service, cond.variable );
+        var newMenu = makeVariableMenu( cond.device, cond.service, cond.variable );
         jQuery("select.varmenu", row).replaceWith( newMenu );
         updateConditionRow( row ); /* pass it on */
     }
@@ -316,53 +343,121 @@ var ReactorSensor = (function(api) {
             row = jQuery('div.row#' + cond.id);
         }
         jQuery('div.params', row).empty();
-        jQuery('div.value', row).empty();
+        var container = jQuery('<div class="form-inline"></div>');
         switch (cond.type) {
             case "":
                 break;
             case 'comment':
-                jQuery('div.params', row).append('<input class="form-control form-control-sm type="text">');
-                jQuery('div.params input', row).on( 'change.reactor', handleRowChange ).val( cond.comment || "" );
+                container.append('<input class="form-control form-control-sm type="text">');
+                jQuery('input', container).on( 'change.reactor', handleRowChange ).val( cond.comment || "" );
                 break;
             case 'service':
-                var container = jQuery('<div class="form-inline"></div>');
-                var pp = makeDeviceSelector( cond.device, cond.devicename || "?" );
+                var pp = makeDeviceMenu( cond.device, cond.devicename || "?" );
                 container.append(pp);
-                /* Fix-up: makeDeviceSelector will display current userdata name
+                /* Fix-up: makeDeviceMenu will display current userdata name
                            for device, but if that's changed from what we've stored,
                            we need to update our store. */
-                if ( udByDevNum[ cond.device ].name !== cond.devicename ) {
-                    cond.devicename = udByDevNum[ cond.device ].name;
-                    configModified = true;
+                if ( cond.device !== undefined && udByDevNum[ cond.device ] !== undefined &&
+                    udByDevNum[ cond.device ].name !== cond.devicename ) {
+                        cond.devicename = udByDevNum[ cond.device ].name;
+                        configModified = true;
                 }
-                pp = makeVariableSelector( cond.device, cond.service, cond.variable );
+                pp = makeVariableMenu( cond.device, cond.service, cond.variable );
                 container.append(pp);
                 pp = makeServiceConditionMenu( cond.condition );
                 container.append(pp);
-                jQuery("div.params", row).append( container );
-                jQuery("div.value", row).append('<input type="text" id="value" class="form-control form-control-sm">');
-                jQuery("input#value", row).val( cond.value );
-                jQuery("select.varmenu", row).on( 'change.reactor', handleRowChange );
-                jQuery("select.condmenu", row).on( 'change.reactor', handleRowChange );
-                jQuery("input#value", row).on( 'change.reactor', handleRowChange );
-                jQuery("select.devicemenu", row).on( 'change.reactor', handleDeviceChange ).change();
+                container.append('<input type="text" id="value" class="form-control form-control-sm">');
+                jQuery("input#value", container).val( cond.value );
+                jQuery("select.varmenu", container).on( 'change.reactor', handleRowChange );
+                jQuery("select.condmenu", container).on( 'change.reactor', handleRowChange );
+                jQuery("input#value", container).on( 'change.reactor', handleRowChange );
+                jQuery("select.devicemenu", container).on( 'change.reactor', handleDeviceChange ).change();
                 break;
             case 'housemode':
-                jQuery("div.value", row).append( '<form class="form-inline">' +
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="housemode" value="1"><label class="form-check-label">Home</label></div>' +
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="housemode" value="2"><label class="form-check-label">Away</label></div>' +
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="housemode" value="3"><label class="form-check-label">Night<label></div>' +
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="housemode" value="4"><label class="form-check-label">Vacation</label></div>' +
-                    '</form>'
+                container.append(
+                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="1"><label class="form-check-label">Home</label></div>' +
+                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="2"><label class="form-check-label">Away</label></div>' +
+                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="3"><label class="form-check-label">Night<label></div>' +
+                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="4"><label class="form-check-label">Vacation</label></div>'
                 );
-                jQuery("div.value input", row).on( 'change.reactor', handleRowChange );
+                jQuery("input", container).on( 'change.reactor', handleRowChange );
                 (cond.value || "").split(',').forEach( function( val ) {
-                    jQuery('input#housemode[value="' + val + '"]', row).prop('checked', true);
+                    jQuery('input#opts[value="' + val + '"]', container).prop('checked', true);
                 });
-                    
-            default:
                 break;
+            case 'weekday':
+                // ??? first, 2nd, 3rd, 4th, 5th, last ???
+                container.append(
+                    '<select class="wdcond form-control form-control-sm"><option value="">Every</option><option value="1">First</option><option value="2">2nd</option><option value="3">Third</option><option value="4">Fourth</option><option value="5">Fifth</option><option value="last">Last</option></select>' +
+                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="1"><label class="form-check-label">Sun</label></div>' +
+                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="2"><label class="form-check-label">Mon</label></div>' +
+                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="3"><label class="form-check-label">Tue<label></div>' +
+                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="4"><label class="form-check-label">Wed</label></div>' +
+                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="5"><label class="form-check-label">Thu</label></div>' +
+                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="6"><label class="form-check-label">Fri</label></div>' +
+                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="7"><label class="form-check-label">Sat</label></div>'
+                );
+                jQuery("input", container).on( 'change.reactor', handleRowChange );
+                (cond.value || "").split(',').forEach( function( val ) {
+                    jQuery('input#opts[value="' + val + '"]', container).prop('checked', true);
+                });
+                break;
+            case 'time':
+                var pp = makeDateTimeConditionMenu( cond.condition );
+                container.append(pp);
+                var mname =  [ 'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec' ];
+                var months = jQuery('<select class="monthmenu form-control form-control-sm"><option value="">(any month)</option></select>');
+                for ( var mon=0; mon<12; mon++ ) {
+                    months.append('<option value="' + mon + '">' + mname[mon] + ' (' + (mon+1) + ')</option>');
+                }
+                var days = jQuery('<select class="daymenu form-control form-control-sm"><option value="">(any day)</option></select>');
+                for ( var day=1; day<=31; day++ ) {
+                    days.append('<option value="' + day + '">' + day + '</option>');
+                }
+                var hours = jQuery('<select class="hourmenu form-control form-control-sm"><option value="">(any hour)</option></select>');
+                hours.append('<option value="sunrise">Sunrise</option><option value="sunset">Sunset</option>');
+                for ( var hr = 0; hr<24; hr++ ) {
+                    var hh = hr % 12;
+                    if ( hh == 0 ) {
+                        hh = 12;
+                    }
+                    hours.append('<option value="' + hr + '">' + hr + ' (' + hh + ( hr < 12 ? "am" : "pm" ) + ')</option>');
+                }
+                var mins = jQuery('<select class="minmenu form-control form-control-sm"><option value="">(any min)</option></select>');
+                for ( var mn=0; mn<=59; mn+=5 ) {
+                    mins.append('<option value="' + mn + '">:' + (mn < 10 ? '0' : '') + mn + '</option>');
+                }
+                container.append('<div class="start"></div> and ').append('<div class="end"></div>');
+                jQuery("div.start", container).append( months.clone() )
+                    .append( days.clone() )
+                    .append('<input type="text" placeholder="yyyy" class="year form-control form-control-sm">')
+                    .append( hours.clone() )
+                    .append( mins.clone() );
+                jQuery("div.end", container).append( months )
+                    .append( days )
+                    .append('<input type="text" placeholder="yyyy" class="year form-control form-control-sm">')
+                    .append( hours )
+                    .append( mins );
+                /* Restore values */
+                var vals = (cond.value || "").split(',');
+                var flist = [ 'div.start select.monthmenu','div.start select.daymenu',
+                              'div.start input.year', 'div.start select.hourmenu', 
+                              'div.start select.minmenu', 'div.end select.monthmenu',
+                              'div.end select.daymenu','div.end input.year',
+                              'div.end select.hourmenu','div.end select.minmenu'
+                ];
+                for ( var fx=0; fx<flist.length; fx++ ) {
+                    jQuery( flist[fx], container ).val( fx < vals.length ? vals[fx] : '' );
+                }
+                jQuery("select", container).on( 'change.reactor', handleRowChange );
+                jQuery("input", container).on( 'change.reactor', handleRowChange );
+                break;
+            default:
+                /* nada */
         }
+                
+        /* Append the new container */
+        jQuery("div.params", row).append( container );
     }
 
     /**
@@ -545,9 +640,8 @@ var ReactorSensor = (function(api) {
      */
     function getConditionRow() {
         var el = jQuery('<div class="row conditionrow"></div>');
-        el.append( '<div class="col-sm-2 condtype"><select class="form-control form-control-sm"><option value="">--choose--</option><option value="comment">Comment</option><option value="service">Service/Variable</option><option value="housemode">House Mode</option><option value="time">Time</option></select></div>' );
-        el.append( '<div class="col-sm-7 params"></div>' );
-        el.append( '<div class="col-sm-2 value"></div>' );
+        el.append( '<div class="col-sm-2 condtype"><select class="form-control form-control-sm"><option value="">--choose--</option><option value="comment">Comment</option><option value="service">Service/Variable</option><option value="housemode">House Mode</option><option value="weekday">Day of Week</option><option value="time">Date/Time</option></select></div>' );
+        el.append( '<div class="col-sm-9 params"></div>' );
         el.append( '<div class="col-sm-1 controls"></div>');
         jQuery("div.controls", el).append('<i class="material-icons md-btn action-up">arrow_upward</i>');
         jQuery("div.controls", el).append('<i class="material-icons md-btn action-down">arrow_downward</i>');
@@ -617,7 +711,7 @@ var ReactorSensor = (function(api) {
      * Handle revert button click: restore setting to last saved and redisplay.
      */
     function handleRevertClick( ev ) {
-        initPlugin();
+        initModule();
         redrawConditions();
     }
     
@@ -650,10 +744,17 @@ var ReactorSensor = (function(api) {
                         removeConditionProperties( cond, 'comment' );
                         break;
                     case 'service':
+                        cond.device = parseInt( cond.device );
                         delete cond.comment;
                         break;
                     case 'housemode':
                         removeConditionProperties( cond, 'value' );
+                        break;
+                    case 'weekday':
+                        removeConditionProperties( cond, 'condition,value' );
+                        break;
+                    case 'time':
+                        removeConditionProperties( cond, 'condition,value' );
                         break;
                     default:
                         /* Don't do anything */
@@ -669,7 +770,7 @@ var ReactorSensor = (function(api) {
     function doSettings()
     {
         try {
-            initPlugin();
+            initModule();
 
             var i, j, html = "";
 
@@ -730,8 +831,11 @@ var ReactorSensor = (function(api) {
             html += 'i.md-btn[disabled] { color: #cccccc; cursor: auto; }';
             html += 'i.md-btn { color: #00a652; font-size: 12pt; cursor: pointer; }';
             html += 'input.tbinvert { min-width: 16px; min-height: 16px; }';
-            html += 'div.params .devicemenu,.varmenu { max-width: 40%; }';
-            html += 'div.params .condmenu { max-width: 20% }';
+            html += 'div.conditions { width: 100%; }';
+            //html += 'div.params .devicemenu,.varmenu { max-width: 30%; }';
+            //html += 'div.params .condmenu { max-width: 20%; }';
+            //html += 'div.params input#value { max-width: 20%; }';
+            html += 'input.year { max-width: 6em; }';
             html += 'div.conditiongroup { border-radius: 8px; border: 2px solid #73ad21; padding: 8px; }';
             html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
             html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
@@ -741,7 +845,7 @@ var ReactorSensor = (function(api) {
             // Body content
             html = '';
             html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>Conditions</h3></div></div>';
-            html += '<div class="row"><div class="col-cs-12 col-sm-12">Conditions within a group are "AND", and groups are "OR". That is, the sensor will trip when any group succeeds, and for a group to succeed, all conditions in the group must be met.</div>';
+            html += '<div class="row"><div class="col-cs-12 col-sm-12">Conditions within a group are "AND", and groups are "OR". That is, the sensor will trip when any group succeeds, and for a group to succeed, all conditions in the group must be met.</div></div>';
             html += '<div id="conditions"></div>';
 
             html += '<div class="clearfix">';
@@ -764,7 +868,7 @@ var ReactorSensor = (function(api) {
 
     myModule = {
         uuid: uuid,
-        initPlugin: initPlugin,
+        initModule: initModule,
         onBeforeCpanelClose: onBeforeCpanelClose,
         doSettings: doSettings
     };

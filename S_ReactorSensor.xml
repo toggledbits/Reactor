@@ -47,7 +47,7 @@
             </argumentList>
         </action>
         <action>
-            <name>Trigger</name>
+            <name>Trip</name>
             <argumentList>
             </argumentList>
         </action>
