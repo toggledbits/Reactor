@@ -52,6 +52,13 @@
         </action>
         <action>
             <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
+            <name>MasterClear</name>
+            <run>
+                Reactor.masterClear( lul_device )
+            </run>
+        </action>
+        <action>
+            <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
             <name>GetPluginVersion</name>
             <run>
                 -- Ugly hack. Luup seems to only be able to return values from related state variables (see S_), so use a temp

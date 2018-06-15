@@ -403,6 +403,13 @@ function actionReset( force, dev )
     setMessage("Not tripped", dev)
 end
 
+function masterClear( dev ) 
+    -- Remove all child devices.
+    local ptr = luup.chdev.start( dev )
+    luup.chdev.sync( dev, ptr )
+    -- Should cause reload immediately.
+end
+
 function setDebug( state, tdev )
     debugMode = state or false
     addEvent{ event="debug", dev=tdev, debugMode=debugMode }

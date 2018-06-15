@@ -322,12 +322,14 @@ var ReactorSensor = (function(api) {
     function handleDeviceChange( ev ) {
         var el = ev.currentTarget;
         var newDev = jQuery(el).val();
-        var row = jQuery( el ).closest('div.row');
+        var row = jQuery( el ).closest('div.conditionrow');
         var condId = row.attr('id');
         var cond = ixCond[condId];
-        cond.device = parseInt(newDev);
-        cond.devicename = udByDevNum[cond.device].name;
-        configModified = true;
+        if ( undefined !== cond.device ) {
+            cond.device = parseInt(newDev);
+            cond.devicename = udByDevNum[cond.device].name;
+            configModified = true;
+        }
 
         // Make a new service/variable menu and replace it on the row.
         var newMenu = makeVariableMenu( cond.device, cond.service, cond.variable );
@@ -371,7 +373,7 @@ var ReactorSensor = (function(api) {
                 jQuery("select.varmenu", container).on( 'change.reactor', handleRowChange );
                 jQuery("select.condmenu", container).on( 'change.reactor', handleRowChange );
                 jQuery("input#value", container).on( 'change.reactor', handleRowChange );
-                jQuery("select.devicemenu", container).on( 'change.reactor', handleDeviceChange ).change();
+                jQuery("select.devicemenu", container).on( 'change.reactor', handleDeviceChange );
                 break;
             case 'housemode':
                 container.append(

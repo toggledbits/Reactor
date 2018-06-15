@@ -90,8 +90,8 @@
 					"top": "0",
 					"left": "1",
 					"Label": {
-						"lang_tag": "cmd_auto",
-						"text": "Auto"
+						"lang_tag": "cmd_trip",
+						"text": "Trip"
 					},
 					"Display": {
 						"Top": 30,
@@ -101,10 +101,10 @@
 					},
 					"Command": {
 						"Service": "urn:toggledbits-com:serviceId:ReactorSensor",
-						"Action": "Trigger",
+						"Action": "Trip",
 						"Parameters": []
 					},
-					"ControlCode": "trigger"
+					"ControlCode": "trip"
 				},
                 {
 					"ControlGroup": "1",

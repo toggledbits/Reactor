@@ -31,6 +31,11 @@
             </argumentList>
         </action>
         <action>
+            <name>MasterClear</name>
+            <argumentList>
+            </argumentList>
+        </action>
+        <action>
             <name>GetPluginVersion</name>
             <argumentList>
                 <argument>
