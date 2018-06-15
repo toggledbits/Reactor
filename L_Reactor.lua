@@ -265,20 +265,6 @@ local function isOnList( l, e )
     return false
 end
 
--- Active house mode?
-local function isActiveHouseMode( tdev )
-    assert(type(tdev) == "number")
-    local mode = luup.attr_get( "Mode", 0 )
-    local activeList,n = split( luup.variable_get( RSSID, "HouseModes", tdev ) or "", "," )
-    D("isActiveHouseMode() checking current mode %1 against active modes %2", mode, activeList )
-    if n == 0 then return true end -- no modes is all modes
-    for _,t in ipairs( activeList ) do
-        if t == mode then return true end
-    end
-    D("isActiveHouseMode() not an active house mode")
-    return false
-end
-
 -- Return the plugin version string
 function getPluginVersion()
     return _PLUGIN_VERSION, _CONFIGVERSION
@@ -297,9 +283,12 @@ local function sensor_runOnce( tdev )
         luup.variable_set( RSSID, "Enabled", "1", tdev )
         luup.variable_set( RSSID, "Invert", "0", tdev )
         luup.variable_set( RSSID, "Retrigger", "0", tdev )
+        luup.variable_set( RSSID, "Message", "", tdev )
         luup.variable_set( RSSID, "cdata", "", tdev )
 
         luup.variable_set( SENSOR_SID, "Tripped", 0, tdev )
+        
+        luup.variable_set( "urn:micasaverde-com:serviceId:HaDevice1", "ModeSetting", "1:;2:;3:;4:", tdev )
 
         luup.variable_set( RSSID, "Version", _CONFIGVERSION, tdev )
         return
