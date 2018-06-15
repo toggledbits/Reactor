@@ -290,7 +290,9 @@ local function sensor_runOnce( tdev )
         luup.variable_set( RSSID, "Message", "", tdev )
         luup.variable_set( RSSID, "cdata", "", tdev )
 
+        luup.variable_set( SENSOR_SID, "Armed", 0, tdev )
         luup.variable_set( SENSOR_SID, "Tripped", 0, tdev )
+        luup.variable_set( SENSOR_SID, "ArmedTripped", 0, tdev )
         
         luup.variable_set( "urn:micasaverde-com:serviceId:HaDevice1", "ModeSetting", "1:;2:;3:;4:", tdev )
 
@@ -393,12 +395,16 @@ end
 function actionTrip( force, dev )
     L("Sensor %1 (%2) trigger action!", dev, luup.devices[dev].description)
     luup.variable_set( SENSOR_SID, "Tripped", 1, dev );
+    if getVarNumeric( "Armed", 0, dev, SENSOR_SID ) ~= 0 then
+        luup.variable_set( SENSOR_SID, "ArmedTripped", 1, dev )
+    end
     setMessage("Tripped", dev);
 end
 
 function actionReset( force, dev )
     L("Sensor %1 (%2) reset action!", dev, luup.devices[dev].description)
     luup.variable_set( SENSOR_SID, "Tripped", 0, dev );
+    luup.variable_set( SENSOR_SID, "ArmedTripped", 0, dev );
     setMessage("Not tripped", dev)
 end
 
@@ -708,6 +714,17 @@ local function updateSensor( tdev )
     if currTrip ~= newTrip or ( newTrip and retrig ) then
         -- Changed, or retriggerable.
         luup.variable_set( SENSOR_SID, "Tripped", iif( newTrip, 1, 0 ), tdev )
+        if not newTrip then
+            -- If not tripped, reset ArmedTripped, but only if it doesn't agree.
+            if getVarNumeric( "ArmedTripped", -1, tdev, SENSOR_SID ) ~= 0 then
+                luup.variable_set( SENSOR_SID, "ArmedTripped", 0, tdev )
+            end
+        else
+            -- Now tripped; if armed, make sure ArmedTripped follows
+            if getVarNumeric( "Armed", 0, tdev, SENSOR_SID ) ~= 0 then
+                luup.variable_set( SENSOR_SID, "ArmedTripped", 1, tdev )
+            end
+        end
     end
     setMessage( iif( newTrip, "Tripped", "Not tripped" ), tdev )
     
