@@ -337,17 +337,23 @@ end
 function addSensor( pdev )
     D("addSensor(%1)", pdev)
     local ptr = luup.chdev.start( pdev )
-    local nc = 0
+    local highd = 0
     for _,v in pairs(luup.devices) do
         if v.device_type == RSTYPE and v.device_num_parent == pdev then
+            D("addSensor() appending existing device %1 (%2)", v.id, v.description)
+            D("----------- v=%1", v)
+            if isOpenLuup then D("----------- ptr=%1", ptr) end
+            local dd = tonumber( string.match( v.id, "s(%d+)" ) )
+            if dd == nil then highd = highd + 1 elseif dd > highd then highd = dd end
             luup.chdev.append( pdev, ptr, v.id, v.description, "",
                 "D_ReactorSensor.xml", "", "", false )
-            nc = nc + 1
         end
     end
-    nc = nc + 1
-    luup.chdev.append( pdev, ptr, "t"..os.time(), "Reactor Sensor " .. nc, "",
-        "D_ReactorSensor.xml", "", RSSID .. ",Version=0", false )
+    highd = highd + 1
+    D("addSensor() creating child r%1s%2", pdev, highd)
+    luup.chdev.append( pdev, ptr, string.format("r%ds%d", pdev, highd), 
+        "Reactor Sensor " .. highd, "", "D_ReactorSensor.xml", "", "", false )
+    if isOpenLuup then D("END ------- ptr=%1", ptr) end
     luup.chdev.sync( pdev, ptr )
     -- Should cause reload immediately.
 end
@@ -406,6 +412,17 @@ function actionReset( force, dev )
     luup.variable_set( SENSOR_SID, "Tripped", 0, dev );
     luup.variable_set( SENSOR_SID, "ArmedTripped", 0, dev );
     setMessage("Not tripped", dev)
+end
+
+function actionSetArmed( armedVal, dev )
+    L("Sensor %1 (%2) set armed to %4", dev, luup.devices[dev].description, armedVal)
+    local armed = ( tonumber( armedVal ) or 0 ) ~= 0
+    luup.variable_set( SENSOR_SID, "Armed", iif( armed, 1, 0 ), dev )
+    if armed then
+        luup.variable_set( SENSOR_SID, "ArmedTripped", getVarNumeric( "Tripped", 0, dev, SENSOR_SID ), dev )
+    else
+        luup.variable_set( SENSOR_SID, "ArmedTripped", 0, dev )    
+    end
 end
 
 function masterClear( dev ) 
