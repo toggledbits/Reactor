@@ -6,16 +6,10 @@
     </specVersion>
     <serviceStateTable>
         <stateVariable sendEvents="yes">
-            <name>Status</name>
-            <dataType>string</dataType>
-            <defaultValue>idle</defaultValue>
-            <shortCode>status</shortCode>
-        </stateVariable>
-        <stateVariable sendEvents="yes">
-            <name>OffTime</name>
-            <dataType>ui4</dataType>
+            <name>Enabled</name>
+            <dataType>boolean</dataType>
             <defaultValue>0</defaultValue>
-            <shortCode>offtime</shortCode>
+            <shortCode>enabled</shortCode>
         </stateVariable>
         <stateVariable sendEvents="yes">
             <name>Message</name>
@@ -23,11 +17,17 @@
             <defaultValue></defaultValue>
             <shortCode>message</shortCode>
         </stateVariable>
-        <stateVariable sendEvents="yes">
-            <name>Timing</name>
-            <dataType>ui1</dataType>
+        <stateVariable sendEvents="no">
+            <name>Invert</name>
+            <dataType>boolean</dataType>
             <defaultValue>0</defaultValue>
-            <shortCode>timing</shortCode>
+            <shortCode>invert</shortCode>
+        </stateVariable>
+        <stateVariable sendEvents="no">
+            <name>Retrigger</name>
+            <dataType>boolean</dataType>
+            <defaultValue>0</defaultValue>
+            <shortCode>retrig</shortCode>
         </stateVariable>
     </serviceStateTable>
     <actionList>
