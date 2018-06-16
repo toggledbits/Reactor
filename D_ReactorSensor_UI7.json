@@ -294,6 +294,41 @@
         {
             "id": 5,
             "label": {
+                "lang_tag": "tb_armed_changes",
+                "text": "Arming state changes"
+            },
+            "serviceId": "urn:micasaverde-com:serviceId:SecuritySensor1",
+            "argumentList": [{
+                "id": 1,
+                "name": "Armed",
+                "comparisson": "=",
+                "dataType": "string",
+                "defaultValue": "1",
+                "allowedValueList": [{
+                        "enabled": "1",
+                        "HumanFriendlyText": {
+                            "lang_tag": "tb_armed",
+                            "text": "Armed"
+                        }
+                    },
+                    {
+                        "disabled": "0",
+                        "HumanFriendlyText": {
+                            "lang_tag": "tb_disarmed",
+                            "text": "Disarmed"
+                        }
+                    }
+                ],
+                "prefix": {
+                    "lang_tag": "tb_arm_to",
+                    "text": "To:"
+                },
+                "suffix": {}
+            }]
+        },
+        {
+            "id": 6,
+            "label": {
                 "lang_tag": "tb_enabled_changes",
                 "text": "Enabled state changes"
             },
