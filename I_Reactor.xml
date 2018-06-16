@@ -53,17 +53,18 @@
         <action>
             <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
             <name>AddSensor</name>
-            <run>
+            <job>
                 Reactor.addSensor( lul_device )
-                return true
-            </run>
+                return 4,0
+            </job>
         </action>
         <action>
             <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
             <name>MasterClear</name>
-            <run>
+            <job>
                 Reactor.masterClear( lul_device )
-            </run>
+                return 4,0
+            </job>
         </action>
         <action>
             <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
