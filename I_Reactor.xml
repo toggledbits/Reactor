@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <implementation>
     <functions>
-        -- -------------------------------------------------------------------------------------------------------------------------
+        -- --------------------------------------------------------------------
         -- Reactor
         -- Copyright 2018 Patrick H. Rigney, All Rights Reserved.
-        -- This file is part of Reactor. For license info, see LICENSE at https://github.com/toggledbits/Reactor
-        -- -------------------------------------------------------------------------------------------------------------------------
+        -- https://www.toggledbits.com/
+        -- --------------------------------------------------------------------
         function startupReactor(devNum)
             luup.log("Reactor STARTUP!")
             Reactor = require("L_Reactor")
@@ -39,6 +39,14 @@
             <name>Trip</name>
             <run>
                 Reactor.actionTrip( false, lul_device )
+                return true
+            </run>
+        </action>
+        <action>
+            <serviceId>urn:micasaverde-com:serviceId:SecuritySensor1</serviceId>
+            <name>SetArmed</name>
+            <run>
+                Reactor.actionSetArmed( lul_settings.newArmedValue, lul_device )
                 return true
             </run>
         </action>
