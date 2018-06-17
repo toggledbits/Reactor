@@ -1014,9 +1014,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
         debugMode = true
     end
 
-    if action == "capabilities" then
-        return "{actors={}}", "application/json"
-    elseif action == "status" then
+    if action == "status" then
         local st = {
             name=_PLUGIN_NAME,
             version=_PLUGIN_VERSION,
