@@ -919,7 +919,7 @@ var ReactorSensor = (function(api) {
             html += '<div class="clearfix">';
 
             html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
-            html += '<div id="tbcopyright">Reactor ver 1.0dev &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>, All Rights Reserved. For documentation and license, please see this project\'s <a href="https://github.com/toggledbits/Reactor" target="_blank">GitHub repository</a>.</div>';
+            html += '<div id="tbcopyright">Reactor ver 1.0alpha1 &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>, All Rights Reserved. For documentation and license, please see this project\'s <a href="https://github.com/toggledbits/Reactor" target="_blank">GitHub repository</a>.</div>';
 
             // Push generated HTML to page
             api.setCpanelContent(html);
