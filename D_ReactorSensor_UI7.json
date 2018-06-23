@@ -20,6 +20,11 @@
             "Position": "0",
             "TabType": "flash",
             "top_navigation_tab": 1,
+            "TopNavigationTab": 1,
+            "AfterInit": {
+                "ScriptName": "J_ReactorSensor_UI7.js",
+                "Function": "ReactorSensor.doStatusPanel"
+            },
             "ControlGroup": [{
                     "id": "1",
                     "scenegroup": "1"
@@ -184,6 +189,7 @@
             "Position": "1",
             "TabType": "javascript",
             "top_navigation_tab": 1,
+            "TopNavigationTab": 1,
             "ScriptName": "J_ReactorSensor_UI7.js",
             "Function": "ReactorSensor.doConditions"
         },
