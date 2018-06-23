@@ -489,10 +489,10 @@ var ReactorSensor = (function(api) {
                 break;
             case 'housemode':
                 container.append(
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="1"><label class="form-check-label">Home</label></div>' +
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="2"><label class="form-check-label">Away</label></div>' +
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="3"><label class="form-check-label">Night<label></div>' +
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="4"><label class="form-check-label">Vacation</label></div>'
+                    '<label class="checkbox-inline"><input type="checkbox" id="opts" value="1">Home</label>' +
+                    '<label class="checkbox-inline"><input type="checkbox" id="opts" value="2">Away</label>' +
+                    '<label class="checkbox-inline"><input type="checkbox" id="opts" value="3">Night</label>' +
+                    '<label class="checkbox-inline"><input type="checkbox" id="opts" value="4">Vacation</label>'
                 );
                 jQuery("input", container).on( 'change.reactor', handleRowChange );
                 (cond.value || "").split(',').forEach( function( val ) {
@@ -502,14 +502,14 @@ var ReactorSensor = (function(api) {
             case 'weekday':
                 // ??? first, 2nd, 3rd, 4th, 5th, last ???
                 container.append(
-                    '<select class="wdcond form-control form-control-sm"><option value="">Every</option><option value="1">First</option><option value="2">2nd</option><option value="3">3rd</option><option value="4">4th</option><option value="5">5th</option><option value="last">Last</option></select>' +
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="1"><label class="form-check-label">Sun</label></div>' +
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="2"><label class="form-check-label">Mon</label></div>' +
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="3"><label class="form-check-label">Tue<label></div>' +
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="4"><label class="form-check-label">Wed</label></div>' +
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="5"><label class="form-check-label">Thu</label></div>' +
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="6"><label class="form-check-label">Fri</label></div>' +
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="7"><label class="form-check-label">Sat</label></div>'
+                    '<select class="wdcond form-control form-control-sm"><option value="">Every</option><option value="1">First</option><option value="2">2nd</option><option value="3">3rd</option><option value="4">4th</option><option value="5">5th</option><option value="last">Last</option></select> ' +
+                    '<label class="checkbox-inline"><input type="checkbox" id="opts" value="1">Sun</label>' +
+                    '<label class="checkbox-inline"><input type="checkbox" id="opts" value="2">Mon</label>' +
+                    '<label class="checkbox-inline"><input type="checkbox" id="opts" value="3">Tue</label>' +
+                    '<label class="checkbox-inline"><input type="checkbox" id="opts" value="4">Wed</label>' +
+                    '<label class="checkbox-inline"><input type="checkbox" id="opts" value="5">Thu</label>' +
+                    '<label class="checkbox-inline"><input type="checkbox" id="opts" value="6">Fri</label>' +
+                    '<label class="checkbox-inline"><input type="checkbox" id="opts" value="7">Sat</label>'
                 );
                 jQuery("input", container).on( 'change.reactor', handleRowChange );
                 jQuery("select.wdcond", container).on( 'change.reactor', handleRowChange ).val( cond.condition || "" );
@@ -971,16 +971,24 @@ var ReactorSensor = (function(api) {
                     
                     case 'weekday':
                         var dmap = [ '?', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat' ];
+                        var wmap = { "1": "First", "2": "Second", "3": "Third", "4": "Fifth", "5": "Fifth", "last": "Last" };
                         el.append('<div class="col-sm-6 col-md-2">Weekday</div>');
-                        var vv = "";
+                        var vv;
+                        if ( ( cond.condition || "" ) == "" ) {
+                            vv = "Every";
+                        } else if ( wmap[cond.condition] ) {
+                            vv = wmap[cond.condition];
+                        } else {
+                            vv = cond.condition;
+                        }
                         if ( ( cond.value || "" ) === "" ) {
-                            vv = "Any";
+                            vv += " day";
                         } else {
                             var t = ( cond.value || "" ).split(/,/);
                             for ( var k=0; k<t.length; ++k ) {
                                 t[k] = dmap[t[k]];
                             }
-                            vv = t.join(', ');
+                            vv += ' ' + t.join(', ');
                         }
                         el.append('<div class="col-sm-6 col-md-6">' + vv + '</div>');
                         currentValue = dmap[currentValue || 0];
