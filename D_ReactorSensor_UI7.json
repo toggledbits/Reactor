@@ -55,7 +55,7 @@
                     "left": "0",
                     "Label": {
                         "lang_tag": "tb_reactor_tag",
-                        "text": "Reactor Load Timing Control"
+                        "text": "Manual Control"
                     },
                     "Display": {
                         "Top": 8,
