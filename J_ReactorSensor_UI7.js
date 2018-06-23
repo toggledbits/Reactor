@@ -27,6 +27,7 @@ var ReactorSensor = (function(api) {
     var cdata;
     var ixCond = {}, ixGroup = {};
     var roomsByName = [];
+    var roomScenes;
     var configModified = false;
     var lastx = 0;
 
@@ -68,6 +69,52 @@ var ReactorSensor = (function(api) {
         } else {
             cdata = JSON.parse( s );
         }
+        
+        // Make our own list of devices, sorted by room.
+        var devices = api.getListOfDevices();
+        deviceByNumber = [];
+        var rooms = [];
+        var noroom = { "id": 0, "name": "No Room", "devices": [] };
+        rooms[noroom.id] = noroom;
+        var dd = devices.sort( function( a, b ) {
+            if ( a.name.toLowerCase() === b.name.toLowerCase() ) {
+                return a.id < b.id ? -1 : 1;
+            }
+            return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1;
+        });
+        for (var i=0; i<dd.length; i+=1) {
+            var roomid = dd[i].room || 0;
+            var roomObj = rooms[roomid];
+            if ( roomObj === undefined ) {
+                roomObj = api.cloneObject(api.getRoomObject(roomid));
+                roomObj.devices = [];
+                rooms[roomid] = roomObj;
+            }
+            dd[i].friendlyName = "#" + dd[i].id + " " + dd[i].name;
+            deviceByNumber[devices[i].id] = dd[i];
+            roomObj.devices.push(dd[i]);
+        }
+        roomsByName = rooms.sort(
+            // Special sort for room name -- sorts "No Room" last
+            function (a, b) {
+                if (a.id === 0) return 1;
+                if (b.id === 0) return -1;
+                if (a.name.toLowerCase() === b.name.toLowerCase()) return 0;
+                return a.name.toLowerCase() > b.name.toLowerCase() ? 1 : -1;
+            }
+        );
+
+        var scenes = ud.scenes; /* There is no api.getListOfScenes(). Really? */
+        roomScenes = [];
+        if ( undefined !== scenes ) {
+            for ( var i=0; i<scenes.length; i+=1 ) {
+                if ( undefined === roomScenes[scenes[i].room] ) {
+                    roomScenes[scenes[i].room] = [];
+                }
+                roomScenes[scenes[i].room].push(scenes[i]);
+            }
+        }
+
     }
     
 
@@ -356,7 +403,7 @@ var ReactorSensor = (function(api) {
                 dd.removeClass('tberror');
                 if ( (cond.duration||0) !== n ) {
                     /* Changed */
-                    if ( n == 0 ) {
+                    if ( n === 0 ) {
                         delete cond.duration;
                     } else {
                         cond.duration = n;
@@ -486,7 +533,7 @@ var ReactorSensor = (function(api) {
                 hours.append('<option value="sunrise">Sunrise</option><option value="sunset">Sunset</option>');
                 for ( var hr = 0; hr<24; hr++ ) {
                     var hh = hr % 12;
-                    if ( hh == 0 ) {
+                    if ( hh === 0 ) {
                         hh = 12;
                     }
                     hours.append('<option value="' + hr + '">' + hr + ' (' + hh + ( hr < 12 ? "am" : "pm" ) + ')</option>');
@@ -834,20 +881,170 @@ var ReactorSensor = (function(api) {
         configModified = false;
         updateControls();
     }
+    
+    function relativeTime( dt ) {
+        if ( 0 === dt || undefined === dt ) {
+            return "";
+        }
+        var dtms = dt * 1000;
+        var ago = ( new Date().getTime() - dtms ) / 1000;
+        if ( ago < 86400 ) {
+            return new Date(dtms).toLocaleTimeString();
+        }
+        return new Date(dtms).toLocaleString();
+    }
 
     function doSettings()
     {
     }
+
+    function updateStatus() {
+        var stel = jQuery('div#reactorstatus');
+        if ( stel.length === 0 ) {
+            // If not displayed, do nothing.
+            return;
+        }
+        stel.empty();
+        
+        var cdata, cstate;
+        var s = api.getDeviceState( myDevice, serviceId, "cdata" ) || "";
+        if ( "" !== s ) {
+            cdata = JSON.parse( s );
+        } else {
+            console.log("cdata unavailable");
+            return;
+        }
+        
+        s = api.getDeviceState( myDevice, serviceId, "cstate" ) || "";
+        if ( "" !== s ) {
+            cstate = JSON.parse( s );
+        } else {
+            console.log("cstate unavailable");
+            cstate = {};
+        }
+
+        for ( var i=0; i<cdata.conditions.length; i++ ) {
+            var grp = cdata.conditions[i];
+            var grpel = jQuery('<div class="reactorgroup" id="' + grp.groupid + '">');
+            stel.append( grpel );
+
+            var groupstate = true;
+            for ( var j=0; j<grp.groupconditions.length; j++ ) {
+                var cond = grp.groupconditions[j];
+                var el = jQuery('<div class="row cond" id="' + cond.id + '">');
+                var currentValue = cstate[cond.id] === undefined ? cstate[cond.id] : cstate[cond.id].lastvalue;
+                
+                switch ( cond.type ) {
+                    case 'service':
+                        el.append('<div class="col-sm-6 col-md-2">Service</div>');
+                        el.append('<div class="col-sm-6 col-md-3">' + 
+                            ( undefined !== deviceByNumber[cond.device] ? 
+                                deviceByNumber[cond.device].friendlyName : 
+                                '#' + cond.device + ( cond.devicename === undefined ? "name unknown" : cond.devicename ) + ' (missing)' ) + 
+                            '</div>');
+                        el.append('<div class="col-sm-6 col-md-3">' + 
+                            cond.variable + cond.condition + cond.value + 
+                            ( ( cond.duration || 0 ) > 0 ? " for " + cond.duration + " secs" : "" ) +
+                            '</div>'); // ??? html escape
+                        break;
+                        
+                    case 'comment':
+                        el.append('<div class="col-sm-12 col-md-12"><em>' + cond.comment + '</em></div>');
+                        break;
+                        
+                    case 'housemode':
+                        var hmap = [ '?', 'Home','Away','Night','Vacation' ];
+                        el.append('<div class="col-sm-6 col-md-2">House Mode</div>');
+                        var vv = "";
+                        if ( ( cond.value || "" ) === "" ) {
+                            vv = "Any";
+                        } else {
+                            var t = ( cond.value || "" ).split(/,/);
+                            for ( var k=0; k<t.length; ++k ) {
+                                t[k] = hmap[t[k]];
+                            }
+                            vv = t.join(' or ');
+                        }
+                        el.append('<div class="col-sm-6 col-md-6">' + vv + '</div>');
+                        currentValue = hmap[currentValue || 0];
+                        break;
+                    
+                    case 'weekday':
+                        var dmap = [ '?', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat' ];
+                        el.append('<div class="col-sm-6 col-md-2">Weekday</div>');
+                        var vv = "";
+                        if ( ( cond.value || "" ) === "" ) {
+                            vv = "Any";
+                        } else {
+                            var t = ( cond.value || "" ).split(/,/);
+                            for ( var k=0; k<t.length; ++k ) {
+                                t[k] = dmap[t[k]];
+                            }
+                            vv = t.join(', ');
+                        }
+                        el.append('<div class="col-sm-6 col-md-6">' + vv + '</div>');
+                        currentValue = dmap[currentValue || 0];
+                        break;
+                    
+                    case 'time':
+                        if ( currentValue !== undefined ) {
+                            currentValue = new Date( currentValue * 1000 ).toLocaleString();
+                        }
+                        /* fall through */
+
+                    default:
+                        el.append('<div class="col-sm-12 col-md-2">' + cond.type + '</div>');
+                        el.append('<div class="col-sm-12 col-md-6">' + JSON.stringify( cond ) + '</div>');
+                }
+                
+                /* Append current value and condition state */
+                if ( cond.type !== "comment" ) {
+                    if ( currentValue !== undefined ) {
+                        var cs = cstate[cond.id];
+                        el.append('<div class="col-sm-6 col-md-4">(' + currentValue + ') ' +
+                            ( cs.laststate ? "true" : "false" ) + 
+                            ' as of ' + relativeTime( cs.statestamp ) +
+                            '</div>' );
+                        groupstate = groupstate && cs.evalstate;
+                    } else {
+                        el.append( '<div class="col-sm-6 col-md-4">(unknown)' );
+                        groupstate = false;
+                    }
+                }
+                
+                grpel.append( el );
+            }
+            
+            if (groupstate) {
+                grpel.addClass("truestate");
+            }
+        }
+    }
+
+    function onUIDeviceStatusChanged( args ) {
+        if ( args.id == myDevice ) {
+            for ( var k=0; k<args.states.length; ++k ) {
+                if ( args.states[k].variable.match( /(cdata|cstate|Tripped|Armed)/ ) ) {
+                    console.log( args.states[k].variable + " updated!");
+                    updateStatus();
+                    return;
+                }
+            }
+        }
+    }
+
     
-    function doStatus()
+    function doStatusPanel()
     {
         initModule();
         
-        var s = api.getDeviceState( myDevice, serviceId, "cdata" ) || "";
-
-        var html = '<div>TBD!</div>';
-        api.setCpanelContent(html);
-
+        api.setCpanelContent( '<div id="reactorstatus"></div>' );
+        
+        jQuery('head').append('<style>.reactorgroup { border-radius: 8px; border: 2px solid #006040; padding: 8px; } .truestate { background-color: #ccffcc; }</style>');
+        
+        updateStatus();
+        
+        api.registerEventHandler('on_ui_deviceStatusChanged', ReactorSensor, 'onUIDeviceStatusChanged');
     }
     
     function doConditions()
@@ -855,71 +1052,25 @@ var ReactorSensor = (function(api) {
         try {
             initModule();
 
-            var i, j, html = "";
-
-            // Make our own list of devices, sorted by room.
-            var devices = api.getListOfDevices();
-            deviceByNumber = [];
-            var rooms = [];
-            var noroom = { "id": 0, "name": "No Room", "devices": [] };
-            rooms[noroom.id] = noroom;
-            var dd = devices.sort( function( a, b ) {
-                if ( a.name.toLowerCase() === b.name.toLowerCase() ) {
-                    return a.id < b.id ? -1 : 1;
-                }
-                return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1;
-            });
-            for (i=0; i<dd.length; i+=1) {
-                var roomid = dd[i].room || 0;
-                var roomObj = rooms[roomid];
-                if ( roomObj === undefined ) {
-                    roomObj = api.cloneObject(api.getRoomObject(roomid));
-                    roomObj.devices = [];
-                    rooms[roomid] = roomObj;
-                }
-                dd[i].friendlyName = "#" + dd[i].id + " " + dd[i].name;
-                deviceByNumber[devices[i].id] = dd[i];
-                roomObj.devices.push(dd[i]);
-            }
-            roomsByName = rooms.sort(
-                // Special sort for room name -- sorts "No Room" last
-                function (a, b) {
-                    if (a.id === 0) return 1;
-                    if (b.id === 0) return -1;
-                    if (a.name.toLowerCase() === b.name.toLowerCase()) return 0;
-                    return a.name.toLowerCase() > b.name.toLowerCase() ? 1 : -1;
-                }
-            );
-
-            var scenes = ud.scenes; /* There is no api.getListOfScenes(). Really? */
-            var roomScenes = [];
-            if ( undefined !== scenes ) {
-                for ( i=0; i<scenes.length; i+=1 ) {
-                    if ( undefined === roomScenes[scenes[i].room] ) {
-                        roomScenes[scenes[i].room] = [];
-                    }
-                    roomScenes[scenes[i].room].push(scenes[i]);
-                }
-            }
-
             // Load material design icons
             jQuery("head").append('<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">');
 
-            html = "<style>";
+            // Our styles.
+            var html = "<style>";
             html += ".tb-about { margin-top: 24px; }";
-            html += ".color-green { color: #00a652; }";
+            html += ".color-green { color: #006040; }";
             html += '.tberror { border: 1px solid red; }';
             html += '.tbwarn { border: 1px solid yellow; background-color: yellow; }';
             html += 'i.md-btn:disabled { color: #cccccc; cursor: auto; }';
             html += 'i.md-btn[disabled] { color: #cccccc; cursor: auto; }';
-            html += 'i.md-btn { color: #00a652; font-size: 12pt; cursor: pointer; }';
+            html += 'i.md-btn { color: #006040; font-size: 12pt; cursor: pointer; }';
             html += 'input.tbinvert { min-width: 16px; min-height: 16px; }';
             html += 'div.conditions { width: 100%; }';
             //html += 'div.params .devicemenu,.varmenu { max-width: 30%; }';
             //html += 'div.params .condmenu { max-width: 20%; }';
             //html += 'div.params input#value { max-width: 20%; }';
             html += 'input.narrow { max-width: 6em; }';
-            html += 'div.conditiongroup { border-radius: 8px; border: 2px solid #73ad21; padding: 8px; }';
+            html += 'div.conditiongroup { border-radius: 8px; border: 2px solid #006040; padding: 8px; }';
             html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
             html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
             html += "</style>";
@@ -953,8 +1104,10 @@ var ReactorSensor = (function(api) {
         uuid: uuid,
         initModule: initModule,
         onBeforeCpanelClose: onBeforeCpanelClose,
+        onUIDeviceStatusChanged: onUIDeviceStatusChanged,
         doSettings: doSettings,
-        doConditions: doConditions
+        doConditions: doConditions,
+        doStatusPanel: doStatusPanel
     };
     return myModule;
 })(api);
