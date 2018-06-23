@@ -42,7 +42,7 @@
 					"top": "1",
 					"left": "0",
 					"Display": {
-						"Top": 60,
+						"Top": 90,
 						"Left": 0,
 						"Width": 320,
 						"Height": 24,
@@ -88,14 +88,14 @@
                 {
                     "ControlType": "label",
                     "Display": {
-                        "Top": 90,
+                        "Top": 120,
                         "Left": 0,
                         "Width": 320,
                         "Height": 24
                     },
                     "Label": {
                         "lang_tag": "tb_reactor_about",
-                        "text": "Reactor ver 1.0alpha1 &#169; 2018 Patrick H. Rigney, All Rights Reserved.<br/><a href=\"#\" target=\"_blank\">Forum thread</a> &#149; <a href=\"http://www.toggledbits.com/reactor\" target=\"_blank\">Documentation and license information</a>."
+                        "text": "Reactor ver 1.0 &#169; 2018 Patrick H. Rigney, All Rights Reserved.<br/><a href=\"http://forum.micasaverde.com/index.php/topic,87484.0.html\" target=\"_blank\">Forum thread</a> &#149; <a href=\"http://www.toggledbits.com/reactor\" target=\"_blank\">Documentation and license information</a>."
                     }
                 }
 			],

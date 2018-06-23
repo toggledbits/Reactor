@@ -178,13 +178,14 @@
         },
         {
             "Label": {
-                "lang_tag": "tb_reactorsensor_settings",
-                "text": "Settings"
+                "lang_tag": "tb_reactorsensor_doConditions",
+                "text": "Conditions"
             },
             "Position": "1",
             "TabType": "javascript",
+            "top_navigation_tab": 1,
             "ScriptName": "J_ReactorSensor_UI7.js",
-            "Function": "ReactorSensor.doSettings"
+            "Function": "ReactorSensor.doConditions"
         },
         {
             "Label": {

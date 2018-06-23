@@ -837,6 +837,21 @@ var ReactorSensor = (function(api) {
 
     function doSettings()
     {
+    }
+    
+    function doStatus()
+    {
+        initModule();
+        
+        var s = api.getDeviceState( myDevice, serviceId, "cdata" ) || "";
+
+        var html = '<div>TBD!</div>';
+        api.setCpanelContent(html);
+
+    }
+    
+    function doConditions()
+    {
         try {
             initModule();
 
@@ -846,7 +861,7 @@ var ReactorSensor = (function(api) {
             var devices = api.getListOfDevices();
             deviceByNumber = [];
             var rooms = [];
-            var noroom = { "id": "0", "name": "No Room", "devices": [] };
+            var noroom = { "id": 0, "name": "No Room", "devices": [] };
             rooms[noroom.id] = noroom;
             var dd = devices.sort( function( a, b ) {
                 if ( a.name.toLowerCase() === b.name.toLowerCase() ) {
@@ -855,7 +870,7 @@ var ReactorSensor = (function(api) {
                 return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1;
             });
             for (i=0; i<dd.length; i+=1) {
-                var roomid = dd[i].room || "0";
+                var roomid = dd[i].room || 0;
                 var roomObj = rooms[roomid];
                 if ( roomObj === undefined ) {
                     roomObj = api.cloneObject(api.getRoomObject(roomid));
@@ -919,7 +934,7 @@ var ReactorSensor = (function(api) {
             html += '<div class="clearfix">';
 
             html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
-            html += '<div id="tbcopyright">Reactor ver 1.0alpha1 &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>, All Rights Reserved. For documentation and license, please see this project\'s <a href="https://github.com/toggledbits/Reactor" target="_blank">GitHub repository</a>.</div>';
+            html += '<div id="tbcopyright">Reactor ver 1.0 &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>, All Rights Reserved. For documentation, please see this project\'s <a href="https://github.com/toggledbits/Reactor" target="_blank">GitHub repository</a>. For support, please post in the <a href="http://forum.micasaverde.com/index.php/topic,87484.0.html" target="_blank">forum thread</a>.</div>';
 
             // Push generated HTML to page
             api.setCpanelContent(html);
@@ -930,7 +945,7 @@ var ReactorSensor = (function(api) {
         }
         catch (e)
         {
-            console.log( 'Error in ReactorSensor.configurePlugin(): ' + e.toString() );
+            console.log( 'Error in ReactorSensor.doConditions(): ' + e.toString() );
         }
     }
 
@@ -938,7 +953,8 @@ var ReactorSensor = (function(api) {
         uuid: uuid,
         initModule: initModule,
         onBeforeCpanelClose: onBeforeCpanelClose,
-        doSettings: doSettings
+        doSettings: doSettings,
+        doConditions: doConditions
     };
     return myModule;
 })(api);
