@@ -556,7 +556,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         elseif tparam[4] ~= "" then
             local shm = tonumber( tparam[4] ) * 60;
             if tparam[5] ~= "" then shm = shm + tonumber( tparam[5] ) end
-            if hm < shn then return false,true end
+            if hm < shm then return false,true end
         elseif tparam[5] ~= "" and dt.min < tonumber( tparam[5] ) then return false,true
         end
         if tparam[9] == "sunrise" then 
