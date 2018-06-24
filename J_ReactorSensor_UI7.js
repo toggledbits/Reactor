@@ -60,7 +60,7 @@ var ReactorSensor = (function(api) {
         /* Get the config and parse it */
         var s = api.getDeviceState( myDevice, serviceId, "cdata" ) || "";
         if ( s.length === 0 ) {
-            cdata = { version: 1, conditions: [ 
+            cdata = { version: 1, conditions: [
                 { groupid: getUID('grp'), groupconditions: [
                     { id: getUID('cond'), type: "comment", comment: "Enter your AND conditions here" }
                     ]
@@ -69,7 +69,7 @@ var ReactorSensor = (function(api) {
         } else {
             cdata = JSON.parse( s );
         }
-        
+
         // Make our own list of devices, sorted by room.
         var devices = api.getListOfDevices();
         deviceByNumber = [];
@@ -116,7 +116,7 @@ var ReactorSensor = (function(api) {
         }
 
     }
-    
+
 
     /**
      * Find cdata group
@@ -383,12 +383,12 @@ var ReactorSensor = (function(api) {
         jQuery("select.varmenu", row).replaceWith( newMenu );
         updateConditionRow( row ); /* pass it on */
     }
-    
+
     function handleOptionChange( ev ) {
         var el = ev.currentTarget;
         var row = jQuery( el ).closest('div.conditionrow');
         var cond = ixCond[ row.attr("id") ];
-        
+
         var dd = jQuery('input.duration', row);
         if ( "" === dd.val() ) {
             if ( undefined !== cond.duration ) {
@@ -412,29 +412,29 @@ var ReactorSensor = (function(api) {
                 }
             }
         }
-        
+
         updateControls();
     }
-    
+
     function handleCloseOptionsClick( ev ) {
         var el = ev.currentTarget;
         var row = jQuery( el ).closest('div.conditionrow');
-        
+
         /* Remove the options block */
         jQuery('div.params div.condopts', row).remove();
-        
+
         /* Put the open tool back */
         jQuery('div.params i.condmore').show();
     }
-    
+
     function handleExpandOptionsClick( ev ) {
         var el = ev.currentTarget;
         var row = jQuery( el ).closest('div.conditionrow');
         var cond = ixCond[ row.attr("id") ];
-        
+
         /* Remove the open tool */
         jQuery( el ).hide();
-        
+
         /* Create the options container and add options */
         var container = jQuery('<div class="condopts"></div>');
         container.append('<form class="form-inline"><label>Sustained for </label><input type="text" class="duration form-control form-control-sm narrow"><label>seconds</label></form>');
@@ -489,10 +489,10 @@ var ReactorSensor = (function(api) {
                 break;
             case 'housemode':
                 container.append(
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="1"><label class="form-check-label">Home</label></div>' +
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="2"><label class="form-check-label">Away</label></div>' +
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="3"><label class="form-check-label">Night<label></div>' +
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="4"><label class="form-check-label">Vacation</label></div>'
+                    '<label class="checkbox-inline"><input type="checkbox" id="opts" value="1">Home</label>' +
+                    '<label class="checkbox-inline"><input type="checkbox" id="opts" value="2">Away</label>' +
+                    '<label class="checkbox-inline"><input type="checkbox" id="opts" value="3">Night</label>' +
+                    '<label class="checkbox-inline"><input type="checkbox" id="opts" value="4">Vacation</label>'
                 );
                 jQuery("input", container).on( 'change.reactor', handleRowChange );
                 (cond.value || "").split(',').forEach( function( val ) {
@@ -502,14 +502,14 @@ var ReactorSensor = (function(api) {
             case 'weekday':
                 // ??? first, 2nd, 3rd, 4th, 5th, last ???
                 container.append(
-                    '<select class="wdcond form-control form-control-sm"><option value="">Every</option><option value="1">First</option><option value="2">2nd</option><option value="3">3rd</option><option value="4">4th</option><option value="5">5th</option><option value="last">Last</option></select>' +
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="1"><label class="form-check-label">Sun</label></div>' +
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="2"><label class="form-check-label">Mon</label></div>' +
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="3"><label class="form-check-label">Tue<label></div>' +
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="4"><label class="form-check-label">Wed</label></div>' +
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="5"><label class="form-check-label">Thu</label></div>' +
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="6"><label class="form-check-label">Fri</label></div>' +
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="7"><label class="form-check-label">Sat</label></div>'
+                    '<select class="wdcond form-control form-control-sm"><option value="">Every</option><option value="1">First</option><option value="2">2nd</option><option value="3">3rd</option><option value="4">4th</option><option value="5">5th</option><option value="last">Last</option></select> ' +
+                    '<label class="checkbox-inline"><input type="checkbox" id="opts" value="1">Sun</label>' +
+                    '<label class="checkbox-inline"><input type="checkbox" id="opts" value="2">Mon</label>' +
+                    '<label class="checkbox-inline"><input type="checkbox" id="opts" value="3">Tue</label>' +
+                    '<label class="checkbox-inline"><input type="checkbox" id="opts" value="4">Wed</label>' +
+                    '<label class="checkbox-inline"><input type="checkbox" id="opts" value="5">Thu</label>' +
+                    '<label class="checkbox-inline"><input type="checkbox" id="opts" value="6">Fri</label>' +
+                    '<label class="checkbox-inline"><input type="checkbox" id="opts" value="7">Sat</label>'
                 );
                 jQuery("input", container).on( 'change.reactor', handleRowChange );
                 jQuery("select.wdcond", container).on( 'change.reactor', handleRowChange ).val( cond.condition || "" );
@@ -556,7 +556,7 @@ var ReactorSensor = (function(api) {
                 /* Restore values */
                 var vals = (cond.value || "").split(',');
                 var flist = [ 'div.start select.monthmenu','div.start select.daymenu',
-                              'div.start input.year', 'div.start select.hourmenu', 
+                              'div.start input.year', 'div.start select.hourmenu',
                               'div.start select.minmenu', 'div.end select.monthmenu',
                               'div.end select.daymenu','div.end input.year',
                               'div.end select.hourmenu','div.end select.minmenu'
@@ -570,7 +570,7 @@ var ReactorSensor = (function(api) {
             default:
                 /* nada */
         }
-                
+
         /* Append the new container */
         jQuery("div.params", row).append( container );
     }
@@ -822,15 +822,15 @@ var ReactorSensor = (function(api) {
         updateControls();
     }
 
-    /** 
+    /**
      * Handle revert button click: restore setting to last saved and redisplay.
      */
     function handleRevertClick( ev ) {
         initModule();
         redrawConditions();
     }
-    
-    /** 
+
+    /**
      * Remove all properies on condition except those in the exclusion list.
      */
     function removeConditionProperties( cond, excl ) {
@@ -847,7 +847,7 @@ var ReactorSensor = (function(api) {
     }
 
     /**
-     * Handle save click: save the current configuration. 
+     * Handle save click: save the current configuration.
      */
     function handleSaveClick( ev ) {
         /* Rip through conditions and clean up before saving */
@@ -881,7 +881,7 @@ var ReactorSensor = (function(api) {
         configModified = false;
         updateControls();
     }
-    
+
     function relativeTime( dt ) {
         if ( 0 === dt || undefined === dt ) {
             return "";
@@ -905,7 +905,7 @@ var ReactorSensor = (function(api) {
             return;
         }
         stel.empty();
-        
+
         var cdata, cstate;
         var s = api.getDeviceState( myDevice, serviceId, "cdata" ) || "";
         if ( "" !== s ) {
@@ -914,7 +914,7 @@ var ReactorSensor = (function(api) {
             console.log("cdata unavailable");
             return;
         }
-        
+
         s = api.getDeviceState( myDevice, serviceId, "cstate" ) || "";
         if ( "" !== s ) {
             cstate = JSON.parse( s );
@@ -925,33 +925,38 @@ var ReactorSensor = (function(api) {
 
         for ( var i=0; i<cdata.conditions.length; i++ ) {
             var grp = cdata.conditions[i];
+
+            if ( i > 0 ) {
+                /* Insert a divider */
+                stel.append('<div class="row divider"><div class="col-sm-5 col-md-5"><hr></div><div class="col-sm-2 col-md-2" style="text-align: center;"><h5>OR</h5></div><div class="col-sm-5 col-md-5"><hr></div></div>');
+            }
+            
             var grpel = jQuery('<div class="reactorgroup" id="' + grp.groupid + '">');
             stel.append( grpel );
-
             var groupstate = true;
             for ( var j=0; j<grp.groupconditions.length; j++ ) {
                 var cond = grp.groupconditions[j];
                 var el = jQuery('<div class="row cond" id="' + cond.id + '">');
                 var currentValue = cstate[cond.id] === undefined ? cstate[cond.id] : cstate[cond.id].lastvalue;
-                
+
                 switch ( cond.type ) {
                     case 'service':
                         el.append('<div class="col-sm-6 col-md-2">Service</div>');
-                        el.append('<div class="col-sm-6 col-md-3">' + 
-                            ( undefined !== deviceByNumber[cond.device] ? 
-                                deviceByNumber[cond.device].friendlyName : 
-                                '#' + cond.device + ( cond.devicename === undefined ? "name unknown" : cond.devicename ) + ' (missing)' ) + 
+                        el.append('<div class="col-sm-6 col-md-3">' +
+                            ( undefined !== deviceByNumber[cond.device] ?
+                                deviceByNumber[cond.device].friendlyName :
+                                '#' + cond.device + ( cond.devicename === undefined ? "name unknown" : cond.devicename ) + ' (missing)' ) +
                             '</div>');
-                        el.append('<div class="col-sm-6 col-md-3">' + 
-                            cond.variable + cond.condition + cond.value + 
+                        el.append('<div class="col-sm-6 col-md-3">' +
+                            cond.variable + cond.condition + cond.value +
                             ( ( cond.duration || 0 ) > 0 ? " for " + cond.duration + " secs" : "" ) +
                             '</div>'); // ??? html escape
                         break;
-                        
+
                     case 'comment':
                         el.append('<div class="col-sm-12 col-md-12"><em>' + cond.comment + '</em></div>');
                         break;
-                        
+
                     case 'housemode':
                         var hmap = [ '?', 'Home','Away','Night','Vacation' ];
                         el.append('<div class="col-sm-6 col-md-2">House Mode</div>');
@@ -968,24 +973,32 @@ var ReactorSensor = (function(api) {
                         el.append('<div class="col-sm-6 col-md-6">' + vv + '</div>');
                         currentValue = hmap[currentValue || 0];
                         break;
-                    
+
                     case 'weekday':
                         var dmap = [ '?', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat' ];
+                        var wmap = { "1": "First", "2": "Second", "3": "Third", "4": "Fifth", "5": "Fifth", "last": "Last" };
                         el.append('<div class="col-sm-6 col-md-2">Weekday</div>');
-                        var vv = "";
+                        var vv;
+                        if ( ( cond.condition || "" ) == "" ) {
+                            vv = "Every";
+                        } else if ( wmap[cond.condition] ) {
+                            vv = wmap[cond.condition];
+                        } else {
+                            vv = cond.condition;
+                        }
                         if ( ( cond.value || "" ) === "" ) {
-                            vv = "Any";
+                            vv += " day";
                         } else {
                             var t = ( cond.value || "" ).split(/,/);
                             for ( var k=0; k<t.length; ++k ) {
                                 t[k] = dmap[t[k]];
                             }
-                            vv = t.join(', ');
+                            vv += ' ' + t.join(', ');
                         }
                         el.append('<div class="col-sm-6 col-md-6">' + vv + '</div>');
                         currentValue = dmap[currentValue || 0];
                         break;
-                    
+
                     case 'time':
                         if ( currentValue !== undefined ) {
                             currentValue = new Date( currentValue * 1000 ).toLocaleString();
@@ -996,13 +1009,13 @@ var ReactorSensor = (function(api) {
                         el.append('<div class="col-sm-12 col-md-2">' + cond.type + '</div>');
                         el.append('<div class="col-sm-12 col-md-6">' + JSON.stringify( cond ) + '</div>');
                 }
-                
+
                 /* Append current value and condition state */
                 if ( cond.type !== "comment" ) {
                     if ( currentValue !== undefined ) {
                         var cs = cstate[cond.id];
                         el.append('<div class="col-sm-6 col-md-4">(' + currentValue + ') ' +
-                            ( cs.laststate ? "true" : "false" ) + 
+                            ( cs.laststate ? "true" : "false" ) +
                             ' as of ' + relativeTime( cs.statestamp ) +
                             '</div>' );
                         groupstate = groupstate && cs.evalstate;
@@ -1011,10 +1024,10 @@ var ReactorSensor = (function(api) {
                         groupstate = false;
                     }
                 }
-                
+
                 grpel.append( el );
             }
-            
+
             if (groupstate) {
                 grpel.addClass("truestate");
             }
@@ -1033,20 +1046,20 @@ var ReactorSensor = (function(api) {
         }
     }
 
-    
+
     function doStatusPanel()
     {
         initModule();
-        
+
         api.setCpanelContent( '<div id="reactorstatus"></div>' );
-        
+
         jQuery('head').append('<style>.reactorgroup { border-radius: 8px; border: 2px solid #006040; padding: 8px; } .truestate { background-color: #ccffcc; }</style>');
-        
+
         updateStatus();
-        
+
         api.registerEventHandler('on_ui_deviceStatusChanged', ReactorSensor, 'onUIDeviceStatusChanged');
     }
-    
+
     function doConditions()
     {
         try {
