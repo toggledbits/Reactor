@@ -20,6 +20,11 @@
             "Position": "0",
             "TabType": "flash",
             "top_navigation_tab": 1,
+            "TopNavigationTab": 1,
+            "AfterInit": {
+                "ScriptName": "J_ReactorSensor_UI7.js",
+                "Function": "ReactorSensor.doStatusPanel"
+            },
             "ControlGroup": [{
                     "id": "1",
                     "scenegroup": "1"
@@ -50,7 +55,7 @@
                     "left": "0",
                     "Label": {
                         "lang_tag": "tb_reactor_tag",
-                        "text": "Reactor Load Timing Control"
+                        "text": "Manual Control"
                     },
                     "Display": {
                         "Top": 8,
@@ -178,13 +183,15 @@
         },
         {
             "Label": {
-                "lang_tag": "tb_reactorsensor_settings",
-                "text": "Settings"
+                "lang_tag": "tb_reactorsensor_doConditions",
+                "text": "Conditions"
             },
             "Position": "1",
             "TabType": "javascript",
+            "top_navigation_tab": 1,
+            "TopNavigationTab": 1,
             "ScriptName": "J_ReactorSensor_UI7.js",
-            "Function": "ReactorSensor.doSettings"
+            "Function": "ReactorSensor.doConditions"
         },
         {
             "Label": {

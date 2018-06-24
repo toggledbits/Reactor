@@ -27,6 +27,7 @@ var ReactorSensor = (function(api) {
     var cdata;
     var ixCond = {}, ixGroup = {};
     var roomsByName = [];
+    var roomScenes;
     var configModified = false;
     var lastx = 0;
 
@@ -59,7 +60,7 @@ var ReactorSensor = (function(api) {
         /* Get the config and parse it */
         var s = api.getDeviceState( myDevice, serviceId, "cdata" ) || "";
         if ( s.length === 0 ) {
-            cdata = { version: 1, conditions: [ 
+            cdata = { version: 1, conditions: [
                 { groupid: getUID('grp'), groupconditions: [
                     { id: getUID('cond'), type: "comment", comment: "Enter your AND conditions here" }
                     ]
@@ -68,8 +69,54 @@ var ReactorSensor = (function(api) {
         } else {
             cdata = JSON.parse( s );
         }
+
+        // Make our own list of devices, sorted by room.
+        var devices = api.getListOfDevices();
+        deviceByNumber = [];
+        var rooms = [];
+        var noroom = { "id": 0, "name": "No Room", "devices": [] };
+        rooms[noroom.id] = noroom;
+        var dd = devices.sort( function( a, b ) {
+            if ( a.name.toLowerCase() === b.name.toLowerCase() ) {
+                return a.id < b.id ? -1 : 1;
+            }
+            return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1;
+        });
+        for (var i=0; i<dd.length; i+=1) {
+            var roomid = dd[i].room || 0;
+            var roomObj = rooms[roomid];
+            if ( roomObj === undefined ) {
+                roomObj = api.cloneObject(api.getRoomObject(roomid));
+                roomObj.devices = [];
+                rooms[roomid] = roomObj;
+            }
+            dd[i].friendlyName = "#" + dd[i].id + " " + dd[i].name;
+            deviceByNumber[devices[i].id] = dd[i];
+            roomObj.devices.push(dd[i]);
+        }
+        roomsByName = rooms.sort(
+            // Special sort for room name -- sorts "No Room" last
+            function (a, b) {
+                if (a.id === 0) return 1;
+                if (b.id === 0) return -1;
+                if (a.name.toLowerCase() === b.name.toLowerCase()) return 0;
+                return a.name.toLowerCase() > b.name.toLowerCase() ? 1 : -1;
+            }
+        );
+
+        var scenes = ud.scenes; /* There is no api.getListOfScenes(). Really? */
+        roomScenes = [];
+        if ( undefined !== scenes ) {
+            for ( var i=0; i<scenes.length; i+=1 ) {
+                if ( undefined === roomScenes[scenes[i].room] ) {
+                    roomScenes[scenes[i].room] = [];
+                }
+                roomScenes[scenes[i].room].push(scenes[i]);
+            }
+        }
+
     }
-    
+
 
     /**
      * Find cdata group
@@ -336,12 +383,12 @@ var ReactorSensor = (function(api) {
         jQuery("select.varmenu", row).replaceWith( newMenu );
         updateConditionRow( row ); /* pass it on */
     }
-    
+
     function handleOptionChange( ev ) {
         var el = ev.currentTarget;
         var row = jQuery( el ).closest('div.conditionrow');
         var cond = ixCond[ row.attr("id") ];
-        
+
         var dd = jQuery('input.duration', row);
         if ( "" === dd.val() ) {
             if ( undefined !== cond.duration ) {
@@ -356,7 +403,7 @@ var ReactorSensor = (function(api) {
                 dd.removeClass('tberror');
                 if ( (cond.duration||0) !== n ) {
                     /* Changed */
-                    if ( n == 0 ) {
+                    if ( n === 0 ) {
                         delete cond.duration;
                     } else {
                         cond.duration = n;
@@ -365,29 +412,29 @@ var ReactorSensor = (function(api) {
                 }
             }
         }
-        
+
         updateControls();
     }
-    
+
     function handleCloseOptionsClick( ev ) {
         var el = ev.currentTarget;
         var row = jQuery( el ).closest('div.conditionrow');
-        
+
         /* Remove the options block */
         jQuery('div.params div.condopts', row).remove();
-        
+
         /* Put the open tool back */
         jQuery('div.params i.condmore').show();
     }
-    
+
     function handleExpandOptionsClick( ev ) {
         var el = ev.currentTarget;
         var row = jQuery( el ).closest('div.conditionrow');
         var cond = ixCond[ row.attr("id") ];
-        
+
         /* Remove the open tool */
         jQuery( el ).hide();
-        
+
         /* Create the options container and add options */
         var container = jQuery('<div class="condopts"></div>');
         container.append('<form class="form-inline"><label>Sustained for </label><input type="text" class="duration form-control form-control-sm narrow"><label>seconds</label></form>');
@@ -442,10 +489,10 @@ var ReactorSensor = (function(api) {
                 break;
             case 'housemode':
                 container.append(
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="1"><label class="form-check-label">Home</label></div>' +
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="2"><label class="form-check-label">Away</label></div>' +
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="3"><label class="form-check-label">Night<label></div>' +
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="4"><label class="form-check-label">Vacation</label></div>'
+                    '<label class="checkbox-inline"><input type="checkbox" id="opts" value="1">Home</label>' +
+                    '<label class="checkbox-inline"><input type="checkbox" id="opts" value="2">Away</label>' +
+                    '<label class="checkbox-inline"><input type="checkbox" id="opts" value="3">Night</label>' +
+                    '<label class="checkbox-inline"><input type="checkbox" id="opts" value="4">Vacation</label>'
                 );
                 jQuery("input", container).on( 'change.reactor', handleRowChange );
                 (cond.value || "").split(',').forEach( function( val ) {
@@ -455,14 +502,14 @@ var ReactorSensor = (function(api) {
             case 'weekday':
                 // ??? first, 2nd, 3rd, 4th, 5th, last ???
                 container.append(
-                    '<select class="wdcond form-control form-control-sm"><option value="">Every</option><option value="1">First</option><option value="2">2nd</option><option value="3">3rd</option><option value="4">4th</option><option value="5">5th</option><option value="last">Last</option></select>' +
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="1"><label class="form-check-label">Sun</label></div>' +
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="2"><label class="form-check-label">Mon</label></div>' +
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="3"><label class="form-check-label">Tue<label></div>' +
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="4"><label class="form-check-label">Wed</label></div>' +
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="5"><label class="form-check-label">Thu</label></div>' +
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="6"><label class="form-check-label">Fri</label></div>' +
-                    '<div class="form-check"><input type="checkbox" class="form-check-input" id="opts" value="7"><label class="form-check-label">Sat</label></div>'
+                    '<select class="wdcond form-control form-control-sm"><option value="">Every</option><option value="1">First</option><option value="2">2nd</option><option value="3">3rd</option><option value="4">4th</option><option value="5">5th</option><option value="last">Last</option></select> ' +
+                    '<label class="checkbox-inline"><input type="checkbox" id="opts" value="1">Sun</label>' +
+                    '<label class="checkbox-inline"><input type="checkbox" id="opts" value="2">Mon</label>' +
+                    '<label class="checkbox-inline"><input type="checkbox" id="opts" value="3">Tue</label>' +
+                    '<label class="checkbox-inline"><input type="checkbox" id="opts" value="4">Wed</label>' +
+                    '<label class="checkbox-inline"><input type="checkbox" id="opts" value="5">Thu</label>' +
+                    '<label class="checkbox-inline"><input type="checkbox" id="opts" value="6">Fri</label>' +
+                    '<label class="checkbox-inline"><input type="checkbox" id="opts" value="7">Sat</label>'
                 );
                 jQuery("input", container).on( 'change.reactor', handleRowChange );
                 jQuery("select.wdcond", container).on( 'change.reactor', handleRowChange ).val( cond.condition || "" );
@@ -486,7 +533,7 @@ var ReactorSensor = (function(api) {
                 hours.append('<option value="sunrise">Sunrise</option><option value="sunset">Sunset</option>');
                 for ( var hr = 0; hr<24; hr++ ) {
                     var hh = hr % 12;
-                    if ( hh == 0 ) {
+                    if ( hh === 0 ) {
                         hh = 12;
                     }
                     hours.append('<option value="' + hr + '">' + hr + ' (' + hh + ( hr < 12 ? "am" : "pm" ) + ')</option>');
@@ -509,7 +556,7 @@ var ReactorSensor = (function(api) {
                 /* Restore values */
                 var vals = (cond.value || "").split(',');
                 var flist = [ 'div.start select.monthmenu','div.start select.daymenu',
-                              'div.start input.year', 'div.start select.hourmenu', 
+                              'div.start input.year', 'div.start select.hourmenu',
                               'div.start select.minmenu', 'div.end select.monthmenu',
                               'div.end select.daymenu','div.end input.year',
                               'div.end select.hourmenu','div.end select.minmenu'
@@ -523,7 +570,7 @@ var ReactorSensor = (function(api) {
             default:
                 /* nada */
         }
-                
+
         /* Append the new container */
         jQuery("div.params", row).append( container );
     }
@@ -775,15 +822,15 @@ var ReactorSensor = (function(api) {
         updateControls();
     }
 
-    /** 
+    /**
      * Handle revert button click: restore setting to last saved and redisplay.
      */
     function handleRevertClick( ev ) {
         initModule();
         redrawConditions();
     }
-    
-    /** 
+
+    /**
      * Remove all properies on condition except those in the exclusion list.
      */
     function removeConditionProperties( cond, excl ) {
@@ -800,7 +847,7 @@ var ReactorSensor = (function(api) {
     }
 
     /**
-     * Handle save click: save the current configuration. 
+     * Handle save click: save the current configuration.
      */
     function handleSaveClick( ev ) {
         /* Rip through conditions and clean up before saving */
@@ -835,76 +882,208 @@ var ReactorSensor = (function(api) {
         updateControls();
     }
 
+    function relativeTime( dt ) {
+        if ( 0 === dt || undefined === dt ) {
+            return "";
+        }
+        var dtms = dt * 1000;
+        var ago = ( new Date().getTime() - dtms ) / 1000;
+        if ( ago < 86400 ) {
+            return new Date(dtms).toLocaleTimeString();
+        }
+        return new Date(dtms).toLocaleString();
+    }
+
     function doSettings()
+    {
+    }
+
+    function updateStatus() {
+        var stel = jQuery('div#reactorstatus');
+        if ( stel.length === 0 ) {
+            // If not displayed, do nothing.
+            return;
+        }
+        stel.empty();
+
+        var cdata, cstate;
+        var s = api.getDeviceState( myDevice, serviceId, "cdata" ) || "";
+        if ( "" !== s ) {
+            cdata = JSON.parse( s );
+        } else {
+            console.log("cdata unavailable");
+            return;
+        }
+
+        s = api.getDeviceState( myDevice, serviceId, "cstate" ) || "";
+        if ( "" !== s ) {
+            cstate = JSON.parse( s );
+        } else {
+            console.log("cstate unavailable");
+            cstate = {};
+        }
+
+        for ( var i=0; i<cdata.conditions.length; i++ ) {
+            var grp = cdata.conditions[i];
+
+            if ( i > 0 ) {
+                /* Insert a divider */
+                stel.append('<div class="row divider"><div class="col-sm-5 col-md-5"><hr></div><div class="col-sm-2 col-md-2" style="text-align: center;"><h5>OR</h5></div><div class="col-sm-5 col-md-5"><hr></div></div>');
+            }
+            
+            var grpel = jQuery('<div class="reactorgroup" id="' + grp.groupid + '">');
+            stel.append( grpel );
+            var groupstate = true;
+            for ( var j=0; j<grp.groupconditions.length; j++ ) {
+                var cond = grp.groupconditions[j];
+                var el = jQuery('<div class="row cond" id="' + cond.id + '">');
+                var currentValue = cstate[cond.id] === undefined ? cstate[cond.id] : cstate[cond.id].lastvalue;
+
+                switch ( cond.type ) {
+                    case 'service':
+                        el.append('<div class="col-sm-6 col-md-2">Service</div>');
+                        el.append('<div class="col-sm-6 col-md-3">' +
+                            ( undefined !== deviceByNumber[cond.device] ?
+                                deviceByNumber[cond.device].friendlyName :
+                                '#' + cond.device + ( cond.devicename === undefined ? "name unknown" : cond.devicename ) + ' (missing)' ) +
+                            '</div>');
+                        el.append('<div class="col-sm-6 col-md-3">' +
+                            cond.variable + cond.condition + cond.value +
+                            ( ( cond.duration || 0 ) > 0 ? " for " + cond.duration + " secs" : "" ) +
+                            '</div>'); // ??? html escape
+                        break;
+
+                    case 'comment':
+                        el.append('<div class="col-sm-12 col-md-12"><em>' + cond.comment + '</em></div>');
+                        break;
+
+                    case 'housemode':
+                        var hmap = [ '?', 'Home','Away','Night','Vacation' ];
+                        el.append('<div class="col-sm-6 col-md-2">House Mode</div>');
+                        var vv = "";
+                        if ( ( cond.value || "" ) === "" ) {
+                            vv = "Any";
+                        } else {
+                            var t = ( cond.value || "" ).split(/,/);
+                            for ( var k=0; k<t.length; ++k ) {
+                                t[k] = hmap[t[k]];
+                            }
+                            vv = t.join(' or ');
+                        }
+                        el.append('<div class="col-sm-6 col-md-6">' + vv + '</div>');
+                        currentValue = hmap[currentValue || 0];
+                        break;
+
+                    case 'weekday':
+                        var dmap = [ '?', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat' ];
+                        var wmap = { "1": "First", "2": "Second", "3": "Third", "4": "Fifth", "5": "Fifth", "last": "Last" };
+                        el.append('<div class="col-sm-6 col-md-2">Weekday</div>');
+                        var vv;
+                        if ( ( cond.condition || "" ) == "" ) {
+                            vv = "Every";
+                        } else if ( wmap[cond.condition] ) {
+                            vv = wmap[cond.condition];
+                        } else {
+                            vv = cond.condition;
+                        }
+                        if ( ( cond.value || "" ) === "" ) {
+                            vv += " day";
+                        } else {
+                            var t = ( cond.value || "" ).split(/,/);
+                            for ( var k=0; k<t.length; ++k ) {
+                                t[k] = dmap[t[k]];
+                            }
+                            vv += ' ' + t.join(', ');
+                        }
+                        el.append('<div class="col-sm-6 col-md-6">' + vv + '</div>');
+                        currentValue = dmap[currentValue || 0];
+                        break;
+
+                    case 'time':
+                        if ( currentValue !== undefined ) {
+                            currentValue = new Date( currentValue * 1000 ).toLocaleString();
+                        }
+                        /* fall through */
+
+                    default:
+                        el.append('<div class="col-sm-12 col-md-2">' + cond.type + '</div>');
+                        el.append('<div class="col-sm-12 col-md-6">' + JSON.stringify( cond ) + '</div>');
+                }
+
+                /* Append current value and condition state */
+                if ( cond.type !== "comment" ) {
+                    if ( currentValue !== undefined ) {
+                        var cs = cstate[cond.id];
+                        el.append('<div class="col-sm-6 col-md-4">(' + currentValue + ') ' +
+                            ( cs.laststate ? "true" : "false" ) +
+                            ' as of ' + relativeTime( cs.statestamp ) +
+                            '</div>' );
+                        groupstate = groupstate && cs.evalstate;
+                    } else {
+                        el.append( '<div class="col-sm-6 col-md-4">(unknown)' );
+                        groupstate = false;
+                    }
+                }
+
+                grpel.append( el );
+            }
+
+            if (groupstate) {
+                grpel.addClass("truestate");
+            }
+        }
+    }
+
+    function onUIDeviceStatusChanged( args ) {
+        if ( args.id == myDevice ) {
+            for ( var k=0; k<args.states.length; ++k ) {
+                if ( args.states[k].variable.match( /(cdata|cstate|Tripped|Armed)/ ) ) {
+                    console.log( args.states[k].variable + " updated!");
+                    updateStatus();
+                    return;
+                }
+            }
+        }
+    }
+
+
+    function doStatusPanel()
+    {
+        initModule();
+
+        api.setCpanelContent( '<div id="reactorstatus"></div>' );
+
+        jQuery('head').append('<style>.reactorgroup { border-radius: 8px; border: 2px solid #006040; padding: 8px; } .truestate { background-color: #ccffcc; }</style>');
+
+        updateStatus();
+
+        api.registerEventHandler('on_ui_deviceStatusChanged', ReactorSensor, 'onUIDeviceStatusChanged');
+    }
+
+    function doConditions()
     {
         try {
             initModule();
 
-            var i, j, html = "";
-
-            // Make our own list of devices, sorted by room.
-            var devices = api.getListOfDevices();
-            deviceByNumber = [];
-            var rooms = [];
-            var noroom = { "id": "0", "name": "No Room", "devices": [] };
-            rooms[noroom.id] = noroom;
-            var dd = devices.sort( function( a, b ) {
-                if ( a.name.toLowerCase() === b.name.toLowerCase() ) {
-                    return a.id < b.id ? -1 : 1;
-                }
-                return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1;
-            });
-            for (i=0; i<dd.length; i+=1) {
-                var roomid = dd[i].room || "0";
-                var roomObj = rooms[roomid];
-                if ( roomObj === undefined ) {
-                    roomObj = api.cloneObject(api.getRoomObject(roomid));
-                    roomObj.devices = [];
-                    rooms[roomid] = roomObj;
-                }
-                dd[i].friendlyName = "#" + dd[i].id + " " + dd[i].name;
-                deviceByNumber[devices[i].id] = dd[i];
-                roomObj.devices.push(dd[i]);
-            }
-            roomsByName = rooms.sort(
-                // Special sort for room name -- sorts "No Room" last
-                function (a, b) {
-                    if (a.id === 0) return 1;
-                    if (b.id === 0) return -1;
-                    if (a.name.toLowerCase() === b.name.toLowerCase()) return 0;
-                    return a.name.toLowerCase() > b.name.toLowerCase() ? 1 : -1;
-                }
-            );
-
-            var scenes = ud.scenes; /* There is no api.getListOfScenes(). Really? */
-            var roomScenes = [];
-            if ( undefined !== scenes ) {
-                for ( i=0; i<scenes.length; i+=1 ) {
-                    if ( undefined === roomScenes[scenes[i].room] ) {
-                        roomScenes[scenes[i].room] = [];
-                    }
-                    roomScenes[scenes[i].room].push(scenes[i]);
-                }
-            }
-
             // Load material design icons
             jQuery("head").append('<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">');
 
-            html = "<style>";
+            // Our styles.
+            var html = "<style>";
             html += ".tb-about { margin-top: 24px; }";
-            html += ".color-green { color: #00a652; }";
+            html += ".color-green { color: #006040; }";
             html += '.tberror { border: 1px solid red; }';
             html += '.tbwarn { border: 1px solid yellow; background-color: yellow; }';
             html += 'i.md-btn:disabled { color: #cccccc; cursor: auto; }';
             html += 'i.md-btn[disabled] { color: #cccccc; cursor: auto; }';
-            html += 'i.md-btn { color: #00a652; font-size: 12pt; cursor: pointer; }';
+            html += 'i.md-btn { color: #006040; font-size: 12pt; cursor: pointer; }';
             html += 'input.tbinvert { min-width: 16px; min-height: 16px; }';
             html += 'div.conditions { width: 100%; }';
             //html += 'div.params .devicemenu,.varmenu { max-width: 30%; }';
             //html += 'div.params .condmenu { max-width: 20%; }';
             //html += 'div.params input#value { max-width: 20%; }';
             html += 'input.narrow { max-width: 6em; }';
-            html += 'div.conditiongroup { border-radius: 8px; border: 2px solid #73ad21; padding: 8px; }';
+            html += 'div.conditiongroup { border-radius: 8px; border: 2px solid #006040; padding: 8px; }';
             html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
             html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
             html += "</style>";
@@ -919,7 +1098,7 @@ var ReactorSensor = (function(api) {
             html += '<div class="clearfix">';
 
             html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
-            html += '<div id="tbcopyright">Reactor ver 1.0alpha1 &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>, All Rights Reserved. For documentation and license, please see this project\'s <a href="https://github.com/toggledbits/Reactor" target="_blank">GitHub repository</a>.</div>';
+            html += '<div id="tbcopyright">Reactor ver 1.0 &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>, All Rights Reserved. For documentation, please see this project\'s <a href="https://github.com/toggledbits/Reactor" target="_blank">GitHub repository</a>. For support, please post in the <a href="http://forum.micasaverde.com/index.php/topic,87484.0.html" target="_blank">forum thread</a>.</div>';
 
             // Push generated HTML to page
             api.setCpanelContent(html);
@@ -930,7 +1109,7 @@ var ReactorSensor = (function(api) {
         }
         catch (e)
         {
-            console.log( 'Error in ReactorSensor.configurePlugin(): ' + e.toString() );
+            console.log( 'Error in ReactorSensor.doConditions(): ' + e.toString() );
         }
     }
 
@@ -938,7 +1117,10 @@ var ReactorSensor = (function(api) {
         uuid: uuid,
         initModule: initModule,
         onBeforeCpanelClose: onBeforeCpanelClose,
-        doSettings: doSettings
+        onUIDeviceStatusChanged: onUIDeviceStatusChanged,
+        doSettings: doSettings,
+        doConditions: doConditions,
+        doStatusPanel: doStatusPanel
     };
     return myModule;
 })(api);

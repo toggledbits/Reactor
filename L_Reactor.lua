@@ -7,10 +7,10 @@
 
 module("L_Reactor", package.seeall)
 
-local debugMode = true
+local debugMode = false
 
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "1.0alpha1"
+local _PLUGIN_VERSION = "1.0"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _CONFIGVERSION = 00100
 
@@ -114,41 +114,13 @@ local function checkVersion(dev)
     return false
 end
 
-local function formatTime(delay)
-    local hh = math.floor(delay / 3600)
-    delay = delay % 3600
-    local mm = math.floor(delay / 60)
-    if hh > 0 then
-        return string.format("%dh:%02dm", hh, mm)
-    elseif delay >= 60 then
-        return string.format("%dm", mm)
-    else
-        return string.format("%ds", delay)
-    end
-end
-
--- Take a string and split it around sep, returning table (indexed) of substrings
--- For example abc,def,ghi becomes t[1]=abc, t[2]=def, t[3]=ghi
--- Returns: table of values, count of values (integer ge 0)
-local function split(s, sep)
-    local t = {}
-    local n = 0
-    if (s == nil or #s == 0) then return t,n end -- empty string returns nothing
-    local i,j
-    local k = 1
-    repeat
-        i, j = string.find(s, sep or "%s*,%s*", k)
-        if (i == nil) then
-            table.insert(t, string.sub(s, k, -1))
-            n = n + 1
-            break
-        else
-            table.insert(t, string.sub(s, k, i-1))
-            n = n + 1
-            k = j + 1
-        end
-    until k > string.len(s)
-    return t, n
+local function split( str, sep )
+    if sep == nil then sep = "," end
+    local arr = {}
+    if #str == 0 then return arr, 0 end
+    local rest = string.gsub( str or "", "([^" .. sep .. "]*)" .. sep, function( m ) table.insert( arr, m ) return "" end )
+    table.insert( arr, rest )
+    return arr, #arr
 end
 
 -- Shallow copy
@@ -584,7 +556,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         elseif tparam[4] ~= "" then
             local shm = tonumber( tparam[4] ) * 60;
             if tparam[5] ~= "" then shm = shm + tonumber( tparam[5] ) end
-            if hm < shn then return false,true end
+            if hm < shm then return false,true end
         elseif tparam[5] ~= "" and dt.min < tonumber( tparam[5] ) then return false,true
         end
         if tparam[9] == "sunrise" then 
@@ -722,12 +694,13 @@ local function updateSensor( tdev )
         return
     end
     
+    -- Update state (if changed)
     local currTrip = getVarNumeric( "Tripped", 0, tdev, SENSOR_SID ) ~= 0
     local newTrip, hasTimer = evaluateConditions( tdev )
     local retrig = getVarNumeric( "Retrigger", 0, tdev, RSSID ) ~= 0
     local invert = getVarNumeric( "Invert", 0, tdev, RSSID ) ~= 0
-    D("updateSensor() trip %4was %1 now %2, retrig %3", currTrip, newTrip, retrig,
-        iif( invert, "(inverted) ", "") )
+    D("updateSensor() trip %4was %1 now %2, retrig %3", currTrip, newTrip,
+        retrig, iif( invert, "(inverted) ", "" ) )
     if currTrip ~= newTrip or ( newTrip and retrig ) then
         -- Changed, or retriggerable.
         luup.variable_set( SENSOR_SID, "Tripped", iif( newTrip, 1, 0 ), tdev )
@@ -745,7 +718,12 @@ local function updateSensor( tdev )
     end
     setMessage( iif( newTrip, "Tripped", "Not tripped" ), tdev )
     
-    if hasTimer then
+    -- ForcePoll??? Not yet implemented.
+    local forcePoll = getVarNumeric( "ForcePoll", 0, tdev, RSSID )
+    
+    -- No need to reschedule timer if no demand. Demand is created by condition 
+    -- type (hasTimer), polling enabled, or ContinuousTimer set.
+    if hasTimer or forcePoll or getVarNumeric( "ContinuousTimer", 0, tdev, RSSID ) then
         local v = 60 - ( os.time() % 60 )
         scheduleDelay( v, false, tdev )
     end
