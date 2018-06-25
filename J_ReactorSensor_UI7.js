@@ -19,15 +19,13 @@ var ReactorSensor = (function(api) {
     var myDevice;
 
     var serviceId = "urn:toggledbits-com:serviceId:ReactorSensor";
-    var deviceType = "urn:schemas-toggledbits-com:device:ReactorSensor:1";
+    // var deviceType = "urn:schemas-toggledbits-com:device:ReactorSensor:1";
 
-    var deviceByNumber = [];
-    var ud;
-    var udByDevNum = [];
+    var deviceByNumber;
+    var udByDevNum;
     var cdata;
     var ixCond = {}, ixGroup = {};
     var roomsByName = [];
-    var roomScenes;
     var configModified = false;
     var lastx = 0;
 
@@ -42,7 +40,7 @@ var ReactorSensor = (function(api) {
 
     /* Closing the control panel. */
     function onBeforeCpanelClose(args) {
-        if ( configModified ) alert("Unsaved changes! Guess you'll remember to hit SAVE next time...");
+        if ( configModified ) alert("Unsaved changes! I can't stop Vera from leaving the edit UI. Sorry. Remember to hit SAVE next time...");
     }
 
     /* Initialize the module */
@@ -51,7 +49,7 @@ var ReactorSensor = (function(api) {
         myDevice = api.getCpanelDeviceId();
 
         /* Make device-indexed version of userdata devices, which is just an array */
-        ud = api.getUserData();
+        var ud = api.getUserData();
         udByDevNum = [];
         for ( var k=0; k<ud.devices.length; ++k ) {
             udByDevNum[ ud.devices[k].id ] = ud.devices[k];
@@ -71,7 +69,7 @@ var ReactorSensor = (function(api) {
         }
 
         // Make our own list of devices, sorted by room.
-        var devices = api.getListOfDevices();
+        var devices = api.cloneObject( api.getListOfDevices() );
         deviceByNumber = [];
         var rooms = [];
         var noroom = { "id": 0, "name": "No Room", "devices": [] };
@@ -83,16 +81,18 @@ var ReactorSensor = (function(api) {
             return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1;
         });
         for (var i=0; i<dd.length; i+=1) {
-            var roomid = dd[i].room || 0;
+            var devobj = api.cloneObject( dd[i] );
+            devobj.friendlyName = "#" + devobj.id + " " + devobj.name;
+            deviceByNumber[devobj.id] = devobj;
+            
+            var roomid = devobj.room || 0;
             var roomObj = rooms[roomid];
             if ( roomObj === undefined ) {
-                roomObj = api.cloneObject(api.getRoomObject(roomid));
+                roomObj = api.cloneObject( api.getRoomObject(roomid) );
                 roomObj.devices = [];
                 rooms[roomid] = roomObj;
             }
-            dd[i].friendlyName = "#" + dd[i].id + " " + dd[i].name;
-            deviceByNumber[devices[i].id] = dd[i];
-            roomObj.devices.push(dd[i]);
+            roomObj.devices.push( devobj );
         }
         roomsByName = rooms.sort(
             // Special sort for room name -- sorts "No Room" last
@@ -103,20 +103,7 @@ var ReactorSensor = (function(api) {
                 return a.name.toLowerCase() > b.name.toLowerCase() ? 1 : -1;
             }
         );
-
-        var scenes = ud.scenes; /* There is no api.getListOfScenes(). Really? */
-        roomScenes = [];
-        if ( undefined !== scenes ) {
-            for ( var i=0; i<scenes.length; i+=1 ) {
-                if ( undefined === roomScenes[scenes[i].room] ) {
-                    roomScenes[scenes[i].room] = [];
-                }
-                roomScenes[scenes[i].room].push(scenes[i]);
-            }
-        }
-
     }
-
 
     /**
      * Find cdata group
@@ -979,7 +966,7 @@ var ReactorSensor = (function(api) {
                         var wmap = { "1": "First", "2": "Second", "3": "Third", "4": "Fifth", "5": "Fifth", "last": "Last" };
                         el.append('<div class="col-sm-6 col-md-2">Weekday</div>');
                         var vv;
-                        if ( ( cond.condition || "" ) == "" ) {
+                        if ( ( cond.condition || "" ) === "" ) {
                             vv = "Every";
                         } else if ( wmap[cond.condition] ) {
                             vv = wmap[cond.condition];
