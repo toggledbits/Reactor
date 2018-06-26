@@ -422,6 +422,15 @@ function setDebug( state, tdev )
     end
 end
 
+local function findCondition( condid, cdata ) 
+    for _,g in ipairs( cdata.conditions or {} ) do
+        for _,c in ipairs( g.groupconditions or {} ) do
+            if c.id == condid then return c end
+        end
+    end
+    return nil
+end
+
 local function evaluateCondition( cond, grp, cdata, tdev )
     D("evaluateCondition(%1,%2,cdata,%3)", cond, grp.groupid, tdev)
     local now = cdata.timebase
@@ -593,13 +602,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
     return true, hasTimer
 end
 
---[[
-    PHR??? Eventually I think this should be done in two phases, first one where
-    all evaluations are performed and boiled down to a true/false for each cond-
-    ition, and then second which evaluates the overall tripped state based on 
-    that. This would facilitate showing last value and condition result on the
-    UI, which I think would be helpful, at the expense of some CPU cycles.
---]]    
+-- Evaluate conditions within group. Return overall group state (all conditions met).
 local function evaluateGroup( grp, cdata, tdev )
     D("evaluateGroup(%1,%2)", grp.groupid, tdev)
     if grp.groupconditions == nil or #grp.groupconditions == 0 then return false end -- empty group always false
@@ -632,9 +635,7 @@ local function evaluateGroup( grp, cdata, tdev )
             end
 
             -- Now, check to see if duration restriction is in effect.
-            if not state then 
-                passed = false
-            elseif ( cond.duration or 0 ) > 0 then
+            if state and ( cond.duration or 0 ) > 0 then
                 -- Condition value matched. See if there's a duration restriction.
                 hasTimer = true
                 -- Age is seconds since last state change.
@@ -643,7 +644,6 @@ local function evaluateGroup( grp, cdata, tdev )
                     D("evaluateGroup() cond %1 suppressed, age %2 has not met duration requirement %3",
                         cond.id, age, cond.duration)
                     state = false
-                    passed = false
                     local rem = math.max( 2, cond.duration - age )
                     scheduleDelay( rem, false, tdev )
                 else
@@ -651,14 +651,45 @@ local function evaluateGroup( grp, cdata, tdev )
                 end
             end
             
-            -- Save the final determination of state.
-            sensorState[skey].condState[cond.id].evalstate = state
+            -- Check for predecessor/sequence
+            if state and ( cond.after or "" ) ~= "" then
+                -- Sequence; this condition must become true after named sequence becomes true
+                local predCond = findCondition( cond.after, cdata )
+                D("evaluateCondition() sequence predecessor %1=%2", cond.after, predCond)
+                if predCond == nil then
+                    state = false
+                else
+                    local predState = sensorState[skey].condState[ predCond.id ]
+                    D("evaluateCondition() testing predecessor %1 state %2", predCond, predState)
+                    if predState == nil -- can't find predecessor
+                        or ( not predState.evalstate ) -- not true laststate
+                        or predState.evalstamp >= now -- explicit for re-evals/restarts
+                    then
+                        D("evaluateCondition() didn't meet sequence requirement %1 after %2", cond.id, cond.after)
+                        state = false
+                    end
+                end
+            end
+
+            -- Save the final determination of state for this condition.
+            passed = state and passed
+            if state ~= sensorState[skey].condState[cond.id].evalstate
+                sensorState[skey].condState[cond.id].evalstate = state
+                sensorState[skey].condState[cond.id].evalstamp = now
+            end
             
-            D("evaluateGroup() cond %1 %2 final match %3", cond.id, cond.type, passed)
+            D("evaluateGroup() cond %1 %2 final %3, group now %4", cond.id, cond.type, state, passed)
         end
     end
     
-    -- If we've run the gauntlet, we're good!
+    -- Save group state (create or change only).
+    if sensorState[skey].condState[grp.groupid] == nil
+        or sensorState[skey].condState[grp.groupid].evalstate ~= passed
+    then
+        sensorState[skey].condState[grp.groupid] = { evalstate: passed, evalstamp: now }
+    end
+    sensorState[skey].condState[grp.groupid].hastimer = hasTimer
+
     return passed, hasTimer
 end
 
