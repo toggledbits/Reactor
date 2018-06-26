@@ -10,9 +10,9 @@ module("L_Reactor", package.seeall)
 local debugMode = false
 
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "1.0"
+local _PLUGIN_VERSION = "1.1dev"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
-local _CONFIGVERSION = 00100
+local _CONFIGVERSION = 00101
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -261,18 +261,28 @@ local function sensor_runOnce( tdev )
         luup.variable_set( RSSID, "Retrigger", "0", tdev )
         luup.variable_set( RSSID, "Message", "", tdev )
         luup.variable_set( RSSID, "cdata", "", tdev )
+        luup.variable_set( RSSID, "cstate", "", tdev )
 
         luup.variable_set( SENSOR_SID, "Armed", 0, tdev )
         luup.variable_set( SENSOR_SID, "Tripped", 0, tdev )
         luup.variable_set( SENSOR_SID, "ArmedTripped", 0, tdev )
         
         luup.variable_set( "urn:micasaverde-com:serviceId:HaDevice1", "ModeSetting", "1:;2:;3:;4:", tdev )
+        
+        -- Fix up category and subcategory
+        luup.attr_set('category_num', 4)
+        luup.attr_set('subcategory_num', 1)
 
         luup.variable_set( RSSID, "Version", _CONFIGVERSION, tdev )
         return
     end
 
     -- Consider per-version changes.
+    if s < 00101 then 
+        -- Fix up category and subcategory
+        luup.attr_set('category_num', 4)
+        luup.attr_set('subcategory_num', 1)
+    end
 
     -- Update version last.
     if (s ~= _CONFIGVERSION) then
