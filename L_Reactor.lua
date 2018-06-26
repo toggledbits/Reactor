@@ -673,7 +673,7 @@ local function evaluateGroup( grp, cdata, tdev )
 
             -- Save the final determination of state for this condition.
             passed = state and passed
-            if state ~= sensorState[skey].condState[cond.id].evalstate
+            if state ~= sensorState[skey].condState[cond.id].evalstate then
                 sensorState[skey].condState[cond.id].evalstate = state
                 sensorState[skey].condState[cond.id].evalstamp = now
             end
@@ -686,7 +686,7 @@ local function evaluateGroup( grp, cdata, tdev )
     if sensorState[skey].condState[grp.groupid] == nil
         or sensorState[skey].condState[grp.groupid].evalstate ~= passed
     then
-        sensorState[skey].condState[grp.groupid] = { evalstate: passed, evalstamp: now }
+        sensorState[skey].condState[grp.groupid] = { evalstate=passed, evalstamp=now }
     end
     sensorState[skey].condState[grp.groupid].hastimer = hasTimer
 
