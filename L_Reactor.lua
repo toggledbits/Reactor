@@ -7,7 +7,7 @@
 
 module("L_Reactor", package.seeall)
 
-local debugMode = false
+local debugMode = true
 
 local _PLUGIN_NAME = "Reactor"
 local _PLUGIN_VERSION = "1.1dev"
@@ -621,17 +621,37 @@ local function evaluateGroup( grp, cdata, tdev )
             -- Preserve the result of the condition eval. We are edge-triggered,
             -- so only save changes, with timestamp.
             if sensorState[skey].condState[cond.id] == nil then
-                sensorState[skey].condState[cond.id] = { id=cond.id }
-            end
-            -- State change?
-            if state ~= sensorState[skey].condState[cond.id].laststate then
+                sensorState[skey].condState[cond.id] = { id=cond.id, laststate=state, statestamp=now }
+            elseif state ~= sensorState[skey].condState[cond.id].laststate then
                 sensorState[skey].condState[cond.id].laststate = state
                 sensorState[skey].condState[cond.id].statestamp = now
             end
+            
+            -- Save actual value if changed (for status display)
             cond.lastvalue.value = cond.lastvalue.value or ""
             if cond.lastvalue.value ~= sensorState[skey].condState[cond.id].lastvalue then
                 sensorState[skey].condState[cond.id].lastvalue = cond.lastvalue.value
                 sensorState[skey].condState[cond.id].valuestamp = now
+            end
+
+            -- Check for predecessor/sequence
+            if state and ( cond.after or "" ) ~= "" then
+                -- Sequence; this condition must become true after named sequence becomes true
+                local predCond = findCondition( cond.after, cdata )
+                D("evaluateCondition() sequence predecessor %1=%2", cond.after, predCond)
+                if predCond == nil then
+                    state = false
+                else
+                    local predState = sensorState[skey].condState[ predCond.id ]
+                    D("evaluateCondition() testing predecessor %1 state %2", predCond, predState)
+                    if predState == nil -- can't find predecessor
+                        or ( not predState.evalstate ) -- not true laststate
+                        or predState.statestamp >= sensorState[skey].condState[cond.id].statestamp -- explicit for re-evals/restarts
+                    then
+                        D("evaluateCondition() didn't meet sequence requirement %1 after %2", cond.id, cond.after)
+                        state = false
+                    end
+                end
             end
 
             -- Now, check to see if duration restriction is in effect.
@@ -651,26 +671,6 @@ local function evaluateGroup( grp, cdata, tdev )
                 end
             end
             
-            -- Check for predecessor/sequence
-            if state and ( cond.after or "" ) ~= "" then
-                -- Sequence; this condition must become true after named sequence becomes true
-                local predCond = findCondition( cond.after, cdata )
-                D("evaluateCondition() sequence predecessor %1=%2", cond.after, predCond)
-                if predCond == nil then
-                    state = false
-                else
-                    local predState = sensorState[skey].condState[ predCond.id ]
-                    D("evaluateCondition() testing predecessor %1 state %2", predCond, predState)
-                    if predState == nil -- can't find predecessor
-                        or ( not predState.evalstate ) -- not true laststate
-                        or predState.evalstamp >= now -- explicit for re-evals/restarts
-                    then
-                        D("evaluateCondition() didn't meet sequence requirement %1 after %2", cond.id, cond.after)
-                        state = false
-                    end
-                end
-            end
-
             -- Save the final determination of state for this condition.
             passed = state and passed
             if state ~= sensorState[skey].condState[cond.id].evalstate then
@@ -764,7 +764,7 @@ local function updateSensor( tdev )
     
     -- No need to reschedule timer if no demand. Demand is created by condition 
     -- type (hasTimer), polling enabled, or ContinuousTimer set.
-    if hasTimer or forcePoll or getVarNumeric( "ContinuousTimer", 0, tdev, RSSID ) then
+    if hasTimer or forcePoll > 0 or getVarNumeric( "ContinuousTimer", 0, tdev, RSSID ) ~= 0 then
         local v = 60 - ( os.time() % 60 )
         scheduleDelay( v, false, tdev )
     end
@@ -951,7 +951,7 @@ function tick(p)
         if delay < 1 then delay = 1 elseif delay > 60 then delay = 60 end
     end
     tickTasks.master.when = now + delay
-    D("tick() scheduling next master tick for %2 delay %3", tickTasks.master.when, delay)
+    D("tick() scheduling next master tick for %1 delay %2", tickTasks.master.when, delay)
     luup.call_delay( "reactorTick", delay, p )
 end
 
