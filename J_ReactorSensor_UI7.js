@@ -38,11 +38,6 @@ var ReactorSensor = (function(api) {
         return ( prefix === undefined ? "" : prefix ) + newx.toString(16);
     }
 
-    /* Closing the control panel. */
-    function onBeforeCpanelClose(args) {
-        if ( configModified ) alert("Unsaved changes! I can't stop Vera from leaving the edit UI. Sorry. Remember to hit SAVE next time...");
-    }
-
     /* Initialize the module */
     function initModule() {
         configModified = false;
@@ -375,6 +370,19 @@ var ReactorSensor = (function(api) {
         var el = ev.currentTarget;
         var row = jQuery( el ).closest('div.conditionrow');
         var cond = ixCond[ row.attr("id") ];
+        
+        var pred = jQuery('select.pred', row);
+        if ( "" === pred.val() ) {
+            if ( undefined !== cond.after ) {
+                delete cond.after;
+                configModified = true;
+            }
+        } else {
+            if ( cond.after !== pred.val() ) {
+                cond.after = pred.val();
+                configModified = true;
+            }
+        }
 
         var dd = jQuery('input.duration', row);
         if ( "" === dd.val() ) {
@@ -418,14 +426,32 @@ var ReactorSensor = (function(api) {
         var el = ev.currentTarget;
         var row = jQuery( el ).closest('div.conditionrow');
         var cond = ixCond[ row.attr("id") ];
+        var grp = ixGroup[ row.closest('div.conditiongroup').attr('id') ];
 
         /* Remove the open tool */
         jQuery( el ).hide();
 
         /* Create the options container and add options */
         var container = jQuery('<div class="condopts"></div>');
-        container.append('<form class="form-inline"><label>Sustained for </label><input type="text" class="duration form-control form-control-sm narrow"><label>seconds</label></form>');
-        container.append('<i class="material-icons closeopts">expand_less</i>');
+        /* Predecessor */
+        var preds = jQuery('<select class="pred form-control form-control-sm"><option value="">(any time/no sequence)</option></select>');
+        for ( var ic=0; ic<grp.groupconditions.length; ic++) {
+            var gc = grp.groupconditions[ic];
+            /* Must be service, not this condition, and not the predecessor to this condition (recursive) */
+            if ( gc.type === 'service' && cond.id !== gc.id && ( gc.after === undefined || gc.after !== cond.id ) ) {
+                preds.append('<option value="' + gc.id + '">' + 
+                    ( deviceByNumber[gc.device] !== undefined ? 
+                        deviceByNumber[gc.device].friendlyName : 
+                        '#' + gc.device + ' ' + ( gc.devicename === 'undefined' ? "?" : ' ' + gc.devicename + '?' ) ) + 
+                    ' changes to ' + gc.variable + gc.condition + gc.value + '</option>');
+            }
+        }
+        container.append('<div class="predopt form-inline"><label>Only after: </label></div>');
+        jQuery('div.predopt label', container).append(preds);
+        jQuery('select.pred', container).val( cond.after );
+        /* Duration */
+        container.append('<div class="duropt form-inline"><label>Condition is sustained for <input type="text" class="duration form-control form-control-sm narrow"> seconds</label></div>');
+        container.append('<i class="material-icons closeopts" title="Close Options">expand_less</i>');
         jQuery('input', container).on( 'change.reactor', handleOptionChange );
         jQuery('i.closeopts', container).on( 'click.reactor', handleCloseOptionsClick );
         jQuery('input.duration', container).val( cond.duration || "0" );
@@ -466,7 +492,7 @@ var ReactorSensor = (function(api) {
                 pp = makeServiceConditionMenu( cond.condition );
                 container.append(pp);
                 container.append('<input type="text" id="value" class="form-control form-control-sm">');
-                container.append('<i class="material-icons condmore">expand_more</i>');
+                container.append('<i class="material-icons condmore" title="Show Options">expand_more</i>');
                 jQuery("input#value", container).val( cond.value );
                 jQuery("select.varmenu", container).on( 'change.reactor', handleRowChange );
                 jQuery("select.condmenu", container).on( 'change.reactor', handleRowChange );
@@ -704,6 +730,19 @@ var ReactorSensor = (function(api) {
         var row = jQuery( el ).closest( 'div.row' );
         var condId = row.attr('id');
         var grpId = jQuery( el ).closest( 'div.conditiongroup' ).attr("id");
+        
+        /* See if the condition is referenced in a sequence */
+        var okDelete = false;
+        for ( var ci in ixCond ) {
+            if ( ixCond.hasOwnProperty(ci) && ixCond[ci].after == condId ) {
+                if ( !okDelete ) {
+                    if ( ! ( okDelete = confirm('This condition is used in sequence options in another condition. Click OK to delete it and disconnect the sequence, or Cancel to leave everything unchanged.') ) ) {
+                        return;
+                    }
+                }
+                delete ixCond[ci].after;
+            }
+        }
 
         /* Find the index of the condition in its groupconditions */
         var grp = ixGroup[ grpId ];
@@ -867,6 +906,14 @@ var ReactorSensor = (function(api) {
         api.setDeviceStatePersistent( myDevice, serviceId, "cdata", JSON.stringify( cdata ), 0);
         configModified = false;
         updateControls();
+    }
+
+    /* Closing the control panel. */
+    function onBeforeCpanelClose(args) {
+        console.log( 'onBeforeCpanelClose args: ' + JSON.stringify(args) );
+        if ( configModified && confirm( "You have unsaved changes! Press OK to save your changes, or Cancel to discard them." ) ) {
+            handleSaveClick( undefined );
+        }
     }
 
     function relativeTime( dt ) {
@@ -1036,6 +1083,11 @@ var ReactorSensor = (function(api) {
 
     function doStatusPanel()
     {
+        /* Make sure changes are saved. */
+        if ( configModified && confirm( "You have unsaved changes! Press OK to save your changes, or Cancel to discard them." ) ) {
+            handleSaveClick( undefined );
+        }
+
         initModule();
 
         api.setCpanelContent( '<div id="reactorstatus"></div>' );
@@ -1096,7 +1148,8 @@ var ReactorSensor = (function(api) {
         }
         catch (e)
         {
-            console.log( 'Error in ReactorSensor.doConditions(): ' + e.toString() );
+            console.log( 'Error in ReactorSensor.doConditions(): ' + String( e ) );
+            alert( e.stack );
         }
     }
 
