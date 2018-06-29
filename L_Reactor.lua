@@ -553,11 +553,11 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         hasTimer = true
         cond.lastvalue = { value=now, timestamp=now }
         local dt = os.date("*t", now)
+        local hm = dt.hour * 60 + dt.min
         local xt = os.date("*t", luup.sunrise())
         local sunrise = xt.hour * 60 + xt.min
         xt = os.date("*t", luup.sunset())
         local sunset = xt.hour * 60 + xt.min
-        local hm = dt.hour * 60 + dt.min
         local tparam = split( cond.value, ',' )
         for ix = #tparam+1,10 do tparam[ix] = "" end -- pad
         local cp = cond.condition
@@ -568,25 +568,59 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         if tparam[7] ~= "" and dt.month > tonumber( tparam[7] ) then return false,true end
         if tparam[3] ~= "" and dt.day < tonumber( tparam[3] ) then return false,true end
         if tparam[8] ~= "" and dt.day > tonumber( tparam[8] ) then return false,true end
-        if tparam[4] == "sunrise" then
-            if hm < sunrise then return false,true end
-        elseif tparam[4] == "sunset" then
-            if hm < sunset then return false,true end 
-        elseif tparam[4] ~= "" then
-            local shm = tonumber( tparam[4] ) * 60;
-            if tparam[5] ~= "" then shm = shm + tonumber( tparam[5] ) end
-            if hm < shm then return false,true end
-        elseif tparam[5] ~= "" and dt.min < tonumber( tparam[5] ) then return false,true
+        -- Date passes. Get start time.
+        local shm, ehm
+        if tparam[4] == "" then
+            -- No hour, just check minute
+            if tparam[5] ~= "" and dt.min < tonumber( tparam[5] ) then return false,true end
+        else
+            if tparam[4] == "sunrise" then
+                shm = sunrise
+            elseif tparam[4] == "sunset" then
+                shm = sunset
+            elseif tparam[4] ~= "" then
+                shm = tonumber( tparam[4] ) * 60;
+                if tparam[5] ~= "" then 
+                    shm = shm + tonumber( tparam[5] ) 
+                end
+            end
         end
-        if tparam[9] == "sunrise" then 
-            if hm > sunrise then return false,true end
-        elseif tparam[9] == "sunset" then
-            if hm > sunset then return false,true end
-        elseif tparam[9] ~= "" then
-            local ehm = tonumber( tparam[9] ) * 60;
-            if tparam[10] ~= "" then ehm = ehm + tonumber( tparam[10] ) else ehm = ehm + 59 end
-            if hm > ehm then return false,true end
-        elseif tparam[10] ~= "" and dt.min > tonumber( tparam[10] ) then return false,true
+        -- Get end time.
+        if tparam[9] == "" then
+            -- No hour, just check minute
+            if tparam[10] ~= "" and dt.min > tonumber( tparam[10] ) then return false,true end
+        else
+            if tparam[9] == "sunrise" then 
+                ehm = sunrise
+            elseif tparam[9] == "sunset" then
+                ehm = sunset
+            elseif tparam[9] ~= "" then
+                local ehm = tonumber( tparam[9] ) * 60;
+                if tparam[10] ~= "" then 
+                    ehm = ehm + tonumber( tparam[10] ) 
+                else
+                    -- Since no selection means "any minute", stretch end time for 
+                    -- comparison to include full hour (e.g. an end time of hour=22,
+                    -- minute=any is equivalent to hour=23 minute=0)
+                    ehm = ehm + 60
+                end
+            end
+        end
+        -- Compare start and end time specs to current time.
+        D("evaluateCondition() compare current time %1 between %2 and %3", hm, shm, ehm)
+        if shm == nil then
+            -- No starting time, consider only end.
+            if ehm ~= nil and hm >= ehm then return false, true end 
+        elseif ehm == nil then
+            -- No end time, consider only start.
+            if shm ~= nil and hm < shm then return false, true end
+        else
+            if shm <= ehm then
+                if hm < shm or hm >= ehm then return false, true end
+            else
+                -- Time spec spans midnight (e.g. sunset to sunrise or 2200 to 0600)
+                if not ( hm >= shm or hm < ehm ) then return false, true end
+            end
         end
     elseif cond.type == "comment" then
         -- Shortcut. Comments are always true.
