@@ -3,7 +3,7 @@
  * J_ReactorSensor_UI7.js
  * Configuration interface for ReactorSensor
  *
- * Copyright 2016,2017,2018 Patrick H. Rigney, All Rights Reserved.
+ * Copyright 2018 Patrick H. Rigney, All Rights Reserved.
  * This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
  */
 /* globals api,jQuery */
@@ -24,11 +24,13 @@ var ReactorSensor = (function(api) {
     var deviceByNumber;
     var udByDevNum;
     var cdata;
-    var ixCond = {}, ixGroup = {};
+    var ixCond, ixGroup;
     var roomsByName = [];
     var configModified = false;
     var lastx = 0;
-
+    var condTypeName = { "service": "Service/Variable", "housemode": "House Mode", "comment": "Comment", "weekday": "Weekday", "time": "Date/Time" };
+    var weekDayName = [ '?', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat' ];
+    
     /* Create an ID that's functionally unique for our purposes. */
     function getUID( prefix ) {
         /* Not good, but enough. */
@@ -61,6 +63,14 @@ var ReactorSensor = (function(api) {
             ]};
         } else {
             cdata = JSON.parse( s );
+        }
+        ixGroup = {}; ixCond = {};
+        for ( var ig=0; ig<(cdata.conditions || {}).length; ig++ ) {
+            var grp = cdata.conditions[ig];
+            ixGroup[ grp.groupid ] = grp;
+            for ( var ic=0; ic<(grp.groupconditions || {}).length; ic++ ) {
+                ixCond[ grp.groupconditions[ic].id ] = grp.groupconditions[ic];
+            }
         }
 
         // Make our own list of devices, sorted by room.
@@ -125,6 +135,67 @@ var ReactorSensor = (function(api) {
             }
         }
         return undefined;
+    }
+    
+    function makeConditionDescription( cond ) {
+        if ( cond === undefined ) {
+            return "(undefined)";
+        }
+        
+        var str = "";
+        switch ( cond.type ) {
+            case 'service':
+                str += ( undefined !== deviceByNumber[cond.device] ?
+                        deviceByNumber[cond.device].friendlyName :
+                        '#' + cond.device + ( cond.devicename === undefined ? "name unknown" : cond.devicename ) + ' (missing)' );
+                str += ' ' + cond.variable + cond.condition + cond.value;
+                break;
+
+            case 'comment':
+                str = cond.comment;
+                break;
+
+            case 'housemode':
+                var hmap = [ '?', 'Home','Away','Night','Vacation' ];
+                if ( ( cond.value || "" ) === "" ) {
+                    str += "Any";
+                } else {
+                    var t = ( cond.value || "" ).split(/,/);
+                    for ( var k=0; k<t.length; ++k ) {
+                        t[k] = hmap[t[k]];
+                    }
+                    str += t.join(' or ');
+                }
+                break;
+
+            case 'weekday':
+                var wmap = { "1": "first", "2": "second", "3": "third", "4": "fourth", "5": "fifth", "last": "last" };
+                if ( ( cond.condition || "" ) === "" ) {
+                    str = "every";
+                } else if ( wmap[cond.condition] ) {
+                    str = 'on the ' + wmap[cond.condition];
+                } else {
+                    str = cond.condition;
+                }
+                if ( ( cond.value || "" ) === "" ) {
+                    str += " day";
+                } else {
+                    var t = ( cond.value || "" ).split(/,/);
+                    for ( var k=0; k<t.length; ++k ) {
+                        t[k] = weekDayName[ t[k] ];
+                    }
+                    str += ' ' + t.join(', ');
+                }
+                break;
+
+            case 'time':
+                /* fall through */
+
+            default:
+                str = JSON.stringify( cond );
+        }
+        
+        return str;
     }
 
     /**
@@ -438,17 +509,16 @@ var ReactorSensor = (function(api) {
         for ( var ic=0; ic<grp.groupconditions.length; ic++) {
             var gc = grp.groupconditions[ic];
             /* Must be service, not this condition, and not the predecessor to this condition (recursive) */
-            if ( gc.type === 'service' && cond.id !== gc.id && ( gc.after === undefined || gc.after !== cond.id ) ) {
-                preds.append('<option value="' + gc.id + '">' + 
-                    ( deviceByNumber[gc.device] !== undefined ? 
-                        deviceByNumber[gc.device].friendlyName : 
-                        '#' + gc.device + ' ' + ( gc.devicename === 'undefined' ? "?" : ' ' + gc.devicename + '?' ) ) + 
-                    ' changes to ' + gc.variable + gc.condition + gc.value + '</option>');
+            if ( cond.id !== gc.id && ( gc.after === undefined || gc.after !== cond.id ) ) {
+                var opt = jQuery('<option></option>');
+                opt.val( gc.id );
+                opt.text( makeConditionDescription( gc ) );
+                preds.append( opt );
             }
         }
         container.append('<div class="predopt form-inline"><label>Only after: </label></div>');
         jQuery('div.predopt label', container).append(preds);
-        jQuery('select.pred', container).val( cond.after );
+        jQuery('select.pred', container).on( 'change.reactor', handleOptionChange ).val( cond.after );
         /* Duration */
         container.append('<div class="duropt form-inline"><label>Condition is sustained for <input type="text" class="duration form-control form-control-sm narrow"> seconds</label></div>');
         container.append('<i class="material-icons closeopts" title="Close Options">expand_less</i>');
@@ -973,76 +1043,35 @@ var ReactorSensor = (function(api) {
                 var el = jQuery('<div class="row cond" id="' + cond.id + '">');
                 var currentValue = cstate[cond.id] === undefined ? cstate[cond.id] : cstate[cond.id].lastvalue;
 
+                el.append('<div class="col-sm-6 col-md-2">' + 
+                    ( condTypeName[ cond.type ] !== undefined ? condTypeName[ cond.type ] : cond.type ) +
+                    '</div>');
+                    
+                var condDesc = makeConditionDescription( cond );
                 switch ( cond.type ) {
                     case 'service':
-                        el.append('<div class="col-sm-6 col-md-2">Service</div>');
-                        el.append('<div class="col-sm-6 col-md-3">' +
-                            ( undefined !== deviceByNumber[cond.device] ?
-                                deviceByNumber[cond.device].friendlyName :
-                                '#' + cond.device + ( cond.devicename === undefined ? "name unknown" : cond.devicename ) + ' (missing)' ) +
-                            '</div>');
-                        el.append('<div class="col-sm-6 col-md-3">' +
-                            cond.variable + cond.condition + cond.value +
-                            ( ( cond.duration || 0 ) > 0 ? " for " + cond.duration + " secs" : "" ) +
-                            '</div>'); // ??? html escape
+                        condDesc += ( ( cond.duration || 0 ) > 0 ? " for " + cond.duration + " secs" : "" );
                         break;
-
-                    case 'comment':
-                        el.append('<div class="col-sm-12 col-md-12"><em>' + cond.comment + '</em></div>');
-                        break;
-
-                    case 'housemode':
-                        var hmap = [ '?', 'Home','Away','Night','Vacation' ];
-                        el.append('<div class="col-sm-6 col-md-2">House Mode</div>');
-                        var vv = "";
-                        if ( ( cond.value || "" ) === "" ) {
-                            vv = "Any";
-                        } else {
-                            var t = ( cond.value || "" ).split(/,/);
-                            for ( var k=0; k<t.length; ++k ) {
-                                t[k] = hmap[t[k]];
-                            }
-                            vv = t.join(' or ');
-                        }
-                        el.append('<div class="col-sm-6 col-md-6">' + vv + '</div>');
-                        currentValue = hmap[currentValue || 0];
-                        break;
-
+                        
                     case 'weekday':
-                        var dmap = [ '?', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat' ];
-                        var wmap = { "1": "First", "2": "Second", "3": "Third", "4": "Fifth", "5": "Fifth", "last": "Last" };
-                        el.append('<div class="col-sm-6 col-md-2">Weekday</div>');
-                        var vv;
-                        if ( ( cond.condition || "" ) === "" ) {
-                            vv = "Every";
-                        } else if ( wmap[cond.condition] ) {
-                            vv = wmap[cond.condition];
-                        } else {
-                            vv = cond.condition;
+                        if ( currentValue !== undefined && weekDayName[ currentValue ] !== undefined ) {
+                            currentValue = weekDayName[ currentValue ];
                         }
-                        if ( ( cond.value || "" ) === "" ) {
-                            vv += " day";
-                        } else {
-                            var t = ( cond.value || "" ).split(/,/);
-                            for ( var k=0; k<t.length; ++k ) {
-                                t[k] = dmap[t[k]];
-                            }
-                            vv += ' ' + t.join(', ');
-                        }
-                        el.append('<div class="col-sm-6 col-md-6">' + vv + '</div>');
-                        currentValue = dmap[currentValue || 0];
                         break;
-
+                        
                     case 'time':
                         if ( currentValue !== undefined ) {
                             currentValue = new Date( currentValue * 1000 ).toLocaleString();
                         }
-                        /* fall through */
+                        break;
 
                     default:
-                        el.append('<div class="col-sm-12 col-md-2">' + cond.type + '</div>');
-                        el.append('<div class="col-sm-12 col-md-6">' + JSON.stringify( cond ) + '</div>');
+                        /* Nada */
                 }
+                if ( cond.after !== undefined ) {
+                    condDesc += ' (after ' + makeConditionDescription( ixCond[cond.after] ) + ')';
+                }
+                el.append( jQuery('<div class="col-sm-6 col-md-6"></div>').text( condDesc ) );
 
                 /* Append current value and condition state */
                 if ( cond.type !== "comment" ) {
@@ -1054,7 +1083,7 @@ var ReactorSensor = (function(api) {
                             '</div>' );
                         groupstate = groupstate && cs.evalstate;
                     } else {
-                        el.append( '<div class="col-sm-6 col-md-4">(unknown)' );
+                        el.append( '<div class="col-sm-6 col-md-4">(unknown)</div>' );
                         groupstate = false;
                     }
                 }
