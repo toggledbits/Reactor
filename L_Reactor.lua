@@ -7,7 +7,7 @@
 
 module("L_Reactor", package.seeall)
 
-local debugMode = false
+local debugMode = true
 
 local _PLUGIN_NAME = "Reactor"
 local _PLUGIN_VERSION = "1.1dev"
@@ -422,6 +422,15 @@ function setDebug( state, tdev )
     end
 end
 
+local function findCondition( condid, cdata ) 
+    for _,g in ipairs( cdata.conditions or {} ) do
+        for _,c in ipairs( g.groupconditions or {} ) do
+            if c.id == condid then return c end
+        end
+    end
+    return nil
+end
+
 local function evaluateCondition( cond, grp, cdata, tdev )
     D("evaluateCondition(%1,%2,cdata,%3)", cond, grp.groupid, tdev)
     local now = cdata.timebase
@@ -544,13 +553,20 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         hasTimer = true
         cond.lastvalue = { value=now, timestamp=now }
         local dt = os.date("*t", now)
-        local xt = os.date("*t", luup.sunrise())
-        local sunrise = xt.hour * 60 + xt.min
-        xt = os.date("*t", luup.sunset())
-        local sunset = xt.hour * 60 + xt.min
-        local hm = dt.hour * 60 + dt.min
+        local hm = dt.hour * 60 + dt.min -- msm (minutes since midnight)
+        -- Figure out sunrise/sunset. We keep a daily cache, because Vera's times
+        -- recalculate to that of the following day once the time has passwed, and
+        -- we need stable with a day.
+        local skey = tostring(tdev)
+        local stamp = (dt.year % 100) * 10000 + dt.month * 100 + dt.day
+-- ??? not saved. Use state variable?
+        if sensorState[skey].sun == nil or sensorState[skey].sun.stamp ~= stamp then
+D("evaluateCondition() storing new sunrise/sunset times for today %1", stamp)
+            sensorState[skey].sun = { stamp=stamp, rise=luup.sunrise(), set=luup.sunset() }
+        end
+        -- Split, pad, and compare date.
         local tparam = split( cond.value, ',' )
-        for ix = #tparam+1,10 do tparam[ix] = "" end -- pad
+        for ix = #tparam+1, 10 do tparam[ix] = "" end -- pad
         local cp = cond.condition
         D("evaluateCondition() time check now %1 vs config %2", dt, tparam)
         if tparam[1] ~= "" and dt.year < tonumber( tparam[1] ) then return false,true end
@@ -559,25 +575,63 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         if tparam[7] ~= "" and dt.month > tonumber( tparam[7] ) then return false,true end
         if tparam[3] ~= "" and dt.day < tonumber( tparam[3] ) then return false,true end
         if tparam[8] ~= "" and dt.day > tonumber( tparam[8] ) then return false,true end
-        if tparam[4] == "sunrise" then
-            if hm < sunrise then return false,true end
-        elseif tparam[4] == "sunset" then
-            if hm < sunset then return false,true end 
-        elseif tparam[4] ~= "" then
-            local shm = tonumber( tparam[4] ) * 60;
-            if tparam[5] ~= "" then shm = shm + tonumber( tparam[5] ) end
-            if hm < shm then return false,true end
-        elseif tparam[5] ~= "" and dt.min < tonumber( tparam[5] ) then return false,true
+        -- Date passes. Get start time.
+        local shm, ehm
+        if tparam[4] == "" then
+            -- No hour, just check minute
+            if tparam[5] ~= "" and dt.min < tonumber( tparam[5] ) then return false,true end
+        else
+            if tparam[4] == "sunrise" then
+                local xt = os.date("*t", sensorState[skey].sun.rise)
+                shm = xt.hour * 60 + xt.min
+            elseif tparam[4] == "sunset" then
+                local xt = os.date("*t", sensorState[skey].sun.set)
+                shm = xt.hour * 60 + xt.min
+            elseif tparam[4] ~= "" then
+                shm = tonumber( tparam[4] ) * 60;
+                if tparam[5] ~= "" then 
+                    shm = shm + tonumber( tparam[5] ) 
+                end
+            end
         end
-        if tparam[9] == "sunrise" then 
-            if hm > sunrise then return false,true end
-        elseif tparam[9] == "sunset" then
-            if hm > sunset then return false,true end
-        elseif tparam[9] ~= "" then
-            local ehm = tonumber( tparam[9] ) * 60;
-            if tparam[10] ~= "" then ehm = ehm + tonumber( tparam[10] ) else ehm = ehm + 59 end
-            if hm > ehm then return false,true end
-        elseif tparam[10] ~= "" and dt.min > tonumber( tparam[10] ) then return false,true
+        -- Get end time.
+        if tparam[9] == "" then
+            -- No hour, just check minute
+            if tparam[10] ~= "" and dt.min > tonumber( tparam[10] ) then return false,true end
+        else
+            if tparam[9] == "sunrise" then 
+                local xt = os.date("*t", sensorState[skey].sun.rise)
+                ehm = xt.hour * 60 + xt.min
+            elseif tparam[9] == "sunset" then
+                local xt = os.date("*t", sensorState[skey].sun.set)
+                ehm = xt.hour * 60 + xt.min
+            elseif tparam[9] ~= "" then
+                local ehm = tonumber( tparam[9] ) * 60;
+                if tparam[10] ~= "" then 
+                    ehm = ehm + tonumber( tparam[10] ) 
+                else
+                    -- Since no selection means "any minute", stretch end time for 
+                    -- comparison to include full hour (e.g. an end time of hour=22,
+                    -- minute=any is equivalent to hour=23 minute=0)
+                    ehm = ehm + 60
+                end
+            end
+        end
+        -- Compare start and end time specs to current time.
+        D("evaluateCondition() compare current time %1 between %2 and %3", hm, shm, ehm)
+        if shm == nil then
+            -- No starting time, consider only end.
+            if ehm ~= nil and hm >= ehm then return false, true end 
+        elseif ehm == nil then
+            -- No end time, consider only start.
+            if shm ~= nil and hm < shm then return false, true end
+        else
+            if shm <= ehm then
+                if hm < shm or hm >= ehm then return false, true end
+            else
+                -- Time spec spans midnight (e.g. sunset to sunrise or 2200 to 0600)
+                if not ( hm >= shm or hm < ehm ) then return false, true end
+            end
         end
     elseif cond.type == "comment" then
         -- Shortcut. Comments are always true.
@@ -593,13 +647,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
     return true, hasTimer
 end
 
---[[
-    PHR??? Eventually I think this should be done in two phases, first one where
-    all evaluations are performed and boiled down to a true/false for each cond-
-    ition, and then second which evaluates the overall tripped state based on 
-    that. This would facilitate showing last value and condition result on the
-    UI, which I think would be helpful, at the expense of some CPU cycles.
---]]    
+-- Evaluate conditions within group. Return overall group state (all conditions met).
 local function evaluateGroup( grp, cdata, tdev )
     D("evaluateGroup(%1,%2)", grp.groupid, tdev)
     if grp.groupconditions == nil or #grp.groupconditions == 0 then return false end -- empty group always false
@@ -618,23 +666,41 @@ local function evaluateGroup( grp, cdata, tdev )
             -- Preserve the result of the condition eval. We are edge-triggered,
             -- so only save changes, with timestamp.
             if sensorState[skey].condState[cond.id] == nil then
-                sensorState[skey].condState[cond.id] = { id=cond.id }
-            end
-            -- State change?
-            if state ~= sensorState[skey].condState[cond.id].laststate then
+                sensorState[skey].condState[cond.id] = { id=cond.id, laststate=state, statestamp=now }
+            elseif state ~= sensorState[skey].condState[cond.id].laststate then
                 sensorState[skey].condState[cond.id].laststate = state
                 sensorState[skey].condState[cond.id].statestamp = now
             end
+            
+            -- Save actual value if changed (for status display)
             cond.lastvalue.value = cond.lastvalue.value or ""
             if cond.lastvalue.value ~= sensorState[skey].condState[cond.id].lastvalue then
                 sensorState[skey].condState[cond.id].lastvalue = cond.lastvalue.value
                 sensorState[skey].condState[cond.id].valuestamp = now
             end
 
+            -- Check for predecessor/sequence
+            if state and ( cond.after or "" ) ~= "" then
+                -- Sequence; this condition must become true after named sequence becomes true
+                local predCond = findCondition( cond.after, cdata )
+                D("evaluateCondition() sequence predecessor %1=%2", cond.after, predCond)
+                if predCond == nil then
+                    state = false
+                else
+                    local predState = sensorState[skey].condState[ predCond.id ]
+                    D("evaluateCondition() testing predecessor %1 state %2", predCond, predState)
+                    if predState == nil -- can't find predecessor
+                        or ( not predState.evalstate ) -- not true laststate
+                        or predState.statestamp >= sensorState[skey].condState[cond.id].statestamp -- explicit for re-evals/restarts
+                    then
+                        D("evaluateCondition() didn't meet sequence requirement %1 after %2", cond.id, cond.after)
+                        state = false
+                    end
+                end
+            end
+
             -- Now, check to see if duration restriction is in effect.
-            if not state then 
-                passed = false
-            elseif ( cond.duration or 0 ) > 0 then
+            if state and ( cond.duration or 0 ) > 0 then
                 -- Condition value matched. See if there's a duration restriction.
                 hasTimer = true
                 -- Age is seconds since last state change.
@@ -643,7 +709,6 @@ local function evaluateGroup( grp, cdata, tdev )
                     D("evaluateGroup() cond %1 suppressed, age %2 has not met duration requirement %3",
                         cond.id, age, cond.duration)
                     state = false
-                    passed = false
                     local rem = math.max( 2, cond.duration - age )
                     scheduleDelay( rem, false, tdev )
                 else
@@ -651,14 +716,25 @@ local function evaluateGroup( grp, cdata, tdev )
                 end
             end
             
-            -- Save the final determination of state.
-            sensorState[skey].condState[cond.id].evalstate = state
+            -- Save the final determination of state for this condition.
+            passed = state and passed
+            if state ~= sensorState[skey].condState[cond.id].evalstate then
+                sensorState[skey].condState[cond.id].evalstate = state
+                sensorState[skey].condState[cond.id].evalstamp = now
+            end
             
-            D("evaluateGroup() cond %1 %2 final match %3", cond.id, cond.type, passed)
+            D("evaluateGroup() cond %1 %2 final %3, group now %4", cond.id, cond.type, state, passed)
         end
     end
     
-    -- If we've run the gauntlet, we're good!
+    -- Save group state (create or change only).
+    if sensorState[skey].condState[grp.groupid] == nil
+        or sensorState[skey].condState[grp.groupid].evalstate ~= passed
+    then
+        sensorState[skey].condState[grp.groupid] = { evalstate=passed, evalstamp=now }
+    end
+    sensorState[skey].condState[grp.groupid].hastimer = hasTimer
+
     return passed, hasTimer
 end
 
@@ -733,7 +809,7 @@ local function updateSensor( tdev )
     
     -- No need to reschedule timer if no demand. Demand is created by condition 
     -- type (hasTimer), polling enabled, or ContinuousTimer set.
-    if hasTimer or forcePoll or getVarNumeric( "ContinuousTimer", 0, tdev, RSSID ) then
+    if hasTimer or forcePoll > 0 or getVarNumeric( "ContinuousTimer", 0, tdev, RSSID ) ~= 0 then
         local v = 60 - ( os.time() % 60 )
         scheduleDelay( v, false, tdev )
     end
@@ -920,7 +996,7 @@ function tick(p)
         if delay < 1 then delay = 1 elseif delay > 60 then delay = 60 end
     end
     tickTasks.master.when = now + delay
-    D("tick() scheduling next master tick for %2 delay %3", tickTasks.master.when, delay)
+    D("tick() scheduling next master tick for %1 delay %2", tickTasks.master.when, delay)
     luup.call_delay( "reactorTick", delay, p )
 end
 
