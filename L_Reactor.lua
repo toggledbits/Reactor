@@ -12,7 +12,7 @@ local debugMode = true
 local _PLUGIN_NAME = "Reactor"
 local _PLUGIN_VERSION = "1.1dev"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
-local _CONFIGVERSION = 00101
+local _CONFIGVERSION = 00102
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -303,11 +303,16 @@ local function plugin_runOnce( pdev )
         luup.variable_set(MYSID, "NumChildren", 0, pdev)
         luup.variable_set(MYSID, "NumRunning", 0, pdev)
         luup.variable_set(MYSID, "Message", "", pdev)
+        luup.variable_set(MYSID, "DebugMode", 0, pdev)
+        
         luup.variable_set(MYSID, "Version", _CONFIGVERSION, pdev)
         return
     end
 
     -- Consider per-version changes.
+    if s < 00102 then
+        luup.variable_set(MYSID, "DebugMode", 0, pdev)
+    end
 
     -- Update version last.
     if (s ~= _CONFIGVERSION) then
@@ -864,6 +869,11 @@ function startPlugin( pdev )
     isOpenLuup = false
     sensorState = {}
     watchData = {}
+    
+    -- Debug?
+    if getVarNumeric( "DebugMode", 0, pdev ) ~= 0 then
+        debugMode = true
+    end
 
     -- Check for ALTUI and OpenLuup
     for k,v in pairs(luup.devices) do
@@ -940,6 +950,8 @@ local function sensorTick(tdev)
     -- updateSensor will schedule next tick if needed
     if isEnabled( tdev ) then
         updateSensor( tdev )
+    else
+        setMessage("Disabled", tdev)
     end
 end
 
@@ -1075,7 +1087,8 @@ function request( lul_request, lul_parameters, lul_outputformat )
     local action = lul_parameters['action'] or lul_parameters['command'] or ""
     --local deviceNum = tonumber( lul_parameters['device'], 10 ) or luup.device
     if action == "debug" then
-        debugMode = true
+        debugMode = not debugMode
+        return "Debug is now " .. iif( debugMode, "on", "off" ), "text/plain"
     end
 
     if action == "status" then
