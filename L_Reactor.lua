@@ -10,7 +10,7 @@ module("L_Reactor", package.seeall)
 local debugMode = false
 
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "1.1dev"
+local _PLUGIN_VERSION = "1.1"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _CONFIGVERSION = 00102
 
@@ -744,7 +744,7 @@ end
 -- Clean cstate
 local function loadCleanState( tdev )
     D("loadCleanState(%1)", tdev)
-    
+
     -- Fetch cstate. If it's empty, there's nothing to do here.
     local cstate = {} -- guilty until proven innocent
     local s = luup.variable_get( RSSID, "cstate", tdev ) or ""
@@ -790,7 +790,7 @@ local function loadCleanState( tdev )
         D("loadCleanState() deleting %1", dels)
         for k,_ in pairs( dels ) do cstate[ k ] = nil end
     end
-    
+
     -- Save updated state
     D("loadCleanState() saving state %1", cstate)
     luup.variable_set( RSSID, "cstate", json.encode( cstate ), tdev )
@@ -807,7 +807,7 @@ local function startSensor( tdev, pdev )
 
     -- Initialize instance data
     sensorState[tostring(tdev)] = { eventList={}, condState={} }
-    
+
     -- Clean and restore our condition state.
     sensorState[tostring(tdev)].condState = loadCleanState( tdev )
 
