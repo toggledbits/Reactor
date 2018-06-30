@@ -51,5 +51,10 @@
             <argumentList>
             </argumentList>
         </action>
+        <action>
+            <name>Restart</name>
+            <argumentList>
+            </argumentList>
+        </action>
     </actionList>
 </scpd>

@@ -54,15 +54,21 @@ var ReactorSensor = (function(api) {
 
         /* Get the config and parse it */
         var s = api.getDeviceState( myDevice, serviceId, "cdata" ) || "";
-        if ( s.length === 0 ) {
+        if ( s.length !== 0 ) {
+            try {
+                cdata = JSON.parse( s );
+            } catch (e) {
+                console.log("Unable to parse cdata: " + String(e));
+            }
+        }
+        if ( cdata === undefined || typeof cdata !== "object" || 
+                cdata.conditions === undefined || typeof cdata.conditions !== "object" ) {
             cdata = { version: 1, conditions: [
                 { groupid: getUID('grp'), groupconditions: [
                     { id: getUID('cond'), type: "comment", comment: "Enter your AND conditions here" }
                     ]
                 }
             ]};
-        } else {
-            cdata = JSON.parse( s );
         }
         ixGroup = {}; ixCond = {};
         for ( var ig=0; ig<(cdata.conditions || {}).length; ig++ ) {
@@ -870,7 +876,7 @@ var ReactorSensor = (function(api) {
     */
     function redrawConditions() {
         jQuery('div#conditions').empty();
-
+        
         for (var ng=0; ng<cdata.conditions.length; ++ng) {
             if ( ng > 0 ) {
                 /* Insert divider */
@@ -1013,18 +1019,27 @@ var ReactorSensor = (function(api) {
         var cdata, cstate;
         var s = api.getDeviceState( myDevice, serviceId, "cdata" ) || "";
         if ( "" !== s ) {
-            cdata = JSON.parse( s );
+            try {
+                cdata = JSON.parse( s );
+            } catch (e) {
+                console.log("Unable to parse cdata: " + String(e))
+                return;
+            }
         } else {
             console.log("cdata unavailable");
             return;
         }
 
         s = api.getDeviceState( myDevice, serviceId, "cstate" ) || "";
+        cstate = {};
         if ( "" !== s ) {
-            cstate = JSON.parse( s );
+            try {
+                cstate = JSON.parse( s );
+            } catch (e) {
+                console.log("cstate cannot be parsed: " + String(e));
+            }
         } else {
             console.log("cstate unavailable");
-            cstate = {};
         }
 
         for ( var i=0; i<cdata.conditions.length; i++ ) {

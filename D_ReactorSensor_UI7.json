@@ -26,27 +26,27 @@
                 "Function": "ReactorSensor.doStatusPanel"
             },
             "ControlGroup": [{
-                    "id": "1",
-                    "scenegroup": "1"
+                    "id": 1,
+                    "scenegroup": 1
                 },
                 {
-                    "id": "2",
-                    "scenegroup": "2"
+                    "id": 2,
+                    "scenegroup": 2
                 }
             ],
             "SceneGroup": [{
-                    "id": "1",
+                    "id": 1,
                     "top": "0",
                     "left": "0",
-                    "x": "1",
-                    "y": "4"
+                    "x": "4",
+                    "y": "2"
                 },
                 {
-                    "id": "2",
+                    "id": 2,
                     "top": "1",
                     "left": "0",
-                    "x": "1",
-                    "y": "3"
+                    "x": "2",
+                    "y": "2"
                 }
             ],
             "Control": [{
@@ -65,7 +65,7 @@
                     }
                 },
                 {
-                    "ControlGroup": "1",
+                    "ControlGroup": 1,
                     "ControlType": "button",
                     "top": "0",
                     "left": "0",
@@ -90,7 +90,7 @@
                     "ControlCode": "reset"
                 },
                 {
-                    "ControlGroup": "1",
+                    "ControlGroup": 1,
                     "ControlType": "button",
                     "top": "0",
                     "left": "1",
@@ -112,10 +112,10 @@
                     "ControlCode": "trip"
                 },
                 {
-                    "ControlGroup": "1",
+                    "ControlGroup": 1,
                     "ControlType": "multi_state_button",
                     "top": "0",
-                    "left": "0",
+                    "left": "3",
                     "Display": {
                         "Top": 30,
                         "Left": 255,
@@ -165,7 +165,7 @@
                     ]
                 },
                 {
-                    "ControlGroup": "2",
+                    "ControlGroup": 2,
                     "ControlType": "variable",
                     "top": "1",
                     "left": "0",
@@ -178,6 +178,27 @@
                         "Variable": "Message"
                     },
                     "ControlCode": "message"
+                },
+                {
+                    "ControlType": "button",
+                    "top": "3",
+                    "left": "1",
+                    "Label": {
+                        "lang_tag": "cmd_restart",
+                        "text": "Restart"
+                    },
+                    "Display": {
+                        "Top": 90,
+                        "Left": 50,
+                        "Width": 90,
+                        "Height": 20
+                    },
+                    "Command": {
+                        "Service": "urn:toggledbits-com:serviceId:ReactorSensor",
+                        "Action": "Restart",
+                        "Parameters": []
+                    },
+                    "ControlCode": "restart"
                 }
             ]
         },
