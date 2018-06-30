@@ -7,9 +7,10 @@
 * Improve stability of sunrise/sunset tests by caching daily values (Luup's move around as they pass);
 * Support restart of a sensor without Luup reload, with UI button, ReactorSensor action, and request action;
 * Improve error handling in UI for corrupt/empty configuration and state data;
-* Add real time state display with current values and color highlighting;
-* Go to some length to not let users lose changes to configuration if they forget to save;
-* Fix a bug that scrambled Vera UI's brains and made "Advanced" tab show incorrect device data.
+* Add real-time state display with current values and color highlighting;
+* Go to some length to not let users lose changes to configuration if they forget to hit 
+Save" before leaving the configuration panel;
+* Fix a bug that scrambled Vera UI's brains when a ReactorSensor's status display was opened, making "Advanced" tab show incorrect device data thereafter (until browser refreshed).
 
 ## Version 1.0 (released) ##
 
