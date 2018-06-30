@@ -1,5 +1,7 @@
 # Change Log #
 
+## Version 1.2 (develop branch)
+
 ## Version 1.1 (release candidate) ##
 
 * Support "sequences light"--restrict the success of a condition to the prior success of another.
