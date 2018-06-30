@@ -20,14 +20,14 @@ trigger standard Vera scenes, Lua, other plugins, etc.).
 Reactor is the parent of a set of a ReactorSensors. Each ReactorSensor contains a set
 of logic conditions that when met, cause the sensor to trip (so, a ReactorSensor
 implements the SecuritySensor1 semantics). When the conditions are not met, the
-sensor is untripped. This basic binary output can be used to trigger scenes and 
+sensor is untripped. This basic binary output can be used to trigger scenes and
 other logic.
 
 Reactor itself is a single-instance plugin, meaning all ReactorSensors in the system
 run from a single copy of the Reactor code, making it light on system resources even
 for large numbers of sensors and logic conditions.
 
-Reactor is currently in its infancy. I've only just released the first version in June 2018. 
+Reactor is currently in its infancy. I've only just released the first version in June 2018.
 It can currently respond to:
 
 * The change of almost any defined state variable on a device (including other Reactor sensors);
@@ -44,8 +44,8 @@ the Alternate App Store (aka AltAppStore under ALTUI, released versions and curr
 stable development version available), or by installing from Github.
 
 To install from Github, download a branch, or a release ZIP file
-from the Github repository "releases" tab and unzip it. Then upload each of the 
-files to your Vera or openLuup. Then, use the "Create Device" command (under 
+from the Github repository "releases" tab and unzip it. Then upload each of the
+files to your Vera or openLuup. Then, use the "Create Device" command (under
 *Apps > Develop apps* on Vera)
 to create the base Reactor device. You only need to provide a device name (use "Reactor"),
 the device filename (must be `D_Reactor.xml`) and the implementation filename (must be
@@ -54,7 +54,7 @@ the device filename (must be `D_Reactor.xml`) and the implementation filename (m
 Then, reload Luup (on Vera, I like to enter `luup.reload()` under *Apps > Develop apps > Test Luup code*),
 and then hard-refresh your browser (Ctrl-F5 on Windows, whatever similar on Mac).
 
-You should then see the Reactor master device on your devices list (dashboard). 
+You should then see the Reactor master device on your devices list (dashboard).
 Refer to the online documentation for instructions on creating your first sensor and
 configuring it (see *Using Reactor* below).
 
