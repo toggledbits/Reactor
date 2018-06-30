@@ -21,8 +21,6 @@ local RSSID = "urn:toggledbits-com:serviceId:ReactorSensor"
 local RSTYPE = "urn:schemas-toggledbits-com:device:ReactorSensor:1"
 
 local SENSOR_SID  = "urn:micasaverde-com:serviceId:SecuritySensor1"
-local SWITCH_SID  = "urn:upnp-org:serviceId:SwitchPower1"
-local DIMMER_SID  = "urn:upnp-org:serviceId:Dimming1"
 
 local sensorState = {}
 local tickTasks = {}
@@ -95,15 +93,7 @@ end
 
 local function checkVersion(dev)
     local ui7Check = luup.variable_get(MYSID, "UI7Check", dev) or ""
-    if isOpenLuup then
-        local s = luup.variable_get( "openLuup", "Version", 2 ) -- hardcoded device?
-        local y,m,d = string.match( s or "0.0.0", "^v(%d+)%.(%d+)%.(%d+)" )
-        local y = tonumber(y) * 10000 + tonumber(m)*100 + tonumber(d)
-        D("checkVersion() checking openLuup version=%1 (numeric %2)", s, y)
-        if y < 180400 or y >= 180611 then return true end -- See Github issue #5
-        L({level=1,msg="openLuup version %1 is not supported. Please upgrade openLuup. See Github issue #5."}, y);
-        return true
-    end
+    if isOpenLuup then return true end
     if (luup.version_branch == 1 and luup.version_major >= 7) then
         if ui7Check == "" then
             -- One-time init for UI7 or better
@@ -346,17 +336,7 @@ function addSensor( pdev )
     -- Should cause reload immediately.
 end
 
--- Find a good tick delay for next update
-local function scaleNextTick( delay )
-    local nextTick = delay or 60
-    if nextTick > 60 then nextTick = 60
-    elseif nextTick > 10 then nextTick = 5
-    else nextTick = 1 end
-    local remain = delay % nextTick
-    if remain > 0 then nextTick = remain end
-    return nextTick
-end
-
+-- Find a condition hiding in a group (or is it?)
 local function findCondition( condid, cdata )
     for _,g in ipairs( cdata.conditions or {} ) do
         for _,c in ipairs( g.groupconditions or {} ) do
@@ -380,12 +360,12 @@ local function evaluateCondition( cond, grp, cdata, tdev )
             D("evaluateCondition() sensor %1 adding watch for %2", tdev, watchkey)
             luup.variable_watch( "reactorWatch", cond.service or "X", cond.variable or "X", cond.device or 0 )
             watchData = watchData or {}
-            watchData[watchkey] = watchData[watchKey] or {}
+            watchData[watchkey] = watchData[watchkey] or {}
             watchData[watchkey][tostring(tdev)] = true
         end
 
         -- Get state variable value.
-        local vv,ts = luup.variable_get( cond.service or "", cond.variable or "", cond.device or -1 ) or ""
+        local vv = luup.variable_get( cond.service or "", cond.variable or "", cond.device or -1 ) or ""
         local vn = tonumber( vv )
 
         cond.lastvalue = { value=vv, timestamp=now }
@@ -414,13 +394,13 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         elseif cond.condition == "<>" then
             if vv == cv then return false end
         elseif cond.condition == ">" then
-            if vn <= vc then return false end
+            if vn == nil or cn == nil or vn <= cn then return false end
         elseif cond.condition == "<" then
-            if vn >= vc then return false end
+            if vn == nil or cn == nil or vn >= cn then return false end
         elseif cond.condition == ">=" then
-            if vn < vc then return false end
+            if vn == nil or cn == nil or vn < cn then return false end
         elseif cond.condition == "<=" then
-            if vn > vc then return false end
+            if vn == nil or cn == nil or vn > cn then return false end
         elseif cond.condition == "contains" then
             if not string.find( vv, cv ) then return false end
         elseif cond.condition == "starts" then
@@ -438,7 +418,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
             end
             if not found then return false end
         else
-            L("evaluateCondition() unknown condition %1 in cond %2 of group", cond.condition, vc)
+            L("evaluateCondition() unknown condition %1 in cond %2 of group", cond.condition, cv)
             return false
         end
     elseif cond.type == "housemode" then
@@ -503,6 +483,7 @@ D("evaluateCondition() storing new sunrise/sunset times for today %1", stamp)
         local tparam = split( cond.value, ',' )
         for ix = #tparam+1, 10 do tparam[ix] = "" end -- pad
         local cp = cond.condition
+        -- ??? between or not?
         D("evaluateCondition() time check now %1 vs config %2", dt, tparam)
         if tparam[1] ~= "" and dt.year < tonumber( tparam[1] ) then return false,true end
         if tparam[6] ~= "" and dt.year > tonumber( tparam[6] ) then return false,true end
@@ -541,7 +522,7 @@ D("evaluateCondition() storing new sunrise/sunset times for today %1", stamp)
                 local xt = os.date("*t", sensorState[skey].sun.set)
                 ehm = xt.hour * 60 + xt.min
             elseif tparam[9] ~= "" then
-                local ehm = tonumber( tparam[9] ) * 60;
+                ehm = tonumber( tparam[9] ) * 60;
                 if tparam[10] ~= "" then
                     ehm = ehm + tonumber( tparam[10] )
                 else
@@ -590,7 +571,7 @@ local function evaluateGroup( grp, cdata, tdev )
     local passed = true; -- innocent until proven guilty
     local now = cdata.timebase
     local skey = tostring(tdev)
-    for nc,cond in ipairs( grp.groupconditions ) do
+    for _,cond in ipairs( grp.groupconditions ) do
         if cond.type ~= "comment" then
             local state, condTimer = evaluateCondition( cond, grp, cdata, tdev )
             D("evaluateGroup() eval group %1 cond %2 state %3 timer %4", grp.groupid,
@@ -605,6 +586,9 @@ local function evaluateGroup( grp, cdata, tdev )
                 sensorState[skey].condState[cond.id] = { id=cond.id, laststate=state, statestamp=now }
             elseif state ~= sensorState[skey].condState[cond.id].laststate then
                 D("evaluateGroup() condition %1 value state changed from %1 to %2", sensorState[skey].condState[cond.id].laststate, state)
+                -- ??? At certain times, Vera gets a time that is in the future, or so it appears. It looks like the TZ offset isn't applied, randomly.
+                -- Maybe if call is during ntp update, don't know. Investigating... This log message helps detection and analysis.
+                if now < sensorState[skey].condState[cond.id].statestamp then L({level=1,msg="Time moved backwards! Sensor %4 cond %1 last change at %2, but time now %3"}, cond.id, sensorState[skey].condState[cond.id].statestamp, now, tdev) end
                 sensorState[skey].condState[cond.id].laststate = state
                 sensorState[skey].condState[cond.id].statestamp = now
             end
@@ -692,7 +676,7 @@ local function evaluateConditions( tdev )
     -- Evaluate all groups. Any group match is a pass.
     local hasTimer = false
     local passed = false
-    for ng,grp in ipairs( cdata.conditions ) do
+    for _,grp in ipairs( cdata.conditions ) do
         local match, t = evaluateGroup( grp, cdata, tdev )
         passed = match or passed
         hasTimer = t or hasTimer
@@ -757,12 +741,13 @@ local function loadCleanState( tdev )
         end
 
         -- Fetch cdata
-        local s = luup.variable_get( RSSID, "cdata", tdev ) or ""
+        s = luup.variable_get( RSSID, "cdata", tdev ) or ""
         if s == "" then
             luup.variable_set( RSSID, "cstate", "", tdev )
             return
         end
-        local cdata,pos,err = json.decode( s )
+        local cdata
+        cdata,pos,err = json.decode( s )
         if err then
             L({level=1,msg="ReactorSensor %1 (%2) has corrupt configuration data!"}, tdev, luup.devices[tdev].description)
             error("ReactorSensor " .. tdev .. " has invalid configuration data")
@@ -1065,7 +1050,7 @@ end
 
 -- Handle the sensor-specific watch (dispatched from the watch callback)
 local function sensorWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
-    D("sensorWatch(%1,%2,%3,%4,%5,%6)", dev, sid, var, oldVal, newVal, tdev)
+    D("sensorWatch(%1,%2,%3,%4,%5,%6,%7)", dev, sid, var, oldVal, newVal, tdev, pdev)
     -- Watched variable has changed. Re-evaluate conditons.
     updateSensor( tdev )
 end
