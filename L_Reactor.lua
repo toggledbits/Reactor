@@ -553,13 +553,20 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         hasTimer = true
         cond.lastvalue = { value=now, timestamp=now }
         local dt = os.date("*t", now)
-        local hm = dt.hour * 60 + dt.min
-        local xt = os.date("*t", luup.sunrise())
-        local sunrise = xt.hour * 60 + xt.min
-        xt = os.date("*t", luup.sunset())
-        local sunset = xt.hour * 60 + xt.min
+        local hm = dt.hour * 60 + dt.min -- msm (minutes since midnight)
+        -- Figure out sunrise/sunset. We keep a daily cache, because Vera's times
+        -- recalculate to that of the following day once the time has passwed, and
+        -- we need stable with a day.
+        local skey = tostring(tdev)
+        local stamp = (dt.year % 100) * 10000 + dt.month * 100 + dt.day
+-- ??? not saved. Use state variable?
+        if sensorState[skey].sun == nil or sensorState[skey].sun.stamp ~= stamp then
+D("evaluateCondition() storing new sunrise/sunset times for today %1", stamp)
+            sensorState[skey].sun = { stamp=stamp, rise=luup.sunrise(), set=luup.sunset() }
+        end
+        -- Split, pad, and compare date.
         local tparam = split( cond.value, ',' )
-        for ix = #tparam+1,10 do tparam[ix] = "" end -- pad
+        for ix = #tparam+1, 10 do tparam[ix] = "" end -- pad
         local cp = cond.condition
         D("evaluateCondition() time check now %1 vs config %2", dt, tparam)
         if tparam[1] ~= "" and dt.year < tonumber( tparam[1] ) then return false,true end
@@ -575,9 +582,11 @@ local function evaluateCondition( cond, grp, cdata, tdev )
             if tparam[5] ~= "" and dt.min < tonumber( tparam[5] ) then return false,true end
         else
             if tparam[4] == "sunrise" then
-                shm = sunrise
+                local xt = os.date("*t", sensorState[skey].sun.rise)
+                shm = xt.hour * 60 + xt.min
             elseif tparam[4] == "sunset" then
-                shm = sunset
+                local xt = os.date("*t", sensorState[skey].sun.set)
+                shm = xt.hour * 60 + xt.min
             elseif tparam[4] ~= "" then
                 shm = tonumber( tparam[4] ) * 60;
                 if tparam[5] ~= "" then 
@@ -591,9 +600,11 @@ local function evaluateCondition( cond, grp, cdata, tdev )
             if tparam[10] ~= "" and dt.min > tonumber( tparam[10] ) then return false,true end
         else
             if tparam[9] == "sunrise" then 
-                ehm = sunrise
+                local xt = os.date("*t", sensorState[skey].sun.rise)
+                ehm = xt.hour * 60 + xt.min
             elseif tparam[9] == "sunset" then
-                ehm = sunset
+                local xt = os.date("*t", sensorState[skey].sun.set)
+                ehm = xt.hour * 60 + xt.min
             elseif tparam[9] ~= "" then
                 local ehm = tonumber( tparam[9] ) * 60;
                 if tparam[10] ~= "" then 
