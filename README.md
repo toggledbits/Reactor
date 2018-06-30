@@ -27,13 +27,13 @@ Reactor itself is a single-instance plugin, meaning all ReactorSensors in the sy
 run from a single copy of the Reactor code, making it light on system resources even
 for large numbers of sensors and logic conditions.
 
-Reactor is currently in its infancy. I've only just released the first version. So
-it's functions are basic. It can respond to:
+Reactor is currently in its infancy. I've only just released the first version in June 2018. 
+It can currently respond to:
 
 * The change of almost any defined state variable on a device (including other Reactor sensors);
 * Changes in house mode (home, away, night, vacation);
-* Time/date changes (specific dates, time ranges, date, and day ranges);
-* Sequences of events (this must happen before that for the condition to be true).
+* Time/date changes (specific days of the week, dates and times; or time and date ranges);
+* Sequences of events (e.g. *this* must happen before *that* for the condition to be true).
 
 More conditions are expected as the user community makes its needs clear.
 
@@ -44,8 +44,9 @@ the Alternate App Store (aka AltAppStore under ALTUI, released versions and curr
 stable development version available), or by installing from Github.
 
 To install from Github, download a branch, or a release ZIP file
-from the Github repository "releases" tab and unzip it. Then upload each of the files
-files to your Vera or openLuup. Then, use the "Create Device" command (under *Apps > Develop apps* on Vera)
+from the Github repository "releases" tab and unzip it. Then upload each of the 
+files to your Vera or openLuup. Then, use the "Create Device" command (under 
+*Apps > Develop apps* on Vera)
 to create the base Reactor device. You only need to provide a device name (use "Reactor"),
 the device filename (must be `D_Reactor.xml`) and the implementation filename (must be
 `I_Reactor.xml`).
@@ -55,11 +56,15 @@ and then hard-refresh your browser (Ctrl-F5 on Windows, whatever similar on Mac)
 
 You should then see the Reactor master device on your devices list (dashboard). 
 Refer to the online documentation for instructions on creating your first sensor and
-configuring it.
+configuring it (see *Using Reactor* below).
 
 ## Using Reactor ##
 
 Documentation for Reactor can be found on my web site at https://www.toggledbits.com/reactor
+
+## Revision History ##
+
+Please see the CHANGELOG file for release notes.
 
 ## License ##
 
