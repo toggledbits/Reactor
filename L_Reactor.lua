@@ -467,11 +467,12 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         -- we need stable with a day.
         local stamp = (dt.year % 100) * 10000 + dt.month * 100 + dt.day
         local sun = split( luup.variable_get( RSSID, "sundata", tdev ) or "" )
-        if #sun ~= 3 or sun[1] ~= stamp then
-            D("evaluateCondition() storing new sunrise/sunset times for today %1", stamp)
+        if #sun ~= 3 or sun[1] ~= tostring(stamp) then
+            D("evaluateCondition() didn't like what I got for sun: %1; expected stamp is %2; storing new.", sun, stamp)
             sun = { stamp, luup.sunrise(), luup.sunset() }
             luup.variable_set( RSSID, "sundata", table.concat( sun, "," ) , tdev )
         end
+        D("evaluateCondition() sunrise/sunset %1", sun)
         -- Split, pad, and compare date.
         local tparam = split( cond.value, ',' )
         for ix = #tparam+1, 10 do tparam[ix] = "" end -- pad
