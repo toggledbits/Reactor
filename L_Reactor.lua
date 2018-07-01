@@ -372,13 +372,6 @@ local function evaluateCondition( cond, grp, cdata, tdev )
 
         -- Get condition value
         local cv = cond.value or ""
-        -- ??? parse date? time? MSSQL style? #yyyy-mm-dd hh:mm:ss#
-        if string.match( cv, "^%#[^#]+%#$" ) then
-            -- Parse date/time string. Result is either a Unix timestamp, or a value <= 86400,
-            -- which is time only and will be matched only to the time component of the variable's
-            -- value.
-            -- ?? if time only, adjust both values to time-range.
-        end
         local cn = tonumber( cv )
 
         -- If case-insensitive, canonify to lowercase.
@@ -404,9 +397,9 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         elseif cond.condition == "contains" then
             if not string.find( vv, cv ) then return false end
         elseif cond.condition == "starts" then
-            if not string.find( "^" .. vv, cv ) then return false end
+            if not string.find( vv, "^" .. cv ) then return false end
         elseif cond.condition == "ends" then
-            if not string.find( vv .. "$", cv ) then return false end
+            if not string.find( vv, cv .. "$" ) then return false end
         elseif cond.condition == "in" then
             local lst = split( cv )
             local found = false
@@ -472,12 +465,12 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         -- Figure out sunrise/sunset. We keep a daily cache, because Vera's times
         -- recalculate to that of the following day once the time has passwed, and
         -- we need stable with a day.
-        local skey = tostring(tdev)
         local stamp = (dt.year % 100) * 10000 + dt.month * 100 + dt.day
--- ??? not saved. Use state variable?
-        if sensorState[skey].sun == nil or sensorState[skey].sun.stamp ~= stamp then
-D("evaluateCondition() storing new sunrise/sunset times for today %1", stamp)
-            sensorState[skey].sun = { stamp=stamp, rise=luup.sunrise(), set=luup.sunset() }
+        local sun = split( luup.variable_get( RSSID, "sundata", tdev ) or "" )
+        if #sun ~= 3 or sun[1] ~= stamp then
+            D("evaluateCondition() storing new sunrise/sunset times for today %1", stamp)
+            sun = { stamp, luup.sunrise(), luup.sunset() }
+            luup.variable_set( RSSID, "sundata", table.concat( sun, "," ) , tdev )
         end
         -- Split, pad, and compare date.
         local tparam = split( cond.value, ',' )
@@ -498,10 +491,10 @@ D("evaluateCondition() storing new sunrise/sunset times for today %1", stamp)
             if tparam[5] ~= "" and dt.min < tonumber( tparam[5] ) then return false,true end
         else
             if tparam[4] == "sunrise" then
-                local xt = os.date("*t", sensorState[skey].sun.rise)
+                local xt = os.date("*t", sun[2])
                 shm = xt.hour * 60 + xt.min
             elseif tparam[4] == "sunset" then
-                local xt = os.date("*t", sensorState[skey].sun.set)
+                local xt = os.date("*t", sun[3])
                 shm = xt.hour * 60 + xt.min
             elseif tparam[4] ~= "" then
                 shm = tonumber( tparam[4] ) * 60;
@@ -516,10 +509,10 @@ D("evaluateCondition() storing new sunrise/sunset times for today %1", stamp)
             if tparam[10] ~= "" and dt.min > tonumber( tparam[10] ) then return false,true end
         else
             if tparam[9] == "sunrise" then
-                local xt = os.date("*t", sensorState[skey].sun.rise)
+                local xt = os.date("*t", sun[2])
                 ehm = xt.hour * 60 + xt.min
             elseif tparam[9] == "sunset" then
-                local xt = os.date("*t", sensorState[skey].sun.set)
+                local xt = os.date("*t", sun[3])
                 ehm = xt.hour * 60 + xt.min
             elseif tparam[9] ~= "" then
                 ehm = tonumber( tparam[9] ) * 60;
