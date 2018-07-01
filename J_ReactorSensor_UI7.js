@@ -3,7 +3,7 @@
  * J_ReactorSensor_UI7.js
  * Configuration interface for ReactorSensor
  *
- * Copyright 2016,2017,2018 Patrick H. Rigney, All Rights Reserved.
+ * Copyright 2018 Patrick H. Rigney, All Rights Reserved.
  * This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
  */
 /* globals api,jQuery */
@@ -19,18 +19,18 @@ var ReactorSensor = (function(api) {
     var myDevice;
 
     var serviceId = "urn:toggledbits-com:serviceId:ReactorSensor";
-    var deviceType = "urn:schemas-toggledbits-com:device:ReactorSensor:1";
+    // var deviceType = "urn:schemas-toggledbits-com:device:ReactorSensor:1";
 
-    var deviceByNumber = [];
-    var ud;
-    var udByDevNum = [];
+    var deviceByNumber;
+    var udByDevNum;
     var cdata;
-    var ixCond = {}, ixGroup = {};
+    var ixCond, ixGroup;
     var roomsByName = [];
-    var roomScenes;
     var configModified = false;
     var lastx = 0;
-
+    var condTypeName = { "service": "Service/Variable", "housemode": "House Mode", "comment": "Comment", "weekday": "Weekday", "time": "Date/Time" };
+    var weekDayName = [ '?', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat' ];
+    
     /* Create an ID that's functionally unique for our purposes. */
     function getUID( prefix ) {
         /* Not good, but enough. */
@@ -40,18 +40,13 @@ var ReactorSensor = (function(api) {
         return ( prefix === undefined ? "" : prefix ) + newx.toString(16);
     }
 
-    /* Closing the control panel. */
-    function onBeforeCpanelClose(args) {
-        if ( configModified ) alert("Unsaved changes! Guess you'll remember to hit SAVE next time...");
-    }
-
     /* Initialize the module */
     function initModule() {
         configModified = false;
         myDevice = api.getCpanelDeviceId();
 
         /* Make device-indexed version of userdata devices, which is just an array */
-        ud = api.getUserData();
+        var ud = api.getUserData();
         udByDevNum = [];
         for ( var k=0; k<ud.devices.length; ++k ) {
             udByDevNum[ ud.devices[k].id ] = ud.devices[k];
@@ -59,19 +54,33 @@ var ReactorSensor = (function(api) {
 
         /* Get the config and parse it */
         var s = api.getDeviceState( myDevice, serviceId, "cdata" ) || "";
-        if ( s.length === 0 ) {
+        if ( s.length !== 0 ) {
+            try {
+                cdata = JSON.parse( s );
+            } catch (e) {
+                console.log("Unable to parse cdata: " + String(e));
+            }
+        }
+        if ( cdata === undefined || typeof cdata !== "object" || 
+                cdata.conditions === undefined || typeof cdata.conditions !== "object" ) {
             cdata = { version: 1, conditions: [
                 { groupid: getUID('grp'), groupconditions: [
                     { id: getUID('cond'), type: "comment", comment: "Enter your AND conditions here" }
                     ]
                 }
             ]};
-        } else {
-            cdata = JSON.parse( s );
+        }
+        ixGroup = {}; ixCond = {};
+        for ( var ig=0; ig<(cdata.conditions || {}).length; ig++ ) {
+            var grp = cdata.conditions[ig];
+            ixGroup[ grp.groupid ] = grp;
+            for ( var ic=0; ic<(grp.groupconditions || {}).length; ic++ ) {
+                ixCond[ grp.groupconditions[ic].id ] = grp.groupconditions[ic];
+            }
         }
 
         // Make our own list of devices, sorted by room.
-        var devices = api.getListOfDevices();
+        var devices = api.cloneObject( api.getListOfDevices() );
         deviceByNumber = [];
         var rooms = [];
         var noroom = { "id": 0, "name": "No Room", "devices": [] };
@@ -83,16 +92,18 @@ var ReactorSensor = (function(api) {
             return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1;
         });
         for (var i=0; i<dd.length; i+=1) {
-            var roomid = dd[i].room || 0;
+            var devobj = api.cloneObject( dd[i] );
+            devobj.friendlyName = "#" + devobj.id + " " + devobj.name;
+            deviceByNumber[devobj.id] = devobj;
+            
+            var roomid = devobj.room || 0;
             var roomObj = rooms[roomid];
             if ( roomObj === undefined ) {
-                roomObj = api.cloneObject(api.getRoomObject(roomid));
+                roomObj = api.cloneObject( api.getRoomObject(roomid) );
                 roomObj.devices = [];
                 rooms[roomid] = roomObj;
             }
-            dd[i].friendlyName = "#" + dd[i].id + " " + dd[i].name;
-            deviceByNumber[devices[i].id] = dd[i];
-            roomObj.devices.push(dd[i]);
+            roomObj.devices.push( devobj );
         }
         roomsByName = rooms.sort(
             // Special sort for room name -- sorts "No Room" last
@@ -103,20 +114,7 @@ var ReactorSensor = (function(api) {
                 return a.name.toLowerCase() > b.name.toLowerCase() ? 1 : -1;
             }
         );
-
-        var scenes = ud.scenes; /* There is no api.getListOfScenes(). Really? */
-        roomScenes = [];
-        if ( undefined !== scenes ) {
-            for ( var i=0; i<scenes.length; i+=1 ) {
-                if ( undefined === roomScenes[scenes[i].room] ) {
-                    roomScenes[scenes[i].room] = [];
-                }
-                roomScenes[scenes[i].room].push(scenes[i]);
-            }
-        }
-
     }
-
 
     /**
      * Find cdata group
@@ -143,6 +141,67 @@ var ReactorSensor = (function(api) {
             }
         }
         return undefined;
+    }
+    
+    function makeConditionDescription( cond ) {
+        if ( cond === undefined ) {
+            return "(undefined)";
+        }
+        
+        var str = "";
+        switch ( cond.type ) {
+            case 'service':
+                str += ( undefined !== deviceByNumber[cond.device] ?
+                        deviceByNumber[cond.device].friendlyName :
+                        '#' + cond.device + ( cond.devicename === undefined ? "name unknown" : cond.devicename ) + ' (missing)' );
+                str += ' ' + cond.variable + ' ' + cond.condition + ' ' + cond.value;
+                break;
+
+            case 'comment':
+                str = cond.comment;
+                break;
+
+            case 'housemode':
+                var hmap = [ '?', 'Home','Away','Night','Vacation' ];
+                if ( ( cond.value || "" ) === "" ) {
+                    str += "Any";
+                } else {
+                    var t = ( cond.value || "" ).split(/,/);
+                    for ( var k=0; k<t.length; ++k ) {
+                        t[k] = hmap[t[k]];
+                    }
+                    str += t.join(' or ');
+                }
+                break;
+
+            case 'weekday':
+                var wmap = { "1": "first", "2": "second", "3": "third", "4": "fourth", "5": "fifth", "last": "last" };
+                if ( ( cond.condition || "" ) === "" ) {
+                    str = "every";
+                } else if ( wmap[cond.condition] ) {
+                    str = 'on the ' + wmap[cond.condition];
+                } else {
+                    str = cond.condition;
+                }
+                if ( ( cond.value || "" ) === "" ) {
+                    str += " day";
+                } else {
+                    var t = ( cond.value || "" ).split(/,/);
+                    for ( var k=0; k<t.length; ++k ) {
+                        t[k] = weekDayName[ t[k] ];
+                    }
+                    str += ' ' + t.join(', ');
+                }
+                break;
+
+            case 'time':
+                /* fall through */
+
+            default:
+                str = JSON.stringify( cond );
+        }
+        
+        return str;
     }
 
     /**
@@ -388,6 +447,19 @@ var ReactorSensor = (function(api) {
         var el = ev.currentTarget;
         var row = jQuery( el ).closest('div.conditionrow');
         var cond = ixCond[ row.attr("id") ];
+        
+        var pred = jQuery('select.pred', row);
+        if ( "" === pred.val() ) {
+            if ( undefined !== cond.after ) {
+                delete cond.after;
+                configModified = true;
+            }
+        } else {
+            if ( cond.after !== pred.val() ) {
+                cond.after = pred.val();
+                configModified = true;
+            }
+        }
 
         var dd = jQuery('input.duration', row);
         if ( "" === dd.val() ) {
@@ -431,14 +503,31 @@ var ReactorSensor = (function(api) {
         var el = ev.currentTarget;
         var row = jQuery( el ).closest('div.conditionrow');
         var cond = ixCond[ row.attr("id") ];
+        var grp = ixGroup[ row.closest('div.conditiongroup').attr('id') ];
 
         /* Remove the open tool */
         jQuery( el ).hide();
 
         /* Create the options container and add options */
         var container = jQuery('<div class="condopts"></div>');
-        container.append('<form class="form-inline"><label>Sustained for </label><input type="text" class="duration form-control form-control-sm narrow"><label>seconds</label></form>');
-        container.append('<i class="material-icons closeopts">expand_less</i>');
+        /* Predecessor */
+        var preds = jQuery('<select class="pred form-control form-control-sm"><option value="">(any time/no sequence)</option></select>');
+        for ( var ic=0; ic<grp.groupconditions.length; ic++) {
+            var gc = grp.groupconditions[ic];
+            /* Must be service, not this condition, and not the predecessor to this condition (recursive) */
+            if ( cond.id !== gc.id && ( gc.after === undefined || gc.after !== cond.id ) ) {
+                var opt = jQuery('<option></option>');
+                opt.val( gc.id );
+                opt.text( makeConditionDescription( gc ) );
+                preds.append( opt );
+            }
+        }
+        container.append('<div class="predopt form-inline"><label>Only after: </label></div>');
+        jQuery('div.predopt label', container).append(preds);
+        jQuery('select.pred', container).on( 'change.reactor', handleOptionChange ).val( cond.after );
+        /* Duration */
+        container.append('<div class="duropt form-inline"><label>Condition is sustained for <input type="text" class="duration form-control form-control-sm narrow"> seconds</label></div>');
+        container.append('<i class="material-icons closeopts" title="Close Options">expand_less</i>');
         jQuery('input', container).on( 'change.reactor', handleOptionChange );
         jQuery('i.closeopts', container).on( 'click.reactor', handleCloseOptionsClick );
         jQuery('input.duration', container).val( cond.duration || "0" );
@@ -479,7 +568,7 @@ var ReactorSensor = (function(api) {
                 pp = makeServiceConditionMenu( cond.condition );
                 container.append(pp);
                 container.append('<input type="text" id="value" class="form-control form-control-sm">');
-                container.append('<i class="material-icons condmore">expand_more</i>');
+                container.append('<i class="material-icons condmore" title="Show Options">expand_more</i>');
                 jQuery("input#value", container).val( cond.value );
                 jQuery("select.varmenu", container).on( 'change.reactor', handleRowChange );
                 jQuery("select.condmenu", container).on( 'change.reactor', handleRowChange );
@@ -717,6 +806,19 @@ var ReactorSensor = (function(api) {
         var row = jQuery( el ).closest( 'div.row' );
         var condId = row.attr('id');
         var grpId = jQuery( el ).closest( 'div.conditiongroup' ).attr("id");
+        
+        /* See if the condition is referenced in a sequence */
+        var okDelete = false;
+        for ( var ci in ixCond ) {
+            if ( ixCond.hasOwnProperty(ci) && ixCond[ci].after == condId ) {
+                if ( !okDelete ) {
+                    if ( ! ( okDelete = confirm('This condition is used in sequence options in another condition. Click OK to delete it and disconnect the sequence, or Cancel to leave everything unchanged.') ) ) {
+                        return;
+                    }
+                }
+                delete ixCond[ci].after;
+            }
+        }
 
         /* Find the index of the condition in its groupconditions */
         var grp = ixGroup[ grpId ];
@@ -774,7 +876,7 @@ var ReactorSensor = (function(api) {
     */
     function redrawConditions() {
         jQuery('div#conditions').empty();
-
+        
         for (var ng=0; ng<cdata.conditions.length; ++ng) {
             if ( ng > 0 ) {
                 /* Insert divider */
@@ -882,6 +984,14 @@ var ReactorSensor = (function(api) {
         updateControls();
     }
 
+    /* Closing the control panel. */
+    function onBeforeCpanelClose(args) {
+        console.log( 'onBeforeCpanelClose args: ' + JSON.stringify(args) );
+        if ( configModified && confirm( "You have unsaved changes! Press OK to save your changes, or Cancel to discard them." ) ) {
+            handleSaveClick( undefined );
+        }
+    }
+
     function relativeTime( dt ) {
         if ( 0 === dt || undefined === dt ) {
             return "";
@@ -909,18 +1019,27 @@ var ReactorSensor = (function(api) {
         var cdata, cstate;
         var s = api.getDeviceState( myDevice, serviceId, "cdata" ) || "";
         if ( "" !== s ) {
-            cdata = JSON.parse( s );
+            try {
+                cdata = JSON.parse( s );
+            } catch (e) {
+                console.log("Unable to parse cdata: " + String(e))
+                return;
+            }
         } else {
             console.log("cdata unavailable");
             return;
         }
 
         s = api.getDeviceState( myDevice, serviceId, "cstate" ) || "";
+        cstate = {};
         if ( "" !== s ) {
-            cstate = JSON.parse( s );
+            try {
+                cstate = JSON.parse( s );
+            } catch (e) {
+                console.log("cstate cannot be parsed: " + String(e));
+            }
         } else {
             console.log("cstate unavailable");
-            cstate = {};
         }
 
         for ( var i=0; i<cdata.conditions.length; i++ ) {
@@ -939,76 +1058,35 @@ var ReactorSensor = (function(api) {
                 var el = jQuery('<div class="row cond" id="' + cond.id + '">');
                 var currentValue = cstate[cond.id] === undefined ? cstate[cond.id] : cstate[cond.id].lastvalue;
 
+                el.append('<div class="col-sm-6 col-md-2">' + 
+                    ( condTypeName[ cond.type ] !== undefined ? condTypeName[ cond.type ] : cond.type ) +
+                    '</div>');
+                    
+                var condDesc = makeConditionDescription( cond );
                 switch ( cond.type ) {
                     case 'service':
-                        el.append('<div class="col-sm-6 col-md-2">Service</div>');
-                        el.append('<div class="col-sm-6 col-md-3">' +
-                            ( undefined !== deviceByNumber[cond.device] ?
-                                deviceByNumber[cond.device].friendlyName :
-                                '#' + cond.device + ( cond.devicename === undefined ? "name unknown" : cond.devicename ) + ' (missing)' ) +
-                            '</div>');
-                        el.append('<div class="col-sm-6 col-md-3">' +
-                            cond.variable + cond.condition + cond.value +
-                            ( ( cond.duration || 0 ) > 0 ? " for " + cond.duration + " secs" : "" ) +
-                            '</div>'); // ??? html escape
+                        condDesc += ( ( cond.duration || 0 ) > 0 ? " for " + cond.duration + " secs" : "" );
                         break;
-
-                    case 'comment':
-                        el.append('<div class="col-sm-12 col-md-12"><em>' + cond.comment + '</em></div>');
-                        break;
-
-                    case 'housemode':
-                        var hmap = [ '?', 'Home','Away','Night','Vacation' ];
-                        el.append('<div class="col-sm-6 col-md-2">House Mode</div>');
-                        var vv = "";
-                        if ( ( cond.value || "" ) === "" ) {
-                            vv = "Any";
-                        } else {
-                            var t = ( cond.value || "" ).split(/,/);
-                            for ( var k=0; k<t.length; ++k ) {
-                                t[k] = hmap[t[k]];
-                            }
-                            vv = t.join(' or ');
-                        }
-                        el.append('<div class="col-sm-6 col-md-6">' + vv + '</div>');
-                        currentValue = hmap[currentValue || 0];
-                        break;
-
+                        
                     case 'weekday':
-                        var dmap = [ '?', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat' ];
-                        var wmap = { "1": "First", "2": "Second", "3": "Third", "4": "Fifth", "5": "Fifth", "last": "Last" };
-                        el.append('<div class="col-sm-6 col-md-2">Weekday</div>');
-                        var vv;
-                        if ( ( cond.condition || "" ) == "" ) {
-                            vv = "Every";
-                        } else if ( wmap[cond.condition] ) {
-                            vv = wmap[cond.condition];
-                        } else {
-                            vv = cond.condition;
+                        if ( currentValue !== undefined && weekDayName[ currentValue ] !== undefined ) {
+                            currentValue = weekDayName[ currentValue ];
                         }
-                        if ( ( cond.value || "" ) === "" ) {
-                            vv += " day";
-                        } else {
-                            var t = ( cond.value || "" ).split(/,/);
-                            for ( var k=0; k<t.length; ++k ) {
-                                t[k] = dmap[t[k]];
-                            }
-                            vv += ' ' + t.join(', ');
-                        }
-                        el.append('<div class="col-sm-6 col-md-6">' + vv + '</div>');
-                        currentValue = dmap[currentValue || 0];
                         break;
-
+                        
                     case 'time':
                         if ( currentValue !== undefined ) {
                             currentValue = new Date( currentValue * 1000 ).toLocaleString();
                         }
-                        /* fall through */
+                        break;
 
                     default:
-                        el.append('<div class="col-sm-12 col-md-2">' + cond.type + '</div>');
-                        el.append('<div class="col-sm-12 col-md-6">' + JSON.stringify( cond ) + '</div>');
+                        /* Nada */
                 }
+                if ( cond.after !== undefined ) {
+                    condDesc += ' (after ' + makeConditionDescription( ixCond[cond.after] ) + ')';
+                }
+                el.append( jQuery('<div class="col-sm-6 col-md-6"></div>').text( condDesc ) );
 
                 /* Append current value and condition state */
                 if ( cond.type !== "comment" ) {
@@ -1020,7 +1098,7 @@ var ReactorSensor = (function(api) {
                             '</div>' );
                         groupstate = groupstate && cs.evalstate;
                     } else {
-                        el.append( '<div class="col-sm-6 col-md-4">(unknown)' );
+                        el.append( '<div class="col-sm-6 col-md-4">(unknown)</div>' );
                         groupstate = false;
                     }
                 }
@@ -1049,6 +1127,11 @@ var ReactorSensor = (function(api) {
 
     function doStatusPanel()
     {
+        /* Make sure changes are saved. */
+        if ( configModified && confirm( "You have unsaved changes! Press OK to save your changes, or Cancel to discard them." ) ) {
+            handleSaveClick( undefined );
+        }
+
         initModule();
 
         api.setCpanelContent( '<div id="reactorstatus"></div>' );
@@ -1098,7 +1181,7 @@ var ReactorSensor = (function(api) {
             html += '<div class="clearfix">';
 
             html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
-            html += '<div id="tbcopyright">Reactor ver 1.0 &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>, All Rights Reserved. For documentation, please see this project\'s <a href="https://github.com/toggledbits/Reactor" target="_blank">GitHub repository</a>. For support, please post in the <a href="http://forum.micasaverde.com/index.php/topic,87484.0.html" target="_blank">forum thread</a>.</div>';
+            html += '<div id="tbcopyright">Reactor ver 1.1 &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>, All Rights Reserved. Please check out the <a href="https://www.toggledbits.com/reactor" target="_blank">online documentation</a> and <a href="http://forum.micasaverde.com/index.php/topic,87484.0.html" target="_blank">forum thread</a> for support.</div>';
 
             // Push generated HTML to page
             api.setCpanelContent(html);
@@ -1109,7 +1192,8 @@ var ReactorSensor = (function(api) {
         }
         catch (e)
         {
-            console.log( 'Error in ReactorSensor.doConditions(): ' + e.toString() );
+            console.log( 'Error in ReactorSensor.doConditions(): ' + String( e ) );
+            alert( e.stack );
         }
     }
 

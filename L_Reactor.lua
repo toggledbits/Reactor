@@ -10,9 +10,9 @@ module("L_Reactor", package.seeall)
 local debugMode = false
 
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "1.0"
+local _PLUGIN_VERSION = "1.1"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
-local _CONFIGVERSION = 00100
+local _CONFIGVERSION = 00102
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -21,8 +21,6 @@ local RSSID = "urn:toggledbits-com:serviceId:ReactorSensor"
 local RSTYPE = "urn:schemas-toggledbits-com:device:ReactorSensor:1"
 
 local SENSOR_SID  = "urn:micasaverde-com:serviceId:SecuritySensor1"
-local SWITCH_SID  = "urn:upnp-org:serviceId:SwitchPower1"
-local DIMMER_SID  = "urn:upnp-org:serviceId:Dimming1"
 
 local sensorState = {}
 local tickTasks = {}
@@ -95,15 +93,7 @@ end
 
 local function checkVersion(dev)
     local ui7Check = luup.variable_get(MYSID, "UI7Check", dev) or ""
-    if isOpenLuup then 
-        local s = luup.variable_get( "openLuup", "Version", 2 ) -- hardcoded device?
-        local y,m,d = string.match( s or "0.0.0", "^v(%d+)%.(%d+)%.(%d+)" )
-        local y = tonumber(y) * 10000 + tonumber(m)*100 + tonumber(d)
-        D("checkVersion() checking openLuup version=%1 (numeric %2)", s, y)
-        if y < 180400 or y >= 180611 then return true end -- See Github issue #5
-        L({level=1,msg="openLuup version %1 is not supported. Please upgrade openLuup. See Github issue #5."}, y);
-        return true 
-    end
+    if isOpenLuup then return true end
     if (luup.version_branch == 1 and luup.version_major >= 7) then
         if ui7Check == "" then
             -- One-time init for UI7 or better
@@ -220,10 +210,11 @@ local function setMessage(s, dev)
 end
 
 -- Return array of keys for a map (table). Pass array or new is created.
-local function getKeys( m, r ) 
+-- N.B. this version may insert duplicate keys if called multiple with r passed in (OK here)
+local function getKeys( m, r )
     if r == nil then r = {} end
     local seen = {}
-    for k,_ in m do
+    for k,_ in pairs( m ) do
         if seen[k] == nil then
             table.insert( r, k )
             seen[k] = true
@@ -261,18 +252,28 @@ local function sensor_runOnce( tdev )
         luup.variable_set( RSSID, "Retrigger", "0", tdev )
         luup.variable_set( RSSID, "Message", "", tdev )
         luup.variable_set( RSSID, "cdata", "", tdev )
+        luup.variable_set( RSSID, "cstate", "", tdev )
 
         luup.variable_set( SENSOR_SID, "Armed", 0, tdev )
         luup.variable_set( SENSOR_SID, "Tripped", 0, tdev )
         luup.variable_set( SENSOR_SID, "ArmedTripped", 0, tdev )
-        
+
         luup.variable_set( "urn:micasaverde-com:serviceId:HaDevice1", "ModeSetting", "1:;2:;3:;4:", tdev )
+
+        -- Fix up category and subcategory
+        luup.attr_set('category_num', 4)
+        luup.attr_set('subcategory_num', 1)
 
         luup.variable_set( RSSID, "Version", _CONFIGVERSION, tdev )
         return
     end
 
     -- Consider per-version changes.
+    if s < 00101 then
+        -- Fix up category and subcategory
+        luup.attr_set('category_num', 4)
+        luup.attr_set('subcategory_num', 1)
+    end
 
     -- Update version last.
     if (s ~= _CONFIGVERSION) then
@@ -293,14 +294,19 @@ local function plugin_runOnce( pdev )
         luup.variable_set(MYSID, "NumChildren", 0, pdev)
         luup.variable_set(MYSID, "NumRunning", 0, pdev)
         luup.variable_set(MYSID, "Message", "", pdev)
+        luup.variable_set(MYSID, "DebugMode", 0, pdev)
+
         luup.variable_set(MYSID, "Version", _CONFIGVERSION, pdev)
         return
     end
 
     -- Consider per-version changes.
+    if s < 00102 then
+        luup.variable_set(MYSID, "DebugMode", 0, pdev)
+    end
 
     -- Update version last.
-    if (s ~= _CONFIGVERSION) then
+    if s ~= _CONFIGVERSION then
         luup.variable_set(MYSID, "Version", _CONFIGVERSION, pdev)
     end
 end
@@ -323,93 +329,21 @@ function addSensor( pdev )
     end
     highd = highd + 1
     D("addSensor() creating child r%1s%2", pdev, highd)
-    luup.chdev.append( pdev, ptr, string.format("r%ds%d", pdev, highd), 
+    luup.chdev.append( pdev, ptr, string.format("r%ds%d", pdev, highd),
         "Reactor Sensor " .. highd, "", "D_ReactorSensor.xml", "", "", false )
     if isOpenLuup then D("END ------- ptr=%1", ptr) end
     luup.chdev.sync( pdev, ptr )
     -- Should cause reload immediately.
 end
 
--- Find a good tick delay for next update
-local function scaleNextTick( delay )
-    local nextTick = delay or 60
-    if nextTick > 60 then nextTick = 60
-    elseif nextTick > 10 then nextTick = 5
-    else nextTick = 1 end
-    local remain = delay % nextTick
-    if remain > 0 then nextTick = remain end
-    return nextTick
-end
-
-function setEnabled( enabled, tdev )
-    D("setEnabled(%1,%2)", enabled, tdev)
-    if type(enabled) == "string" then
-        if enabled:lower() == "false" or enabled:lower() == "disabled" or enabled == "0" then
-            enabled = false
-        else
-            enabled = true
-        end
-    elseif type(enabled) == "number" then
-        enabled = enabled ~= 0
-    elseif type(enabled) ~= "boolean" then
-        return
-    end
-    local wasEnabled = isEnabled( tdev )
-    if wasEnabled ~= enabled then
-        -- changing
-        addEvent{ event="enable", dev=tdev, enabled=enabled }
-        luup.variable_set( RSSID, "Enabled", iif( enabled, "1", "0" ), tdev )
-        -- If disabling, do nothing else, so current actions complete/expire.
-        if enabled then
-            -- Kick off a new timer thread, which will also re-eval.
-            scheduleDelay( 2, false, tdev )
-            setMessage( "Enabling...", tdev )
-        else
-            setMessage( "Disabled", tdev )
+-- Find a condition hiding in a group (or is it?)
+local function findCondition( condid, cdata )
+    for _,g in ipairs( cdata.conditions or {} ) do
+        for _,c in ipairs( g.groupconditions or {} ) do
+            if c.id == condid then return c end
         end
     end
-end
-
-function actionTrip( force, dev )
-    L("Sensor %1 (%2) trigger action!", dev, luup.devices[dev].description)
-    luup.variable_set( SENSOR_SID, "Tripped", 1, dev );
-    if getVarNumeric( "Armed", 0, dev, SENSOR_SID ) ~= 0 then
-        luup.variable_set( SENSOR_SID, "ArmedTripped", 1, dev )
-    end
-    setMessage("Tripped", dev);
-end
-
-function actionReset( force, dev )
-    L("Sensor %1 (%2) reset action!", dev, luup.devices[dev].description)
-    luup.variable_set( SENSOR_SID, "Tripped", 0, dev );
-    luup.variable_set( SENSOR_SID, "ArmedTripped", 0, dev );
-    setMessage("Not tripped", dev)
-end
-
-function actionSetArmed( armedVal, dev )
-    L("Sensor %1 (%2) set armed to %4", dev, luup.devices[dev].description, armedVal)
-    local armed = ( tonumber( armedVal ) or 0 ) ~= 0
-    luup.variable_set( SENSOR_SID, "Armed", iif( armed, 1, 0 ), dev )
-    if armed then
-        luup.variable_set( SENSOR_SID, "ArmedTripped", getVarNumeric( "Tripped", 0, dev, SENSOR_SID ), dev )
-    else
-        luup.variable_set( SENSOR_SID, "ArmedTripped", 0, dev )    
-    end
-end
-
-function masterClear( dev ) 
-    -- Remove all child devices.
-    local ptr = luup.chdev.start( dev )
-    luup.chdev.sync( dev, ptr )
-    -- Should cause reload immediately.
-end
-
-function setDebug( state, tdev )
-    debugMode = state or false
-    addEvent{ event="debug", dev=tdev, debugMode=debugMode }
-    if debugMode then
-        D("Debug enabled")
-    end
+    return nil
 end
 
 local function evaluateCondition( cond, grp, cdata, tdev )
@@ -419,40 +353,33 @@ local function evaluateCondition( cond, grp, cdata, tdev )
     if cond.type == "service" then
         -- Can't succeed if referenced device doesn't exist.
         if luup.devices[cond.device or 0] == nil then return false end
-        
+
         -- If we're not watching this variable yet, start watching it.
         local watchkey = string.format("%d:%s/%s", cond.device or 0, cond.service or "X", cond.variable or "X")
         if watchData[watchkey] == nil or watchData[watchkey][tostring(tdev)] == nil then
             D("evaluateCondition() sensor %1 adding watch for %2", tdev, watchkey)
             luup.variable_watch( "reactorWatch", cond.service or "X", cond.variable or "X", cond.device or 0 )
             watchData = watchData or {}
-            watchData[watchkey] = watchData[watchKey] or {}
+            watchData[watchkey] = watchData[watchkey] or {}
             watchData[watchkey][tostring(tdev)] = true
         end
 
         -- Get state variable value.
-        local vv,ts = luup.variable_get( cond.service or "", cond.variable or "", cond.device or -1 ) or ""
+        local vv = luup.variable_get( cond.service or "", cond.variable or "", cond.device or -1 ) or ""
         local vn = tonumber( vv )
-        
+
         cond.lastvalue = { value=vv, timestamp=now }
-        
+
         -- Get condition value
         local cv = cond.value or ""
-        -- ??? parse date? time? MSSQL style? #yyyy-mm-dd hh:mm:ss#
-        if string.match( cv, "^%#[^#]+%#$" ) then
-            -- Parse date/time string. Result is either a Unix timestamp, or a value <= 86400,
-            -- which is time only and will be matched only to the time component of the variable's
-            -- value. 
-            -- ?? if time only, adjust both values to time-range.
-        end
         local cn = tonumber( cv )
-        
+
         -- If case-insensitive, canonify to lowercase.
         if cond.nocase then
             vv = string.lower( vv )
-            cv = string.lower( cv ) 
+            cv = string.lower( cv )
         end
-        
+
         -- Evaluate conditions. Any failure is a bail-out.
         D("evaluateCondition() %1: %2/%3 %4%5%6?", cond.type, cond.service, cond.variable, vv, cond.condition, cv)
         if cond.condition == "=" then
@@ -460,31 +387,31 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         elseif cond.condition == "<>" then
             if vv == cv then return false end
         elseif cond.condition == ">" then
-            if vn <= vc then return false end
+            if vn == nil or cn == nil or vn <= cn then return false end
         elseif cond.condition == "<" then
-            if vn >= vc then return false end
+            if vn == nil or cn == nil or vn >= cn then return false end
         elseif cond.condition == ">=" then
-            if vn < vc then return false end
+            if vn == nil or cn == nil or vn < cn then return false end
         elseif cond.condition == "<=" then
-            if vn > vc then return false end
+            if vn == nil or cn == nil or vn > cn then return false end
         elseif cond.condition == "contains" then
             if not string.find( vv, cv ) then return false end
         elseif cond.condition == "starts" then
-            if not string.find( "^" .. vv, cv ) then return false end
+            if not string.find( vv, "^" .. cv ) then return false end
         elseif cond.condition == "ends" then
-            if not string.find( vv .. "$", cv ) then return false end
+            if not string.find( vv, cv .. "$" ) then return false end
         elseif cond.condition == "in" then
             local lst = split( cv )
             local found = false
             for _,z in ipairs( lst ) do
-                if z == vv then 
+                if z == vv then
                     found = true
                     break
                 end
             end
             if not found then return false end
         else
-            L("evaluateCondition() unknown condition %1 in cond %2 of group", cond.condition, vc)
+            L("evaluateCondition() unknown condition %1 in cond %2 of group", cond.condition, cv)
             return false
         end
     elseif cond.type == "housemode" then
@@ -529,19 +456,28 @@ local function evaluateCondition( cond, grp, cdata, tdev )
             D("evaluateCondition() yes, today %1 %2-%3 IS #%4 in month", tt.wday,
                 tt.month, tt.day, cond.condition)
         end
-    elseif cond.type == "time" then 
+    elseif cond.type == "time" then
         -- Time, with various components specified, or not.
         hasTimer = true
         cond.lastvalue = { value=now, timestamp=now }
         local dt = os.date("*t", now)
-        local xt = os.date("*t", luup.sunrise())
-        local sunrise = xt.hour * 60 + xt.min
-        xt = os.date("*t", luup.sunset())
-        local sunset = xt.hour * 60 + xt.min
-        local hm = dt.hour * 60 + dt.min
+        local hm = dt.hour * 60 + dt.min -- msm (minutes since midnight)
+        -- Figure out sunrise/sunset. We keep a daily cache, because Vera's times
+        -- recalculate to that of the following day once the time has passwed, and
+        -- we need stable with a day.
+        local stamp = (dt.year % 100) * 10000 + dt.month * 100 + dt.day
+        local sun = split( luup.variable_get( RSSID, "sundata", tdev ) or "" )
+        if #sun ~= 3 or sun[1] ~= tostring(stamp) then
+            D("evaluateCondition() didn't like what I got for sun: %1; expected stamp is %2; storing new.", sun, stamp)
+            sun = { stamp, luup.sunrise(), luup.sunset() }
+            luup.variable_set( RSSID, "sundata", table.concat( sun, "," ) , tdev )
+        end
+        D("evaluateCondition() sunrise/sunset %1", sun)
+        -- Split, pad, and compare date.
         local tparam = split( cond.value, ',' )
-        for ix = #tparam+1,10 do tparam[ix] = "" end -- pad
+        for ix = #tparam+1, 10 do tparam[ix] = "" end -- pad
         local cp = cond.condition
+        -- ??? between or not?
         D("evaluateCondition() time check now %1 vs config %2", dt, tparam)
         if tparam[1] ~= "" and dt.year < tonumber( tparam[1] ) then return false,true end
         if tparam[6] ~= "" and dt.year > tonumber( tparam[6] ) then return false,true end
@@ -549,25 +485,63 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         if tparam[7] ~= "" and dt.month > tonumber( tparam[7] ) then return false,true end
         if tparam[3] ~= "" and dt.day < tonumber( tparam[3] ) then return false,true end
         if tparam[8] ~= "" and dt.day > tonumber( tparam[8] ) then return false,true end
-        if tparam[4] == "sunrise" then
-            if hm < sunrise then return false,true end
-        elseif tparam[4] == "sunset" then
-            if hm < sunset then return false,true end 
-        elseif tparam[4] ~= "" then
-            local shm = tonumber( tparam[4] ) * 60;
-            if tparam[5] ~= "" then shm = shm + tonumber( tparam[5] ) end
-            if hm < shm then return false,true end
-        elseif tparam[5] ~= "" and dt.min < tonumber( tparam[5] ) then return false,true
+        -- Date passes. Get start time.
+        local shm, ehm
+        if tparam[4] == "" then
+            -- No hour, just check minute
+            if tparam[5] ~= "" and dt.min < tonumber( tparam[5] ) then return false,true end
+        else
+            if tparam[4] == "sunrise" then
+                local xt = os.date("*t", sun[2])
+                shm = xt.hour * 60 + xt.min
+            elseif tparam[4] == "sunset" then
+                local xt = os.date("*t", sun[3])
+                shm = xt.hour * 60 + xt.min
+            elseif tparam[4] ~= "" then
+                shm = tonumber( tparam[4] ) * 60;
+                if tparam[5] ~= "" then
+                    shm = shm + tonumber( tparam[5] )
+                end
+            end
         end
-        if tparam[9] == "sunrise" then 
-            if hm > sunrise then return false,true end
-        elseif tparam[9] == "sunset" then
-            if hm > sunset then return false,true end
-        elseif tparam[9] ~= "" then
-            local ehm = tonumber( tparam[9] ) * 60;
-            if tparam[10] ~= "" then ehm = ehm + tonumber( tparam[10] ) else ehm = ehm + 59 end
-            if hm > ehm then return false,true end
-        elseif tparam[10] ~= "" and dt.min > tonumber( tparam[10] ) then return false,true
+        -- Get end time.
+        if tparam[9] == "" then
+            -- No hour, just check minute
+            if tparam[10] ~= "" and dt.min > tonumber( tparam[10] ) then return false,true end
+        else
+            if tparam[9] == "sunrise" then
+                local xt = os.date("*t", sun[2])
+                ehm = xt.hour * 60 + xt.min
+            elseif tparam[9] == "sunset" then
+                local xt = os.date("*t", sun[3])
+                ehm = xt.hour * 60 + xt.min
+            elseif tparam[9] ~= "" then
+                ehm = tonumber( tparam[9] ) * 60;
+                if tparam[10] ~= "" then
+                    ehm = ehm + tonumber( tparam[10] )
+                else
+                    -- Since no selection means "any minute", stretch end time for
+                    -- comparison to include full hour (e.g. an end time of hour=22,
+                    -- minute=any is equivalent to hour=23 minute=0)
+                    ehm = ehm + 60
+                end
+            end
+        end
+        -- Compare start and end time specs to current time.
+        D("evaluateCondition() compare current time %1 between %2 and %3", hm, shm, ehm)
+        if shm == nil then
+            -- No starting time, consider only end.
+            if ehm ~= nil and hm >= ehm then return false, true end
+        elseif ehm == nil then
+            -- No end time, consider only start.
+            if shm ~= nil and hm < shm then return false, true end
+        else
+            if shm <= ehm then
+                if hm < shm or hm >= ehm then return false, true end
+            else
+                -- Time spec spans midnight (e.g. sunset to sunrise or 2200 to 0600)
+                if not ( hm >= shm or hm < ehm ) then return false, true end
+            end
         end
     elseif cond.type == "comment" then
         -- Shortcut. Comments are always true.
@@ -583,13 +557,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
     return true, hasTimer
 end
 
---[[
-    PHR??? Eventually I think this should be done in two phases, first one where
-    all evaluations are performed and boiled down to a true/false for each cond-
-    ition, and then second which evaluates the overall tripped state based on 
-    that. This would facilitate showing last value and condition result on the
-    UI, which I think would be helpful, at the expense of some CPU cycles.
---]]    
+-- Evaluate conditions within group. Return overall group state (all conditions met).
 local function evaluateGroup( grp, cdata, tdev )
     D("evaluateGroup(%1,%2)", grp.groupid, tdev)
     if grp.groupconditions == nil or #grp.groupconditions == 0 then return false end -- empty group always false
@@ -597,34 +565,57 @@ local function evaluateGroup( grp, cdata, tdev )
     local passed = true; -- innocent until proven guilty
     local now = cdata.timebase
     local skey = tostring(tdev)
-    for nc,cond in ipairs( grp.groupconditions ) do
+    for _,cond in ipairs( grp.groupconditions ) do
         if cond.type ~= "comment" then
             local state, condTimer = evaluateCondition( cond, grp, cdata, tdev )
             D("evaluateGroup() eval group %1 cond %2 state %3 timer %4", grp.groupid,
                 cond.id, state, condTimer)
-            
+
             hasTimer = condTimer or hasTimer
-            
+
             -- Preserve the result of the condition eval. We are edge-triggered,
             -- so only save changes, with timestamp.
             if sensorState[skey].condState[cond.id] == nil then
-                sensorState[skey].condState[cond.id] = { id=cond.id }
-            end
-            -- State change?
-            if state ~= sensorState[skey].condState[cond.id].laststate then
+                D("evaluateGroup() new condition state for %1=%2", cond.id, state)
+                sensorState[skey].condState[cond.id] = { id=cond.id, laststate=state, statestamp=now }
+            elseif state ~= sensorState[skey].condState[cond.id].laststate then
+                D("evaluateGroup() condition %1 value state changed from %1 to %2", sensorState[skey].condState[cond.id].laststate, state)
+                -- ??? At certain times, Vera gets a time that is in the future, or so it appears. It looks like the TZ offset isn't applied, randomly.
+                -- Maybe if call is during ntp update, don't know. Investigating... This log message helps detection and analysis.
+                if now < sensorState[skey].condState[cond.id].statestamp then L({level=1,msg="Time moved backwards! Sensor %4 cond %1 last change at %2, but time now %3"}, cond.id, sensorState[skey].condState[cond.id].statestamp, now, tdev) end
                 sensorState[skey].condState[cond.id].laststate = state
                 sensorState[skey].condState[cond.id].statestamp = now
             end
+
+            -- Save actual value if changed (for status display)
             cond.lastvalue.value = cond.lastvalue.value or ""
             if cond.lastvalue.value ~= sensorState[skey].condState[cond.id].lastvalue then
                 sensorState[skey].condState[cond.id].lastvalue = cond.lastvalue.value
                 sensorState[skey].condState[cond.id].valuestamp = now
             end
 
+            -- Check for predecessor/sequence
+            if state and ( cond.after or "" ) ~= "" then
+                -- Sequence; this condition must become true after named sequence becomes true
+                local predCond = findCondition( cond.after, cdata )
+                D("evaluateCondition() sequence predecessor %1=%2", cond.after, predCond)
+                if predCond == nil then
+                    state = false
+                else
+                    local predState = sensorState[skey].condState[ predCond.id ]
+                    D("evaluateCondition() testing predecessor %1 state %2", predCond, predState)
+                    if predState == nil -- can't find predecessor
+                        or ( not predState.evalstate ) -- not true laststate
+                        or predState.statestamp >= sensorState[skey].condState[cond.id].statestamp -- explicit for re-evals/restarts
+                    then
+                        D("evaluateCondition() didn't meet sequence requirement %1 after %2", cond.id, cond.after)
+                        state = false
+                    end
+                end
+            end
+
             -- Now, check to see if duration restriction is in effect.
-            if not state then 
-                passed = false
-            elseif ( cond.duration or 0 ) > 0 then
+            if state and ( cond.duration or 0 ) > 0 then
                 -- Condition value matched. See if there's a duration restriction.
                 hasTimer = true
                 -- Age is seconds since last state change.
@@ -633,26 +624,36 @@ local function evaluateGroup( grp, cdata, tdev )
                     D("evaluateGroup() cond %1 suppressed, age %2 has not met duration requirement %3",
                         cond.id, age, cond.duration)
                     state = false
-                    passed = false
                     local rem = math.max( 2, cond.duration - age )
                     scheduleDelay( rem, false, tdev )
                 else
                     D("evaluateGroup() cond %1 age %2 (>=%3) success", cond.id, age, cond.duration)
                 end
             end
-            
-            -- Save the final determination of state.
-            sensorState[skey].condState[cond.id].evalstate = state
-            
-            D("evaluateGroup() cond %1 %2 final match %3", cond.id, cond.type, passed)
+
+            -- Save the final determination of state for this condition.
+            passed = state and passed
+            if state ~= sensorState[skey].condState[cond.id].evalstate then
+                sensorState[skey].condState[cond.id].evalstate = state
+                sensorState[skey].condState[cond.id].evalstamp = now
+            end
+
+            D("evaluateGroup() cond %1 %2 final %3, group now %4", cond.id, cond.type, state, passed)
         end
     end
-    
-    -- If we've run the gauntlet, we're good!
+
+    -- Save group state (create or change only).
+    if sensorState[skey].condState[grp.groupid] == nil
+        or sensorState[skey].condState[grp.groupid].evalstate ~= passed
+    then
+        sensorState[skey].condState[grp.groupid] = { evalstate=passed, evalstamp=now }
+    end
+    sensorState[skey].condState[grp.groupid].hastimer = hasTimer
+
     return passed, hasTimer
 end
 
--- 
+--
 local function evaluateConditions( tdev )
     -- Fetch the condition data.
     local s = luup.variable_get( RSSID, "cdata", tdev ) or ""
@@ -665,35 +666,35 @@ local function evaluateConditions( tdev )
 
     -- Mark a stable base of time
     cdata.timebase = os.time()
-    
+
     -- Evaluate all groups. Any group match is a pass.
     local hasTimer = false
     local passed = false
-    for ng,grp in ipairs( cdata.conditions ) do
+    for _,grp in ipairs( cdata.conditions ) do
         local match, t = evaluateGroup( grp, cdata, tdev )
         passed = match or passed
         hasTimer = t or hasTimer
-        D("evaluateConditions() group %1 eval %2, timer %3, overall state %4 timer %5, continuing", 
+        D("evaluateConditions() group %1 eval %2, timer %3, overall state %4 timer %5, continuing",
             grp.groupid, match, t, passed, hasTimer)
     end
-    
+
     -- Save the condition state.
     luup.variable_set( RSSID, "cstate", json.encode(sensorState[tostring(tdev)].condState), tdev )
-    
+
     D("evaluateConditions() sensor %1 overall state now %1, hasTimer %2", passed, hasTimer)
     return passed, hasTimer
 end
 
---
+-- Perform update tasks
 local function updateSensor( tdev )
     D("updateSensor(%1) %2", tdev, luup.devices[tdev].description)
-    
+
     -- If not enabled, no work to do.
     if not isEnabled( tdev ) then
         D("updateSensor() disabled; no action")
         return
     end
-    
+
     -- Update state (if changed)
     local currTrip = getVarNumeric( "Tripped", 0, tdev, SENSOR_SID ) ~= 0
     local newTrip, hasTimer = evaluateConditions( tdev )
@@ -704,59 +705,100 @@ local function updateSensor( tdev )
     if currTrip ~= newTrip or ( newTrip and retrig ) then
         -- Changed, or retriggerable.
         luup.variable_set( SENSOR_SID, "Tripped", iif( newTrip, 1, 0 ), tdev )
-        if not newTrip then
-            -- If not tripped, reset ArmedTripped, but only if it doesn't agree.
-            if getVarNumeric( "ArmedTripped", -1, tdev, SENSOR_SID ) ~= 0 then
-                luup.variable_set( SENSOR_SID, "ArmedTripped", 0, tdev )
-            end
-        else
-            -- Now tripped; if armed, make sure ArmedTripped follows
-            if getVarNumeric( "Armed", 0, tdev, SENSOR_SID ) ~= 0 then
-                luup.variable_set( SENSOR_SID, "ArmedTripped", 1, tdev )
-            end
-        end
     end
     setMessage( iif( newTrip, "Tripped", "Not tripped" ), tdev )
-    
+
     -- ForcePoll??? Not yet implemented.
     local forcePoll = getVarNumeric( "ForcePoll", 0, tdev, RSSID )
-    
-    -- No need to reschedule timer if no demand. Demand is created by condition 
+
+    -- No need to reschedule timer if no demand. Demand is created by condition
     -- type (hasTimer), polling enabled, or ContinuousTimer set.
-    if hasTimer or forcePoll or getVarNumeric( "ContinuousTimer", 0, tdev, RSSID ) then
-        local v = 60 - ( os.time() % 60 )
+    if hasTimer or forcePoll > 0 or getVarNumeric( "ContinuousTimer", 0, tdev, RSSID ) ~= 0 then
+        local v = 10 + ( 60 - ( os.time() % 60 ) ) -- 10 seconds after minute
         scheduleDelay( v, false, tdev )
     end
 end
 
+-- Clean cstate
+local function loadCleanState( tdev )
+    D("loadCleanState(%1)", tdev)
+
+    -- Fetch cstate. If it's empty, there's nothing to do here.
+    local cstate = {} -- guilty until proven innocent
+    local s = luup.variable_get( RSSID, "cstate", tdev ) or ""
+    if s ~= "" then
+        local pos, err
+        cstate,pos,err = json.decode( s )
+        if err then
+            L({level=2,msg="ReactorSensor %1 (%2) corrupted cstate, clearing!"}, tdev, luup.devices[tdev].description)
+            cstate = {}
+        end
+
+        -- Fetch cdata
+        s = luup.variable_get( RSSID, "cdata", tdev ) or ""
+        if s == "" then
+            luup.variable_set( RSSID, "cstate", "", tdev )
+            return
+        end
+        local cdata
+        cdata,pos,err = json.decode( s )
+        if err then
+            L({level=1,msg="ReactorSensor %1 (%2) has corrupt configuration data!"}, tdev, luup.devices[tdev].description)
+            error("ReactorSensor " .. tdev .. " has invalid configuration data")
+            -- no return
+        end
+
+        -- Find all conditions in cdata
+        local conds = {}
+        for _,grp in ipairs( cdata.conditions or {} ) do
+            table.insert( conds, grp.groupid )
+            for _,cond in ipairs( grp.groupconditions or {} ) do
+                table.insert( conds, cond.id )
+            end
+        end
+        D("loadCleanState() cdata has %1 conditions: %2", #conds, conds)
+
+        -- Get all conditions in cstate. Remove from that list all cdata conditions.
+        local states = getKeys( cstate )
+        D("loadCleanState() cstate has %1 states: %2", #states, states)
+        local dels = {} -- map
+        for _,k in ipairs( states ) do dels[k] = true end
+        for _,k in ipairs( conds ) do dels[k] = nil end
+
+        -- Delete whatever is left
+        D("loadCleanState() deleting %1", dels)
+        for k,_ in pairs( dels ) do cstate[ k ] = nil end
+    end
+
+    -- Save updated state
+    D("loadCleanState() saving state %1", cstate)
+    luup.variable_set( RSSID, "cstate", json.encode( cstate ), tdev )
+    return cstate
+end
+
+
 -- Start an instance
 local function startSensor( tdev, pdev )
     D("startSensor(%1,%2)", tdev, pdev)
-    
+
     -- Device one-time initialization
     sensor_runOnce( tdev )
-    
+
     -- Initialize instance data
     sensorState[tostring(tdev)] = { eventList={}, condState={} }
 
-    -- Restore our condition state
-    local s = luup.variable_get( RSSID, "cstate", tdev ) or ""
-    if s ~= "" then
-        local cstate, pos, err = json.decode( s )
-        if err then
-            L("Unable to parse cstate at %2, %1 in %3", pos, err, s)
-        else
-            sensorState[tostring(tdev)].condState = cstate
-        end
-    end
+    -- Clean and restore our condition state.
+    sensorState[tostring(tdev)].condState = loadCleanState( tdev )
 
     -- Watch our own cdata; when it changes, re-evaluate.
     luup.variable_watch( "reactorWatch", RSSID, "cdata", tdev )
-    
+
     setMessage("Starting...", tdev)
 
     -- Use a tick task for initial evaluation.
     scheduleDelay( 5, true, tdev )
+
+    luup.set_failure( 0, tdev )
 end
 
 -- Start plugin running.
@@ -778,6 +820,11 @@ function startPlugin( pdev )
     isOpenLuup = false
     sensorState = {}
     watchData = {}
+
+    -- Debug?
+    if getVarNumeric( "DebugMode", 0, pdev, MYSID ) ~= 0 then
+        debugMode = true
+    end
 
     -- Check for ALTUI and OpenLuup
     for k,v in pairs(luup.devices) do
@@ -832,6 +879,8 @@ function startPlugin( pdev )
             local success, err = pcall( startSensor, k, pdev )
             if not success then
                 L({level=2,msg="Failed to start %1 (%2): %3"}, k, luup.devices[k].description, err)
+                setMessage( "Failed (see log)", k )
+                luup.set_failure( 1, k ) -- error on timer device
             else
                 started = started + 1
             end
@@ -848,12 +897,91 @@ function startPlugin( pdev )
     return true, "Ready", _PLUGIN_NAME
 end
 
+function setEnabled( enabled, tdev )
+    D("setEnabled(%1,%2)", enabled, tdev)
+    if type(enabled) == "string" then
+        if enabled:lower() == "false" or enabled:lower() == "disabled" or enabled == "0" then
+            enabled = false
+        else
+            enabled = true
+        end
+    elseif type(enabled) == "number" then
+        enabled = enabled ~= 0
+    elseif type(enabled) ~= "boolean" then
+        return
+    end
+    local wasEnabled = isEnabled( tdev )
+    if wasEnabled ~= enabled then
+        -- changing
+        addEvent{ event="enable", dev=tdev, enabled=enabled }
+        luup.variable_set( RSSID, "Enabled", iif( enabled, "1", "0" ), tdev )
+        -- If disabling, do nothing else, so current actions complete/expire.
+        if enabled then
+            -- Kick off a new timer thread, which will also re-eval.
+            scheduleDelay( 2, false, tdev )
+            setMessage( "Enabling...", tdev )
+        else
+            setMessage( "Disabled", tdev )
+        end
+    end
+end
+
+function actionTrip( force, dev )
+    L("Sensor %1 (%2) trigger action!", dev, luup.devices[dev].description)
+    luup.variable_set( SENSOR_SID, "Tripped", 1, dev );
+    setMessage("Tripped", dev);
+end
+
+function actionReset( force, dev )
+    L("Sensor %1 (%2) reset action!", dev, luup.devices[dev].description)
+    luup.variable_set( SENSOR_SID, "Tripped", 0, dev );
+    setMessage("Not tripped", dev)
+end
+
+function actionSetArmed( armedVal, dev )
+    L("Sensor %1 (%2) set armed to %4", dev, luup.devices[dev].description, armedVal)
+    local armed = ( tonumber( armedVal ) or 0 ) ~= 0
+    luup.variable_set( SENSOR_SID, "Armed", iif( armed, 1, 0 ), dev )
+end
+
+function masterClear( dev )
+    -- Remove all child devices.
+    local ptr = luup.chdev.start( dev )
+    luup.chdev.sync( dev, ptr )
+    -- Should cause reload immediately.
+end
+
+function actionRestart( dev )
+    dev = tonumber( dev )
+    assert( dev ~= nil )
+    assert( luup.devices[dev] ~= nil and luup.devices[dev].device_type == RSTYPE )
+    L("Restarting sensor %1 (%2)", dev, luup.devices[dev].description)
+    local success, err = pcall( startSensor, dev, luup.devices[dev].device_num_parent )
+    if not success then
+        L({level=2,msg="Failed to start %1 (%2): %3"}, dev, luup.devices[dev].description, err)
+        setMessage( "Failed (see log)", dev )
+        luup.set_failure( 1, dev ) -- error on timer device
+    else
+        luup.set_failure( 0, dev )
+    end
+end
+
+function setDebug( state, tdev )
+    debugMode = state or false
+    addEvent{ event="debug", dev=tdev, debugMode=debugMode }
+    if debugMode then
+        D("Debug enabled")
+    end
+end
+
 local function sensorTick(tdev)
     D("sensorTick(%1)", tdev)
 
     -- updateSensor will schedule next tick if needed
     if isEnabled( tdev ) then
         updateSensor( tdev )
+    else
+        setMessage("Disabled", tdev)
     end
 end
 
@@ -910,13 +1038,13 @@ function tick(p)
         if delay < 1 then delay = 1 elseif delay > 60 then delay = 60 end
     end
     tickTasks.master.when = now + delay
-    D("tick() scheduling next master tick for %2 delay %3", tickTasks.master.when, delay)
+    D("tick() scheduling next master tick for %1 delay %2", tickTasks.master.when, delay)
     luup.call_delay( "reactorTick", delay, p )
 end
 
 -- Handle the sensor-specific watch (dispatched from the watch callback)
 local function sensorWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
-    D("sensorWatch(%1,%2,%3,%4,%5,%6)", dev, sid, var, oldVal, newVal, tdev)
+    D("sensorWatch(%1,%2,%3,%4,%5,%6,%7)", dev, sid, var, oldVal, newVal, tdev, pdev)
     -- Watched variable has changed. Re-evaluate conditons.
     updateSensor( tdev )
 end
@@ -925,12 +1053,12 @@ end
 function watch( dev, sid, var, oldVal, newVal )
     D("watch(%1,%2,%3,%4,%5) luup.device(tdev)=%6", dev, sid, var, oldVal, newVal, luup.device)
     assert(var ~= nil) -- nil if service or device watch (can happen on openLuup)
-    
+
     if sid == RSSID and var == "cdata" then
         -- Sensor configuration change. Immediate update.
         L("Child %1 (%2) config change, re-evaluating!", dev, luup.devices[dev].description)
         updateSensor( dev )
-    else 
+    else
         local key = string.format("%d:%s/%s", dev, sid, var)
         if watchData[key] then
             for t in pairs(watchData[key]) do
@@ -987,12 +1115,21 @@ end
 function request( lul_request, lul_parameters, lul_outputformat )
     D("request(%1,%2,%3) luup.device=%4", lul_request, lul_parameters, lul_outputformat, luup.device)
     local action = lul_parameters['action'] or lul_parameters['command'] or ""
-    --local deviceNum = tonumber( lul_parameters['device'], 10 ) or luup.device
+    local deviceNum = tonumber( lul_parameters['device'], 10 )
     if action == "debug" then
-        debugMode = true
+        debugMode = not debugMode
+        D("debug set %1 by request", debugMode)
+        return "Debug is now " .. iif( debugMode, "on", "off" ), "text/plain"
     end
 
-    if action == "status" then
+    if action == "restart" then
+        if deviceNum ~= nil and luup.devices[deviceNum] ~= nil and luup.devices[deviceNum].device_type == RSTYPE then
+            actionRestart( deviceNum )
+            return "OK, restarting #" .. deviceNum .. " " .. luup.devices[deviceNum].description, "text/plain"
+        else
+            return "ERROR, device number invalid or is not a ReactorSensor", "text/plain"
+        end
+    elseif action == "status" then
         local st = {
             name=_PLUGIN_NAME,
             version=_PLUGIN_VERSION,
@@ -1007,7 +1144,9 @@ function request( lul_request, lul_parameters, lul_outputformat )
                 isOpenLuup=isOpenLuup,
                 isALTUI=isALTUI
             },
-            devices={}
+            devices={},
+            watchData=watchData,
+            tickTasks=tickTasks
         }
         for k,v in pairs( luup.devices ) do
             if v.device_type == MYTYPE or v.device_type == RSTYPE then

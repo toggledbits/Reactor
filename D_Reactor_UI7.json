@@ -1,77 +1,77 @@
 {
-	"default_icon": "https://www.toggledbits.com/assets/reactor/reactor-default.png",
-	"state_icons": [],
-	"x": "2",
-	"y": "4",
-	"inScene": "1",
-	"Tabs": [{
-			"Label": {
-				"lang_tag": "tabname_control",
-				"text": "Control"
-			},
-			"Position": "0",
-			"TabType": "flash",
+    "default_icon": "https://www.toggledbits.com/assets/reactor/reactor-default.png",
+    "state_icons": [],
+    "x": "2",
+    "y": "4",
+    "inScene": "1",
+    "Tabs": [{
+            "Label": {
+                "lang_tag": "tabname_control",
+                "text": "Control"
+            },
+            "Position": "0",
+            "TabType": "flash",
             "top_navigation_tab": 1,
-			"ControlGroup": [{
-					"id": "1",
-					"scenegroup": "1"
-				},
-				{
-					"id": "2",
-					"scenegroup": "2"
-				}
-			],
-			"SceneGroup": [{
-					"id": "1",
-					"top": "0",
-					"left": "0",
-					"x": "1",
-					"y": "4"
-				},
-				{
-					"id": "2",
-					"top": "1",
-					"left": "0",
-					"x": "1",
-					"y": "3"
-				}
-			],
-			"Control": [				{
-					"ControlGroup": "1",
-					"ControlType": "variable",
-					"top": "1",
-					"left": "0",
-					"Display": {
-						"Top": 90,
-						"Left": 0,
-						"Width": 320,
-						"Height": 24,
-						"Service": "urn:toggledbits-com:serviceId:Reactor",
-						"Variable": "Message"
-					},
-					"ControlCode": "message"
-				},
-				{
-					"ControlType": "button",
-					"top": "0",
-					"left": "0",
-					"Label": {
-						"lang_tag": "cmd_create",
-						"text": "Add Sensor"
-					},
-					"Display": {
-						"Top": 0,
-						"Left": 0,
-						"Width": 120,
-						"Height": 24
-					},
-					"Command": {
-						"Service": "urn:toggledbits-com:serviceId:Reactor",
-						"Action": "AddSensor",
-						"Parameters": []
-					},
-					"ControlCode": "addsensor"
-				},
+            "ControlGroup": [{
+                    "id": "1",
+                    "scenegroup": "1"
+                },
+                {
+                    "id": "2",
+                    "scenegroup": "2"
+                }
+            ],
+            "SceneGroup": [{
+                    "id": "1",
+                    "top": "0",
+                    "left": "0",
+                    "x": "1",
+                    "y": "4"
+                },
+                {
+                    "id": "2",
+                    "top": "1",
+                    "left": "0",
+                    "x": "1",
+                    "y": "3"
+                }
+            ],
+            "Control": [                {
+                    "ControlGroup": "1",
+                    "ControlType": "variable",
+                    "top": "1",
+                    "left": "0",
+                    "Display": {
+                        "Top": 90,
+                        "Left": 0,
+                        "Width": 320,
+                        "Height": 24,
+                        "Service": "urn:toggledbits-com:serviceId:Reactor",
+                        "Variable": "Message"
+                    },
+                    "ControlCode": "message"
+                },
+                {
+                    "ControlType": "button",
+                    "top": "0",
+                    "left": "0",
+                    "Label": {
+                        "lang_tag": "cmd_create",
+                        "text": "Add Sensor"
+                    },
+                    "Display": {
+                        "Top": 0,
+                        "Left": 0,
+                        "Width": 120,
+                        "Height": 24
+                    },
+                    "Command": {
+                        "Service": "urn:toggledbits-com:serviceId:Reactor",
+                        "Action": "AddSensor",
+                        "Parameters": []
+                    },
+                    "ControlCode": "addsensor"
+                },
                 {
                     "ControlType": "label",
                     "Display": {
@@ -95,10 +95,10 @@
                     },
                     "Label": {
                         "lang_tag": "tb_reactor_about",
-                        "text": "Reactor ver 1.0 &#169; 2018 Patrick H. Rigney, All Rights Reserved.<br/><a href=\"http://forum.micasaverde.com/index.php/topic,87484.0.html\" target=\"_blank\">Forum thread</a> &#149; <a href=\"http://www.toggledbits.com/reactor\" target=\"_blank\">Documentation and license information</a>."
+                        "text": "Reactor ver 1.1 &#169; 2018 Patrick H. Rigney, All Rights Reserved.<br/><a href=\"http://forum.micasaverde.com/index.php/topic,87484.0.html\" target=\"_blank\">Forum thread</a> &#149; <a href=\"http://www.toggledbits.com/reactor\" target=\"_blank\">Documentation and license information</a>."
                     }
                 }
-			],
+            ],
             "Conditions": [
                 {
                     "Trigger": {
@@ -114,28 +114,28 @@
                     "Target": "addsensor"
                 }
             ]
-		},
-		{
-			"Label": {
-				"lang_tag": "ui7_advanced",
-				"text": "Advanced"
-			},
-			"Position": "1",
-			"TabType": "javascript",
-			"ScriptName": "shared.js",
-			"Function": "advanced_device"
-		},
-		{
-			"Label": {
-				"lang_tag": "ui7_logs",
-				"text": "Logs"
-			},
-			"Position": "2",
-			"TabType": "javascript",
-			"ScriptName": "shared.js",
-			"Function": "device_logs"
-		}
-	],
-	"eventList2": [],
-	"device_type": "urn:schemas-toggledbits-com:device:Reactor:1"
+        },
+        {
+            "Label": {
+                "lang_tag": "ui7_advanced",
+                "text": "Advanced"
+            },
+            "Position": "1",
+            "TabType": "javascript",
+            "ScriptName": "shared.js",
+            "Function": "advanced_device"
+        },
+        {
+            "Label": {
+                "lang_tag": "ui7_logs",
+                "text": "Logs"
+            },
+            "Position": "2",
+            "TabType": "javascript",
+            "ScriptName": "shared.js",
+            "Function": "device_logs"
+        }
+    ],
+    "eventList2": [],
+    "device_type": "urn:schemas-toggledbits-com:device:Reactor:1"
 }
