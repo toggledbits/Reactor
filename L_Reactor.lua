@@ -720,7 +720,7 @@ local function updateSensor( tdev )
     -- No need to reschedule timer if no demand. Demand is created by condition
     -- type (hasTimer), polling enabled, or ContinuousTimer set.
     if hasTimer or forcePoll > 0 or getVarNumeric( "ContinuousTimer", 0, tdev, RSSID ) ~= 0 then
-        local v = 60 - ( os.time() % 60 )
+        local v = 10 + ( 60 - ( os.time() % 60 ) ) -- 10 seconds after minute
         scheduleDelay( v, false, tdev )
     end
 end
@@ -1150,7 +1150,9 @@ function request( lul_request, lul_parameters, lul_outputformat )
                 isOpenLuup=isOpenLuup,
                 isALTUI=isALTUI
             },
-            devices={}
+            devices={},
+            watchData=watchData,
+            tickTasks=tickTasks
         }
         for k,v in pairs( luup.devices ) do
             if v.device_type == MYTYPE or v.device_type == RSTYPE then
