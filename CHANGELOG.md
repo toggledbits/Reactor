@@ -1,6 +1,6 @@
 # Change Log #
 
-## Version 1.1 (release candidate) ##
+## Version 1.1 (released) ##
 
 * Support "sequences light"--restrict the success of a condition to the prior success of another.
 * Ability to restart a sensor without doing a Luup reload, via UI button, ReactorSensor action, and request action.
