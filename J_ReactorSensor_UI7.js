@@ -54,15 +54,21 @@ var ReactorSensor = (function(api) {
 
         /* Get the config and parse it */
         var s = api.getDeviceState( myDevice, serviceId, "cdata" ) || "";
-        if ( s.length === 0 ) {
+        if ( s.length !== 0 ) {
+            try {
+                cdata = JSON.parse( s );
+            } catch (e) {
+                console.log("Unable to parse cdata: " + String(e));
+            }
+        }
+        if ( cdata === undefined || typeof cdata !== "object" || 
+                cdata.conditions === undefined || typeof cdata.conditions !== "object" ) {
             cdata = { version: 1, conditions: [
                 { groupid: getUID('grp'), groupconditions: [
                     { id: getUID('cond'), type: "comment", comment: "Enter your AND conditions here" }
                     ]
                 }
             ]};
-        } else {
-            cdata = JSON.parse( s );
         }
         ixGroup = {}; ixCond = {};
         for ( var ig=0; ig<(cdata.conditions || {}).length; ig++ ) {
@@ -148,7 +154,7 @@ var ReactorSensor = (function(api) {
                 str += ( undefined !== deviceByNumber[cond.device] ?
                         deviceByNumber[cond.device].friendlyName :
                         '#' + cond.device + ( cond.devicename === undefined ? "name unknown" : cond.devicename ) + ' (missing)' );
-                str += ' ' + cond.variable + cond.condition + cond.value;
+                str += ' ' + cond.variable + ' ' + cond.condition + ' ' + cond.value;
                 break;
 
             case 'comment':
@@ -870,7 +876,7 @@ var ReactorSensor = (function(api) {
     */
     function redrawConditions() {
         jQuery('div#conditions').empty();
-
+        
         for (var ng=0; ng<cdata.conditions.length; ++ng) {
             if ( ng > 0 ) {
                 /* Insert divider */
@@ -1013,18 +1019,27 @@ var ReactorSensor = (function(api) {
         var cdata, cstate;
         var s = api.getDeviceState( myDevice, serviceId, "cdata" ) || "";
         if ( "" !== s ) {
-            cdata = JSON.parse( s );
+            try {
+                cdata = JSON.parse( s );
+            } catch (e) {
+                console.log("Unable to parse cdata: " + String(e))
+                return;
+            }
         } else {
             console.log("cdata unavailable");
             return;
         }
 
         s = api.getDeviceState( myDevice, serviceId, "cstate" ) || "";
+        cstate = {};
         if ( "" !== s ) {
-            cstate = JSON.parse( s );
+            try {
+                cstate = JSON.parse( s );
+            } catch (e) {
+                console.log("cstate cannot be parsed: " + String(e));
+            }
         } else {
             console.log("cstate unavailable");
-            cstate = {};
         }
 
         for ( var i=0; i<cdata.conditions.length; i++ ) {
@@ -1166,7 +1181,7 @@ var ReactorSensor = (function(api) {
             html += '<div class="clearfix">';
 
             html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
-            html += '<div id="tbcopyright">Reactor ver 1.1dev &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>, All Rights Reserved. For documentation, please see this project\'s <a href="https://github.com/toggledbits/Reactor" target="_blank">GitHub repository</a>. For support, please post in the <a href="http://forum.micasaverde.com/index.php/topic,87484.0.html" target="_blank">forum thread</a>.</div>';
+            html += '<div id="tbcopyright">Reactor ver 1.1 &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>, All Rights Reserved. Please check out the <a href="https://www.toggledbits.com/reactor" target="_blank">online documentation</a> and <a href="http://forum.micasaverde.com/index.php/topic,87484.0.html" target="_blank">forum thread</a> for support.</div>';
 
             // Push generated HTML to page
             api.setCpanelContent(html);

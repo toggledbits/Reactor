@@ -43,6 +43,14 @@
             </run>
         </action>
         <action>
+            <serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
+            <name>Restart</name>
+            <job>
+                Reactor.actionRestart( lul_device )
+                return 4,0
+            </job>
+        </action>
+        <action>
             <serviceId>urn:micasaverde-com:serviceId:SecuritySensor1</serviceId>
             <name>SetArmed</name>
             <run>
