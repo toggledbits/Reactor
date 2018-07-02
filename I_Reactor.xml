@@ -4,7 +4,7 @@
         -- --------------------------------------------------------------------
         -- Reactor
         -- Copyright 2018 Patrick H. Rigney, All Rights Reserved.
-        -- https://www.toggledbits.com/
+        -- https://www.toggledbits.com/reactor
         -- --------------------------------------------------------------------
         function startupReactor(devNum)
             luup.log("Reactor STARTUP!")
