@@ -16,7 +16,6 @@ var ReactorSensor = (function(api) {
     var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
     var myModule = {};
-    var myDevice;
 
     var serviceId = "urn:toggledbits-com:serviceId:ReactorSensor";
     // var deviceType = "urn:schemas-toggledbits-com:device:ReactorSensor:1";
@@ -30,7 +29,7 @@ var ReactorSensor = (function(api) {
     var lastx = 0;
     var condTypeName = { "service": "Service/Variable", "housemode": "House Mode", "comment": "Comment", "weekday": "Weekday", "time": "Date/Time" };
     var weekDayName = [ '?', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat' ];
-    
+
     /* Create an ID that's functionally unique for our purposes. */
     function getUID( prefix ) {
         /* Not good, but enough. */
@@ -43,7 +42,6 @@ var ReactorSensor = (function(api) {
     /* Initialize the module */
     function initModule() {
         configModified = false;
-        myDevice = api.getCpanelDeviceId();
 
         /* Make device-indexed version of userdata devices, which is just an array */
         var ud = api.getUserData();
@@ -53,7 +51,7 @@ var ReactorSensor = (function(api) {
         }
 
         /* Get the config and parse it */
-        var s = api.getDeviceState( myDevice, serviceId, "cdata" ) || "";
+        var s = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "cdata" ) || "";
         if ( s.length !== 0 ) {
             try {
                 cdata = JSON.parse( s );
@@ -61,7 +59,7 @@ var ReactorSensor = (function(api) {
                 console.log("Unable to parse cdata: " + String(e));
             }
         }
-        if ( cdata === undefined || typeof cdata !== "object" || 
+        if ( cdata === undefined || typeof cdata !== "object" ||
                 cdata.conditions === undefined || typeof cdata.conditions !== "object" ) {
             cdata = { version: 1, conditions: [
                 { groupid: getUID('grp'), groupconditions: [
@@ -95,7 +93,7 @@ var ReactorSensor = (function(api) {
             var devobj = api.cloneObject( dd[i] );
             devobj.friendlyName = "#" + devobj.id + " " + devobj.name;
             deviceByNumber[devobj.id] = devobj;
-            
+
             var roomid = devobj.room || 0;
             var roomObj = rooms[roomid];
             if ( roomObj === undefined ) {
@@ -142,12 +140,12 @@ var ReactorSensor = (function(api) {
         }
         return undefined;
     }
-    
+
     function makeConditionDescription( cond ) {
         if ( cond === undefined ) {
             return "(undefined)";
         }
-        
+
         var str = "";
         switch ( cond.type ) {
             case 'service':
@@ -200,7 +198,7 @@ var ReactorSensor = (function(api) {
             default:
                 str = JSON.stringify( cond );
         }
-        
+
         return str;
     }
 
@@ -209,13 +207,14 @@ var ReactorSensor = (function(api) {
      * names sorted alpha.
      */
     function makeDeviceMenu( val, name ) {
+        var myid = api.getCpanelDeviceId();
         var el = jQuery('<select class="devicemenu form-control form-control-sm pull-left"></select>');
         roomsByName.forEach( function( roomObj ) {
             if ( roomObj.devices && roomObj.devices.length ) {
                 var first = true; /* per-room first */
                 for (var j=0; j<roomObj.devices.length; ++j) {
                     var devid = roomObj.devices[j].id;
-                    if ( devid == myDevice ) {
+                    if ( devid == myid ) {
                         continue;
                     }
                     if (first)
@@ -447,7 +446,7 @@ var ReactorSensor = (function(api) {
         var el = ev.currentTarget;
         var row = jQuery( el ).closest('div.conditionrow');
         var cond = ixCond[ row.attr("id") ];
-        
+
         var pred = jQuery('select.pred', row);
         if ( "" === pred.val() ) {
             if ( undefined !== cond.after ) {
@@ -806,7 +805,7 @@ var ReactorSensor = (function(api) {
         var row = jQuery( el ).closest( 'div.row' );
         var condId = row.attr('id');
         var grpId = jQuery( el ).closest( 'div.conditiongroup' ).attr("id");
-        
+
         /* See if the condition is referenced in a sequence */
         var okDelete = false;
         for ( var ci in ixCond ) {
@@ -876,7 +875,7 @@ var ReactorSensor = (function(api) {
     */
     function redrawConditions() {
         jQuery('div#conditions').empty();
-        
+
         for (var ng=0; ng<cdata.conditions.length; ++ng) {
             if ( ng > 0 ) {
                 /* Insert divider */
@@ -979,7 +978,7 @@ var ReactorSensor = (function(api) {
             }
         }
         /* Save to persistent state */
-        api.setDeviceStatePersistent( myDevice, serviceId, "cdata", JSON.stringify( cdata ), 0);
+        api.setDeviceStatePersistent( api.getCpanelDeviceId(), serviceId, "cdata", JSON.stringify( cdata ), 0);
         configModified = false;
         updateControls();
     }
@@ -1008,7 +1007,7 @@ var ReactorSensor = (function(api) {
     {
     }
 
-    function updateStatus() {
+    function updateStatus( pdev ) {
         var stel = jQuery('div#reactorstatus');
         if ( stel.length === 0 ) {
             // If not displayed, do nothing.
@@ -1017,12 +1016,12 @@ var ReactorSensor = (function(api) {
         stel.empty();
 
         var cdata, cstate;
-        var s = api.getDeviceState( myDevice, serviceId, "cdata" ) || "";
+        var s = api.getDeviceState( pdev, serviceId, "cdata" ) || "";
         if ( "" !== s ) {
             try {
                 cdata = JSON.parse( s );
             } catch (e) {
-                console.log("Unable to parse cdata: " + String(e))
+                console.log("Unable to parse cdata: " + String(e));
                 return;
             }
         } else {
@@ -1030,7 +1029,7 @@ var ReactorSensor = (function(api) {
             return;
         }
 
-        s = api.getDeviceState( myDevice, serviceId, "cstate" ) || "";
+        s = api.getDeviceState( pdev, serviceId, "cstate" ) || "";
         cstate = {};
         if ( "" !== s ) {
             try {
@@ -1049,7 +1048,7 @@ var ReactorSensor = (function(api) {
                 /* Insert a divider */
                 stel.append('<div class="row divider"><div class="col-sm-5 col-md-5"><hr></div><div class="col-sm-2 col-md-2" style="text-align: center;"><h5>OR</h5></div><div class="col-sm-5 col-md-5"><hr></div></div>');
             }
-            
+
             var grpel = jQuery('<div class="reactorgroup" id="' + grp.groupid + '">');
             stel.append( grpel );
             var groupstate = true;
@@ -1058,22 +1057,22 @@ var ReactorSensor = (function(api) {
                 var el = jQuery('<div class="row cond" id="' + cond.id + '">');
                 var currentValue = cstate[cond.id] === undefined ? cstate[cond.id] : cstate[cond.id].lastvalue;
 
-                el.append('<div class="col-sm-6 col-md-2">' + 
+                el.append('<div class="col-sm-6 col-md-2">' +
                     ( condTypeName[ cond.type ] !== undefined ? condTypeName[ cond.type ] : cond.type ) +
                     '</div>');
-                    
+
                 var condDesc = makeConditionDescription( cond );
                 switch ( cond.type ) {
                     case 'service':
                         condDesc += ( ( cond.duration || 0 ) > 0 ? " for " + cond.duration + " secs" : "" );
                         break;
-                        
+
                     case 'weekday':
                         if ( currentValue !== undefined && weekDayName[ currentValue ] !== undefined ) {
                             currentValue = weekDayName[ currentValue ];
                         }
                         break;
-                        
+
                     case 'time':
                         if ( currentValue !== undefined ) {
                             currentValue = new Date( currentValue * 1000 ).toLocaleString();
@@ -1113,11 +1112,13 @@ var ReactorSensor = (function(api) {
     }
 
     function onUIDeviceStatusChanged( args ) {
-        if ( args.id == myDevice ) {
+        var pdev = api.getCpanelDeviceId();
+        // console.log("Device " + String(pdev) + " status change callback for " + String(args.id));
+        if ( args.id == pdev ) {
             for ( var k=0; k<args.states.length; ++k ) {
-                if ( args.states[k].variable.match( /(cdata|cstate|Tripped|Armed)/ ) ) {
+                if ( args.states[k].variable.match( /^(cdata|cstate|Tripped|Armed)$/ ) ) {
                     console.log( args.states[k].variable + " updated!");
-                    updateStatus();
+                    updateStatus( pdev );
                     return;
                 }
             }
@@ -1138,7 +1139,7 @@ var ReactorSensor = (function(api) {
 
         jQuery('head').append('<style>.reactorgroup { border-radius: 8px; border: 2px solid #006040; padding: 8px; } .truestate { background-color: #ccffcc; }</style>');
 
-        updateStatus();
+        updateStatus( api.getCpanelDeviceId() );
 
         api.registerEventHandler('on_ui_deviceStatusChanged', ReactorSensor, 'onUIDeviceStatusChanged');
     }
