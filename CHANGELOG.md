@@ -2,6 +2,8 @@
 
 ## Version 1.2 (develop branch)
 
+* Make sure category and subcategory are correctly set.
+
 ## Version 1.1 (released) ##
 
 * Support "sequences light"--restrict the success of a condition to the prior success of another.

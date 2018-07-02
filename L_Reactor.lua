@@ -12,7 +12,7 @@ local debugMode = false
 local _PLUGIN_NAME = "Reactor"
 local _PLUGIN_VERSION = "1.2develop"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
-local _CONFIGVERSION = 00102
+local _CONFIGVERSION = 00103
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -261,18 +261,18 @@ local function sensor_runOnce( tdev )
         luup.variable_set( "urn:micasaverde-com:serviceId:HaDevice1", "ModeSetting", "1:;2:;3:;4:", tdev )
 
         -- Fix up category and subcategory
-        luup.attr_set('category_num', 4)
-        luup.attr_set('subcategory_num', 1)
+        luup.attr_set('category_num', 4, tdev)
+        luup.attr_set('subcategory_num', 1, tdev)
 
         luup.variable_set( RSSID, "Version", _CONFIGVERSION, tdev )
         return
     end
 
     -- Consider per-version changes.
-    if s < 00101 then
+    if s < 00103 then
         -- Fix up category and subcategory
-        luup.attr_set('category_num', 4)
-        luup.attr_set('subcategory_num', 1)
+        luup.attr_set('category_num', 4, tdev)
+        luup.attr_set('subcategory_num', 1, tdev)
     end
 
     -- Update version last.
@@ -296,6 +296,8 @@ local function plugin_runOnce( pdev )
         luup.variable_set(MYSID, "Message", "", pdev)
         luup.variable_set(MYSID, "DebugMode", 0, pdev)
 
+        luup.attr_set('category_num', 1, pdev)
+
         luup.variable_set(MYSID, "Version", _CONFIGVERSION, pdev)
         return
     end
@@ -304,36 +306,16 @@ local function plugin_runOnce( pdev )
     if s < 00102 then
         luup.variable_set(MYSID, "DebugMode", 0, pdev)
     end
+    
+    if s < 00103 then
+        luup.attr_set('category_num', 1, pdev)
+        luup.attr_set('subcategory_num', "", pdev)
+    end
 
     -- Update version last.
     if s ~= _CONFIGVERSION then
         luup.variable_set(MYSID, "Version", _CONFIGVERSION, pdev)
     end
-end
-
--- Add a child (used as both action and local function)
-function addSensor( pdev )
-    D("addSensor(%1)", pdev)
-    local ptr = luup.chdev.start( pdev )
-    local highd = 0
-    for _,v in pairs(luup.devices) do
-        if v.device_type == RSTYPE and v.device_num_parent == pdev then
-            D("addSensor() appending existing device %1 (%2)", v.id, v.description)
-            D("----------- v=%1", v)
-            if isOpenLuup then D("----------- ptr=%1", ptr) end
-            local dd = tonumber( string.match( v.id, "s(%d+)" ) )
-            if dd == nil then highd = highd + 1 elseif dd > highd then highd = dd end
-            luup.chdev.append( pdev, ptr, v.id, v.description, "",
-                "D_ReactorSensor.xml", "", "", false )
-        end
-    end
-    highd = highd + 1
-    D("addSensor() creating child r%1s%2", pdev, highd)
-    luup.chdev.append( pdev, ptr, string.format("r%ds%d", pdev, highd),
-        "Reactor Sensor " .. highd, "", "D_ReactorSensor.xml", "", "", false )
-    if isOpenLuup then D("END ------- ptr=%1", ptr) end
-    luup.chdev.sync( pdev, ptr )
-    -- Should cause reload immediately.
 end
 
 -- Find a condition hiding in a group (or is it?)
@@ -804,15 +786,8 @@ end
 -- Start plugin running.
 function startPlugin( pdev )
     L("Plugin version %2, device %1 (%3)", pdev, _PLUGIN_VERSION, luup.devices[pdev].description)
-    assert( ( luup.devices[pdev].device_num_parent or 0 ) == 0 )
 
-    if luup.variable_get( MYSID, "Converted", pdev ) == "1" then
-        L("This instance %1 (%2) has been converted to child; stopping.", pdev, luup.devices[pdev].description)
-        luup.variable_set( MYSID, "Message", "Device upgraded. Delete this one!", pdev)
-        return true, "Upgraded", _PLUGIN_NAME
-    else
-        luup.variable_set( MYSID, "Message", "Starting...", pdev )
-    end
+    luup.variable_set( MYSID, "Message", "Starting...", pdev )
 
     -- Early inits
     pluginDevice = pdev
@@ -895,6 +870,29 @@ function startPlugin( pdev )
     -- Return success
     luup.set_failure( 0, pdev )
     return true, "Ready", _PLUGIN_NAME
+end
+
+-- Add a child (used as both action and local function)
+function addSensor( pdev )
+    D("addSensor(%1)", pdev)
+    local ptr = luup.chdev.start( pdev )
+    local highd = 0
+    luup.variable_set( MYSID, "Message", "Adding sensor, please hard-refresh your browser.", pdev )
+    for _,v in pairs(luup.devices) do
+        if v.device_type == RSTYPE and v.device_num_parent == pdev then
+            D("addSensor() appending existing device %1 (%2)", v.id, v.description)
+            local dd = tonumber( string.match( v.id, "s(%d+)" ) )
+            if dd == nil then highd = highd + 1 elseif dd > highd then highd = dd end
+            luup.chdev.append( pdev, ptr, v.id, v.description, "",
+                "D_ReactorSensor.xml", "", "", false )
+        end
+    end
+    highd = highd + 1
+    D("addSensor() creating child r%1s%2", pdev, highd)
+    luup.chdev.append( pdev, ptr, string.format("r%ds%d", pdev, highd),
+        "Reactor Sensor " .. highd, "", "D_ReactorSensor.xml", "", "", false )
+    luup.chdev.sync( pdev, ptr )
+    -- Should cause reload immediately.
 end
 
 function setEnabled( enabled, tdev )
