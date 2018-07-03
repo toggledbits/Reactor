@@ -164,8 +164,7 @@
                         }
                     ]
                 },
-
-{
+                {
                     "ControlGroup": 1,
                     "ControlType": "multi_state_button",
                     "top": "0",
