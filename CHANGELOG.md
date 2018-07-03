@@ -2,6 +2,7 @@
 
 ## Version 1.2 (develop branch)
 
+* Add UI to arm/disarm on dashboard and control panel.
 * Make sure category and subcategory are correctly set.
 
 ## Version 1.1 (released) ##

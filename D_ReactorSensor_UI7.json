@@ -164,8 +164,66 @@
                         }
                     ]
                 },
+
+{
+                    "ControlGroup": 1,
+                    "ControlType": "multi_state_button",
+                    "top": "0",
+                    "left": "4",
+                    "Display": {
+                        "Top": 30,
+                        "Left": 320,
+                        "Width": 70,
+                        "Height": 24
+                    },
+                    "states": [{
+                            "Label": {
+                                "lang_tag": "ui7_cmd_arm",
+                                "text": "Armed"
+                            },
+                            "Display": {
+                                "Service": "urn:micasaverde-com:serviceId:SecuritySensor1",
+                                "Variable": "Armed",
+                                "Value": "1"
+                            },
+                            "Command": {
+                                "Service": "urn:micasaverde-com:serviceId:SecuritySensor1",
+                                "Action": "SetArmed",
+                                "Parameters": [{
+                                    "Name": "newArmedValue",
+                                    "Value": "1"
+                                }]
+                            },
+                            "ControlCode": "arm_armed"
+                        },
+                        {
+                            "Label": {
+                                "lang_tag": "ui7_cmd_bypass",
+                                "text": "Disarmed"
+                            },
+                            "Display": {
+                                "Service": "urn:micasaverde-com:serviceId:SecuritySensor1",
+                                "Variable": "Armed",
+                                "Value": "0"
+                            },
+                            "Command": {
+                                "Service": "urn:micasaverde-com:serviceId:SecuritySensor1",
+                                "Action": "SetArmed",
+                                "Parameters": [{
+                                    "Name": "newArmedValue",
+                                    "Value": "0"
+                                }]
+                            },
+                            "ControlCode": "arm_disarmed"
+                        }
+                    ]
+                },
                 {
-                    "ControlGroup": 2,
+                    "ControlGroup": "1",
+                    "ControlType": "line_break"
+                },
+                {
+                    "ControlGroup": 1,
                     "ControlType": "variable",
                     "top": "1",
                     "left": "0",
