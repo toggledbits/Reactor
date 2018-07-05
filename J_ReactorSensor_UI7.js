@@ -27,9 +27,12 @@ var ReactorSensor = (function(api) {
     var roomsByName = [];
     var configModified = false;
     var lastx = 0;
-    var condTypeName = { "service": "Service/Variable", "housemode": "House Mode", "comment": "Comment", "weekday": "Weekday", "time": "Date/Time" };
+    var condTypeName = { "service": "Service/Variable", "housemode": "House Mode", "comment": "Comment", "weekday": "Weekday", 'time': "Date (deprecated)",
+        "sun": "Sunrise/Sunset", "trange": "Date/Time" };
     var weekDayName = [ '?', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat' ];
     var monthName = [ '?', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec' ];
+    var condName = { "bet": "between", "nob": "not between", "after": "after", "before": "before" };
+    var houseModeName = [ '?', 'Home', 'Away', 'Night', 'Vacation' ];
 
     /* Create an ID that's functionally unique for our purposes. */
     function getUID( prefix ) {
@@ -145,7 +148,18 @@ var ReactorSensor = (function(api) {
     function isEmpty( s ) {
         return s === undefined || s === "";
     }
-    
+
+    function textDateTime( y, m, d, hh, mm, isEnd ) {
+        hh = parseInt( hh || "0" );
+        mm = parseInt( mm || "0" );
+        var tstr = ( hh < 10 ? '0' : '' ) + hh + ':' + ( mm < 10 ? '0' : '' ) + mm;
+        if ( isEmpty( m ) ) {
+            return tstr;
+        } 
+        m = parseInt( m );
+        return monthName[m] + ' ' + d + ( isEmpty( y ) ? '' : ' ' + y ) + ' ' + tstr;
+    }
+
     function textDate( y, m, d, isEnd ) {
         if ( isEmpty( y ) ) {
             if ( isEmpty( m ) ) {
@@ -189,13 +203,12 @@ var ReactorSensor = (function(api) {
                 break;
 
             case 'housemode':
-                var hmap = [ '?', 'Home','Away','Night','Vacation' ];
                 if ( ( cond.value || "" ) === "" ) {
                     str += "Any";
                 } else {
                     var t = ( cond.value || "" ).split(/,/);
                     for ( var k=0; k<t.length; ++k ) {
-                        t[k] = hmap[t[k]];
+                        t[k] = houseModeName[t[k]] || t[k];
                     }
                     str += t.join(' or ');
                 }
@@ -220,20 +233,38 @@ var ReactorSensor = (function(api) {
                     str += ' ' + t.join(', ');
                 }
                 break;
+                
+            case 'sun':
+                if ( condName[ cond.condition ] !== undefined ) {
+                    str += condName[ cond.condition ];
+                } else {
+                    str += cond.condition + '???';
+                }
+                var vals = ( cond.value || "sunrise+0,sunset+0" ).split(/,/);
+                var k = vals[0].match( /^([^+-]+)(.*)/ );
+                if ( k === null || k.length !== 3 ) {
+                    str += cond.value + '???';
+                } else {
+                    str += ' ' + k[1];
+                    str += ' ' + k[2] + " minutes";
+                }
+                if ( cond.condition == "bet" || cond.condition == "nob" ) {
+                    str += " and ";
+                    k = ( vals[1] || "sunset+0" ).match( /^([^+-]+)(.*)/ );
+                    if ( k === null || k.length !== 3 ) {
+                        str += cond.value + '???';
+                    } else {
+                        str += ' ' + k[1];
+                        str += ' ' + k[2] + " minutes";
+                    }
+                }
+                break;
 
             case 'time':
                 var t = ( cond.value || "" ).split(/,/);
-                var ds = textDate( t[0], t[1], t[2], false );
-                var de = textDate( t[5], t[6], t[7], true );
-                if ( undefined == ds && undefined == de ) {
-                    de = ds = "";
-                    str += 'daily ';
-                } else if ( ds == undefined ) {
-                    ds = "";
-                } else if ( de == undefined ) {
-                    de = "";
-                }
-                str += (cond.condition != "bet" ? "not " : "") + 'between ' +
+                var ds = textDate( t[0], t[1], t[2], false ) || "";
+                var de = textDate( t[5], t[6], t[7], true ) || "";
+                str += (cond.condition != "bet" ? "nob " : "") + 'between ' +
                     ds +
                     ' ' +
                     ( isEmpty( t[3] ) ? "*" : t[3] ) + ':' + ( isEmpty( t[4] ) ? "*" : t[4] ) +
@@ -243,6 +274,19 @@ var ReactorSensor = (function(api) {
                     ( isEmpty( t[8] ) ? "*" : t[8] ) + ':' + ( isEmpty( t[9] ) ? "*" : t[9] );
                 break;
                 
+            case 'trange':
+                if ( condName[ cond.condition ] !== undefined ) {
+                    str += condName[ cond.condition ];
+                } else {
+                    str += cond.condition + '???';
+                }
+                var t = ( cond.value || "" ).split(/,/);
+                str += ' ' + textDateTime( t[0], t[1], t[2], t[3], t[4], false );
+                if ( cond.condition !== "before" && cond.condition !== "after" ) {
+                    str += ' and ' + textDateTime( t[5], t[6], t[7], t[8], t[9], true );
+                }
+                break;
+
             default:
                 str = JSON.stringify( cond );
         }
@@ -406,9 +450,9 @@ var ReactorSensor = (function(api) {
     }
 
     /**
-     * Update row structure from current display data
+     * Update row structure from current display data.
      */
-    function updateConditionRow( row ) {
+    function updateConditionRow( row, target ) {
         var condId = row.attr("id");
         var cond = ixCond[ condId ];
         var typ = jQuery("div.condtype select", row).val();
@@ -417,6 +461,7 @@ var ReactorSensor = (function(api) {
             case 'comment':
                 cond.comment = jQuery("div.params input", row).val();
                 break;
+                
             case 'service':
                 cond.device = parseInt( jQuery("div.params select.devicemenu", row).val() );
                 cond.service = jQuery("div.params select.varmenu", row).val();
@@ -425,9 +470,11 @@ var ReactorSensor = (function(api) {
                 cond.condition = jQuery("div.params select.condmenu", row).val();
                 cond.value = jQuery("input#value", row).val();
                 break;
+                
             case 'weekday':
                 cond.condition = jQuery("div.params select.wdcond", row).val() || "";
                 /* fall through */
+                
             case 'housemode':
                 var res = [];
                 jQuery("input#opts:checked", row).each( function( ix, control ) {
@@ -435,21 +482,94 @@ var ReactorSensor = (function(api) {
                 });
                 cond.value = res.join(',');
                 break;
+                
             case 'time':
+            case 'trange':
+                /* Pre-sanity check */
+                if ( typ === "trange" && target !== undefined && target.hasClass('year') ) {
+                    var pdiv = target.closest('div');
+                    var newval = target.val();
+                    var losOtros;
+                    if ( pdiv.hasClass('start') ) {
+                        losOtros = jQuery('div.end input.year', row);
+                    } else {
+                        losOtros = jQuery('div.start input.year', row);
+                    }
+                    if ( newval === "" && losOtros.val() !== "" ) {
+                        losOtros.val("");
+                    } else if ( newval !== "" && losOtros.val() === "" ) {
+                        losOtros.val(newval);
+                    }
+                }
+                /* Fetch and load */
                 cond.condition = jQuery("div.params select.condmenu", row).val();
                 res = [];
-                res.push( jQuery("div.start input.year", row).val() || "" );
-                res.push( jQuery("div.start select.monthmenu", row).val() || "" );
-                res.push( jQuery("div.start select.daymenu", row).val() || "" );
-                res.push( jQuery("div.start select.hourmenu", row).val() || "" );
-                res.push( jQuery("div.start select.minmenu", row).val() || "" );
-                res.push( jQuery("div.end input.year", row).val() || "" );
-                res.push( jQuery("div.end select.monthmenu", row).val() || "" );
-                res.push( jQuery("div.end select.daymenu", row).val() || "" );
-                res.push( jQuery("div.end select.hourmenu", row).val() || "" );
-                res.push( jQuery("div.end select.minmenu", row).val() || "" );
+                var mon = jQuery("div.start select.monthmenu", row).val() || "";
+                if ( mon !== "" ) {
+                    res.push( jQuery("div.start input.year", row).val() || "" );
+                    res.push( jQuery("div.start select.monthmenu", row).val() || "" );
+                    res.push( jQuery("div.start select.daymenu", row).val() || "1" );
+                } else {
+                    Array.prototype.push.apply( res, ["","",""] );
+                }
+                res.push( jQuery("div.start select.hourmenu", row).val() || "0" );
+                res.push( jQuery("div.start select.minmenu", row).val() || "0" );
+                if ( cond.condition === "before" || cond.condition === "after" ) {
+                    Array.prototype.push.apply( res, ["","","","",""] );
+                } else {
+                    jQuery('div.end', row).show();
+                    if ( mon !== "" ) {
+                        res.push( jQuery("div.end input.year", row).val() || "" );
+                        res.push( jQuery("div.end select.monthmenu", row).val() || "" );
+                        res.push( jQuery("div.end select.daymenu", row).val() || "1" );
+                    } else {
+                        Array.prototype.push.apply( res, ["","",""] );
+                    }
+                    res.push( jQuery("div.end select.hourmenu", row).val() || "0" );
+                    res.push( jQuery("div.end select.minmenu", row).val() || "0" );
+                }
+                if ( res[5] === "" && res[0] !== "" ) {
+                    res[5] = res[0];
+                    jQuery("div.end input.year", row).val( res[0] );
+                }
+                cond.value = res.join(',');
+                if ( typ === "trange" ) {
+                    jQuery('.datespec', row).prop('disabled', res[1]==="");
+                    // jQuery('div.end .datespec', row).prop('disabled', res[6]==="");
+                    if ( cond.condition !== "bet" && cond.condition !== "nob" ) {
+                        jQuery('div.end', row).hide();
+                    } else {
+                        jQuery('div.end', row).show();
+                    }
+                }
+                break;
+                
+            case 'sun':
+                cond.condition = jQuery('div.params select.condmenu', row).val() || "after";
+                res = [];
+                var whence = jQuery('div.params select#sunstart', row).val() || "sunrise";
+                var offset = jQuery('div.params input#startoffset', row).val() || "0";
+                offset = parseInt( offset );
+                if ( isNaN( offset ) ) {
+                    /* Validation error, flag and treat as 0 */
+                    offset = 0;
+                }
+                res.push( whence + ( offset < 0 ? '' : '+' ) + String(offset) );
+                if ( cond.condition == "bet" || cond.condition == "nob" ) {
+                    jQuery( 'div.end', row ).show();
+                    whence = jQuery('select#sunend', row).val() || "sunset";
+                    offset = parseInt( jQuery('input#endoffset', row).val() || "0" );
+                    if ( isNaN( offset ) ) {
+                        offset = 0;
+                    }
+                    res.push( whence + ( offset < 0 ? '' : '+' ) + String(offset) );
+                } else {
+                    jQuery( 'div.end', row ).hide();
+                    res.push("");
+                }
                 cond.value = res.join(',');
                 break;
+                
             default:
                 break;
         }
@@ -466,7 +586,7 @@ var ReactorSensor = (function(api) {
         var el = ev.currentTarget;
         var row = jQuery( el ).closest('div.conditionrow');
         configModified = true;
-        updateConditionRow( row );
+        updateConditionRow( row, jQuery( el ) );
     }
 
     /**
@@ -595,10 +715,12 @@ var ReactorSensor = (function(api) {
         switch (cond.type) {
             case "":
                 break;
+                
             case 'comment':
                 container.append('<input class="form-control form-control-sm type="text">');
                 jQuery('input', container).on( 'change.reactor', handleRowChange ).val( cond.comment || "" );
                 break;
+                
             case 'service':
                 var pp = makeDeviceMenu( cond.device, cond.devicename || "?" );
                 container.append(pp);
@@ -623,6 +745,7 @@ var ReactorSensor = (function(api) {
                 jQuery("select.devicemenu", container).on( 'change.reactor', handleDeviceChange );
                 jQuery("i.condmore", container).on( 'click.reactor', handleExpandOptionsClick );
                 break;
+                
             case 'housemode':
                 container.append(
                     '<label class="checkbox-inline"><input type="checkbox" id="opts" value="1">Home</label>' +
@@ -635,8 +758,8 @@ var ReactorSensor = (function(api) {
                     jQuery('input#opts[value="' + val + '"]', container).prop('checked', true);
                 });
                 break;
+                
             case 'weekday':
-                // ??? first, 2nd, 3rd, 4th, 5th, last ???
                 container.append(
                     '<select class="wdcond form-control form-control-sm"><option value="">Every</option><option value="1">First</option><option value="2">2nd</option><option value="3">3rd</option><option value="4">4th</option><option value="5">5th</option><option value="last">Last</option></select> ' +
                     '<label class="checkbox-inline"><input type="checkbox" id="opts" value="1">Sun</label>' +
@@ -653,13 +776,55 @@ var ReactorSensor = (function(api) {
                     jQuery('input#opts[value="' + val + '"]', container).prop('checked', true);
                 });
                 break;
+                
+            case 'sun':
+                var pp = makeDateTimeConditionMenu( cond.condition );
+                container.append(pp);
+                jQuery("select.condmenu", container).append('<option value="before">before</option>');
+                jQuery("select.condmenu", container).append('<option value="after">after</option>');
+                container.append('<div class="start">' +
+                    '<select id="sunstart" class="form-control form-control-sm"><option value="sunrise">sunrise</option><option value="sunset">sunset</option></select> '+
+                    '<label for="startoffset">offset <input type="text" id="startoffset" value="" class="narrow form-control form-control-sm"> minutes</label>' +
+                    '</div>'
+                );
+                container.append('<div class="end"> and ' +
+                    '<select id="sunend" class="form-control form-control-sm" id="value"><option value="sunrise">sunrise</option><option value="sunset">sunset</option></select> '+
+                    '<label for="endoffset">offset <input type="text" id="endoffset" value="" class="narrow form-control form-control-sm"> minutes</label>' + 
+                    '</div>'
+                );
+                /* Restore. Condition first... */
+                var cp = cond.condition || "after";
+                jQuery("select.condmenu", container).on( 'change.reactor', handleRowChange ).val( cp );
+                if ( cp === "before" || cp === "after" ) {
+                    jQuery("div.end", container).hide();
+                } else {
+                    jQuery("div.end", container).show();
+                }
+                /* Start */
+                var vals = ( cond.value || "sunrise+0,sunset+0" ).split(/,/);
+                var k = vals[0].match( /^([^+-]+)(.*)/ );
+                if ( k === null || k.length !== 3 ) {
+                    k = [ "", "sunrise", "0" ];
+                    configModified = true;
+                }
+                jQuery("select#sunstart", container).on( 'change.reactor', handleRowChange ).val( k[1] );
+                jQuery("input#startoffset", container).on( 'change.reactor', handleRowChange ).val( k[2] );
+                /* End */
+                k = ( vals[1] || "sunset+0" ).match( /^([^+-]+)(.*)/ );
+                if ( k === null || k.length !== 3 ) {
+                    k = [ "", "sunset", "0" ];
+                    configModified = true;
+                }
+                jQuery("select#sunend", container).on( 'change.reactor', handleRowChange ).val( k[1] );
+                jQuery("input#endoffset", container).on( 'change.reactor', handleRowChange ).val( k[2] );
+                break;
+                
             case 'time':
                 var pp = makeDateTimeConditionMenu( cond.condition );
                 container.append(pp);
-                var mname =  [ 'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec' ];
                 var months = jQuery('<select class="monthmenu form-control form-control-sm"><option value=""></option></select>');
                 for ( var mon=1; mon<=12; mon++ ) {
-                    months.append('<option value="' + mon + '">' + mname[mon-1] + ' (' + mon + ')</option>');
+                    months.append('<option value="' + mon + '">' + monthName[mon] + ' (' + mon + ')</option>');
                 }
                 var days = jQuery('<select class="daymenu form-control form-control-sm"></select>');
                 for ( var day=1; day<=31; day++ ) {
@@ -702,6 +867,78 @@ var ReactorSensor = (function(api) {
                 jQuery("select", container).on( 'change.reactor', handleRowChange );
                 jQuery("input", container).on( 'change.reactor', handleRowChange );
                 break;
+                
+            case 'trange':
+                var pp = makeDateTimeConditionMenu( cond.condition );
+                container.append(pp);
+                jQuery("select.condmenu", container).append('<option value="before">before</option>');
+                jQuery("select.condmenu", container).append('<option value="after">after</option>');
+                var months = jQuery('<select class="monthmenu form-control form-control-sm"><option value=""></option></select>');
+                for ( var mon=1; mon<=12; mon++ ) {
+                    months.append('<option value="' + mon + '">' + monthName[mon] + ' (' + mon + ')</option>');
+                }
+                var days = jQuery('<select class="daymenu datespec form-control form-control-sm"></select>');
+                for ( var day=1; day<=31; day++ ) {
+                    days.append('<option value="' + day + '">' + day + '</option>');
+                }
+                var hours = jQuery('<select class="hourmenu form-control form-control-sm"></select>');
+                for ( var hr = 0; hr<24; hr++ ) {
+                    var hh = hr % 12;
+                    if ( hh === 0 ) {
+                        hh = 12;
+                    }
+                    hours.append('<option value="' + hr + '">' + hr + ' (' + hh + ( hr < 12 ? "am" : "pm" ) + ')</option>');
+                }
+                var mins = jQuery('<select class="minmenu form-control form-control-sm"></select>');
+                for ( var mn=0; mn<60; mn+=5 ) {
+                    mins.append('<option value="' + mn + '">:' + (mn < 10 ? '0' : '') + mn + '</option>');
+                }
+                container.append('<div class="start"></div>').append('<div class="end"> and </div>');
+                jQuery("div.start", container).append( months.clone() )
+                    .append( days.clone() )
+                    .append('<input type="text" placeholder="yyyy" class="year narrow datespec form-control form-control-sm">')
+                    .append( hours.clone() )
+                    .append( mins.clone() );
+                jQuery("div.end", container).append( months )
+                    .append( days )
+                    .append('<input type="text" placeholder="yyyy" class="year narrow datespec form-control form-control-sm">')
+                    .append( hours )
+                    .append( mins );
+                jQuery("div.end select.monthmenu", container).addClass("datespec"); /* ability to disable */
+                jQuery('div.end select.monthmenu option[value=""]', container).remove();
+                /* Default all menus to first option */
+                jQuery("select", container).each( function( ix, obj ) {
+                    jQuery(obj).val( jQuery("option:first", obj ).val() );
+                });
+                /* Restore values. */
+                var cp = cond.condition || "between";
+                jQuery("select.condmenu", container).val( cp );
+                if ( cp === "before" || cp === "after" ) {
+                    jQuery("div.end", container).hide();
+                } else {
+                    jQuery("div.end", container).show();
+                }
+                var vals = (cond.value || "").split(',');
+                var flist = [ 'div.start input.year', 'div.start select.monthmenu','div.start select.daymenu',
+                              'div.start select.hourmenu', 'div.start select.minmenu', 
+                              'div.end input.year','div.end select.monthmenu', 'div.end select.daymenu',
+                              'div.end select.hourmenu','div.end select.minmenu'
+                ];
+                for ( var fx=0; fx<flist.length; fx++ ) {
+                    if ( fx >= vals.length ) {
+                        vals[fx] = "";
+                    }
+                    if ( vals[fx] !== "" ) {
+                        jQuery( flist[fx], container ).val( vals[fx] );
+                    }
+                }
+                /* Enable date fields if month spec present */
+                jQuery('.datespec', container).prop('disabled', vals[1]==="");
+                // jQuery('div.end .datespec', container).prop('disabled', vals[6]==="");
+                jQuery("select", container).on( 'change.reactor', handleRowChange );
+                jQuery("input", container).on( 'change.reactor', handleRowChange );
+                break;
+                
             default:
                 /* nada */
         }
@@ -903,12 +1140,16 @@ var ReactorSensor = (function(api) {
      */
     function getConditionRow() {
         var el = jQuery('<div class="row conditionrow"></div>');
-        el.append( '<div class="col-sm-2 condtype"><select class="form-control form-control-sm"><option value="">--choose--</option><option value="comment">Comment</option><option value="service">Service/Variable</option><option value="housemode">House Mode</option><option value="weekday">Day of Week</option><option value="time">Date/Time</option></select></div>' );
+        el.append( '<div class="col-sm-2 condtype"><select class="form-control form-control-sm"><option value="">--choose--</option></select></div>' );
         el.append( '<div class="col-sm-9 params"></div>' );
         el.append( '<div class="col-sm-1 controls"></div>');
         jQuery("div.controls", el).append('<i class="material-icons md-btn action-up">arrow_upward</i>');
         jQuery("div.controls", el).append('<i class="material-icons md-btn action-down">arrow_downward</i>');
         jQuery("div.controls", el).append('<i class="material-icons md-btn action-delete">clear</i>');
+        
+        [ "comment", "service", "housemode", "sun", "weekday", "trange" ].forEach( function( k ) {
+            jQuery( "div.condtype select", el ).append( jQuery( "<option/>" ).val( k ).text( condTypeName[k] ) );
+        });
 
         jQuery('div.condtype select', el).on( 'change.reactor', handleTypeChange );
         jQuery('div.controls i.action-up', el).on( 'click.reactor', handleConditionSort );
@@ -943,6 +1184,13 @@ var ReactorSensor = (function(api) {
                     cond.id = getUID("cond");
                 row.attr("id", cond.id);
                 ixCond[cond.id] = cond;
+                var sel = jQuery('div.condtype select', row);
+                if ( jQuery('option[value="' + cond.type + '"]', sel).length === 0 ) {
+                    /* Condition type not on menu, probably a deprecated form. Insert it. */
+                    sel.append('<option value="' + cond.type + '">' + 
+                        (condTypeName[cond.type] === undefined ? cond.type + ' (deprecated)' : condTypeName[cond.type] ) + 
+                        '</option>');
+                }
                 jQuery('div.condtype select', row).val( cond.type );
                 setConditionForType( cond, row );
                 gel.append( row );
@@ -1019,15 +1267,30 @@ var ReactorSensor = (function(api) {
                     case 'time':
                         removeConditionProperties( cond, 'condition,value' );
                         break;
+                    case 'sun':
+                        removeConditionProperties( cond, 'condition,value' );
+                        break;
+                    case 'trange':
+                        removeConditionProperties( cond, 'condition,value' );
+                        break;
                     default:
                         /* Don't do anything */
                 }
             }
         }
         /* Save to persistent state */
-        api.setDeviceStatePersistent( api.getCpanelDeviceId(), serviceId, "cdata", JSON.stringify( cdata ), 0);
-        configModified = false;
-        updateControls();
+        api.setDeviceStatePersistent( api.getCpanelDeviceId(), serviceId, "cdata", JSON.stringify( cdata ), 
+        {
+            'onSuccess' : function() { 
+                configModified = false; 
+                updateControls();
+            }, 
+            'onFailure' : function() {
+                alert('There was a problem saving the configuration. Vera/Luup may have been restarting. Please try hitting the "Save" button again.'); 
+                configModified = true;
+                updateControls();
+            }
+        });
     }
 
     /* Closing the control panel. */
@@ -1119,8 +1382,16 @@ var ReactorSensor = (function(api) {
                             currentValue = weekDayName[ currentValue ];
                         }
                         break;
-
+                        
+                    case 'housemode':
+                        if ( currentValue !== undefined && houseModeName[ currentValue ] !== undefined ) {
+                            currentValue = houseModeName[ currentValue ];
+                        }
+                        break;
+                        
                     case 'time':
+                    case 'sun':
+                    case 'trange':
                         if ( currentValue !== undefined ) {
                             currentValue = new Date( currentValue * 1000 ).toLocaleString();
                         }
@@ -1142,6 +1413,11 @@ var ReactorSensor = (function(api) {
                             ( cs.laststate ? "true" : "false" ) +
                             ' as of ' + relativeTime( cs.statestamp ) +
                             '</div>' );
+                        if ( cs.laststate ) {
+                            el.addClass( "truecond" ).removeClass("falsecond");
+                        } else {
+                            el.addClass( "falsecond" ).removeClass("truecond");
+                        }
                         groupstate = groupstate && cs.evalstate;
                     } else {
                         el.append( '<div class="col-sm-6 col-md-4">(unknown)</div>' );
@@ -1182,9 +1458,17 @@ var ReactorSensor = (function(api) {
 
         initModule();
 
-        api.setCpanelContent( '<div id="reactorstatus"></div>' );
+        // Our styles.
+        var html = "<style>";
+        html += 'div.reactorgroup { border-radius: 8px; border: 2px solid #006040; padding: 8px; }';
+        html += '.truestate { background-color: #ccffcc; }';
+        html += '.row.cond { min-height: 2em; }';
+        html += 'div.truecond { color: #008000; font-weight: bold; }';
+        html += 'div.falsecond { color: #800000; }';
+        html += "</style>";
+        jQuery("head").append( html );
 
-        jQuery('head').append('<style>.reactorgroup { border-radius: 8px; border: 2px solid #006040; padding: 8px; } .truestate { background-color: #ccffcc; }</style>');
+        api.setCpanelContent( '<div id="reactorstatus"></div>' );
 
         updateStatus( api.getCpanelDeviceId() );
 

@@ -331,6 +331,7 @@ end
 local function evaluateCondition( cond, grp, cdata, tdev )
     D("evaluateCondition(%1,%2,cdata,%3)", cond, grp.groupid, tdev)
     local now = cdata.timebase
+    local ndt = cdata.timeparts
     local hasTimer = false
     if cond.type == "service" then
         -- Can't succeed if referenced device doesn't exist.
@@ -406,7 +407,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
     elseif cond.type == "weekday" then
         -- Weekday; Lua 1=Sunday, 2=Monday, ..., 7=Saturday
         hasTimer = true
-        local tt = os.date("*t", now)
+        local tt = cdata.timeparts
         cond.lastvalue = { value=tt.wday, timestamp=now }
         local wd = split( cond.value )
         D("evaluateCondition() weekday %1 among %2", tt.wday, wd)
@@ -440,10 +441,10 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         end
     elseif cond.type == "time" then
         -- Time, with various components specified, or not.
-        L({level=2,msg="ReactorSensor %1 (%2) uses the deprecated form of date condition.  This form will cease to function at rev 1.5 (current running %3). Please reconfigure using the new form and delete the old one."}, tdev, luup.devices[tdev].description, _PLUGIN_VERSION)
+        L({level=2,msg="ReactorSensor %1 (%2) uses the deprecated form of 'time' condition.  This form will cease to function at rev 1.5 (current running %3). Please reconfigure using the new 'trange' (or 'sun') form and delete the old one."}, tdev, luup.devices[tdev].description, _PLUGIN_VERSION)
         hasTimer = true
         cond.lastvalue = { value=now, timestamp=now }
-        local dt = os.date("*t", now)
+        local dt = cdata.timeparts
         local hm = dt.hour * 60 + dt.min -- msm (minutes since midnight)
         -- Figure out sunrise/sunset. We keep a daily cache, because Vera's times
         -- recalculate to that of the following day once the time has passwed, and
@@ -526,15 +527,15 @@ local function evaluateCondition( cond, grp, cdata, tdev )
                 if not ( hm >= shm or hm < ehm ) then return false, true end
             end
         end
-    elseif cond.type == "drange" then
-        -- Time, with various components specified, or not.
+    elseif cond.type == "sun" then
+        -- Sun condition (sunrise/set)
         hasTimer = true
         cond.lastvalue = { value=now, timestamp=now }
-        local dt = os.date("*t", now)
-        local hm = dt.hour * 60 + dt.min -- msm (minutes since midnight)
         -- Figure out sunrise/sunset. We keep a daily cache, because Vera's times
         -- recalculate to that of the following day once the time has passwed, and
         -- we need stable with a day.
+        local dt = cdata.timeparts
+        local nowMSM = dt.hour * 60 + dt.min
         local stamp = (dt.year % 100) * 10000 + dt.month * 100 + dt.day
         local sun = split( luup.variable_get( RSSID, "sundata", tdev ) or "" )
         if #sun ~= 3 or sun[1] ~= tostring(stamp) then
@@ -543,11 +544,46 @@ local function evaluateCondition( cond, grp, cdata, tdev )
             luup.variable_set( RSSID, "sundata", table.concat( sun, "," ) , tdev )
         end
         D("evaluateCondition() sunrise/sunset %1", sun)
+        local tparam = split( cond.value or "sunrise+0,sunset+0" )
+        local cp,offset = string.match( tparam[1], "^([^%+%-]+)(.*)" )
+        offset = tonumber( offset or "0" ) or 0
+        local stt = iif( cp == "sunrise", sun[2], sun[3] )
+        dt = os.date("*t", stt + offset*60)
+        local startMSM = dt.hour * 60 + dt.min
+        if cond.condition == "bet" or cond.condition == "nob" then
+            local ep,eoffs = string.match( tparam[2] or "sunset+0", "^([^%+%-]+)(.*)" )
+            eoffs = tonumber( eoffs or 0 ) or 0
+            local ett = iif( ep == "sunrise", sun[2], sun[3] )
+            dt = os.date("*t", ett + eoffs*60)
+            local endMSM = dt.hour * 60 + dt.min
+            D("evaluateCondition() cond %1 check %2 %3 %4 and %5", cond.id, nowMSM, cond.condition, startMSM, endMSM)
+            local between
+            if endMSM <= startMSM then
+                between = nowMSM >= startMSM or nowMSM < endMSM
+            else
+                between = nowMSM >= startMSM and nowMSM < endMSM
+            end
+            if ( cond.condition == "bet" and not between ) or
+                ( cond.condition == "nob" and between ) then 
+                return false, true
+            end
+        elseif cond.condition == "before" then
+            D("evaluateCondition() cond %1 check %2 before %3", cond.id, nowMSM, startMSM)
+            if nowMSM >= startMSM then return false, true end
+        else
+            D("evaluateCondition() cond %1 check %2 after %3", cond.id, nowMSM, startMSM)
+            if nowMSM < startMSM then return false, true end -- after
+        end
+    elseif cond.type == "trange" then
+        -- Time, with various components specified, or not.
+        hasTimer = true
+        cond.lastvalue = { value=now, timestamp=now }
         -- Split, pad, and complete date. Any missing parts are filled in with the 
         -- current date/time's corresponding part.
         local tparam = split( cond.value, ',' )
         for ix = #tparam+1, 10 do tparam[ix] = "" end -- pad
         local tpart = {}
+        local dt = cdata.timeparts
         tpart[1] = iif( tparam[1] == "", dt.year, tparam[1] )
         tpart[2] = iif( tparam[2] == "", dt.month, tparam[2] )
         tpart[3] = iif( tparam[3] == "", dt.day, tparam[3] )
@@ -556,42 +592,81 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         tpart[6] = iif( tparam[6] == "", tpart[1], tparam[6] )
         tpart[7] = iif( tparam[7] == "", tpart[2], tparam[7] )
         tpart[8] = iif( tparam[8] == "", tpart[3], tparam[8] )
-        tpart[9] = iif( tparam[9] == "", 23, tparam[9] )
-        tpart[10] = iif( tparam[10] == "", 59, tparam[10] )
-        local stt, ett
-        -- ??? sunrise/sunset: what if day is not today? Need to compute for date and location ourselves, I think.
-        if tpart[4] == "sunrise" then
-            local xt = os.date( "*t", sun[2] )
-            tpart[4] = xt.hour
-            tpart[5] = xt.min
-        elseif tpart[4] == "sunset" then
-            local xt = os.date( "*t", sun[3] )
-            tpart[4] = xt.hour
-            tpart[5] = xt.min
-        end
-        stt = os.time{ year=tpart[1], month=tpart[2], day=tpart[3], hour=tpart[4], min=tpart[5] }
-        D("evaluateCondition() time start %1", os.date( "%x.%X", stt ))
-        if tpart[9] == "sunrise" then
-            local xt = os.date( "*t", sun[2] )
-            tpart[9] = xt.hour
-            tpart[10] = xt.min
-        elseif tpart[10] == "sunset" then
-            local xt = os.date( "*t", sun[3] )
-            tpart[9] = xt.hour
-            tpart[10] = xt.min
-        end
-        ett = os.time{ year=tpart[6], month=tpart[7], day=tpart[8], hour=tpart[9], min=tpart[10], sec=59 }
-        D("evaluateCondition() time end %1", os.date( "%x.%X", ett ))
-        D("evaluateCondition() compare now %1 %2 %3 and %4", now, cond.condition, stt, ett)
-        local cp = cond.condition or "bet"
-        if cp == "bet" then
-            if now < stt or now > ett then return false, true end
-        elseif cp == "not" then
-            if now >= stt and now <= ett then return false, true end
+        tpart[9] = iif( tparam[9] == "", tpart[4], tparam[9] )
+        tpart[10] = iif( tparam[10] == "", tpart[5], tparam[10] )
+
+        if tparam[2] == "" then
+            -- No date specified, only time components.
+            D("evaluateCondition() time-only comparison, now is %1, dt is %2", now, dt)
+            local nowMSM = dt.hour * 60 + dt.min
+            local startMSM = tonumber( tparam[4] ) * 60 + tonumber( tparam[5] )
+            if cond.condition == "after" then
+                D("evaluateCondition() time-only comparison %1 after %2", nowMSM, startMSM)
+                if nowMSM < startMSM then return false, true end
+            elseif cond.condition == "before" then
+                D("evaluateCondition() time-only comparison %1 before %2", nowMSM, startMSM)
+                if nowMSM >= startMSM then return false, true end
+            else
+                -- Between, or not
+                local endMSM = tonumber( tparam[9] ) * 60 + tonumber( tparam[10] )
+                local between
+                if endMSM <= startMSM then
+                    between = nowMSM >= startMSM or nowMSM < endMSM
+                else
+                    between = nowMSM >= startMSM and nowMSM < endMSM
+                end
+                D("evaluateCondition() time-only comparison %1 %2 %3 %4 (between=%5)",
+                    nowMSM, cond.condition, startMSM, endMSM, between)
+                if ( cond.condition == "nob" and between ) or
+                    ( cond.condition == "bet" and not between ) then 
+                    return false, true 
+                end
+            end
         else
-            L({level=1,msg="Unrecognized condition %1 in time spec for cond %2 of %3 (%4)"},
-                cp, cond.id, tdev, luup.devices[tdev].description)
-            return false, false
+            if tparam[1] == "" then
+                -- No-year comparison, just month/day. If between, watch for year wraps.
+                if cond.condition == "bet" or cond.condition == "nob" then
+                    local stz = tonumber( tpart[2] )
+                    local enz = tonumber( tpart[7] )
+                    if enz < stz then
+                        -- End > start (e.g. Nov - Aug) Decrement start year
+                        tpart[1] = tonumber( tpart[6] ) - 1
+                    elseif stz == enz then
+                        -- Check days
+                        stz = tonumber( tpart[3] )
+                        enz = tonumber( tpart[8] )
+                        if enz < stz then
+                            tpart[1] = tonumber( tpart[1] ) - 1
+                        end
+                    end
+                end
+            end
+            D("evaluateCondition() post-adjustments, tpart=%1", tpart)
+                
+            now = math.floor( now / 60 ) * 60
+            local stt, ett
+            stt = os.time{ year=tpart[1], month=tpart[2], day=tpart[3], hour=tpart[4], min=tpart[5] }
+            stt = math.floor( stt / 60 ) * 60
+            D("evaluateCondition() time start %1", os.date( "%x.%X", stt ))
+            ett = os.time{ year=tpart[6], month=tpart[7], day=tpart[8], hour=tpart[9], min=tpart[10] }
+            ett = math.floor( ett / 60 ) * 60
+            D("evaluateCondition() time end %1", os.date( "%x.%X", ett ))
+            if stt == ett then ett = ett + 60 end -- special case
+            D("evaluateCondition() compare now %1 %2 %3 and %4", now, cond.condition, stt, ett)
+            local cp = cond.condition or "bet"
+            if cp == "bet" then
+                if now < stt or now >= ett then return false, true end
+            elseif cp == "nob" then
+                if now >= stt and now < ett then return false, true end
+            elseif cp == "before" then
+                if now >= stt then return false, true end
+            elseif cp == "after" then
+                if now < stt then return false, true end
+            else
+                L({level=1,msg="Unrecognized condition %1 in time spec for cond %2 of %3 (%4)"},
+                    cp, cond.id, tdev, luup.devices[tdev].description)
+                return false, false
+            end
         end
     elseif cond.type == "comment" then
         -- Shortcut. Comments are always true.
@@ -716,6 +791,8 @@ local function evaluateConditions( tdev )
 
     -- Mark a stable base of time
     cdata.timebase = os.time()
+    cdata.timeparts = os.date("*t")
+    D("evaluateConditions() base time is %1 (%2)", cdata.timebase, cdata.timeparts)
 
     -- Evaluate all groups. Any group match is a pass.
     local hasTimer = false
