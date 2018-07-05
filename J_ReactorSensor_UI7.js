@@ -29,6 +29,7 @@ var ReactorSensor = (function(api) {
     var lastx = 0;
     var condTypeName = { "service": "Service/Variable", "housemode": "House Mode", "comment": "Comment", "weekday": "Weekday", "time": "Date/Time" };
     var weekDayName = [ '?', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat' ];
+    var monthName = [ '?', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec' ];
 
     /* Create an ID that's functionally unique for our purposes. */
     function getUID( prefix ) {
@@ -140,6 +141,34 @@ var ReactorSensor = (function(api) {
         }
         return undefined;
     }
+    
+    function isEmpty( s ) {
+        return s === undefined || s === "";
+    }
+    
+    function textDate( y, m, d, isEnd ) {
+        if ( isEmpty( y ) ) {
+            if ( isEmpty( m ) ) {
+                if ( isEmpty( d ) ) {
+                    return undefined;
+                } else {
+                    return "day " + d + " each month";
+                }
+            } else {
+                return monthName[ parseInt( m ) ] + ( isEmpty( d ) ? "" : " " + d );
+            }
+        } else {
+            if ( isEmpty( m ) ) {
+                if ( isEmpty( d ) ) {
+                    return y;
+                } else {
+                    return "day " + d + " each month of " + y;
+                }
+            } else {
+                return monthName[ parseInt( m ) ] + ( isEmpty( d ) ? "" : " " + d ) + " " + y;
+            }
+        }
+    }
 
     function makeConditionDescription( cond ) {
         if ( cond === undefined ) {
@@ -193,8 +222,27 @@ var ReactorSensor = (function(api) {
                 break;
 
             case 'time':
-                /* fall through */
-
+                var t = ( cond.value || "" ).split(/,/);
+                var ds = textDate( t[0], t[1], t[2], false );
+                var de = textDate( t[5], t[6], t[7], true );
+                if ( undefined == ds && undefined == de ) {
+                    de = ds = "";
+                    str += 'daily ';
+                } else if ( ds == undefined ) {
+                    ds = "";
+                } else if ( de == undefined ) {
+                    de = "";
+                }
+                str += (cond.condition != "bet" ? "not " : "") + 'between ' +
+                    ds +
+                    ' ' +
+                    ( isEmpty( t[3] ) ? "*" : t[3] ) + ':' + ( isEmpty( t[4] ) ? "*" : t[4] ) +
+                    ' and ' +
+                    de +
+                    ' ' +
+                    ( isEmpty( t[8] ) ? "*" : t[8] ) + ':' + ( isEmpty( t[9] ) ? "*" : t[9] );
+                break;
+                
             default:
                 str = JSON.stringify( cond );
         }
@@ -610,8 +658,8 @@ var ReactorSensor = (function(api) {
                 container.append(pp);
                 var mname =  [ 'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec' ];
                 var months = jQuery('<select class="monthmenu form-control form-control-sm"><option value="">(any month)</option></select>');
-                for ( var mon=0; mon<12; mon++ ) {
-                    months.append('<option value="' + mon + '">' + mname[mon] + ' (' + (mon+1) + ')</option>');
+                for ( var mon=1; mon<=12; mon++ ) {
+                    months.append('<option value="' + mon + '">' + mname[mon-1] + ' (' + mon + ')</option>');
                 }
                 var days = jQuery('<select class="daymenu form-control form-control-sm"><option value="">(any day)</option></select>');
                 for ( var day=1; day<=31; day++ ) {
@@ -643,10 +691,9 @@ var ReactorSensor = (function(api) {
                     .append( mins );
                 /* Restore values */
                 var vals = (cond.value || "").split(',');
-                var flist = [ 'div.start select.monthmenu','div.start select.daymenu',
-                              'div.start input.year', 'div.start select.hourmenu',
-                              'div.start select.minmenu', 'div.end select.monthmenu',
-                              'div.end select.daymenu','div.end input.year',
+                var flist = [ 'div.start input.year', 'div.start select.monthmenu','div.start select.daymenu',
+                              'div.start select.hourmenu', 'div.start select.minmenu', 
+                              'div.end input.year','div.end select.monthmenu', 'div.end select.daymenu',
                               'div.end select.hourmenu','div.end select.minmenu'
                 ];
                 for ( var fx=0; fx<flist.length; fx++ ) {
