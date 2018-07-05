@@ -657,15 +657,15 @@ var ReactorSensor = (function(api) {
                 var pp = makeDateTimeConditionMenu( cond.condition );
                 container.append(pp);
                 var mname =  [ 'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec' ];
-                var months = jQuery('<select class="monthmenu form-control form-control-sm"><option value="">(any month)</option></select>');
+                var months = jQuery('<select class="monthmenu form-control form-control-sm"><option value=""></option></select>');
                 for ( var mon=1; mon<=12; mon++ ) {
                     months.append('<option value="' + mon + '">' + mname[mon-1] + ' (' + mon + ')</option>');
                 }
-                var days = jQuery('<select class="daymenu form-control form-control-sm"><option value="">(any day)</option></select>');
+                var days = jQuery('<select class="daymenu form-control form-control-sm"></select>');
                 for ( var day=1; day<=31; day++ ) {
                     days.append('<option value="' + day + '">' + day + '</option>');
                 }
-                var hours = jQuery('<select class="hourmenu form-control form-control-sm"><option value="">(any hour)</option></select>');
+                var hours = jQuery('<select class="hourmenu form-control form-control-sm"><option value="">(every hour)</option></select>');
                 hours.append('<option value="sunrise">Sunrise</option><option value="sunset">Sunset</option>');
                 for ( var hr = 0; hr<24; hr++ ) {
                     var hh = hr % 12;
@@ -675,7 +675,7 @@ var ReactorSensor = (function(api) {
                     hours.append('<option value="' + hr + '">' + hr + ' (' + hh + ( hr < 12 ? "am" : "pm" ) + ')</option>');
                 }
                 var mins = jQuery('<select class="minmenu form-control form-control-sm"><option value="">(any min)</option></select>');
-                for ( var mn=0; mn<=59; mn+=5 ) {
+                for ( var mn=0; mn<60; mn+=5 ) {
                     mins.append('<option value="' + mn + '">:' + (mn < 10 ? '0' : '') + mn + '</option>');
                 }
                 container.append('<div class="start"></div> and ').append('<div class="end"></div>');

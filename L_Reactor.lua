@@ -440,6 +440,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         end
     elseif cond.type == "time" then
         -- Time, with various components specified, or not.
+        L({level=2,msg="ReactorSensor %1 (%2) uses the deprecated form of date condition.  This form will cease to function at rev 1.5 (current running %3). Please reconfigure using the new form and delete the old one."}, tdev, luup.devices[tdev].description, _PLUGIN_VERSION)
         hasTimer = true
         cond.lastvalue = { value=now, timestamp=now }
         local dt = os.date("*t", now)
@@ -524,6 +525,73 @@ local function evaluateCondition( cond, grp, cdata, tdev )
                 -- Time spec spans midnight (e.g. sunset to sunrise or 2200 to 0600)
                 if not ( hm >= shm or hm < ehm ) then return false, true end
             end
+        end
+    elseif cond.type == "drange" then
+        -- Time, with various components specified, or not.
+        hasTimer = true
+        cond.lastvalue = { value=now, timestamp=now }
+        local dt = os.date("*t", now)
+        local hm = dt.hour * 60 + dt.min -- msm (minutes since midnight)
+        -- Figure out sunrise/sunset. We keep a daily cache, because Vera's times
+        -- recalculate to that of the following day once the time has passwed, and
+        -- we need stable with a day.
+        local stamp = (dt.year % 100) * 10000 + dt.month * 100 + dt.day
+        local sun = split( luup.variable_get( RSSID, "sundata", tdev ) or "" )
+        if #sun ~= 3 or sun[1] ~= tostring(stamp) then
+            D("evaluateCondition() didn't like what I got for sun: %1; expected stamp is %2; storing new.", sun, stamp)
+            sun = { stamp, luup.sunrise(), luup.sunset() }
+            luup.variable_set( RSSID, "sundata", table.concat( sun, "," ) , tdev )
+        end
+        D("evaluateCondition() sunrise/sunset %1", sun)
+        -- Split, pad, and complete date. Any missing parts are filled in with the 
+        -- current date/time's corresponding part.
+        local tparam = split( cond.value, ',' )
+        for ix = #tparam+1, 10 do tparam[ix] = "" end -- pad
+        local tpart = {}
+        tpart[1] = iif( tparam[1] == "", dt.year, tparam[1] )
+        tpart[2] = iif( tparam[2] == "", dt.month, tparam[2] )
+        tpart[3] = iif( tparam[3] == "", dt.day, tparam[3] )
+        tpart[4] = iif( tparam[4] == "", dt.hour, tparam[4] )
+        tpart[5] = iif( tparam[5] == "", dt.min, tparam[5] )
+        tpart[6] = iif( tparam[6] == "", tpart[1], tparam[6] )
+        tpart[7] = iif( tparam[7] == "", tpart[2], tparam[7] )
+        tpart[8] = iif( tparam[8] == "", tpart[3], tparam[8] )
+        tpart[9] = iif( tparam[9] == "", 23, tparam[9] )
+        tpart[10] = iif( tparam[10] == "", 59, tparam[10] )
+        local stt, ett
+        -- ??? sunrise/sunset: what if day is not today? Need to compute for date and location ourselves, I think.
+        if tpart[4] == "sunrise" then
+            local xt = os.date( "*t", sun[2] )
+            tpart[4] = xt.hour
+            tpart[5] = xt.min
+        elseif tpart[4] == "sunset" then
+            local xt = os.date( "*t", sun[3] )
+            tpart[4] = xt.hour
+            tpart[5] = xt.min
+        end
+        stt = os.time{ year=tpart[1], month=tpart[2], day=tpart[3], hour=tpart[4], min=tpart[5] }
+        D("evaluateCondition() time start %1", os.date( "%x.%X", stt ))
+        if tpart[9] == "sunrise" then
+            local xt = os.date( "*t", sun[2] )
+            tpart[9] = xt.hour
+            tpart[10] = xt.min
+        elseif tpart[10] == "sunset" then
+            local xt = os.date( "*t", sun[3] )
+            tpart[9] = xt.hour
+            tpart[10] = xt.min
+        end
+        ett = os.time{ year=tpart[6], month=tpart[7], day=tpart[8], hour=tpart[9], min=tpart[10], sec=59 }
+        D("evaluateCondition() time end %1", os.date( "%x.%X", ett ))
+        D("evaluateCondition() compare now %1 %2 %3 and %4", now, cond.condition, stt, ett)
+        local cp = cond.condition or "bet"
+        if cp == "bet" then
+            if now < stt or now > ett then return false, true end
+        elseif cp == "not" then
+            if now >= stt and now <= ett then return false, true end
+        else
+            L({level=1,msg="Unrecognized condition %1 in time spec for cond %2 of %3 (%4)"},
+                cp, cond.id, tdev, luup.devices[tdev].description)
+            return false, false
         end
     elseif cond.type == "comment" then
         -- Shortcut. Comments are always true.
