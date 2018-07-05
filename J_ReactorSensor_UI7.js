@@ -612,7 +612,7 @@ var ReactorSensor = (function(api) {
                 var mname =  [ 'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec' ];
                 var months = jQuery('<select class="monthmenu form-control form-control-sm"><option value="">(any month)</option></select>');
                 for ( var mon=1; mon<=12; mon++ ) {
-                    months.append('<option value="' + mon + '">' + mname[mon-1] + ' (' + (mon+1) + ')</option>');
+                    months.append('<option value="' + mon + '">' + mname[mon-1] + ' (' + mon + ')</option>');
                 }
                 var days = jQuery('<select class="daymenu form-control form-control-sm"><option value="">(any day)</option></select>');
                 for ( var day=1; day<=31; day++ ) {
