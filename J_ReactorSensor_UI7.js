@@ -611,8 +611,8 @@ var ReactorSensor = (function(api) {
                 container.append(pp);
                 var mname =  [ 'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec' ];
                 var months = jQuery('<select class="monthmenu form-control form-control-sm"><option value="">(any month)</option></select>');
-                for ( var mon=0; mon<12; mon++ ) {
-                    months.append('<option value="' + mon + '">' + mname[mon] + ' (' + (mon+1) + ')</option>');
+                for ( var mon=1; mon<=12; mon++ ) {
+                    months.append('<option value="' + mon + '">' + mname[mon-1] + ' (' + (mon+1) + ')</option>');
                 }
                 var days = jQuery('<select class="daymenu form-control form-control-sm"><option value="">(any day)</option></select>');
                 for ( var day=1; day<=31; day++ ) {
@@ -644,10 +644,9 @@ var ReactorSensor = (function(api) {
                     .append( mins );
                 /* Restore values */
                 var vals = (cond.value || "").split(',');
-                var flist = [ 'div.start select.monthmenu','div.start select.daymenu',
-                              'div.start input.year', 'div.start select.hourmenu',
-                              'div.start select.minmenu', 'div.end select.monthmenu',
-                              'div.end select.daymenu','div.end input.year',
+                var flist = [ 'div.start input.year', 'div.start select.monthmenu', 'div.start select.daymenu',
+                              'div.start select.hourmenu', 'div.start select.minmenu',
+                              'div.end input.year', 'div.end select.monthmenu', 'div.end select.daymenu',
                               'div.end select.hourmenu','div.end select.minmenu'
                 ];
                 for ( var fx=0; fx<flist.length; fx++ ) {
