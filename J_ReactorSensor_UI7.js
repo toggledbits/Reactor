@@ -12,7 +12,7 @@
 
 var ReactorSensor = (function(api) {
 
-    // unique identifier for this plugin...
+    /* unique identifier for this plugin... */
     var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
     var myModule = {};
@@ -81,7 +81,7 @@ var ReactorSensor = (function(api) {
             }
         }
 
-        // Make our own list of devices, sorted by room.
+        /* Make our own list of devices, sorted by room. */
         var devices = api.cloneObject( api.getListOfDevices() );
         deviceByNumber = [];
         var rooms = [];
@@ -108,7 +108,7 @@ var ReactorSensor = (function(api) {
             roomObj.devices.push( devobj );
         }
         roomsByName = rooms.sort(
-            // Special sort for room name -- sorts "No Room" last
+            /* Special sort for room name -- sorts "No Room" last */
             function (a, b) {
                 if (a.id === 0) return 1;
                 if (b.id === 0) return -1;
@@ -144,7 +144,7 @@ var ReactorSensor = (function(api) {
         }
         return undefined;
     }
-    
+
     function isEmpty( s ) {
         return s === undefined || s === "";
     }
@@ -155,7 +155,7 @@ var ReactorSensor = (function(api) {
         var tstr = ( hh < 10 ? '0' : '' ) + hh + ':' + ( mm < 10 ? '0' : '' ) + mm;
         if ( isEmpty( m ) ) {
             return tstr;
-        } 
+        }
         m = parseInt( m );
         return monthName[m] + ' ' + d + ( isEmpty( y ) ? '' : ' ' + y ) + ' ' + tstr;
     }
@@ -233,7 +233,7 @@ var ReactorSensor = (function(api) {
                     str += ' ' + t.join(', ');
                 }
                 break;
-                
+
             case 'sun':
                 if ( condName[ cond.condition ] !== undefined ) {
                     str += condName[ cond.condition ];
@@ -273,7 +273,7 @@ var ReactorSensor = (function(api) {
                     ' ' +
                     ( isEmpty( t[8] ) ? "*" : t[8] ) + ':' + ( isEmpty( t[9] ) ? "*" : t[9] );
                 break;
-                
+
             case 'trange':
                 if ( condName[ cond.condition ] !== undefined ) {
                     str += condName[ cond.condition ];
@@ -358,7 +358,6 @@ var ReactorSensor = (function(api) {
                         service: devobj.states[k].service,
                         variable: devobj.states[k].variable
                     };
-                    // mm[ms[n].text.toLowerCase()] = n;
                 }
             }
             var r = ms.sort( function( a, b ) {
@@ -461,7 +460,7 @@ var ReactorSensor = (function(api) {
             case 'comment':
                 cond.comment = jQuery("div.params input", row).val();
                 break;
-                
+
             case 'service':
                 cond.device = parseInt( jQuery("div.params select.devicemenu", row).val() );
                 cond.service = jQuery("div.params select.varmenu", row).val();
@@ -470,11 +469,11 @@ var ReactorSensor = (function(api) {
                 cond.condition = jQuery("div.params select.condmenu", row).val();
                 cond.value = jQuery("input#value", row).val();
                 break;
-                
+
             case 'weekday':
                 cond.condition = jQuery("div.params select.wdcond", row).val() || "";
                 /* fall through */
-                
+
             case 'housemode':
                 var res = [];
                 jQuery("input#opts:checked", row).each( function( ix, control ) {
@@ -482,7 +481,7 @@ var ReactorSensor = (function(api) {
                 });
                 cond.value = res.join(',');
                 break;
-                
+
             case 'time':
             case 'trange':
                 /* Pre-sanity check */
@@ -535,7 +534,6 @@ var ReactorSensor = (function(api) {
                 cond.value = res.join(',');
                 if ( typ === "trange" ) {
                     jQuery('.datespec', row).prop('disabled', res[1]==="");
-                    // jQuery('div.end .datespec', row).prop('disabled', res[6]==="");
                     if ( cond.condition !== "bet" && cond.condition !== "nob" ) {
                         jQuery('div.end', row).hide();
                     } else {
@@ -543,7 +541,7 @@ var ReactorSensor = (function(api) {
                     }
                 }
                 break;
-                
+
             case 'sun':
                 cond.condition = jQuery('div.params select.condmenu', row).val() || "after";
                 res = [];
@@ -569,7 +567,7 @@ var ReactorSensor = (function(api) {
                 }
                 cond.value = res.join(',');
                 break;
-                
+
             default:
                 break;
         }
@@ -604,7 +602,7 @@ var ReactorSensor = (function(api) {
             configModified = true;
         }
 
-        // Make a new service/variable menu and replace it on the row.
+        /* Make a new service/variable menu and replace it on the row. */
         var newMenu = makeVariableMenu( cond.device, cond.service, cond.variable );
         jQuery("select.varmenu", row).replaceWith( newMenu );
         updateConditionRow( row ); /* pass it on */
@@ -715,12 +713,12 @@ var ReactorSensor = (function(api) {
         switch (cond.type) {
             case "":
                 break;
-                
+
             case 'comment':
                 container.append('<input class="form-control form-control-sm type="text">');
                 jQuery('input', container).on( 'change.reactor', handleRowChange ).val( cond.comment || "" );
                 break;
-                
+
             case 'service':
                 var pp = makeDeviceMenu( cond.device, cond.devicename || "?" );
                 container.append(pp);
@@ -745,7 +743,7 @@ var ReactorSensor = (function(api) {
                 jQuery("select.devicemenu", container).on( 'change.reactor', handleDeviceChange );
                 jQuery("i.condmore", container).on( 'click.reactor', handleExpandOptionsClick );
                 break;
-                
+
             case 'housemode':
                 container.append(
                     '<label class="checkbox-inline"><input type="checkbox" id="opts" value="1">Home</label>' +
@@ -758,7 +756,7 @@ var ReactorSensor = (function(api) {
                     jQuery('input#opts[value="' + val + '"]', container).prop('checked', true);
                 });
                 break;
-                
+
             case 'weekday':
                 container.append(
                     '<select class="wdcond form-control form-control-sm"><option value="">Every</option><option value="1">First</option><option value="2">2nd</option><option value="3">3rd</option><option value="4">4th</option><option value="5">5th</option><option value="last">Last</option></select> ' +
@@ -776,7 +774,7 @@ var ReactorSensor = (function(api) {
                     jQuery('input#opts[value="' + val + '"]', container).prop('checked', true);
                 });
                 break;
-                
+
             case 'sun':
                 var pp = makeDateTimeConditionMenu( cond.condition );
                 container.append(pp);
@@ -789,7 +787,7 @@ var ReactorSensor = (function(api) {
                 );
                 container.append('<div class="end"> and ' +
                     '<select id="sunend" class="form-control form-control-sm" id="value"><option value="sunrise">sunrise</option><option value="sunset">sunset</option></select> '+
-                    '<label for="endoffset">offset <input type="text" id="endoffset" value="" class="narrow form-control form-control-sm"> minutes</label>' + 
+                    '<label for="endoffset">offset <input type="text" id="endoffset" value="" class="narrow form-control form-control-sm"> minutes</label>' +
                     '</div>'
                 );
                 /* Restore. Condition first... */
@@ -818,7 +816,7 @@ var ReactorSensor = (function(api) {
                 jQuery("select#sunend", container).on( 'change.reactor', handleRowChange ).val( k[1] );
                 jQuery("input#endoffset", container).on( 'change.reactor', handleRowChange ).val( k[2] );
                 break;
-                
+
             case 'time':
                 var pp = makeDateTimeConditionMenu( cond.condition );
                 container.append(pp);
@@ -857,7 +855,7 @@ var ReactorSensor = (function(api) {
                 /* Restore values */
                 var vals = (cond.value || "").split(',');
                 var flist = [ 'div.start input.year', 'div.start select.monthmenu','div.start select.daymenu',
-                              'div.start select.hourmenu', 'div.start select.minmenu', 
+                              'div.start select.hourmenu', 'div.start select.minmenu',
                               'div.end input.year','div.end select.monthmenu', 'div.end select.daymenu',
                               'div.end select.hourmenu','div.end select.minmenu'
                 ];
@@ -867,7 +865,7 @@ var ReactorSensor = (function(api) {
                 jQuery("select", container).on( 'change.reactor', handleRowChange );
                 jQuery("input", container).on( 'change.reactor', handleRowChange );
                 break;
-                
+
             case 'trange':
                 var pp = makeDateTimeConditionMenu( cond.condition );
                 container.append(pp);
@@ -920,7 +918,7 @@ var ReactorSensor = (function(api) {
                 }
                 var vals = (cond.value || "").split(',');
                 var flist = [ 'div.start input.year', 'div.start select.monthmenu','div.start select.daymenu',
-                              'div.start select.hourmenu', 'div.start select.minmenu', 
+                              'div.start select.hourmenu', 'div.start select.minmenu',
                               'div.end input.year','div.end select.monthmenu', 'div.end select.daymenu',
                               'div.end select.hourmenu','div.end select.minmenu'
                 ];
@@ -934,11 +932,10 @@ var ReactorSensor = (function(api) {
                 }
                 /* Enable date fields if month spec present */
                 jQuery('.datespec', container).prop('disabled', vals[1]==="");
-                // jQuery('div.end .datespec', container).prop('disabled', vals[6]==="");
                 jQuery("select", container).on( 'change.reactor', handleRowChange );
                 jQuery("input", container).on( 'change.reactor', handleRowChange );
                 break;
-                
+
             default:
                 /* nada */
         }
@@ -1146,7 +1143,7 @@ var ReactorSensor = (function(api) {
         jQuery("div.controls", el).append('<i class="material-icons md-btn action-up">arrow_upward</i>');
         jQuery("div.controls", el).append('<i class="material-icons md-btn action-down">arrow_downward</i>');
         jQuery("div.controls", el).append('<i class="material-icons md-btn action-delete">clear</i>');
-        
+
         [ "comment", "service", "housemode", "sun", "weekday", "trange" ].forEach( function( k ) {
             jQuery( "div.condtype select", el ).append( jQuery( "<option/>" ).val( k ).text( condTypeName[k] ) );
         });
@@ -1187,8 +1184,8 @@ var ReactorSensor = (function(api) {
                 var sel = jQuery('div.condtype select', row);
                 if ( jQuery('option[value="' + cond.type + '"]', sel).length === 0 ) {
                     /* Condition type not on menu, probably a deprecated form. Insert it. */
-                    sel.append('<option value="' + cond.type + '">' + 
-                        (condTypeName[cond.type] === undefined ? cond.type + ' (deprecated)' : condTypeName[cond.type] ) + 
+                    sel.append('<option value="' + cond.type + '">' +
+                        (condTypeName[cond.type] === undefined ? cond.type + ' (deprecated)' : condTypeName[cond.type] ) +
                         '</option>');
                 }
                 jQuery('div.condtype select', row).val( cond.type );
@@ -1279,14 +1276,14 @@ var ReactorSensor = (function(api) {
             }
         }
         /* Save to persistent state */
-        api.setDeviceStatePersistent( api.getCpanelDeviceId(), serviceId, "cdata", JSON.stringify( cdata ), 
+        api.setDeviceStatePersistent( api.getCpanelDeviceId(), serviceId, "cdata", JSON.stringify( cdata ),
         {
-            'onSuccess' : function() { 
-                configModified = false; 
+            'onSuccess' : function() {
+                configModified = false;
                 updateControls();
-            }, 
+            },
             'onFailure' : function() {
-                alert('There was a problem saving the configuration. Vera/Luup may have been restarting. Please try hitting the "Save" button again.'); 
+                alert('There was a problem saving the configuration. Vera/Luup may have been restarting. Please try hitting the "Save" button again.');
                 configModified = true;
                 updateControls();
             }
@@ -1320,7 +1317,7 @@ var ReactorSensor = (function(api) {
     function updateStatus( pdev ) {
         var stel = jQuery('div#reactorstatus');
         if ( stel.length === 0 ) {
-            // If not displayed, do nothing.
+            /* If not displayed, do nothing. */
             return;
         }
         stel.empty();
@@ -1382,13 +1379,13 @@ var ReactorSensor = (function(api) {
                             currentValue = weekDayName[ currentValue ];
                         }
                         break;
-                        
+
                     case 'housemode':
                         if ( currentValue !== undefined && houseModeName[ currentValue ] !== undefined ) {
                             currentValue = houseModeName[ currentValue ];
                         }
                         break;
-                        
+
                     case 'time':
                     case 'sun':
                     case 'trange':
@@ -1436,7 +1433,6 @@ var ReactorSensor = (function(api) {
 
     function onUIDeviceStatusChanged( args ) {
         var pdev = api.getCpanelDeviceId();
-        // console.log("Device " + String(pdev) + " status change callback for " + String(args.id));
         if ( args.id == pdev ) {
             for ( var k=0; k<args.states.length; ++k ) {
                 if ( args.states[k].variable.match( /^(cdata|cstate|Tripped|Armed)$/ ) ) {
@@ -1458,7 +1454,7 @@ var ReactorSensor = (function(api) {
 
         initModule();
 
-        // Our styles.
+        /* Our styles. */
         var html = "<style>";
         html += 'div.reactorgroup { border-radius: 8px; border: 2px solid #006040; padding: 8px; }';
         html += '.truestate { background-color: #ccffcc; }';
@@ -1480,10 +1476,10 @@ var ReactorSensor = (function(api) {
         try {
             initModule();
 
-            // Load material design icons
+            /* Load material design icons */
             jQuery("head").append('<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">');
 
-            // Our styles.
+            /* Our styles. */
             var html = "<style>";
             html += ".tb-about { margin-top: 24px; }";
             html += ".color-green { color: #006040; }";
@@ -1494,9 +1490,6 @@ var ReactorSensor = (function(api) {
             html += 'i.md-btn { color: #006040; font-size: 12pt; cursor: pointer; }';
             html += 'input.tbinvert { min-width: 16px; min-height: 16px; }';
             html += 'div.conditions { width: 100%; }';
-            //html += 'div.params .devicemenu,.varmenu { max-width: 30%; }';
-            //html += 'div.params .condmenu { max-width: 20%; }';
-            //html += 'div.params input#value { max-width: 20%; }';
             html += 'input.narrow { max-width: 6em; }';
             html += 'div.conditiongroup { border-radius: 8px; border: 2px solid #006040; padding: 8px; }';
             html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
@@ -1504,7 +1497,7 @@ var ReactorSensor = (function(api) {
             html += "</style>";
             jQuery("head").append( html );
 
-            // Body content
+            /* Body content */
             html = '';
             html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>Conditions</h3></div></div>';
             html += '<div class="row"><div class="col-cs-12 col-sm-12">Conditions within a group are "AND", and groups are "OR". That is, the sensor will trip when any group succeeds, and for a group to succeed, all conditions in the group must be met.</div></div>';
@@ -1515,7 +1508,6 @@ var ReactorSensor = (function(api) {
             html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
             html += '<div id="tbcopyright">Reactor ver 1.2develop &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>, All Rights Reserved. Please check out the <a href="https://www.toggledbits.com/reactor" target="_blank">online documentation</a> and <a href="http://forum.micasaverde.com/index.php/topic,87484.0.html" target="_blank">forum thread</a> for support.</div>';
 
-            // Push generated HTML to page
             api.setCpanelContent(html);
 
             redrawConditions();
