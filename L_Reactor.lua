@@ -318,6 +318,15 @@ local function plugin_runOnce( pdev )
     end
 end
 
+-- Return current house mode, or test house mode if set
+local function getHouseMode( tdev )
+    local mode = getVarNumeric( "TestHouseMode", 0, tdev, RSSID )
+    if mode == 0 then
+        mode = luup.attr_get( "Mode", 0 )
+    end
+    return mode
+end
+
 -- Find a condition hiding in a group (or is it?)
 local function findCondition( condid, cdata )
     for _,g in ipairs( cdata.conditions or {} ) do
@@ -400,7 +409,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
     elseif cond.type == "housemode" then
         hasTimer = true
         local modes = split( cond.value )
-        local mode = tostring( luup.attr_get( "Mode", 0 ) )
+        local mode = tostring( getHouseMode( tdev ) )
         cond.lastvalue = { value=mode, timestamp=now }
         D("evaluateCondition() housemode %1 among %2?", mode, modes)
         if not isOnList( modes, mode ) then return false,true end
@@ -799,8 +808,11 @@ local function evaluateConditions( tdev )
     end
 
     -- Mark a stable base of time
-    cdata.timebase = os.time()
-    cdata.timeparts = os.date("*t")
+    cdata.timebase = getVarNumeric( "TestTime", 0, tdev, RSSID )
+    if cdata.timebase == 0 then
+        cdata.timebase = os.time()
+    end
+    cdata.timeparts = os.date("*t", cdata.timebase)
     D("evaluateConditions() base time is %1 (%2)", cdata.timebase, cdata.timeparts)
 
     -- Evaluate all groups. Any group match is a pass.

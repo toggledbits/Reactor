@@ -1313,6 +1313,125 @@ var ReactorSensor = (function(api) {
     function doSettings()
     {
     }
+    
+    function handleTestChange( ev ) {
+        var container = jQuery('div.testfields');
+        var el = jQuery('input#testdateenable', container);
+        var vv = "";
+        if ( el.prop('checked') ) {
+            jQuery('select,input#testtime', el.closest('div.row')).prop('disabled', false);
+            var t = new Date();
+            t.setFullYear( jQuery('select#testyear', container).val() );
+            t.setMonth( parseInt( jQuery('select#testmonth', container).val() ) - 1 );
+            t.setDate( jQuery('select#testday', container).val() );
+            t.setSeconds( 0 );
+            var s = jQuery('input#testtime', container).val();
+            var p = ( s || "0:00" ).match( /^(\d+):(\d+)(:(\d+))?$/ );
+            if ( p !== null ) {
+                t.setHours( p[1] );
+                t.setMinutes( p[2] );
+                if ( p.length >= 5 && p[5] !== undefined ) {
+                    t.setSeconds( p[4] );
+                }
+            }
+            t.setMilliseconds( 0 );
+            vv = Math.floor( t.getTime() / 1000 );
+            if ( isNaN(vv) ) {
+                vv = "";
+            }
+        } else {
+            jQuery('select,input#testtime', el.closest('div.row')).prop('disabled', true);
+        }
+        api.setDeviceStatePersistent( api.getCpanelDeviceId(), serviceId, "TestTime", vv );
+        
+        el = jQuery('input#testhousemode', container);
+        if ( el.prop('checked') ) {
+            jQuery('select', el.closest('div.row')).prop('disabled', false);
+            vv = jQuery('select#mode').val();
+        } else {
+            jQuery('select', el.closest('div.row')).prop('disabled', true);
+            vv = "";
+        }
+        api.setDeviceStatePersistent( api.getCpanelDeviceId(), serviceId, "TestHouseMode", vv );
+    }
+    
+    function doTest()
+    {
+        var html = "";
+        
+        html = '<style>';
+        html += 'input.narrow { max-width: 8em; }';
+        html += '</style>';
+        jQuery('head').append( html );
+        
+        html = '<div class="testfields">';
+        html += '<div class="row form-inline">';
+        html += '<div class="col-sm-3 col-md-3"><label for="testdateenable"><input type="checkbox" value="1" id="testdateenable">&nbsp;Test&nbsp;Date:</label></div>';
+        html += '<div class="col-sm-9 col-md-9"><select id="testyear" class="form-control form-control-sm"></select><select id="testmonth" class="form-control form-control-sm"></select><select class="form-control form-control-sm" id="testday"></select><input class="narrow form-control form-control-sm" id="testtime"></div>';
+        html += '</div>'; /* row */
+        html += '<div class="row form-inline">';
+        html += '<div class="col-sm-3 col-md-3"><label for="testhousemode"><input type="checkbox" value="1" id="testhousemode">&nbsp;House&nbsp;Mode</label></div>';
+        html += '<div class="col-sm-9 col-md-9"><select class="form-control form-control-sm" id="mode"><option value="1">Home</option><option value="2">Away</option><option value="3">Night</option><option value="4">Vacation</option></select></div>';
+        html += '</div>'; /* row */
+        html += '<div class="row"><div class="col-sm-12 col-md-12">';
+        html += 'These settings allow you to force the date/time and house mode for testing your conditions. For example, turn on the "Test Date" checkbox above' +
+            ' and use the controls to set a date, then go back to the "Control" tab and press the "Restart" button to force a re-evaluation of the sensor state' +
+            ' using your selected date/time. <b>Remember to turn these settings off when you have finished testing!</b>';
+        html += '</div></div>';
+        html += '</div>'; /* .testfields */
+        
+        api.setCpanelContent( html );
+        
+        var container = jQuery('div.testfields');
+        var el = jQuery('select#testyear', container);
+        var i, vv;
+        var now = new Date();
+        vv = now.getFullYear() - 2;
+        for ( i=0; i<12; i++, vv++ ) {
+            el.append('<option value="' + vv + '">' + vv + '</option>');
+        }
+        el = jQuery('select#testmonth', container);
+        for ( i=1; i<=12; i++) {
+            el.append('<option value="' + i + '">' + monthName[ i ] + '</option>');
+        }
+        el = jQuery('select#testday', container);
+        for ( i=1; i<=31; i++) {
+            el.append('<option value="' + i + '">' + i + '</option>');
+        }
+        
+        /* Restore test date */
+        var s = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "TestTime" );
+        jQuery('input#testdateenable', container).prop('checked', false);
+        jQuery('select#testyear,select#testmonth,select#testday,input#testtime', container).prop('disabled', true);
+        if ( s !== "" ) {
+            s = parseInt( s );
+            if ( ! isNaN( s ) ) {
+                /* Test time spec overrides now */
+                now = new Date( s * 1000 );
+                jQuery('input#testdateenable', container).prop('checked', true);
+                jQuery('select#testyear,select#testmonth,select#testday,input#testtime', container).prop('disabled', false);
+            }
+        }
+        jQuery('select#testyear', container).on( 'change.reactor', handleTestChange ).val( now.getFullYear() );
+        jQuery('select#testmonth', container).on( 'change.reactor', handleTestChange ).val( now.getMonth() + 1 );
+        jQuery('select#testday', container).on( 'change.reactor', handleTestChange ).val( now.getDate() );
+        var mm = now.getMinutes();
+        jQuery('input#testtime', container).on( 'change.reactor', handleTestChange ).val( now.getHours() + ":" + ( mm < 10 ? '0' + mm : mm ) );
+        jQuery('input#testdateenable', container).on( 'click.reactor', handleTestChange );
+        
+        /* Restore test house mode */
+        var mode = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "TestHouseMode" );
+        jQuery('input#testhousemode', container).prop('checked', false);
+        jQuery('select#mode', container).prop('disabled', true);
+        if ( mode !== "" ) {
+            mode = parseInt( mode );
+            if ( ! isNaN( mode ) ) {
+                jQuery('input#testhousemode', container).prop('checked', true);
+                jQuery('select#mode', container).prop('disabled', false).val( mode );
+            }
+        }
+        jQuery('input#testhousemode,select#mode', container).on( 'change.reactor', handleTestChange );
+    }
 
     function updateStatus( pdev ) {
         var stel = jQuery('div#reactorstatus');
@@ -1526,6 +1645,7 @@ var ReactorSensor = (function(api) {
         initModule: initModule,
         onBeforeCpanelClose: onBeforeCpanelClose,
         onUIDeviceStatusChanged: onUIDeviceStatusChanged,
+        doTest: doTest,
         doSettings: doSettings,
         doConditions: doConditions,
         doStatusPanel: doStatusPanel
