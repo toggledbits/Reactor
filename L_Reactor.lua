@@ -596,7 +596,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         tpart[10] = iif( tparam[10] == "", tpart[5], tparam[10] )
 
         if tparam[2] == "" then
-            -- No date specified, only time components.
+            -- No date specified, only time components. Magnitude comparison.
             D("evaluateCondition() time-only comparison, now is %1, dt is %2", now, dt)
             local nowMSM = dt.hour * 60 + dt.min
             local startMSM = tonumber( tparam[4] ) * 60 + tonumber( tparam[5] )
@@ -622,27 +622,36 @@ local function evaluateCondition( cond, grp, cdata, tdev )
                     return false, true 
                 end
             end
-        else
-            if tparam[1] == "" then
-                -- No-year comparison, just month/day. If between, watch for year wraps.
-                if cond.condition == "bet" or cond.condition == "nob" then
-                    local stz = tonumber( tpart[2] )
-                    local enz = tonumber( tpart[7] )
-                    if enz < stz then
-                        -- End > start (e.g. Nov - Aug) Decrement start year
-                        tpart[1] = tonumber( tpart[6] ) - 1
-                    elseif stz == enz then
-                        -- Check days
-                        stz = tonumber( tpart[3] )
-                        enz = tonumber( tpart[8] )
-                        if enz < stz then
-                            tpart[1] = tonumber( tpart[1] ) - 1
-                        end
-                    end
+        elseif tparam[1] == "" then
+            -- No-year given, just M/D H:M. We can do comparison by magnitude,
+            -- which works better for year-spanning ranges.
+            local nowz = tonumber( dt.month ) * 100 + tonumber( dt.day )
+            local stz = tonumber( tpart[2] ) * 100 + tonumber( tpart[3] )
+            nowz = nowz * 3600 + dt.hour * 60 + dt.min
+            stz = stz * 3600 + tpart[4] * 60 + tpart[5]
+            if cond.condition == "before" then
+                D("evaluateCondition() M/D H:M test %1 %2 %3", nowz, cond.condition, stz)
+                if nowz >= stz then return false, true end
+            elseif cond.condition == "after" then   
+                D("evaluateCondition() M/D H:M test %1 %2 %3", nowz, cond.condition, stz)
+                if nowz < stz then return false, true end
+            else
+                local enz = tonumber( tpart[7] ) * 100 + tonumber( tpart[8] )
+                enz = enz * 3600 + tpart[9] * 60 + tpart[10]
+                D("evaluateCondition() M/D H:M test %1 %2 %3 and %4", nowz, cond.condition, stz, enz)
+                local between
+                if stz < enz then -- check for year-spanning
+                    between = nowz >= stz and nowz < enz
+                else
+                    between = nowz >= stz or nowz < enz
+                end
+                if ( cond.condition == "bet" and not between ) or
+                    ( cond.condition == "nob" and between ) then
+                    return false, true
                 end
             end
-            D("evaluateCondition() post-adjustments, tpart=%1", tpart)
-                
+        else
+            -- Full spec (Y-M-D H:M). Compare actual times (minute resolution).
             now = math.floor( now / 60 ) * 60
             local stt, ett
             stt = os.time{ year=tpart[1], month=tpart[2], day=tpart[3], hour=tpart[4], min=tpart[5] }
