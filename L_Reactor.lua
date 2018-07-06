@@ -12,7 +12,7 @@ local debugMode = false
 local _PLUGIN_NAME = "Reactor"
 local _PLUGIN_VERSION = "1.2develop"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
-local _CONFIGVERSION = 00103
+local _CONFIGVERSION = 00104
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -253,6 +253,7 @@ local function sensor_runOnce( tdev )
         luup.variable_set( RSSID, "Message", "", tdev )
         luup.variable_set( RSSID, "cdata", "", tdev )
         luup.variable_set( RSSID, "cstate", "", tdev )
+        luup.variable_set( RSSID, "ContinuousTimer", 0, tdev )
 
         luup.variable_set( SENSOR_SID, "Armed", 0, tdev )
         luup.variable_set( SENSOR_SID, "Tripped", 0, tdev )
@@ -273,6 +274,10 @@ local function sensor_runOnce( tdev )
         -- Fix up category and subcategory
         luup.attr_set('category_num', 4, tdev)
         luup.attr_set('subcategory_num', 1, tdev)
+    end
+    
+    if s < 00104 then
+        luup.variable_set( RSSID, "ContinuousTimer", 0, tdev )
     end
 
     -- Update version last.
