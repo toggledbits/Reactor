@@ -4,6 +4,7 @@
 
 * Deprecate current time condition and create new replacement with more definitive logic. First, the handling of sunrise/sunset are moved to their own condition, with offsets for each, and the possibility to test *after*, *before*, *between* and *not between*. The new date/time condition (internally 'trange' for time range) allows M/D/Y H:M, M/D H:M, or just H:M. The UI enforces these combinations. This reduces the number of combinations, many of which are difficult to make sense of explain in the old, unrestricted model. See documentation for detailed explanation.
 * Clean up the humam-readable form of the (now deprecated) old-style time condition (issue #2).
+* Show a disabled icon when a ReactorSensor is disabled.
 * Add UI to arm/disarm on dashboard and control panel.
 * Make sure category and subcategory are correctly set.
 
