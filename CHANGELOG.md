@@ -2,12 +2,14 @@
 
 ## Version 1.2 (develop branch)
 
-* Deprecate current time condition and create new replacement with more definitive logic. First, the handling of sunrise/sunset are moved to their own condition, with offsets for each, and the possibility to test *after*, *before*, *between* and *not between*. The new date/time condition (internally 'trange' for time range) allows M/D/Y H:M, M/D H:M, or just H:M. The UI enforces these combinations. This reduces the number of combinations, many of which are difficult to make sense of explain in the old, unrestricted model. See documentation for detailed explanation.
+* Deprecate current time condition and create new replacement with more definitive logic. First, the handling of sunrise/sunset is moved to its own condition, with offsets, and the possibility to test *after*, *before*, *between* and *not between*. The new date/time condition (internally 'trange' for time range) allows M/D/Y H:M, M/D H:M, or just H:M. The UI enforces these combinations. This reduces the number of combinations, many of which are difficult to make sense of explain in the old, unrestricted model. See documentation for detailed explanation.
+* Add "Runtime" state variable accumulating the total number of seconds a ReactorSensor has been in tripped state. Reset it using the ResetRuntime action or writing 0 to the state variable directly.
 * Implement "Test" tab with ability to set a fixed date and house mode, to help users test conditions (and help me test as well).
+* Implement rate-limiting for both updates and tripped state changes. The default is 30 updates or 5 tripped state changed per minute (configurable via service variables). Exceeding these rates throttles the sensor (it ignores input for a while). This is primarily to prevent an unwitting user from creating a sensor loop that overwhelmes the processor.
+* Add UI to arm/disarm on dashboard and control panel.
 * Clean up the humam-readable form of the (now deprecated) old-style time condition (issue #2).
 * Show a disabled icon when a ReactorSensor is disabled.
-* Add UI to arm/disarm on dashboard and control panel.
-* Make sure category and subcategory are correctly set.
+* Make sure category and subcategory are correctly set on new sensors.
 
 ## Version 1.1 (released) ##
 
