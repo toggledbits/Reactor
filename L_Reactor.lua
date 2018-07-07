@@ -7,7 +7,7 @@
 
 module("L_Reactor", package.seeall)
 
-local debugMode = false
+local debugMode = true
 
 local _PLUGIN_NAME = "Reactor"
 local _PLUGIN_VERSION = "1.2develop"
@@ -122,6 +122,16 @@ local function shallowCopy( t )
     return r
 end
 
+-- Initialize a variable if it does not already exist.
+local function initVar( name, dflt, dev, sid )
+    D("initVar(%1,%2,%3,%4)", name, dflt, dev, sid)
+    assert( dev ~= nil )
+    assert( sid ~= nil )
+    if luup.variable_get( sid, name, dev ) == nil then
+        luup.variable_set( sid, name, tostring(dflt), dev )
+    end
+end
+
 -- Get numeric variable, or return default value if not set or blank
 local function getVarNumeric( name, dflt, dev, sid )
     assert( dev ~= nil )
@@ -212,23 +222,12 @@ local function addEvent( t )
     p.time = os.date("%Y%m%dT%H%M%S")
     local dev = p.dev or pluginDevice
     table.insert( sensorState[tostring(dev)].eventList, p )
-    if #sensorState[tostring(dev)].eventList > 25 then table.remove(sensorState[tostring(dev)].eventList, 1) end
+    if #sensorState[tostring(dev)].eventList > 50 then table.remove(sensorState[tostring(dev)].eventList, 1) end
 end
 
 -- Enabled?
 local function isEnabled( dev )
     return getVarNumeric( "Enabled", 1, dev, RSSID ) ~= 0
-end
-
--- Delete a variable (if we can... read on...)
-local function deleteVar( sid, name, devid )
-    -- Interestingly, setting a variable to nil with luup.variable_set does nothing interesting; too bad, it
-    -- could have been used to delete variables, since a later get would yield nil anyway. But it turns out
-    -- that using the variableset Luup request with no value WILL delete the variable.
-    local sue = sid:gsub("([^%w])", function( c ) return string.format("%%%02x", string.byte(c)) end)
-    local req = "http://127.0.0.1/port_3480/data_request?id=variableset&DeviceNum=" .. tostring(devid) .. "&serviceId=" .. sue .. "&Variable=" .. name .. "&Value="
-    local status, result = luup.inet.wget(req)
-    D("deleteVar(%1,%2) status=%3, result=%4", name, devid, status, result)
 end
 
 -- Schedule a timer tick for a future (absolute) time. If the time is sooner than
@@ -311,21 +310,23 @@ local function sensor_runOnce( tdev )
         return
     elseif s == 0 then
         L("Sensor %1 (%2) first run, setting up new instance...", tdev, luup.devices[tdev].description)
-        luup.variable_set( RSSID, "Enabled", "1", tdev )
-        luup.variable_set( RSSID, "Invert", "0", tdev )
-        luup.variable_set( RSSID, "Retrigger", "0", tdev )
-        luup.variable_set( RSSID, "Message", "", tdev )
-        luup.variable_set( RSSID, "cdata", "", tdev )
-        luup.variable_set( RSSID, "cstate", "", tdev )
-        luup.variable_set( RSSID, "Runtime", 0, tdev )
-        luup.variable_set( RSSID, "ContinuousTimer", 0, tdev )
-        luup.variable_set( RSSID, "MaxUpdateRate", "", tdev )
-        luup.variable_set( RSSID, "MaxChangeRate", "", tdev )
+        initVar( "Enabled", "1", tdev, RSSID )
+        initVar( "Invert", "0", tdev, RSSID )
+        initVar( "Retrigger", "0", tdev, RSSID )
+        initVar( "Message", "", tdev, RSSID )
+        initVar( "cdata", "", tdev, RSSID )
+        initVar( "cstate", "", tdev, RSSID )
+        initVar( "Runtime", 0, tdev, RSSID )
+        initVar( "ContinuousTimer", 0, tdev, RSSID )
+        initVar( "MaxUpdateRate", "", tdev, RSSID )
+        initVar( "MaxChangeRate", "", tdev, RSSID )
 
-        luup.variable_set( SENSOR_SID, "Armed", 0, tdev )
-        luup.variable_set( SENSOR_SID, "Tripped", 0, tdev )
-        luup.variable_set( SENSOR_SID, "ArmedTripped", 0, tdev )
+        initVar( "Armed", 0, tdev, SENSOR_SID )
+        initVar( "Tripped", 0, tdev, SENSOR_SID )
+        initVar( "ArmedTripped", 0, tdev, SENSOR_SID )
+        initVar( "LastTrip", 0, tdev, SENSOR_SID )
 
+        -- Force this value.
         luup.variable_set( "urn:micasaverde-com:serviceId:HaDevice1", "ModeSetting", "1:;2:;3:;4:", tdev )
 
         -- Fix up category and subcategory
@@ -344,10 +345,10 @@ local function sensor_runOnce( tdev )
     end
     
     if s < 00105 then
-        luup.variable_set( RSSID, "ContinuousTimer", 0, tdev )
-        luup.variable_set( RSSID, "Runtime", 0, tdev )
-        luup.variable_set( RSSID, "MaxUpdateRate", "", tdev )
-        luup.variable_set( RSSID, "MaxChangeRate", "", tdev )
+        initVar( "ContinuousTimer", 0, tdev, RSSID )
+        initVar( "Runtime", 0, tdev, RSSID )
+        initVar( "MaxUpdateRate", "", tdev, RSSID )
+        initVar( "MaxChangeRate", "", tdev, RSSID )
     end
 
     -- Update version last.
@@ -366,10 +367,10 @@ local function plugin_runOnce( pdev )
         return
     elseif s == 0 then
         L("First run, setting up new plugin instance...")
-        luup.variable_set(MYSID, "NumChildren", 0, pdev)
-        luup.variable_set(MYSID, "NumRunning", 0, pdev)
-        luup.variable_set(MYSID, "Message", "", pdev)
-        luup.variable_set(MYSID, "DebugMode", 0, pdev)
+        initVar( "NumChildren", 0, pdev, MYSID )
+        initVar( "NumRunning", 0, pdev, MYSID )
+        initVar( "Message", "", pdev, MYSID )
+        initVar( "DebugMode", 0, pdev, MYSID )
 
         luup.attr_set('category_num', 1, pdev)
 
@@ -379,7 +380,7 @@ local function plugin_runOnce( pdev )
 
     -- Consider per-version changes.
     if s < 00102 then
-        luup.variable_set(MYSID, "DebugMode", 0, pdev)
+        initVar( "DebugMode", 0, pdev, MYSID )
     end
     
     if s < 00103 then
@@ -796,11 +797,13 @@ local function evaluateGroup( grp, cdata, tdev )
             if sensorState[skey].condState[cond.id] == nil then
                 D("evaluateGroup() new condition state for %1=%2", cond.id, state)
                 sensorState[skey].condState[cond.id] = { id=cond.id, laststate=state, statestamp=now }
+                addEvent{dev=tdev,event='condchange',cond=cond.id,newState=state}
             elseif state ~= sensorState[skey].condState[cond.id].laststate then
                 D("evaluateGroup() condition %1 value state changed from %1 to %2", sensorState[skey].condState[cond.id].laststate, state)
                 -- ??? At certain times, Vera gets a time that is in the future, or so it appears. It looks like the TZ offset isn't applied, randomly.
                 -- Maybe if call is during ntp update, don't know. Investigating... This log message helps detection and analysis.
                 if now < sensorState[skey].condState[cond.id].statestamp then L({level=1,msg="Time moved backwards! Sensor %4 cond %1 last change at %2, but time now %3"}, cond.id, sensorState[skey].condState[cond.id].statestamp, now, tdev) end
+                addEvent{dev=tdev,event='condchange',cond=cond.id,oldState=sensorState[skey].condState[cond.id].laststate,newState=state}
                 sensorState[skey].condState[cond.id].laststate = state
                 sensorState[skey].condState[cond.id].statestamp = now
             end
@@ -854,6 +857,7 @@ local function evaluateGroup( grp, cdata, tdev )
             if state ~= sensorState[skey].condState[cond.id].evalstate then
                 sensorState[skey].condState[cond.id].evalstate = state
                 sensorState[skey].condState[cond.id].evalstamp = now
+                addEvent{dev=tdev,event='evalchange',cond=cond.id,oldState=sensorState[skey].condState[cond.id].evalstate,newState=state}
             end
 
             D("evaluateGroup() cond %1 %2 final %3, group now %4", cond.id, cond.type, state, passed)
@@ -865,6 +869,7 @@ local function evaluateGroup( grp, cdata, tdev )
         or sensorState[skey].condState[grp.groupid].evalstate ~= passed
     then
         sensorState[skey].condState[grp.groupid] = { evalstate=passed, evalstamp=now }
+        addEvent{dev=tdev,event='groupchange',cond=grp.groupid,oldState=sensorState[skey].condState[grp.groupid].evalstate,newState=passed}
     end
     sensorState[skey].condState[grp.groupid].hastimer = hasTimer
 
@@ -956,6 +961,7 @@ local function updateSensor( tdev )
                 sensorState[tostring(tdev)].changeThrottled = false
                 L("%2 (#%1) tripped state now %3", tdev, luup.devices[tdev].description, newTrip)
                 luup.variable_set( SENSOR_SID, "Tripped", iif( newTrip, "1", "0" ), tdev )
+                addEvent{dev=tdev,event='sensorstate',state=newTrip}
                 if not newTrip then
                     -- Luup keeps (SecuritySensor1/)LastTrip, but we also keep LastReset
                     luup.variable_set( RSSID, "LastReset", now, tdev )
@@ -965,6 +971,7 @@ local function updateSensor( tdev )
                     L({level=2,msg="%2 (#%1) trip state changing too fast (%4 > %3/min)! Throttling..."},
                         tdev, luup.devices[tdev].description, maxTrip, rate60)
                     sensorState[tostring(tdev)].changeThrottled = true
+                    addEvent{dev=tdev,event='throttle',['type']='change',rate=rate60,limit=maxTrip}
                     setMessage( "Throttled! (high change rate)", tdev )
                 end
                 hasTimer = true -- force, so sensor gets checked later
@@ -981,6 +988,7 @@ local function updateSensor( tdev )
                 tdev, luup.devices[tdev].description, maxUpdate, rate60)
             setMessage( "Throttled! (high update rate)", tdev )
             sensorState[tostring(tdev)].updateThrottled = true
+            addEvent{dev=tdev,event='throttle',['type']='update',rate=rate60,limit=maxTrip}
         end
         hasTimer = true -- force, so sensor gets checked later.
 
@@ -1072,6 +1080,8 @@ local function startSensor( tdev, pdev )
     -- Clean and restore our condition state.
     sensorState[tostring(tdev)].condState = loadCleanState( tdev )
 
+    addEvent{dev=tdev,event='start'}
+    
     -- Watch our own cdata; when it changes, re-evaluate.
     luup.variable_watch( "reactorWatch", RSSID, "cdata", tdev )
 
