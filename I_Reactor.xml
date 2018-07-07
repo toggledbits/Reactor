@@ -51,6 +51,14 @@
             </job>
         </action>
         <action>
+            <serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
+            <name>ResetRuntime</name>
+            <run>
+                luup.variable_set( "urn:toggledbits-com:serviceId:ReactorSensor", "Runtime", "0", lul_device )
+                return true
+            </run>
+        </action>
+        <action>
             <serviceId>urn:micasaverde-com:serviceId:SecuritySensor1</serviceId>
             <name>SetArmed</name>
             <run>
