@@ -780,14 +780,14 @@ var ReactorSensor = (function(api) {
                 container.append(pp);
                 jQuery("select.condmenu", container).append('<option value="before">before</option>');
                 jQuery("select.condmenu", container).append('<option value="after">after</option>');
-                container.append('<div class="start">' +
+                container.append('<div class="start form-inline">' +
                     '<select id="sunstart" class="form-control form-control-sm"><option value="sunrise">sunrise</option><option value="sunset">sunset</option></select> '+
-                    '<label for="startoffset">offset <input type="text" id="startoffset" value="" class="narrow form-control form-control-sm"> minutes</label>' +
+                    ' offset&nbsp;<input type="text" id="startoffset" value="" class="narrow form-control form-control-sm">&nbsp;minutes' +
                     '</div>'
                 );
-                container.append('<div class="end"> and ' +
+                container.append('<div class="end form-inline"> and ' +
                     '<select id="sunend" class="form-control form-control-sm" id="value"><option value="sunrise">sunrise</option><option value="sunset">sunset</option></select> '+
-                    '<label for="endoffset">offset <input type="text" id="endoffset" value="" class="narrow form-control form-control-sm"> minutes</label>' +
+                    ' offset&nbsp;<input type="text" id="endoffset" value="" class="narrow form-control form-control-sm">&nbsp;minutes' +
                     '</div>'
                 );
                 /* Restore. Condition first... */
@@ -1365,18 +1365,20 @@ var ReactorSensor = (function(api) {
         jQuery('head').append( html );
         
         html = '<div class="testfields">';
-        html += '<div class="row form-inline">';
-        html += '<div class="col-sm-3 col-md-3"><label for="testdateenable"><input type="checkbox" value="1" id="testdateenable">&nbsp;Test&nbsp;Date:</label></div>';
-        html += '<div class="col-sm-9 col-md-9"><select id="testyear" class="form-control form-control-sm"></select><select id="testmonth" class="form-control form-control-sm"></select><select class="form-control form-control-sm" id="testday"></select><input class="narrow form-control form-control-sm" id="testtime"></div>';
+        html += '<div class="row">';
+        html += '<div class="col-sm-2 col-md-2"><label for="testdateenable"><input type="checkbox" value="1" id="testdateenable">&nbsp;Test&nbsp;Date:</label></div>';
+        html += '<div class="col-sm-10 col-md-10 form-inline"><select id="testyear" class="form-control form-control-sm"></select><select id="testmonth" class="form-control form-control-sm"></select><select class="form-control form-control-sm" id="testday"></select><input class="narrow form-control form-control-sm" id="testtime"></div>';
         html += '</div>'; /* row */
-        html += '<div class="row form-inline">';
-        html += '<div class="col-sm-3 col-md-3"><label for="testhousemode"><input type="checkbox" value="1" id="testhousemode">&nbsp;House&nbsp;Mode</label></div>';
-        html += '<div class="col-sm-9 col-md-9"><select class="form-control form-control-sm" id="mode"><option value="1">Home</option><option value="2">Away</option><option value="3">Night</option><option value="4">Vacation</option></select></div>';
+        html += '<div class="row">';
+        html += '<div class="col-sm-2 col-md-2"><label for="testhousemode"><input type="checkbox" value="1" id="testhousemode">&nbsp;House&nbsp;Mode</label></div>';
+        html += '<div class="col-sm-10 col-md-10 form-inline"><select class="form-control form-control-sm" id="mode"><option value="1">Home</option><option value="2">Away</option><option value="3">Night</option><option value="4">Vacation</option></select></div>';
         html += '</div>'; /* row */
         html += '<div class="row"><div class="col-sm-12 col-md-12">';
         html += 'These settings allow you to force the date/time and house mode for testing your conditions. For example, turn on the "Test Date" checkbox above' +
             ' and use the controls to set a date, then go back to the "Control" tab and press the "Restart" button to force a re-evaluation of the sensor state' +
-            ' using your selected date/time. <b>Remember to turn these settings off when you have finished testing!</b>';
+            ' using your selected date/time. <b>Remember to turn these settings off when you have finished testing!</b>' + 
+            '<p>&nbsp;</p>' +
+            '<p>Support links: <a href="https://www.toggledbits.com/reactor" target="_blank">Documentation</a> &bull; <a href="http://forum.micasaverde.com/index.php/topic,87484.0.html" target="_blank">Forum Thread</a> &bull; <a href="/port_3480/data_request?id=lr_Reactor&action=debug" target="_blank">Toggle Debug</a> &bull; <a href="/cgi-bin/cmh/log.sh?Device=LuaUPnP" target="_blank">Log File</a> &bull; <a href="/port_3480/data_request?id=lr_Reactor&action=status" target="_blank">Device Status</a></p>';
         html += '</div></div>';
         html += '</div>'; /* .testfields */
         
