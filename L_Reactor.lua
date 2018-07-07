@@ -12,7 +12,7 @@ local debugMode = false
 local _PLUGIN_NAME = "Reactor"
 local _PLUGIN_VERSION = "1.2develop"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
-local _CONFIGVERSION = 00104
+local _CONFIGVERSION = 00105
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -140,6 +140,70 @@ local function iif( cond, trueVal, falseVal )
     else return falseVal end
 end
 
+local function rateFill( rh, tt ) 
+    if tt == nil then tt = os.time() end
+    local id = math.floor(tt / rh.divid)
+    local minid = math.floor(( tt-rh.period ) / rh.divid) + 1
+    for i=minid,id do
+        if rh.buckets[tostring(i)] == nil then
+            rh.buckets[tostring(i)] = 0
+        end
+    end
+    local del = {}
+    for i in pairs(rh.buckets) do
+        if tonumber(i) < minid then
+            table.insert( del, i )
+        end
+    end
+    for i in ipairs(del) do
+        rh.buckets[del[i]] = nil
+    end
+end
+
+-- Initialize a rate-limiting pool and return in. rateTime is the period for
+-- rate limiting (default 60 seconds), and rateDiv is the number of buckets
+-- in the pool (granularity, default 15 seconds).
+local function initRate( rateTime, rateDiv )
+    -- D("initRate(%1,%2)", rateTime, rateDiv)
+    if rateTime == nil then rateTime = 60 end
+    if rateDiv == nil then rateDiv = 15 end
+    local rateTab = { buckets = { }, period = rateTime, divid = rateDiv }
+    rateFill( rateTab )
+    return rateTab
+end
+
+-- Bump rate-limit bucket (default 1 count)
+local function rateBump( rh, count )
+    local tt = os.time()
+    local id = math.floor(tt / rh.divid)
+    if count == nil then count = 1 end
+    rateFill( rh, tt )
+    rh.buckets[tostring(id)] = rh.buckets[tostring(id)] + count
+end
+    
+-- Check rate limit. Return true if rate for period (set in init)
+-- exceeds rateMax, rate over period, and 60-second average.
+local function rateLimit( rh, rateMax, bump)
+    -- D("rateLimit(%1,%2,%3)", rh, rateMax, bump)
+    if bump == nil then bump = false end
+    if bump then
+        rateBump( rh, 1 ) -- bump fills for us
+    else
+        rateFill( rh )
+    end
+        
+    -- Get rate
+    local nb = 0
+    local t = 0
+    for i in pairs(rh.buckets) do
+        t = t + rh.buckets[i]
+        nb = nb + 1
+    end
+    local r60 = iif( nb < 1, 0, t / ( rh.divid * nb ) ) * 60.0 -- 60-sec average
+    D("rateLimit() rate is %1 over %4 from %2 buckets, %3/minute avg", t, nb, r60, rh.divid*nb)
+    return t > rateMax, t, r60
+end
+
 -- Add an event to the event list. Prune the list for size.
 local function addEvent( t )
     local p = shallowCopy(t)
@@ -253,7 +317,10 @@ local function sensor_runOnce( tdev )
         luup.variable_set( RSSID, "Message", "", tdev )
         luup.variable_set( RSSID, "cdata", "", tdev )
         luup.variable_set( RSSID, "cstate", "", tdev )
+        luup.variable_set( RSSID, "Runtime", 0, tdev )
         luup.variable_set( RSSID, "ContinuousTimer", 0, tdev )
+        luup.variable_set( RSSID, "MaxUpdateRate", "", tdev )
+        luup.variable_set( RSSID, "MaxChangeRate", "", tdev )
 
         luup.variable_set( SENSOR_SID, "Armed", 0, tdev )
         luup.variable_set( SENSOR_SID, "Tripped", 0, tdev )
@@ -276,8 +343,11 @@ local function sensor_runOnce( tdev )
         luup.attr_set('subcategory_num', 1, tdev)
     end
     
-    if s < 00104 then
+    if s < 00105 then
         luup.variable_set( RSSID, "ContinuousTimer", 0, tdev )
+        luup.variable_set( RSSID, "Runtime", 0, tdev )
+        luup.variable_set( RSSID, "MaxUpdateRate", "", tdev )
+        luup.variable_set( RSSID, "MaxChangeRate", "", tdev )
     end
 
     -- Update version last.
@@ -847,19 +917,74 @@ local function updateSensor( tdev )
         D("updateSensor() disabled; no action")
         return
     end
+    
+    -- Check throttling for update rate
+    local hasTimer = false
+    local maxUpdate = getVarNumeric( "MaxUpdateRate", 30, tdev, RSSID )
+    local _, _, rate60 = rateLimit( sensorState[tostring(tdev)].updateRate, maxUpdate, false )
+    if maxUpdate == 0 or rate60 <= maxUpdate then
+        rateBump( sensorState[tostring(tdev)].updateRate )
+        sensorState[tostring(tdev)].updateThrottled = false
+        
+        -- Update state (if changed)
+        local currTrip = getVarNumeric( "Tripped", 0, tdev, SENSOR_SID ) ~= 0
+        local retrig = getVarNumeric( "Retrigger", 0, tdev, RSSID ) ~= 0
+        local invert = getVarNumeric( "Invert", 0, tdev, RSSID ) ~= 0
+        local newTrip
+        newTrip, hasTimer = evaluateConditions( tdev )
+        if invert then newTrip = not newTrip end
+        D("updateSensor() trip %4was %1 now %2, retrig %3", currTrip, newTrip,
+            retrig, iif( invert, "(inverted) ", "" ) )
+            
+        -- Update runtime based on last status
+        local now = os.time()
+        local lastUpdate = getVarNumeric( "lastacc", now, tdev, RSSID )
+        if currTrip then
+            -- Update accumulated trip time
+            local delta = now - lastUpdate
+            luup.variable_set( RSSID, "Runtime", getVarNumeric( "Runtime", 0, tdev, RSSID  ) + delta, tdev )
+        end
+        luup.variable_set( RSSID, "lastacc", now, tdev )
+        
+        -- Set tripped state based on change in status.
+        if currTrip ~= newTrip or ( newTrip and retrig ) then
+            -- Changed, or retriggerable.
+            local maxTrip = getVarNumeric( "MaxChangeRate", 5, tdev, RSSID )
+            _, _, rate60 = rateLimit( sensorState[tostring(tdev)].changeRate, maxTrip, false )
+            if maxTrip == 0 or rate60 <= maxTrip then
+                rateBump( sensorState[tostring(tdev)].changeRate )
+                sensorState[tostring(tdev)].changeThrottled = false
+                L("%2 (#%1) tripped state now %3", tdev, luup.devices[tdev].description, newTrip)
+                luup.variable_set( SENSOR_SID, "Tripped", iif( newTrip, "1", "0" ), tdev )
+                if not newTrip then
+                    -- Luup keeps (SecuritySensor1/)LastTrip, but we also keep LastReset
+                    luup.variable_set( RSSID, "LastReset", now, tdev )
+                end
+            else
+                if not sensorState[tostring(tdev)].changeThrottled then
+                    L({level=2,msg="%2 (#%1) trip state changing too fast (%4 > %3/min)! Throttling..."},
+                        tdev, luup.devices[tdev].description, maxTrip, rate60)
+                    sensorState[tostring(tdev)].changeThrottled = true
+                    setMessage( "Throttled! (high change rate)", tdev )
+                end
+                hasTimer = true -- force, so sensor gets checked later
+            end
+        end
+        if not sensorState[tostring(tdev)].changeThrottled then
+            setMessage( iif( newTrip, "Tripped", "Not tripped" ), tdev )
+        end
 
-    -- Update state (if changed)
-    local currTrip = getVarNumeric( "Tripped", 0, tdev, SENSOR_SID ) ~= 0
-    local newTrip, hasTimer = evaluateConditions( tdev )
-    local retrig = getVarNumeric( "Retrigger", 0, tdev, RSSID ) ~= 0
-    local invert = getVarNumeric( "Invert", 0, tdev, RSSID ) ~= 0
-    D("updateSensor() trip %4was %1 now %2, retrig %3", currTrip, newTrip,
-        retrig, iif( invert, "(inverted) ", "" ) )
-    if currTrip ~= newTrip or ( newTrip and retrig ) then
-        -- Changed, or retriggerable.
-        luup.variable_set( SENSOR_SID, "Tripped", iif( newTrip, 1, 0 ), tdev )
+    else 
+
+        if not sensorState[tostring(tdev)].updateThrottled then
+            L({level=2,msg="%2 (#%1) updating too fast (%4 > %3/min)! Throttling..."}, 
+                tdev, luup.devices[tdev].description, maxUpdate, rate60)
+            setMessage( "Throttled! (high update rate)", tdev )
+            sensorState[tostring(tdev)].updateThrottled = true
+        end
+        hasTimer = true -- force, so sensor gets checked later.
+
     end
-    setMessage( iif( newTrip, "Tripped", "Not tripped" ), tdev )
 
     -- ForcePoll??? Not yet implemented.
     local forcePoll = getVarNumeric( "ForcePoll", 0, tdev, RSSID )
@@ -939,7 +1064,11 @@ local function startSensor( tdev, pdev )
 
     -- Initialize instance data
     sensorState[tostring(tdev)] = { eventList={}, condState={} }
-
+    sensorState[tostring(tdev)].updateRate = initRate( 60, 15 )
+    sensorState[tostring(tdev)].updateThrottled = false
+    sensorState[tostring(tdev)].changeRate = initRate( 60, 15 )
+    sensorState[tostring(tdev)].changeThrottled = false
+    
     -- Clean and restore our condition state.
     sensorState[tostring(tdev)].condState = loadCleanState( tdev )
 
@@ -1184,7 +1313,7 @@ function tick(p)
     for _,t in ipairs(todo) do
         local success, err = pcall( sensorTick, t )
         if not success then
-            L("Sensor %1 (%2) tick failed: %3", t, luup.devices[t].description, err)
+            L({level=1,msg="Sensor %1 (%2) tick failed: %3"}, t, luup.devices[t].description, err)
         else
             D("tick() successful return from sensorTick(%1)", t)
         end
