@@ -1,6 +1,14 @@
 {
     "default_icon": "https://www.toggledbits.com/assets/reactor/reactorsensor-default.png",
     "state_icons": [{
+        "img": "https://www.toggledbits.com/assets/reactor/reactorsensor-disabled.png",
+        "conditions": [{
+            "service": "urn:toggledbits-com:serviceId:ReactorSensor",
+            "variable": "Enabled",
+            "operator": "!=",
+            "value": "1"
+        }]
+    },{
         "img": "https://www.toggledbits.com/assets/reactor/reactorsensor-tripped.png",
         "conditions": [{
             "service": "urn:micasaverde-com:serviceId:SecuritySensor1",
@@ -165,7 +173,64 @@
                     ]
                 },
                 {
-                    "ControlGroup": 2,
+                    "ControlGroup": 1,
+                    "ControlType": "multi_state_button",
+                    "top": "0",
+                    "left": "4",
+                    "Display": {
+                        "Top": 30,
+                        "Left": 320,
+                        "Width": 70,
+                        "Height": 24
+                    },
+                    "states": [{
+                            "Label": {
+                                "lang_tag": "ui7_cmd_arm",
+                                "text": "Armed"
+                            },
+                            "Display": {
+                                "Service": "urn:micasaverde-com:serviceId:SecuritySensor1",
+                                "Variable": "Armed",
+                                "Value": "1"
+                            },
+                            "Command": {
+                                "Service": "urn:micasaverde-com:serviceId:SecuritySensor1",
+                                "Action": "SetArmed",
+                                "Parameters": [{
+                                    "Name": "newArmedValue",
+                                    "Value": "1"
+                                }]
+                            },
+                            "ControlCode": "arm_armed"
+                        },
+                        {
+                            "Label": {
+                                "lang_tag": "ui7_cmd_bypass",
+                                "text": "Disarmed"
+                            },
+                            "Display": {
+                                "Service": "urn:micasaverde-com:serviceId:SecuritySensor1",
+                                "Variable": "Armed",
+                                "Value": "0"
+                            },
+                            "Command": {
+                                "Service": "urn:micasaverde-com:serviceId:SecuritySensor1",
+                                "Action": "SetArmed",
+                                "Parameters": [{
+                                    "Name": "newArmedValue",
+                                    "Value": "0"
+                                }]
+                            },
+                            "ControlCode": "arm_disarmed"
+                        }
+                    ]
+                },
+                {
+                    "ControlGroup": "1",
+                    "ControlType": "line_break"
+                },
+                {
+                    "ControlGroup": 1,
                     "ControlType": "variable",
                     "top": "1",
                     "left": "0",
@@ -216,10 +281,22 @@
         },
         {
             "Label": {
+                "lang_tag": "tb_reactorsensor_doTest",
+                "text": "Test"
+            },
+            "Position": "2",
+            "TabType": "javascript",
+            "top_navigation_tab": 1,
+            "TopNavigationTab": 1,
+            "ScriptName": "J_ReactorSensor_UI7.js",
+            "Function": "ReactorSensor.doTest"
+        },
+        {
+            "Label": {
                 "lang_tag": "ui7_advanced",
                 "text": "Advanced"
             },
-            "Position": "2",
+            "Position": "3",
             "TabType": "javascript",
             "ScriptName": "shared.js",
             "Function": "advanced_device"
@@ -229,7 +306,7 @@
                 "lang_tag": "ui7_logs",
                 "text": "Logs"
             },
-            "Position": "3",
+            "Position": "4",
             "TabType": "javascript",
             "ScriptName": "shared.js",
             "Function": "device_logs"
@@ -239,7 +316,7 @@
                 "lang_tag": "ui7_notifications",
                 "text": "Notifications"
             },
-            "Position": "4",
+            "Position": "5",
             "TabType": "javascript",
             "ScriptName": "shared.js",
             "Function": "device_notifications"
@@ -249,7 +326,7 @@
                 "lang_tag": "ui7_device_scenes",
                 "text": "Scenes"
             },
-            "Position": "5",
+            "Position": "6",
             "TabType": "javascript",
             "ScriptName": "shared.js",
             "Function": "device_scenes"
