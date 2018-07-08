@@ -10,7 +10,7 @@ module("L_Reactor", package.seeall)
 local debugMode = false
 
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "1.2RC1"
+local _PLUGIN_VERSION = "1.2"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _CONFIGVERSION = 00105
 
@@ -988,7 +988,7 @@ local function updateSensor( tdev )
                 tdev, luup.devices[tdev].description, maxUpdate, rate60)
             setMessage( "Throttled! (high update rate)", tdev )
             sensorState[tostring(tdev)].updateThrottled = true
-            addEvent{dev=tdev,event='throttle',['type']='update',rate=rate60,limit=maxTrip}
+            addEvent{dev=tdev,event='throttle',['type']='update',rate=rate60,limit=maxUpdate}
         end
         hasTimer = true -- force, so sensor gets checked later.
 
