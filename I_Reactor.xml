@@ -4,7 +4,7 @@
         -- --------------------------------------------------------------------
         -- Reactor
         -- Copyright 2018 Patrick H. Rigney, All Rights Reserved.
-        -- https://www.toggledbits.com/
+        -- https://www.toggledbits.com/reactor
         -- --------------------------------------------------------------------
         function startupReactor(devNum)
             luup.log("Reactor STARTUP!")
@@ -49,6 +49,14 @@
                 Reactor.actionRestart( lul_device )
                 return 4,0
             </job>
+        </action>
+        <action>
+            <serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
+            <name>ResetRuntime</name>
+            <run>
+                luup.variable_set( "urn:toggledbits-com:serviceId:ReactorSensor", "Runtime", "0", lul_device )
+                return true
+            </run>
         </action>
         <action>
             <serviceId>urn:micasaverde-com:serviceId:SecuritySensor1</serviceId>
