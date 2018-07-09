@@ -452,7 +452,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         D("evaluateCondition() %1: %2/%3 %4%5%6?", cond.type, cond.service, cond.variable, vv, cond.condition, cv)
         if cond.condition == "=" then
             if vv ~= cv then return false end
-        elseif cond.condition == "<>" then
+        elseif cond.condition == "<>" or cond.condition == "><" then
             if vv == cv then return false end
         elseif cond.condition == ">" then
             if vn == nil or cn == nil or vn <= cn then return false end
@@ -815,6 +815,10 @@ local function evaluateGroup( grp, cdata, tdev )
                 sensorState[skey].condState[cond.id].valuestamp = now
             end
 
+            -- TODO??? Sort conditions by sequence/predecessor, so they are evaluated in the
+            -- order needed, and use evalstamp rather than statestamp for all work below.
+            -- That sort should also be able to detect loops.
+            
             -- Check for predecessor/sequence
             if state and ( cond.after or "" ) ~= "" then
                 -- Sequence; this condition must become true after named sequence becomes true

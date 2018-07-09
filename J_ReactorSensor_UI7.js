@@ -384,7 +384,7 @@ var ReactorSensor = (function(api) {
     function makeServiceConditionMenu( cond ) {
         var el = jQuery('<select class="condmenu form-control form-control-sm pull-left"></select>');
         el.append('<option value="=">equals</option>');
-        el.append( '<option value="&gt;&lt;">not equals</option>' );
+        el.append( '<option value="&lt;&gt;">not equals</option>' );
         el.append( '<option value="&lt;">&lt;</option>' );
         el.append( '<option value="&lt;=">&lt;=</option>' );
         el.append( '<option value="&gt;">&gt;</option>' );
@@ -395,6 +395,7 @@ var ReactorSensor = (function(api) {
         el.append( '<option value="in">in</option>' );
 
         if ( undefined !== cond ) {
+            if ( cond == '><' ) { cond = '<>'; configModified = true; }
             el.val( cond );
         }
         return el;
