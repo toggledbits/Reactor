@@ -403,6 +403,58 @@ local function getHouseMode( tdev )
     return mode
 end
 
+local function stopScene( tdev )
+    luup.variable_set( RSSID, "scene", "", tdev )
+end
+
+local function runScene( scd, tdev )
+    D("runScene(%1,%2)", scd, tdev )
+    
+    local now = os.time()
+    
+    -- Check if scene running. If not, set up and run first scene group (maybe).
+    local sceneState = split( luup.variable_get( RSSID, "scene", tdev ) or "" )
+    -- sceneState: scene_id,execution_start,last_completed_group
+    if sceneState[1] == "" or tonumber( sceneState[1] ) ~= scd.id then
+        sceneState = { scd.id, now, 0 }
+        luup.variable_set( RSSID, "scene", sceneState:concat(','), tdev )
+        scd.groups:sort( function( a, b ) return a.delay < b.delay end )
+    end
+    local nextGroup = ( tonumber( sceneState[3] ) or 0 ) + 1
+    while nextGroup <= #scd.groups do 
+        -- Wait?
+        local tt = tonumber( sceneState[2] ) + scd.groups[nextGroup].delay
+        if tt > now then 
+            -- It's not time yet
+            local delay = tt - now
+            scheduleDelay( delay, false, tdev )
+            return
+        end
+        
+        -- Run this group.
+        for _,action in ipairs( scd.groups[nextGroup].actions or {} ) do
+            local devnum = tonumber( action.device )
+            if devnum == nil or luup.devices[devnum] == nil then
+                L({level=2,msg="%5 (%6): invalid device number (%4) in scene %1 (%2) group %3; skipping action."},
+                    scd.id, scd.name, nextGroup, action.device, tdev, luup.devices[tdev].description)
+            else
+                local param = {}
+                for k,p in ipairs( action.arguments or {} ) do
+                    param[p.name or tostring(k)] = p.value
+                end
+                D("runScene() dev %4 (%5) do %1/%2(%3)", action.service, action.action,
+                    param, devnum)
+                luup.call_action( action.service, action.action, param, devnum )
+            end
+        end
+        luup.variable_set( RSSID, "scene", sceneState:concat(','), tdev )
+        nextGroup = nextGroup + 1
+    end
+
+    D("runScene() reached end of scene %1 (%2)", scd.id, scd.name)
+    stopScene( tdev )
+end
+
 -- Find a condition hiding in a group (or is it?)
 local function findCondition( condid, cdata )
     for _,g in ipairs( cdata.conditions or {} ) do
@@ -970,6 +1022,7 @@ local function updateSensor( tdev )
                     -- Luup keeps (SecuritySensor1/)LastTrip, but we also keep LastReset
                     luup.variable_set( RSSID, "LastReset", now, tdev )
                 end
+                
             else
                 if not sensorState[tostring(tdev)].changeThrottled then
                     L({level=2,msg="%2 (#%1) trip state changing too fast (%4 > %3/min)! Throttling..."},
