@@ -452,7 +452,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         D("evaluateCondition() %1: %2/%3 %4%5%6?", cond.type, cond.service, cond.variable, vv, cond.condition, cv)
         if cond.condition == "=" then
             if vv ~= cv then return false end
-        elseif cond.condition == "<>" then
+        elseif cond.condition == "<>" or cond.condition == "><" then
             if vv == cv then return false end
         elseif cond.condition == ">" then
             if vn == nil or cn == nil or vn <= cn then return false end
