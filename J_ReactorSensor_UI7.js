@@ -1371,11 +1371,13 @@ var ReactorSensor = (function(api) {
         html += '<div class="col-sm-10 col-md-10 form-inline"><select id="testyear" class="form-control form-control-sm"></select><select id="testmonth" class="form-control form-control-sm"></select><select class="form-control form-control-sm" id="testday"></select><input class="narrow form-control form-control-sm" id="testtime"></div>';
         html += '</div>'; /* row */
         html += '<div class="row">';
-        html += '<div class="col-sm-2 col-md-2"><label for="testhousemode"><input type="checkbox" value="1" id="testhousemode">&nbsp;House&nbsp;Mode</label></div>';
+        html += '<div class="col-sm-2 col-md-2"><label for="testhousemode"><input type="checkbox" value="1" id="testhousemode">&nbsp;Test&nbsp;House&nbsp;Mode</label></div>';
         html += '<div class="col-sm-10 col-md-10 form-inline"><select class="form-control form-control-sm" id="mode"><option value="1">Home</option><option value="2">Away</option><option value="3">Night</option><option value="4">Vacation</option></select></div>';
         html += '</div>'; /* row */
         html += '<div class="row"><div class="col-sm-12 col-md-12">';
-        html += 'These settings allow you to force the date/time and house mode for testing your conditions. For example, turn on the "Test Date" checkbox above' +
+        html += 'These setting do not change system configuration.' +
+            ' They override the system values when your ReactorSensor requests them, allowing you to more easily test your conditions.' +
+            ' For example, turn on the "Test Date" checkbox above' +
             ' and use the controls to set a date, then go back to the "Control" tab and press the "Restart" button to force a re-evaluation of the sensor state' +
             ' using your selected date/time. <b>Remember to turn these settings off when you have finished testing!</b>' + 
             '<p>&nbsp;</p>' +
