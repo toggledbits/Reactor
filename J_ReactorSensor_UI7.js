@@ -46,6 +46,7 @@ var ReactorSensor = (function(api) {
     /* Initialize the module */
     function initModule() {
         configModified = false;
+        var myid = api.getCpanelDeviceId();
 
         /* Make device-indexed version of userdata devices, which is just an array */
         var ud = api.getUserData();
@@ -55,7 +56,7 @@ var ReactorSensor = (function(api) {
         }
 
         /* Get the config and parse it */
-        var s = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "cdata" ) || "";
+        var s = api.getDeviceState( myid, serviceId, "cdata" ) || "";
         if ( s.length !== 0 ) {
             try {
                 cdata = JSON.parse( s );
@@ -88,6 +89,8 @@ var ReactorSensor = (function(api) {
         var noroom = { "id": 0, "name": "No Room", "devices": [] };
         rooms[noroom.id] = noroom;
         var dd = devices.sort( function( a, b ) {
+            if ( a.id == myid ) return -1;
+            if ( b.id == myid ) return 1;
             if ( a.name.toLowerCase() === b.name.toLowerCase() ) {
                 return a.id < b.id ? -1 : 1;
             }
@@ -95,7 +98,11 @@ var ReactorSensor = (function(api) {
         });
         for (var i=0; i<dd.length; i+=1) {
             var devobj = api.cloneObject( dd[i] );
-            devobj.friendlyName = "#" + devobj.id + " " + devobj.name;
+            if ( devobj.id === myid ) {
+                devobj.friendlyName = "(self)";
+            } else {
+                devobj.friendlyName = "#" + devobj.id + " " + devobj.name;
+            }
             deviceByNumber[devobj.id] = devobj;
 
             var roomid = devobj.room || 0;
@@ -306,9 +313,6 @@ var ReactorSensor = (function(api) {
                 var first = true; /* per-room first */
                 for (var j=0; j<roomObj.devices.length; ++j) {
                     var devid = roomObj.devices[j].id;
-                    if ( devid == myid ) {
-                        continue;
-                    }
                     if (first)
                         el.append( "<option disabled>--" + roomObj.name + "--</option>" );
                     first = false;
@@ -336,11 +340,15 @@ var ReactorSensor = (function(api) {
      */
     function makeVariableMenu( device, service, variable ) {
         var el = jQuery('<select class="varmenu form-control form-control-sm pull-left"></select>');
-
+        var myid = api.getCpanelDeviceId();
         var devobj = udByDevNum[parseInt(device)];
         if ( undefined !== devobj ) {
             var mm = {}, ms = [];
             for ( var k=0; k<devobj.states.length; ++k ) {
+                /* For self-reference, only allow variables created from configured expressions */
+                if ( device == myid && devobj.states[k].service != "urn:toggledbits-com:serviceId:ReactorValues" ) {
+                    continue;
+                }
                 if ( mm[devobj.states[k].variable.toLowerCase()] === undefined ) {
                     /* Just use variable name as menu text, unless multiple with same name (collision) */
                     mm[devobj.states[k].variable.toLowerCase()] = ms.length;
@@ -368,6 +376,9 @@ var ReactorSensor = (function(api) {
             r.forEach( function( sv ) {
                 el.append( '<option value="' + sv.service + '/' + sv.variable + '">' + sv.text + '</option>' );
             });
+            if ( 0 === r.length ) {
+                el.append( '<option value="" disabled>(no eligible variables)</option>' );
+            }
         }
 
         if ( ( service || "" ) !== "" && ( variable || "" ) !== "" ) {
