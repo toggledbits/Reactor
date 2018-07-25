@@ -101,6 +101,8 @@ local function checkVersion(dev)
         end
         return true
     end
+    L({level=1,msg="firmware %1 (%2.%3.%4) not compatible"}, luup.version,
+        luup.version_branch, luup.version_major, luup.version_minor)
     return false
 end
 
@@ -1200,7 +1202,7 @@ function startPlugin( pdev )
     if not checkVersion( pdev ) then
         L({level=1,msg="This plugin does not run on this firmware."})
         luup.set_failure( 1, pdev )
-        return false, "Incompatible firmware", _PLUGIN_NAME
+        return false, "Incompatible firmware " .. luup.version, _PLUGIN_NAME
     end
 
     -- One-time stuff
