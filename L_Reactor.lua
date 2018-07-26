@@ -7,7 +7,7 @@
 
 module("L_Reactor", package.seeall)
 
-local debugMode = true
+local debugMode = false
 
 local _PLUGIN_NAME = "Reactor"
 local _PLUGIN_VERSION = "1.3develop"
@@ -37,15 +37,21 @@ local isOpenLuup = false
 local json = require("dkjson")
 if json == nil then json = require("json") end
 if json == nil then luup.log(_PLUGIN_NAME .. " cannot load JSON library, exiting.", 1) return end
+local luaxp -- will only be loaded if needed
 
-local function dump(t)
+local function dump(t, seen)
     if t == nil then return "nil" end
+    if seen == nil then seen = {} end
     local sep = ""
     local str = "{ "
     for k,v in pairs(t) do
         local val
         if type(v) == "table" then
-            val = dump(v)
+            if seen[v] then val = "(recursion)"
+            else
+                seen[v] = true
+                val = dump(v, seen)
+            end
         elseif type(v) == "function" then
             val = "(function)"
         elseif type(v) == "string" then
@@ -478,10 +484,23 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
             tdev, luup.devices[tdev].description, vname)
         return
     end
-    local luaxp = require("L_LuaXP")
-    if luaxp._VNUMBER == nil or luaxp._VNUMBER < 000906 then
-        L({level=2,msg="Warning! The luaxp module fopund by Reactor is out of date. Some expression evaluation features may not be available (%1/%2)"},
-            luaxp._VERSION, luaxp._VNUMBER)
+    if luaxp == nil then
+        luaxp = require("L_LuaXP_Reactor")
+        if type(luaxp) == "string" then
+            L({level=2,msg="Can't load L_LuaXP_Reactor (%1); falling back to L_LuaXP if I can..."},
+                luaxp)
+            luaxp = require("L_LuaXP")
+        end
+        if type(luaxp) ~= "table" then
+            L{level=1,msg="Failed to load LuaXP module. Expression evaluation not possible."}
+            return
+        end
+        if luaxp._VNUMBER == nil or luaxp._VNUMBER < 000906 then
+            L({level=2,msg="Warning! The LuaXP module found by Reactor is out of date. Some expression evaluation features may not be available (%1/%2)"},
+                luaxp._VERSION, luaxp._VNUMBER)
+        else
+            D("evaluateVariable() loaded LuaXP %1/%2", luaxp._VERSION, luaxp._VNUMBER)
+        end
     end
     -- if debugMode then luaxp._DEBUG = D end
     ctx.NULL = luaxp.NULL
@@ -497,11 +516,13 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
         local oldVal = luup.variable_get( VARSID, vname, tdev )
         if oldVal == nil or oldVal ~= result then
             luup.variable_set( VARSID, vname, tostring(result or ""), tdev )
+            luup.variable_set( VARSID, vname .. "_Error", "", tdev )
         end
     else
         L({level=2,msg="%2 (%1) failed evaluation of %3: result=%4, err=%5"}, tdev, luup.devices[tdev].description,
             vdef.expression, result, err)
         ctx[vname] = luaxp.NULL
+        luup.variable_set( VARSID, vname .. "_Error", err, tdev )
         return nil, err
     end
     return result, false
@@ -1287,6 +1308,7 @@ function startPlugin( pdev )
     -- Debug?
     if getVarNumeric( "DebugMode", 0, pdev, MYSID ) ~= 0 then
         debugMode = true
+        D("startPlugin() debug enabled by state variable DebugMode")
     end
 
     -- Check for ALTUI and OpenLuup
