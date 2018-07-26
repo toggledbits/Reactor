@@ -7,7 +7,7 @@
 -- Github: https://github.com/toggledbits/luaxp
 ------------------------------------------------------------------------
 
-module("L_LuaXP", package.seeall)
+module("L_LuaXP_Reactor", package.seeall)
 
 local _M = {}
 
