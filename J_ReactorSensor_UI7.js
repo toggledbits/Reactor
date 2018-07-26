@@ -42,6 +42,15 @@ var ReactorSensor = (function(api) {
         lastx = newx;
         return ( prefix === undefined ? "" : prefix ) + newx.toString(16);
     }
+    
+    /* Evaluate input string as integer, strict (no non-numeric chars allowed other than leading/trailing whitespace, empty string fails). */
+    function getInteger( s ) {
+        s = String(s).replace( /^\s+|\s+$/gm, '' );
+        if ( s.match( /^[0-9]+$/ ) ) {
+            return parseInt( s );
+        }
+        return NaN;
+    }
 
     /* Load configuration data */
     function loadConfigData( myid ) {
@@ -448,8 +457,9 @@ var ReactorSensor = (function(api) {
 
         /* Disable "Add Group" button with same conditions. */
         jQuery('button#addgroup').attr('disabled', nset );
-
-        jQuery('button#saveconf').attr('disabled', !configModified);
+        
+        var errors = jQuery('.tberror');
+        jQuery('button#saveconf').attr('disabled', ! ( configModified && errors.length === 0 ) );
         jQuery('button#revertconf').attr('disabled', !configModified);
 
         /* Up/down tools for conditions enabled except up for first and down
@@ -573,7 +583,7 @@ var ReactorSensor = (function(api) {
                 res = [];
                 var whence = jQuery('div.params select#sunstart', row).val() || "sunrise";
                 var offset = jQuery('div.params input#startoffset', row).val() || "0";
-                offset = parseInt( offset );
+                offset = getInteger( offset );
                 if ( isNaN( offset ) ) {
                     /* Validation error, flag and treat as 0 */
                     offset = 0;
@@ -582,7 +592,7 @@ var ReactorSensor = (function(api) {
                 if ( cond.operator == "bet" || cond.operator == "nob" ) {
                     jQuery( 'div.end', row ).show();
                     whence = jQuery('select#sunend', row).val() || "sunset";
-                    offset = parseInt( jQuery('input#endoffset', row).val() || "0" );
+                    offset = getInteger( jQuery('input#endoffset', row).val() || "0" );
                     if ( isNaN( offset ) ) {
                         offset = 0;
                     }
@@ -651,23 +661,75 @@ var ReactorSensor = (function(api) {
                 configModified = true;
             }
         }
-
+        
+        var rc = jQuery('input.rcount', row);
+        if ( "" === rc.val() || rc.prop('disabled') ) {
+            jQuery('input.duration', row).prop('disabled', false);
+            jQuery('input.rspan', row).val("").prop('disabled', true);
+            if ( undefined !== cond.repeatcount ) {
+                delete cond.repeatcount;
+                delete cond.repeatwithin;
+                configModified = true;
+            }
+        } else {
+            var n = getInteger( rc.val() );
+            if ( isNaN( n ) || n < 2 ) {
+                rc.addClass( 'tberror' );
+            } else if ( n > 1 ) {
+                rc.removeClass( 'tberror' );
+                if ( n != cond.repeatcount ) {
+                    cond.repeatcount = n;
+                    delete cond.duration;
+                    configModified = true;
+                }
+                jQuery('input.duration', row).val("").prop('disabled', true);
+                jQuery('input.rspan', row).prop('disabled', false);
+                if ( jQuery('input.rspan', row).val() === "" ) {
+                    jQuery('input.rspan', row).val("60");
+                    cond.repeatwithin = 60;
+                    configModified = true;
+                }
+            }
+        }
+        
+        var rs = jQuery('input.rspan', row);
+        if ( ! rs.prop('disabled') ) {
+            var n = getInteger( rs.val() );
+            if ( isNaN(n) || n < 1 ) {
+                rs.addClass( 'tberror' );
+            } else {
+                rs.removeClass( 'tberror' );
+                if ( n !== ( cond.repeatwithin || 0 ) ) {
+                    cond.repeatwithin = n;
+                    configModified = true;
+                }
+            }
+        }
+        
         var dd = jQuery('input.duration', row);
-        if ( "" === dd.val() ) {
+        if ( "" === dd.val() || dd.prop('disabled') ) {
+            jQuery('input.rcount', row).prop('disabled', false);
+            // jQuery('input.rspan', row).prop('disabled', false);
             if ( undefined !== cond.duration ) {
                 delete cond.duration;
                 configModified = true;
             }
         } else {
-            var n = parseInt( dd.val() );
+            var n = getInteger( dd.val() );
             if ( isNaN( n ) || n < 0 ) {
                 dd.addClass('tberror');
             } else {
                 dd.removeClass('tberror');
+                jQuery('input.rcount', row).val("").prop('disabled', true);
+                // jQuery('input.rspan', row).val("").prop('disabled', true);
+                delete cond.repeatwithin;
+                delete cond.repeatcount;
                 if ( (cond.duration||0) !== n ) {
                     /* Changed */
                     if ( n === 0 ) {
                         delete cond.duration;
+                        jQuery('input.rcount', row).prop('disabled', false);
+                        // jQuery('input.rspan', row).prop('disabled', false);
                     } else {
                         cond.duration = n;
                     }
@@ -717,11 +779,20 @@ var ReactorSensor = (function(api) {
         jQuery('div.predopt label', container).append(preds);
         jQuery('select.pred', container).on( 'change.reactor', handleOptionChange ).val( cond.after );
         /* Duration */
-        container.append('<div class="duropt form-inline"><label>Condition is sustained for <input type="text" class="duration form-control form-control-sm narrow"> seconds</label></div>');
+        container.append('<div class="duropt form-inline"><label>State is sustained for <input type="text" class="duration form-control form-control-sm narrow"> seconds</label></div>');
+        /* Repeat */
+        container.append('<div class="duropt form-inline"><label>State repeats <input type="text" class="rcount form-control form-control-sm narrow"> times within <input type="text" class="rspan form-control form-control-sm narrow"> seconds</label></div>');
         container.append('<i class="material-icons closeopts" title="Close Options">expand_less</i>');
         jQuery('input', container).on( 'change.reactor', handleOptionChange );
         jQuery('i.closeopts', container).on( 'click.reactor', handleCloseOptionsClick );
-        jQuery('input.duration', container).val( cond.duration || "0" );
+        if ( ( cond.duration || 0 ) > 0 ) {
+            jQuery('input.rcount,input.rspan', container).prop('disabled', true);
+            jQuery('input.duration', container).val( cond.duration );
+        } else {
+            jQuery('input.duration', container).prop('disabled', true);
+            jQuery('input.rcount', container).val( cond.repeatcount || "2" );
+            jQuery('input.rspan', container).val( cond.repeatwithin || "60" );
+        }
 
         /* Add it to the params */
         jQuery('div.params', row).append( container );
@@ -1536,7 +1607,11 @@ var ReactorSensor = (function(api) {
                 var condDesc = makeConditionDescription( cond );
                 switch ( cond.type ) {
                     case 'service':
-                        condDesc += ( ( cond.duration || 0 ) > 0 ? " for " + cond.duration + " secs" : "" );
+                        if ( ( cond.repeatcount || 0 ) > 1 ) {
+                            condDesc += " repeats " + cond.repeatcount + " times within " + cond.repeatwithin + " secs";
+                        } else if ( ( cond.duration || 0 ) > 0 ) {
+                            condDesc += " for " + cond.duration + " secs";
+                        }
                         break;
 
                     case 'weekday':
@@ -1571,11 +1646,17 @@ var ReactorSensor = (function(api) {
                 if ( cond.type !== "comment" ) {
                     if ( currentValue !== undefined ) {
                         var cs = cstate[cond.id];
-                        el.append('<div class="col-sm-6 col-md-4">(' + currentValue + ') ' +
+                        el.append('<div class="currentvalue col-sm-6 col-md-4">(' + currentValue + ') ' +
                             ( cs.laststate ? "true" : "false" ) +
                             ' as of ' + relativeTime( cs.statestamp ) +
                             '</div>' );
-                        if ( cs.laststate ) {
+                        if ( "service" === cond.type && ( cond.repeatcount || 0 ) > 1 ) {
+                            if ( cs.repeats !== undefined && cs.repeats.length > 0 ) {
+                                var dtime = Math.floor((new Date()).getTime()/1000) - cs.repeats[0];
+                                jQuery("div.currentvalue", el).append( " (last " + cs.repeats.length + " span " + dtime + " secs)" );
+                            }
+                        }
+                        if ( cs.evalstate ) {
                             el.addClass( "truecond" ).removeClass("falsecond");
                         } else {
                             el.addClass( "falsecond" ).removeClass("truecond");
@@ -1598,7 +1679,7 @@ var ReactorSensor = (function(api) {
 
     function onUIDeviceStatusChanged( args ) {
         var pdev = api.getCpanelDeviceId();
-        var doUpdate = false
+        var doUpdate = false;
         if ( args.id == pdev ) {
             for ( var k=0; k<args.states.length; ++k ) {
                 if ( args.states[k].variable.match( /^(cdata|cstate|Tripped|Armed)$/ ) ||

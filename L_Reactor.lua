@@ -988,25 +988,37 @@ local function evaluateGroup( grp, cdata, tdev )
 
             -- Preserve the result of the condition eval. We are edge-triggered,
             -- so only save changes, with timestamp.
-            if sensorState[skey].condState[cond.id] == nil then
+            local cs = sensorState[skey].condState[cond.id]
+            if cs == nil then
                 D("evaluateGroup() new condition state for %1=%2", cond.id, state)
-                sensorState[skey].condState[cond.id] = { id=cond.id, laststate=state, statestamp=now }
+                cs = { id=cond.id, laststate=state, statestamp=now }
+                sensorState[skey].condState[cond.id] = cs
+                if state and cond.repeatcount > 1 then
+                    -- If true, store the first timestamp for repeat counter
+                    cs.repeats = { now }
+                end
                 addEvent{dev=tdev,event='condchange',cond=cond.id,newState=state}
-            elseif state ~= sensorState[skey].condState[cond.id].laststate then
+            elseif state ~= cs.laststate then
                 D("evaluateGroup() condition %1 value state changed from %1 to %2", sensorState[skey].condState[cond.id].laststate, state)
                 -- ??? At certain times, Vera gets a time that is in the future, or so it appears. It looks like the TZ offset isn't applied, randomly.
                 -- Maybe if call is during ntp update, don't know. Investigating... This log message helps detection and analysis.
                 if now < sensorState[skey].condState[cond.id].statestamp then L({level=1,msg="Time moved backwards! Sensor %4 cond %1 last change at %2, but time now %3"}, cond.id, sensorState[skey].condState[cond.id].statestamp, now, tdev) end
-                addEvent{dev=tdev,event='condchange',cond=cond.id,oldState=sensorState[skey].condState[cond.id].laststate,newState=state}
-                sensorState[skey].condState[cond.id].laststate = state
-                sensorState[skey].condState[cond.id].statestamp = now
+                addEvent{dev=tdev,event='condchange',cond=cond.id,oldState=cs.laststate,newState=state}
+                cs.laststate = state
+                cs.statestamp = now
+                if state and cond.repeatcount > 1 then
+                    -- If condition now true and counting repeats, append time to list and prune
+                    cs.repeats = cs.repeats or {}
+                    table.insert( cs.repeats, now )
+                    while #cs.repeats > cond.repeatcount do table.remove( cs.repeats, 1 ) end
+                end
             end
 
             -- Save actual value if changed (for status display)
             cond.lastvalue.value = cond.lastvalue.value or ""
-            if cond.lastvalue.value ~= sensorState[skey].condState[cond.id].lastvalue then
-                sensorState[skey].condState[cond.id].lastvalue = cond.lastvalue.value
-                sensorState[skey].condState[cond.id].valuestamp = now
+            if cond.lastvalue.value ~= cs.lastvalue then
+                cs.lastvalue = cond.lastvalue.value
+                cs.valuestamp = now
             end
 
             -- TODO??? Sort conditions by sequence/predecessor, so they are evaluated in the
@@ -1032,10 +1044,29 @@ local function evaluateGroup( grp, cdata, tdev )
                     end
                 end
             end
-
-            -- Now, check to see if duration restriction is in effect.
-            if state and ( cond.duration or 0 ) > 0 then
-                -- Condition value matched. See if there's a duration restriction.
+            
+            if state and ( cond.repeatcount or 0 ) > 1 then
+                -- Repeat count over duration (don't need hasTimer, it's leading-edge-driven)
+                -- The repeats array contains the most recent repeatcount (or fewer) timestamps
+                -- of when the condition was met. If (a) the array has the required number of 
+                -- events, and (b) the delta from the first to now is <= the repeat window, we're
+                -- true.
+                D("evaluateGroup() cond %1 repeat check %2x in %3s from %4", cond.id,
+                    cond.repeatcount, cond.repeatwithin, cond.repeats)
+                if #( cs.repeats or {} ) < cond.repeatcount then
+                    -- Not enough samples yet
+                    state = false
+                elseif ( now - cs.repeats[1] ) > cond.repeatwithin then
+                    -- Gap between first sample and now too long
+                    D("evaluateGroup() cond %1 repeated %2x in %3s--too long!",
+                        cond.id, #cs.repeats, now - cs.repeats[1])
+                    state = false
+                else 
+                    D("evaluateGroup() cond %1 repeated %2x in %3s (seeking %4 within %5, good!)",
+                        cond.id, #cs.repeats, now-cs.repeats[1], cond.repeatcount, cond.repeatwithin)
+                end
+            elseif state and ( cond.duration or 0 ) > 0 then
+                -- Duration restriction?
                 hasTimer = true
                 -- Age is seconds since last state change.
                 local age = now - sensorState[skey].condState[cond.id].statestamp
@@ -1052,10 +1083,10 @@ local function evaluateGroup( grp, cdata, tdev )
 
             -- Save the final determination of state for this condition.
             passed = state and passed
-            if state ~= sensorState[skey].condState[cond.id].evalstate then
-                sensorState[skey].condState[cond.id].evalstate = state
-                sensorState[skey].condState[cond.id].evalstamp = now
-                addEvent{dev=tdev,event='evalchange',cond=cond.id,oldState=sensorState[skey].condState[cond.id].evalstate,newState=state}
+            if state ~= cs.evalstate then
+                addEvent{dev=tdev,event='evalchange',cond=cond.id,oldState=cs.evalstate,newState=state}
+                cs.evalstate = state
+                cs.evalstamp = now
             end
 
             D("evaluateGroup() cond %1 %2 final %3, group now %4", cond.id, cond.type, state, passed)
@@ -1063,13 +1094,14 @@ local function evaluateGroup( grp, cdata, tdev )
     end
 
     -- Save group state (create or change only).
-    if sensorState[skey].condState[grp.groupid] == nil
-        or sensorState[skey].condState[grp.groupid].evalstate ~= passed
-    then
-        sensorState[skey].condState[grp.groupid] = { evalstate=passed, evalstamp=now }
-        addEvent{dev=tdev,event='groupchange',cond=grp.groupid,oldState=sensorState[skey].condState[grp.groupid].evalstate,newState=passed}
+    sensorState[skey].condState[grp.groupid] = sensorState[skey].condState[grp.groupid] or {}
+    local gs = sensorState[skey].condState[grp.groupid]
+    if gs.evalstate == nil or gs.evalstate ~= passed then
+        addEvent{dev=tdev,event='groupchange',cond=grp.groupid,oldState=gs.evalstate,newState=passed}
+        gs.evalstate = passed
+        gs.evalstamp = now
     end
-    sensorState[skey].condState[grp.groupid].hastimer = hasTimer
+    gs.hastimer = hasTimer
 
     return passed, hasTimer
 end
