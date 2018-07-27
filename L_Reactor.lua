@@ -10,12 +10,14 @@ module("L_Reactor", package.seeall)
 local debugMode = false
 
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "1.3stable+180709"
+local _PLUGIN_VERSION = "1.3stable+180726"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _CONFIGVERSION = 00105
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
+
+local VARSID = "urn:toggledbits-com:serviceId:ReactorValues"
 
 local RSSID = "urn:toggledbits-com:serviceId:ReactorSensor"
 local RSTYPE = "urn:schemas-toggledbits-com:device:ReactorSensor:1"
@@ -25,6 +27,7 @@ local SENSOR_SID  = "urn:micasaverde-com:serviceId:SecuritySensor1"
 local sensorState = {}
 local tickTasks = {}
 local watchData = {}
+local devicesByName = {}
 
 local runStamp = 0
 local pluginDevice = 0
@@ -34,15 +37,21 @@ local isOpenLuup = false
 local json = require("dkjson")
 if json == nil then json = require("json") end
 if json == nil then luup.log(_PLUGIN_NAME .. " cannot load JSON library, exiting.", 1) return end
+local luaxp -- will only be loaded if needed
 
-local function dump(t)
+local function dump(t, seen)
     if t == nil then return "nil" end
+    if seen == nil then seen = {} end
     local sep = ""
     local str = "{ "
     for k,v in pairs(t) do
         local val
         if type(v) == "table" then
-            val = dump(v)
+            if seen[v] then val = "(recursion)"
+            else
+                seen[v] = true
+                val = dump(v, seen)
+            end
         elseif type(v) == "function" then
             val = "(function)"
         elseif type(v) == "string" then
@@ -101,6 +110,8 @@ local function checkVersion(dev)
         end
         return true
     end
+    L({level=1,msg="firmware %1 (%2.%3.%4) not compatible"}, luup.version,
+        luup.version_branch, luup.version_major, luup.version_minor)
     return false
 end
 
@@ -403,6 +414,58 @@ local function getHouseMode( tdev )
     return mode
 end
 
+local function stopScene( tdev )
+    luup.variable_set( RSSID, "scene", "", tdev )
+end
+
+local function runScene( scd, tdev )
+    D("runScene(%1,%2)", scd, tdev )
+    
+    local now = os.time()
+    
+    -- Check if scene running. If not, set up and run first scene group (maybe).
+    local sceneState = split( luup.variable_get( RSSID, "scene", tdev ) or "" )
+    -- sceneState: scene_id,execution_start,last_completed_group
+    if sceneState[1] == "" or tonumber( sceneState[1] ) ~= scd.id then
+        sceneState = { scd.id, now, 0 }
+        luup.variable_set( RSSID, "scene", sceneState:concat(','), tdev )
+        scd.groups:sort( function( a, b ) return a.delay < b.delay end )
+    end
+    local nextGroup = ( tonumber( sceneState[3] ) or 0 ) + 1
+    while nextGroup <= #scd.groups do 
+        -- Wait?
+        local tt = tonumber( sceneState[2] ) + scd.groups[nextGroup].delay
+        if tt > now then 
+            -- It's not time yet
+            local delay = tt - now
+            scheduleDelay( delay, false, tdev )
+            return
+        end
+        
+        -- Run this group.
+        for _,action in ipairs( scd.groups[nextGroup].actions or {} ) do
+            local devnum = tonumber( action.device )
+            if devnum == nil or luup.devices[devnum] == nil then
+                L({level=2,msg="%5 (%6): invalid device number (%4) in scene %1 (%2) group %3; skipping action."},
+                    scd.id, scd.name, nextGroup, action.device, tdev, luup.devices[tdev].description)
+            else
+                local param = {}
+                for k,p in ipairs( action.arguments or {} ) do
+                    param[p.name or tostring(k)] = p.value
+                end
+                D("runScene() dev %4 (%5) do %1/%2(%3)", action.service, action.action,
+                    param, devnum)
+                luup.call_action( action.service, action.action, param, devnum )
+            end
+        end
+        luup.variable_set( RSSID, "scene", sceneState:concat(','), tdev )
+        nextGroup = nextGroup + 1
+    end
+
+    D("runScene() reached end of scene %1 (%2)", scd.id, scd.name)
+    stopScene( tdev )
+end
+
 -- Find a condition hiding in a group (or is it?)
 local function findCondition( condid, cdata )
     for _,g in ipairs( cdata.conditions or {} ) do
@@ -411,6 +474,134 @@ local function findCondition( condid, cdata )
         end
     end
     return nil
+end
+
+local function evaluateVariable( vname, ctx, cdata, tdev )
+    D("evaluateVariable(%1,cdata,%2)", vname, tdev)
+    local vdef = cdata.variables[vname]
+    if vdef == nil then
+        L({level=1,msg="%2 (%1) Invalid variable reference to %1, not configured"}, 
+            tdev, luup.devices[tdev].description, vname)
+        return
+    end
+    if luaxp == nil then
+        luaxp = require("L_LuaXP_Reactor")
+        if type(luaxp) == "string" then
+            L({level=2,msg="Can't load L_LuaXP_Reactor (%1); falling back to L_LuaXP if I can..."},
+                luaxp)
+            luaxp = require("L_LuaXP")
+        end
+        if type(luaxp) ~= "table" then
+            L{level=1,msg="Failed to load LuaXP module. Expression evaluation not possible."}
+            return
+        end
+        if luaxp._VNUMBER == nil or luaxp._VNUMBER < 000906 then
+            L({level=2,msg="Warning! The LuaXP module found by Reactor is out of date. Some expression evaluation features may not be available (%1/%2)"},
+                luaxp._VERSION, luaxp._VNUMBER)
+        else
+            D("evaluateVariable() loaded LuaXP %1/%2", luaxp._VERSION, luaxp._VNUMBER)
+        end
+    end
+    -- if debugMode then luaxp._DEBUG = D end
+    ctx.NULL = luaxp.NULL
+    D("evaluateVariable() evaluating %1", vdef.expression)
+    local result, err = luaxp.evaluate( vdef.expression or "?", ctx )
+    if not ( err or luaxp.isNull(result) ) then
+        D("evaluateVariable() %2 (%1) %3 evaluates to %4", tdev, luup.devices[tdev].description,
+            vdef.expression, result)
+        -- Save on context for other evals
+        ctx[vname] = result
+        -- Canonify booleans by converting to number for storage as state variable
+        if type(result) == "boolean" then result = iif( result, "1", "0" ) end
+        local oldVal = luup.variable_get( VARSID, vname, tdev )
+        if oldVal == nil or oldVal ~= result then
+            luup.variable_set( VARSID, vname, tostring(result or ""), tdev )
+            luup.variable_set( VARSID, vname .. "_Error", "", tdev )
+        end
+    else
+        L({level=2,msg="%2 (%1) failed evaluation of %3: result=%4, err=%5"}, tdev, luup.devices[tdev].description,
+            vdef.expression, result, err)
+        ctx[vname] = luaxp.NULL
+        local msg = err.message or "Failed"
+        if err.location ~= nil then msg = msg .. " at " .. tostring(err.location) end
+        luup.variable_set( VARSID, vname .. "_Error", msg, tdev )
+        return nil, err
+    end
+    return result, false
+end
+
+local function updateVariables( cdata, tdev )
+    -- Make a list of variable names to iterate over. This also facilitates a 
+    -- quick test in case there are no variables, bypassing a bit of work.
+    local vars = {}
+    for n,_ in pairs(cdata.variables or {}) do table.insert( vars, n ) end
+    if #vars == 0 then return end
+    D("updateVariables() updating vars=%1", vars)
+    local ctx = { __functions={}, __lvars={} }
+    -- Create evaluation context
+    ctx.__functions.finddevice = function( args )
+        local selector = unpack( args )
+        D("findDevice(%1) selector=%2", args, selector)
+        local ns = tonumber(selector)
+        if ns ~= nil then
+            if luup.devices[ns] ~= nil then return ns end
+            return args.__context.NULL
+        end
+        selector = string.lower( selector or "?" )
+        -- Cached?
+        if devicesByName[selector] then 
+            return devicesByName[selector]
+        end
+        for n,d in pairs(luup.devices) do
+            if string.lower(d.description) == selector then
+                devicesByName[selector] = n -- Cache for future lookups
+                return n
+            end
+        end
+        return args.__context.NULL
+    end
+    ctx.__functions.getstate = function( args )
+        local dev, svc, var = unpack( args )
+        local vn = tonumber(dev) or 0
+        D("getstate(%1), dev=%2, svc=%3, var=%4, vn=%5", args, dev, svc, var, vn)
+        if vn == 0 or luup.devices[vn] == nil then
+            L("%2 (%1) variable expression refers to invalid device %3", tdev,
+                luup.devices[tdev].description, dev)
+            return args.__context.NULL
+        end
+        -- Create a watch if we don't have one?
+        local watchkey = string.format("%d:%s/%s", vn, svc or "X", var or "X")
+        if watchData[watchkey] == nil or watchData[watchkey][tostring(tdev)] == nil then
+            D("getstate() sensor %1 adding watch for %2", tdev, watchkey)
+            luup.variable_watch( "reactorWatch", svc or "X", var or "X", vn )
+            watchData = watchData or {}
+            watchData[watchkey] = watchData[watchkey] or {}
+            watchData[watchkey][tostring(tdev)] = true
+        end
+        -- Get and return value
+        return luup.variable_get( svc, var, vn ) or args.__context.NULL
+    end
+    -- Implement LuaXP extension resolver as recursive evaluation. This allows expressions
+    -- to reference other variables, makes working order of evaluation.
+    ctx.__functions.__resolve = function( name, c2x )
+        D("__resolve(%1,c2x)", name)
+        if (c2x.__resolving or {})[name] then
+            L("%2 (%1) circular reference detected in variable expression for %3",
+                tdev, luup.devices[tdev].description, name)
+            return nil
+        end
+        c2x.__resolving = c2x.__resolving or {}
+        c2x.__resolving[name] = true
+        local val,err = evaluateVariable( name, c2x, cdata, tdev )
+        c2x.__resolving[name] = nil
+        return val
+    end
+    -- Perform evaluations.
+    for _,n in ipairs( vars ) do
+        if not ctx[n] then -- not yet evaluated this run?
+            evaluateVariable( n, ctx, cdata, tdev )
+        end
+    end
 end
 
 local function evaluateCondition( cond, grp, cdata, tdev )
@@ -448,27 +639,28 @@ local function evaluateCondition( cond, grp, cdata, tdev )
             cv = string.lower( cv )
         end
 
-        -- Evaluate conditions. Any failure is a bail-out.
-        D("evaluateCondition() %1: %2/%3 %4%5%6?", cond.type, cond.service, cond.variable, vv, cond.condition, cv)
-        if cond.condition == "=" then
+        -- Evaluate conditions. Any failure is a bail-out.'
+        local op = cond.operator or cond.condition -- latter is old, deprecated
+        D("evaluateCondition() %1: %2/%3 %4%5%6?", cond.type, cond.service, cond.variable, vv, op, cv)
+        if op == "=" then
             if vv ~= cv then return false end
-        elseif cond.condition == "<>" or cond.condition == "><" then
+        elseif op == "<>" or op == "><" then -- latter from bug pre-1.2 ??? expireme
             if vv == cv then return false end
-        elseif cond.condition == ">" then
+        elseif op == ">" then
             if vn == nil or cn == nil or vn <= cn then return false end
-        elseif cond.condition == "<" then
+        elseif op == "<" then
             if vn == nil or cn == nil or vn >= cn then return false end
-        elseif cond.condition == ">=" then
+        elseif op == ">=" then
             if vn == nil or cn == nil or vn < cn then return false end
-        elseif cond.condition == "<=" then
+        elseif op == "<=" then
             if vn == nil or cn == nil or vn > cn then return false end
-        elseif cond.condition == "contains" then
+        elseif op == "contains" then
             if not string.find( vv, cv ) then return false end
-        elseif cond.condition == "starts" then
+        elseif op == "starts" then
             if not string.find( vv, "^" .. cv ) then return false end
-        elseif cond.condition == "ends" then
+        elseif op == "ends" then
             if not string.find( vv, cv .. "$" ) then return false end
-        elseif cond.condition == "in" then
+        elseif op == "in" then
             local lst = split( cv )
             local found = false
             for _,z in ipairs( lst ) do
@@ -478,8 +670,12 @@ local function evaluateCondition( cond, grp, cdata, tdev )
                 end
             end
             if not found then return false end
+        elseif op == "istrue" then
+            if vv == 0 then return false end
+        elseif op == "isfalse" then
+            if vv ~= 0 then return false end
         else
-            L("evaluateCondition() unknown condition %1 in cond %2 of group", cond.condition, cv)
+            L("evaluateCondition() unknown condition %1 in cond %2 of group", op, cv)
             return false
         end
     elseif cond.type == "housemode" then
@@ -794,27 +990,43 @@ local function evaluateGroup( grp, cdata, tdev )
 
             -- Preserve the result of the condition eval. We are edge-triggered,
             -- so only save changes, with timestamp.
-            if sensorState[skey].condState[cond.id] == nil then
+            local cs = sensorState[skey].condState[cond.id]
+            if cs == nil then
                 D("evaluateGroup() new condition state for %1=%2", cond.id, state)
-                sensorState[skey].condState[cond.id] = { id=cond.id, laststate=state, statestamp=now }
+                cs = { id=cond.id, laststate=state, statestamp=now }
+                sensorState[skey].condState[cond.id] = cs
+                if state and cond.repeatcount > 1 then
+                    -- If true, store the first timestamp for repeat counter
+                    cs.repeats = { now }
+                end
                 addEvent{dev=tdev,event='condchange',cond=cond.id,newState=state}
-            elseif state ~= sensorState[skey].condState[cond.id].laststate then
+            elseif state ~= cs.laststate then
                 D("evaluateGroup() condition %1 value state changed from %1 to %2", sensorState[skey].condState[cond.id].laststate, state)
                 -- ??? At certain times, Vera gets a time that is in the future, or so it appears. It looks like the TZ offset isn't applied, randomly.
                 -- Maybe if call is during ntp update, don't know. Investigating... This log message helps detection and analysis.
                 if now < sensorState[skey].condState[cond.id].statestamp then L({level=1,msg="Time moved backwards! Sensor %4 cond %1 last change at %2, but time now %3"}, cond.id, sensorState[skey].condState[cond.id].statestamp, now, tdev) end
-                addEvent{dev=tdev,event='condchange',cond=cond.id,oldState=sensorState[skey].condState[cond.id].laststate,newState=state}
-                sensorState[skey].condState[cond.id].laststate = state
-                sensorState[skey].condState[cond.id].statestamp = now
+                addEvent{dev=tdev,event='condchange',cond=cond.id,oldState=cs.laststate,newState=state}
+                cs.laststate = state
+                cs.statestamp = now
+                if state and cond.repeatcount > 1 then
+                    -- If condition now true and counting repeats, append time to list and prune
+                    cs.repeats = cs.repeats or {}
+                    table.insert( cs.repeats, now )
+                    while #cs.repeats > cond.repeatcount do table.remove( cs.repeats, 1 ) end
+                end
             end
 
             -- Save actual value if changed (for status display)
             cond.lastvalue.value = cond.lastvalue.value or ""
-            if cond.lastvalue.value ~= sensorState[skey].condState[cond.id].lastvalue then
-                sensorState[skey].condState[cond.id].lastvalue = cond.lastvalue.value
-                sensorState[skey].condState[cond.id].valuestamp = now
+            if cond.lastvalue.value ~= cs.lastvalue then
+                cs.lastvalue = cond.lastvalue.value
+                cs.valuestamp = now
             end
 
+            -- TODO??? Sort conditions by sequence/predecessor, so they are evaluated in the
+            -- order needed, and use evalstamp rather than statestamp for all work below.
+            -- That sort should also be able to detect loops.
+            
             -- Check for predecessor/sequence
             if state and ( cond.after or "" ) ~= "" then
                 -- Sequence; this condition must become true after named sequence becomes true
@@ -834,10 +1046,29 @@ local function evaluateGroup( grp, cdata, tdev )
                     end
                 end
             end
-
-            -- Now, check to see if duration restriction is in effect.
-            if state and ( cond.duration or 0 ) > 0 then
-                -- Condition value matched. See if there's a duration restriction.
+            
+            if state and ( cond.repeatcount or 0 ) > 1 then
+                -- Repeat count over duration (don't need hasTimer, it's leading-edge-driven)
+                -- The repeats array contains the most recent repeatcount (or fewer) timestamps
+                -- of when the condition was met. If (a) the array has the required number of 
+                -- events, and (b) the delta from the first to now is <= the repeat window, we're
+                -- true.
+                D("evaluateGroup() cond %1 repeat check %2x in %3s from %4", cond.id,
+                    cond.repeatcount, cond.repeatwithin, cond.repeats)
+                if #( cs.repeats or {} ) < cond.repeatcount then
+                    -- Not enough samples yet
+                    state = false
+                elseif ( now - cs.repeats[1] ) > cond.repeatwithin then
+                    -- Gap between first sample and now too long
+                    D("evaluateGroup() cond %1 repeated %2x in %3s--too long!",
+                        cond.id, #cs.repeats, now - cs.repeats[1])
+                    state = false
+                else 
+                    D("evaluateGroup() cond %1 repeated %2x in %3s (seeking %4 within %5, good!)",
+                        cond.id, #cs.repeats, now-cs.repeats[1], cond.repeatcount, cond.repeatwithin)
+                end
+            elseif state and ( cond.duration or 0 ) > 0 then
+                -- Duration restriction?
                 hasTimer = true
                 -- Age is seconds since last state change.
                 local age = now - sensorState[skey].condState[cond.id].statestamp
@@ -854,10 +1085,10 @@ local function evaluateGroup( grp, cdata, tdev )
 
             -- Save the final determination of state for this condition.
             passed = state and passed
-            if state ~= sensorState[skey].condState[cond.id].evalstate then
-                sensorState[skey].condState[cond.id].evalstate = state
-                sensorState[skey].condState[cond.id].evalstamp = now
-                addEvent{dev=tdev,event='evalchange',cond=cond.id,oldState=sensorState[skey].condState[cond.id].evalstate,newState=state}
+            if state ~= cs.evalstate then
+                addEvent{dev=tdev,event='evalchange',cond=cond.id,oldState=cs.evalstate,newState=state}
+                cs.evalstate = state
+                cs.evalstamp = now
             end
 
             D("evaluateGroup() cond %1 %2 final %3, group now %4", cond.id, cond.type, state, passed)
@@ -865,36 +1096,20 @@ local function evaluateGroup( grp, cdata, tdev )
     end
 
     -- Save group state (create or change only).
-    if sensorState[skey].condState[grp.groupid] == nil
-        or sensorState[skey].condState[grp.groupid].evalstate ~= passed
-    then
-        sensorState[skey].condState[grp.groupid] = { evalstate=passed, evalstamp=now }
-        addEvent{dev=tdev,event='groupchange',cond=grp.groupid,oldState=sensorState[skey].condState[grp.groupid].evalstate,newState=passed}
+    sensorState[skey].condState[grp.groupid] = sensorState[skey].condState[grp.groupid] or {}
+    local gs = sensorState[skey].condState[grp.groupid]
+    if gs.evalstate == nil or gs.evalstate ~= passed then
+        addEvent{dev=tdev,event='groupchange',cond=grp.groupid,oldState=gs.evalstate,newState=passed}
+        gs.evalstate = passed
+        gs.evalstamp = now
     end
-    sensorState[skey].condState[grp.groupid].hastimer = hasTimer
+    gs.hastimer = hasTimer
 
     return passed, hasTimer
 end
 
 --
-local function evaluateConditions( tdev )
-    -- Fetch the condition data.
-    local s = luup.variable_get( RSSID, "cdata", tdev ) or ""
-    if s == "" then return false end
-    local cdata, pos, err = json.decode( s )
-    if err then
-        L("Unable to parse JSON data at %2, %1 in %3", pos, err, s)
-        return nil, nil
-    end
-
-    -- Mark a stable base of time
-    cdata.timebase = getVarNumeric( "TestTime", 0, tdev, RSSID )
-    if cdata.timebase == 0 then
-        cdata.timebase = os.time()
-    end
-    cdata.timeparts = os.date("*t", cdata.timebase)
-    D("evaluateConditions() base time is %1 (%2)", cdata.timebase, cdata.timeparts)
-
+local function evaluateConditions( cdata, tdev )
     -- Evaluate all groups. Any group match is a pass.
     local hasTimer = false
     local passed = false
@@ -905,9 +1120,6 @@ local function evaluateConditions( tdev )
         D("evaluateConditions() group %1 eval %2, timer %3, overall state %4 timer %5, continuing",
             grp.groupid, match, t, passed, hasTimer)
     end
-
-    -- Save the condition state.
-    luup.variable_set( RSSID, "cstate", json.encode(sensorState[tostring(tdev)].condState), tdev )
 
     D("evaluateConditions() sensor %1 overall state now %1, hasTimer %2", passed, hasTimer)
     return passed, hasTimer
@@ -931,12 +1143,30 @@ local function updateSensor( tdev )
         rateBump( sensorState[tostring(tdev)].updateRate )
         sensorState[tostring(tdev)].updateThrottled = false
         
+        -- Fetch the condition data.
+        local s = luup.variable_get( RSSID, "cdata", tdev ) or ""
+        if s == "" then return false end
+        local cdata, pos, err = json.decode( s )
+        if err then
+            L("Unable to parse JSON data at %2, %1 in %3", pos, err, s)
+            return nil, nil
+        end
+
+        -- Mark a stable base of time
+        cdata.timebase = getVarNumeric( "TestTime", 0, tdev, RSSID )
+        if cdata.timebase == 0 then
+            cdata.timebase = os.time()
+        end
+        cdata.timeparts = os.date("*t", cdata.timebase)
+        D("updateSensor() base time is %1 (%2)", cdata.timebase, cdata.timeparts)
+
         -- Update state (if changed)
+        updateVariables( cdata, tdev )
         local currTrip = getVarNumeric( "Tripped", 0, tdev, SENSOR_SID ) ~= 0
         local retrig = getVarNumeric( "Retrigger", 0, tdev, RSSID ) ~= 0
         local invert = getVarNumeric( "Invert", 0, tdev, RSSID ) ~= 0
         local newTrip
-        newTrip, hasTimer = evaluateConditions( tdev )
+        newTrip, hasTimer = evaluateConditions( cdata, tdev )
         if invert then newTrip = not newTrip end
         D("updateSensor() trip %4was %1 now %2, retrig %3", currTrip, newTrip,
             retrig, iif( invert, "(inverted) ", "" ) )
@@ -966,6 +1196,7 @@ local function updateSensor( tdev )
                     -- Luup keeps (SecuritySensor1/)LastTrip, but we also keep LastReset
                     luup.variable_set( RSSID, "LastReset", now, tdev )
                 end
+                
             else
                 if not sensorState[tostring(tdev)].changeThrottled then
                     L({level=2,msg="%2 (#%1) trip state changing too fast (%4 > %3/min)! Throttling..."},
@@ -981,6 +1212,8 @@ local function updateSensor( tdev )
             setMessage( iif( newTrip, "Tripped", "Not tripped" ), tdev )
         end
 
+        -- Save the condition state.
+        luup.variable_set( RSSID, "cstate", json.encode(sensorState[tostring(tdev)].condState), tdev )
     else 
 
         if not sensorState[tostring(tdev)].updateThrottled then
@@ -1109,6 +1342,7 @@ function startPlugin( pdev )
     -- Debug?
     if getVarNumeric( "DebugMode", 0, pdev, MYSID ) ~= 0 then
         debugMode = true
+        D("startPlugin() debug enabled by state variable DebugMode")
     end
 
     -- Check for ALTUI and OpenLuup
@@ -1143,7 +1377,7 @@ function startPlugin( pdev )
     if not checkVersion( pdev ) then
         L({level=1,msg="This plugin does not run on this firmware."})
         luup.set_failure( 1, pdev )
-        return false, "Incompatible firmware", _PLUGIN_NAME
+        return false, "Incompatible firmware " .. luup.version, _PLUGIN_NAME
     end
 
     -- One-time stuff
