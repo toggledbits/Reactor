@@ -640,7 +640,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         end
 
         -- Evaluate conditions. Any failure is a bail-out.'
-        local op = cond.operator or cond.condition -- latter is old, deprecated
+        local op = cond.operator or cond.condition -- ??? legacy
         D("evaluateCondition() %1: %2/%3 %4%5%6?", cond.type, cond.service, cond.variable, vv, op, cv)
         if op == "=" then
             if vv ~= cv then return false end
@@ -691,20 +691,21 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         local tt = cdata.timeparts
         cond.lastvalue = { value=tt.wday, timestamp=now }
         local wd = split( cond.value )
+        local op = cond.operator or cond.condition -- ??? legacy
         D("evaluateCondition() weekday %1 among %2", tt.wday, wd)
         if not isOnList( wd, tostring( tt.wday ) ) then return false,true end
         -- OK, we're on the right day of the week. Which week?
-        if ( cond.condition or "" ) ~= "" then -- blank means "every"
+        if ( op or "" ) ~= "" then -- blank means "every"
             D("evaluateCondition() is today %1 %2-%3 the %4th?", tt.wday, tt.month,
-                tt.day, cond.condition)
-            if cond.condition == "last" then
+                tt.day, op)
+            if op == "last" then
                 -- Must be last of this day of the week. If we add a week
                 -- to current date, the new date should be next month.
                 local nt = os.date( "*t", now + ( 7 * 86400 ) )
-                D("evaluateCondition() weekday %1 %2? today=%3, nextweek=%4", tt.wday, cond.condition, tt, nt)
+                D("evaluateCondition() weekday %1 %2? today=%3, nextweek=%4", tt.wday, op, tt, nt)
                 if nt.month == tt.month then return false,true end -- same
             else
-                local nth = tonumber( cond.condition )
+                local nth = tonumber( op )
                 -- Move back N-1 weeks; we should still be in same month. Then
                 -- move back one more week, should be in prior month.
                 local pt, ref
@@ -718,7 +719,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
                 if pt.month == tt.month then return false,true end
             end
             D("evaluateCondition() yes, today %1 %2-%3 IS #%4 in month", tt.wday,
-                tt.month, tt.day, cond.condition)
+                tt.month, tt.day, op)
         end
     elseif cond.type == "time" then
         -- Time, with various components specified, or not.
@@ -741,7 +742,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         -- Split, pad, and compare date.
         local tparam = split( cond.value, ',' )
         for ix = #tparam+1, 10 do tparam[ix] = "" end -- pad
-        local cp = cond.condition
+        local cp = cond.operator or cond.condition
         -- ??? between or not?
         D("evaluateCondition() time check now %1 vs config %2", dt, tparam)
         if tparam[1] ~= "" and dt.year < tonumber( tparam[1] ) then return false,true end
@@ -819,6 +820,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         local nowMSM = dt.hour * 60 + dt.min
         local stamp = (dt.year % 100) * 10000 + dt.month * 100 + dt.day
         local sun = split( luup.variable_get( RSSID, "sundata", tdev ) or "" )
+        local op = cond.operator or cond.condition -- legacy ???
         if #sun ~= 3 or sun[1] ~= tostring(stamp) then
             D("evaluateCondition() didn't like what I got for sun: %1; expected stamp is %2; storing new.", sun, stamp)
             sun = { stamp, luup.sunrise(), luup.sunset() }
@@ -831,24 +833,24 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         local stt = iif( cp == "sunrise", sun[2], sun[3] )
         dt = os.date("*t", stt + offset*60)
         local startMSM = dt.hour * 60 + dt.min
-        if cond.condition == "bet" or cond.condition == "nob" then
+        if op == "bet" or op == "nob" then
             local ep,eoffs = string.match( tparam[2] or "sunset+0", "^([^%+%-]+)(.*)" )
             eoffs = tonumber( eoffs or 0 ) or 0
             local ett = iif( ep == "sunrise", sun[2], sun[3] )
             dt = os.date("*t", ett + eoffs*60)
             local endMSM = dt.hour * 60 + dt.min
-            D("evaluateCondition() cond %1 check %2 %3 %4 and %5", cond.id, nowMSM, cond.condition, startMSM, endMSM)
+            D("evaluateCondition() cond %1 check %2 %3 %4 and %5", cond.id, nowMSM, op, startMSM, endMSM)
             local between
             if endMSM <= startMSM then
                 between = nowMSM >= startMSM or nowMSM < endMSM
             else
                 between = nowMSM >= startMSM and nowMSM < endMSM
             end
-            if ( cond.condition == "bet" and not between ) or
-                ( cond.condition == "nob" and between ) then 
+            if ( op == "bet" and not between ) or
+                ( op == "nob" and between ) then 
                 return false, true
             end
-        elseif cond.condition == "before" then
+        elseif cond.operator == "before" then
             D("evaluateCondition() cond %1 check %2 before %3", cond.id, nowMSM, startMSM)
             if nowMSM >= startMSM then return false, true end
         else
@@ -859,6 +861,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         -- Time, with various components specified, or not.
         hasTimer = true
         cond.lastvalue = { value=now, timestamp=now }
+        local op = cond.operator or cond.condition or "bet" -- ??? legacy
         -- Split, pad, and complete date. Any missing parts are filled in with the 
         -- current date/time's corresponding part.
         local tparam = split( cond.value, ',' )
@@ -881,10 +884,10 @@ local function evaluateCondition( cond, grp, cdata, tdev )
             D("evaluateCondition() time-only comparison, now is %1, dt is %2", now, dt)
             local nowMSM = dt.hour * 60 + dt.min
             local startMSM = tonumber( tparam[4] ) * 60 + tonumber( tparam[5] )
-            if cond.condition == "after" then
+            if op == "after" then
                 D("evaluateCondition() time-only comparison %1 after %2", nowMSM, startMSM)
                 if nowMSM < startMSM then return false, true end
-            elseif cond.condition == "before" then
+            elseif op == "before" then
                 D("evaluateCondition() time-only comparison %1 before %2", nowMSM, startMSM)
                 if nowMSM >= startMSM then return false, true end
             else
@@ -897,9 +900,9 @@ local function evaluateCondition( cond, grp, cdata, tdev )
                     between = nowMSM >= startMSM and nowMSM < endMSM
                 end
                 D("evaluateCondition() time-only comparison %1 %2 %3 %4 (between=%5)",
-                    nowMSM, cond.condition, startMSM, endMSM, between)
-                if ( cond.condition == "nob" and between ) or
-                    ( cond.condition == "bet" and not between ) then 
+                    nowMSM, op, startMSM, endMSM, between)
+                if ( op == "nob" and between ) or
+                    ( op == "bet" and not between ) then 
                     return false, true 
                 end
             end
@@ -910,24 +913,24 @@ local function evaluateCondition( cond, grp, cdata, tdev )
             local stz = tonumber( tpart[2] ) * 100 + tonumber( tpart[3] )
             nowz = nowz * 3600 + dt.hour * 60 + dt.min
             stz = stz * 3600 + tpart[4] * 60 + tpart[5]
-            if cond.condition == "before" then
-                D("evaluateCondition() M/D H:M test %1 %2 %3", nowz, cond.condition, stz)
+            if op == "before" then
+                D("evaluateCondition() M/D H:M test %1 %2 %3", nowz, op, stz)
                 if nowz >= stz then return false, true end
-            elseif cond.condition == "after" then   
-                D("evaluateCondition() M/D H:M test %1 %2 %3", nowz, cond.condition, stz)
+            elseif op == "after" then   
+                D("evaluateCondition() M/D H:M test %1 %2 %3", nowz, op, stz)
                 if nowz < stz then return false, true end
             else
                 local enz = tonumber( tpart[7] ) * 100 + tonumber( tpart[8] )
                 enz = enz * 3600 + tpart[9] * 60 + tpart[10]
-                D("evaluateCondition() M/D H:M test %1 %2 %3 and %4", nowz, cond.condition, stz, enz)
+                D("evaluateCondition() M/D H:M test %1 %2 %3 and %4", nowz, op, stz, enz)
                 local between
                 if stz < enz then -- check for year-spanning
                     between = nowz >= stz and nowz < enz
                 else
                     between = nowz >= stz or nowz < enz
                 end
-                if ( cond.condition == "bet" and not between ) or
-                    ( cond.condition == "nob" and between ) then
+                if ( op == "bet" and not between ) or
+                    ( op == "nob" and between ) then
                     return false, true
                 end
             end
@@ -942,8 +945,8 @@ local function evaluateCondition( cond, grp, cdata, tdev )
             ett = math.floor( ett / 60 ) * 60
             D("evaluateCondition() time end %1", os.date( "%x.%X", ett ))
             if stt == ett then ett = ett + 60 end -- special case
-            D("evaluateCondition() compare now %1 %2 %3 and %4", now, cond.condition, stt, ett)
-            local cp = cond.condition or "bet"
+            D("evaluateCondition() compare now %1 %2 %3 and %4", now, op, stt, ett)
+            local cp = op
             if cp == "bet" then
                 if now < stt or now >= ett then return false, true end
             elseif cp == "nob" then
@@ -1008,7 +1011,7 @@ local function evaluateGroup( grp, cdata, tdev )
                 addEvent{dev=tdev,event='condchange',cond=cond.id,oldState=cs.laststate,newState=state}
                 cs.laststate = state
                 cs.statestamp = now
-                if state and cond.repeatcount > 1 then
+                if state and ( cond.repeatcount or 0 ) > 1 then
                     -- If condition now true and counting repeats, append time to list and prune
                     cs.repeats = cs.repeats or {}
                     table.insert( cs.repeats, now )
