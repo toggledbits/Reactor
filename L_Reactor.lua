@@ -522,7 +522,9 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
         L({level=2,msg="%2 (%1) failed evaluation of %3: result=%4, err=%5"}, tdev, luup.devices[tdev].description,
             vdef.expression, result, err)
         ctx[vname] = luaxp.NULL
-        luup.variable_set( VARSID, vname .. "_Error", err, tdev )
+        local msg = err.message or "Failed"
+        if err.location ~= nil then msg = msg .. " at " .. tostring(err.location) end
+        luup.variable_set( VARSID, vname .. "_Error", msg, tdev )
         return nil, err
     end
     return result, false

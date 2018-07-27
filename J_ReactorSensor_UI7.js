@@ -34,6 +34,21 @@ var ReactorSensor = (function(api) {
     var opName = { "bet": "between", "nob": "not between", "after": "after", "before": "before" };
     var houseModeName = [ '?', 'Home', 'Away', 'Night', 'Vacation' ];
 
+    /* Return footer */
+    function footer() {
+        var html = '';
+        html += '<div class="clearfix">';
+        html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
+        html += '<div id="tbcopyright">Reactor ver 1.3develop &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
+            ' All Rights Reserved. Please check out the <a href="https://www.toggledbits.com/reactor" target="_blank">online documentation</a>' +
+            ' and <a href="http://forum.micasaverde.com/index.php/topic,87484.0.html" target="_blank">forum thread</a> for support.</div>';
+        html += '<div id="supportlinks">Support links: ' +
+            ' <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=debug" target="_blank">Toggle&nbsp;Debug</a>' +
+            ' &bull; <a href="/cgi-bin/cmh/log.sh?Device=LuaUPnP" target="_blank">Log&nbsp;File</a>' +
+            ' &bull; <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=status" target="_blank">Plugin&nbsp;Status</a></div>';
+        return html;
+    }
+
     /* Create an ID that's functionally unique for our purposes. */
     function getUID( prefix ) {
         /* Not good, but enough. */
@@ -42,7 +57,7 @@ var ReactorSensor = (function(api) {
         lastx = newx;
         return ( prefix === undefined ? "" : prefix ) + newx.toString(16);
     }
-    
+
     /* Evaluate input string as integer, strict (no non-numeric chars allowed other than leading/trailing whitespace, empty string fails). */
     function getInteger( s ) {
         s = String(s).replace( /^\s+|\s+$/gm, '' );
@@ -93,7 +108,6 @@ var ReactorSensor = (function(api) {
 
     /* Initialize the module */
     function initModule() {
-        configModified = false;
         var myid = api.getCpanelDeviceId();
 
         /* Make device-indexed version of userdata devices, which is just an array */
@@ -457,7 +471,7 @@ var ReactorSensor = (function(api) {
 
         /* Disable "Add Group" button with same conditions. */
         jQuery('button#addgroup').attr('disabled', nset );
-        
+
         var errors = jQuery('.tberror');
         jQuery('button#saveconf').attr('disabled', ! ( configModified && errors.length === 0 ) );
         jQuery('button#revertconf').attr('disabled', !configModified);
@@ -661,7 +675,7 @@ var ReactorSensor = (function(api) {
                 configModified = true;
             }
         }
-        
+
         var rc = jQuery('input.rcount', row);
         if ( "" === rc.val() || rc.prop('disabled') ) {
             jQuery('input.duration', row).prop('disabled', false);
@@ -691,7 +705,7 @@ var ReactorSensor = (function(api) {
                 }
             }
         }
-        
+
         var rs = jQuery('input.rspan', row);
         if ( ! rs.prop('disabled') ) {
             var n = getInteger( rs.val() );
@@ -705,7 +719,7 @@ var ReactorSensor = (function(api) {
                 }
             }
         }
-        
+
         var dd = jQuery('input.duration', row);
         if ( "" === dd.val() || dd.prop('disabled') ) {
             jQuery('input.rcount', row).prop('disabled', false);
@@ -1304,7 +1318,8 @@ var ReactorSensor = (function(api) {
         jQuery("div#conditions").append('<div class="row"><div class="col-sm-2"><hr></div>' +
             '<div class="col-sm-2"><button id="addgroup" class="btn btn-sm btn-primary">Add Group</button></div>' +
             '<div class="col-sm-4"><hr></div>' +
-            '<div class="col-sm-4"><button id="saveconf" class="btn btn-sm btn-success">Save</button><button id="revertconf" class="btn btn-sm btn-danger">Revert</button></div>');
+            '<div class="col-sm-4"><button id="saveconf" class="btn btn-sm btn-success">Save</button><button id="revertconf" class="btn btn-sm btn-danger">Revert</button></div>' +
+            '</div>');
         jQuery("button#addgroup").on( 'click.reactor', handleAddGroupClick );
         jQuery("button#saveconf").on( 'click.reactor', handleSaveClick );
         jQuery("button#revertconf").on( 'click.reactor', handleRevertClick );
@@ -1393,7 +1408,7 @@ var ReactorSensor = (function(api) {
     /* Closing the control panel. */
     function onBeforeCpanelClose(args) {
         console.log( 'onBeforeCpanelClose args: ' + JSON.stringify(args) );
-        if ( configModified && confirm( "You have unsaved changes! Press OK to save your changes, or Cancel to discard them." ) ) {
+        if ( configModified && confirm( "You have unsaved changes! Press OK to save them, or Cancel to discard them." ) ) {
             handleSaveClick( undefined );
         }
     }
@@ -1408,10 +1423,6 @@ var ReactorSensor = (function(api) {
             return new Date(dtms).toLocaleTimeString();
         }
         return new Date(dtms).toLocaleString();
-    }
-
-    function doSettings()
-    {
     }
 
     function handleTestChange( ev ) {
@@ -1457,6 +1468,12 @@ var ReactorSensor = (function(api) {
 
     function doTest()
     {
+        if ( configModified && confirm( "You have unsaved changes. Press OK to save them, or Cancel to discard them." ) ) {
+            handleSaveClick( undefined );
+        }
+
+        initModule();
+        
         var html = "";
 
         html = '<style>';
@@ -1478,11 +1495,11 @@ var ReactorSensor = (function(api) {
             ' They override the system values when your ReactorSensor requests them, allowing you to more easily test your conditions.' +
             ' For example, turn on the "Test Date" checkbox above' +
             ' and use the controls to set a date, then go back to the "Control" tab and press the "Restart" button to force a re-evaluation of the sensor state' +
-            ' using your selected date/time. <b>Remember to turn these settings off when you have finished testing!</b>' +
-            '<p>&nbsp;</p>' +
-            '<p>Support links: <a href="https://www.toggledbits.com/reactor" target="_blank">Documentation</a> &bull; <a href="http://forum.micasaverde.com/index.php/topic,87484.0.html" target="_blank">Forum Thread</a> &bull; <a href="/port_3480/data_request?id=lr_Reactor&action=debug" target="_blank">Toggle Debug</a> &bull; <a href="/cgi-bin/cmh/log.sh?Device=LuaUPnP" target="_blank">Log File</a> &bull; <a href="/port_3480/data_request?id=lr_Reactor&action=status" target="_blank">Device Status</a></p>';
+            ' using your selected date/time. <b>Remember to turn these settings off when you have finished testing!</b>';
         html += '</div></div>';
         html += '</div>'; /* .testfields */
+
+        html += footer();
 
         api.setCpanelContent( html );
 
@@ -1651,8 +1668,8 @@ var ReactorSensor = (function(api) {
                             ' as of ' + relativeTime( cs.statestamp ) +
                             '</div>' );
                         if ( "service" === cond.type && ( cond.repeatcount || 0 ) > 1 ) {
-                            if ( cs.repeats !== undefined && cs.repeats.length > 0 ) {
-                                var dtime = Math.floor((new Date()).getTime()/1000) - cs.repeats[0];
+                            if ( cs.repeats !== undefined && cs.repeats.length > 1 ) {
+                                var dtime = cs.repeats[ cs.repeats.length - 1 ] - cs.repeats[0];
                                 jQuery("div.currentvalue", el).append( " (last " + cs.repeats.length + " span " + dtime + " secs)" );
                             }
                         }
@@ -1698,7 +1715,7 @@ var ReactorSensor = (function(api) {
     function doStatusPanel()
     {
         /* Make sure changes are saved. */
-        if ( configModified && confirm( "You have unsaved changes! Press OK to save your changes, or Cancel to discard them." ) ) {
+        if ( configModified && confirm( "You have unsaved changes! Press OK to save them, or Cancel to discard them." ) ) {
             handleSaveClick( undefined );
         }
 
@@ -1722,10 +1739,178 @@ var ReactorSensor = (function(api) {
 
         api.registerEventHandler('on_ui_deviceStatusChanged', ReactorSensor, 'onUIDeviceStatusChanged');
     }
+    
+    function updateVariableControls() {
+        var container = jQuery('div#variables');
+        var errors = jQuery('.tberror', container);
+        jQuery("button#saveconf", container).prop('disabled', ! ( configModified && errors.length === 0 ) );
+        jQuery("button#revertconf", container).prop('disabled', !configModified);
+    }
+    
+    function handleVariableChange() {
+        var container = jQuery('div#variables');
+        
+        jQuery('.tberror', container).removeClass( 'tberror' );
+        jQuery('div.row.var', container).each( function( ix, obj ) {
+            var row = jQuery(obj);
+            var vname = row.attr("id");
+            var expr = jQuery('input.expr', row).val();
+            if ( expr === "" ) {
+                jQuery('input.expr', row).addClass('tberror');
+            }
+            if ( cdata.variables[vname] === undefined ) {
+                cdata.variables[vname] = { name: vname, expression: expr };
+                configModified = true;
+            } else if ( cdata.variables[vname].expression !== expr ) {
+                cdata.variables[vname].expression = expr;
+                configModified = true;
+            }
+        });
+
+        updateVariableControls();
+    }
+    
+    function handleDeleteVariableClick( ev ) {
+        var row = jQuery( ev.currentTarget ).closest( 'div.row.var' );
+        var vname = row.attr('id');
+        if ( confirm( 'Deleting "' + vname + '" will break any conditions that refer to it.' ) ) {
+            delete cdata.variables[vname];
+            row.remove();
+            configModified = true;
+            updateVariableControls();
+        }
+    }
+        
+    function handleAddVariableClick() {
+        var container = jQuery('div#variables');
+        
+        var editrow = jQuery('<div class="row editrow"></div>');
+        editrow.append( '<div class="col-sm-6 col-md-2 col-lg-1"><input class="varname form-control form-control-sm"></div>' );
+        editrow.append( '<div class="col-sm-12 col-md-9 col-lg-10"><input type="text" class="expr form-control form-control-sm"></div>' );
+        editrow.append( '<div class="col-sm-6 col-md-1"><i class="material-icons md-btn deletevar">clear</i></div>' );
+        jQuery( 'div.row.var input,i', container ).prop( 'disabled', true );
+        jQuery( 'button#addvar', container ).prop( 'disabled', true );
+        jQuery( 'input.expr', editrow ).prop('disabled', true).on('change.reactor',handleVariableChange);
+        jQuery( 'i.deletevar', editrow ).on('click.reactor',handleDeleteVariableClick);
+        jQuery( 'input.varname', editrow ).on('change.reactor', function( ev ) {
+            /* Convert to regular row */
+            var f = jQuery( ev.currentTarget );
+            var vname = f.val();
+            if ( vname === "" || jQuery( 'div.row.var#' + vname ).length > 0 ) {
+                f.addClass('tberror');
+                f.focus();
+            } else {
+                /* Set the row ID to the name */
+                var row = f.closest('div.row');
+                row.removeClass('editrow').addClass('var').attr('id', vname);
+                /* Remove the name input field and swap in the name (text) */
+                f.parent().empty().text(vname);
+                /* Re-enable fields and add button */
+                jQuery('div.row.var input,i', container).prop('disabled', false);
+                jQuery( 'button#addvar', container ).prop( 'disabled', false );
+                /* Do the regular stuff */
+                handleVariableChange();
+            }
+        });
+        jQuery( 'div.reactorgroup', container ).append( editrow );
+        jQuery( 'input.varname', editrow ).focus();
+    }
+
+    /**
+     * Redraw variables and expressions.
+    */
+    function redrawVariables() {
+        var container = jQuery('div#variables');
+        container.empty();
+        var gel = jQuery('<div class="reactorgroup"></div>');
+        for ( var vn in cdata.variables ) {
+            if ( cdata.variables.hasOwnProperty( vn ) ) {
+                var vd = cdata.variables[vn];
+                var el = jQuery('<div class="row var" id="' + vn + '"></div>');
+                el.append( jQuery( '<div class="col-sm-6 col-md-2 col-lg-1"></div>' ).text( vn ) );
+                el.append( '<div class="col-sm-12 col-md-9 col-lg-10"><input type="text" class="expr form-control form-control-sm"></div>' );
+                el.append( '<div class="col-sm-6 col-md-1"><i class="material-icons md-btn deletevar">clear</i></div>' );
+                gel.append( el );
+                jQuery( 'input.expr', el ).val( vd.expression );
+            }
+        }
+
+        /* Append the group */
+        container.append(gel);
+
+        container.append('<div class="row">' +
+            '<div class="col-sm-2"><button id="addvar" class="btn btn-sm btn-primary">Add Variable/Expression</button></div>' +
+            '<div class="col-sm-4"><hr></div>' +
+            '<div class="col-sm-6"><button id="saveconf" class="btn btn-sm btn-success">Save</button><button id="revertconf" class="btn btn-sm btn-danger">Revert</button></div>' +
+            '</div>');
+        jQuery("button#addvar", container).on( 'click.reactor', handleAddVariableClick );
+        jQuery("input.expr", container).on( 'change.reactor', handleVariableChange );
+        jQuery('i.deletevar', container).on('click.reactor', handleDeleteVariableClick);
+        jQuery("button#saveconf", container).on( 'click.reactor', handleSaveClick );
+        jQuery("button#revertconf", container).on( 'click.reactor', handleRevertClick );
+
+        updateVariableControls();
+    }
+
+
+    function doVariables()
+    {
+        try {
+            /* Make sure changes are saved. */
+            if ( configModified && confirm( "You have unsaved changes. Press OK to save them, or Cancel to discard them." ) ) {
+                handleSaveClick( undefined );
+            }
+
+            initModule();
+
+            /* Load material design icons */
+            jQuery("head").append('<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">');
+
+            /* Our styles. */
+            var html = "<style>";
+            html += ".tb-about { margin-top: 24px; }";
+            html += ".color-green { color: #006040; }";
+            html += '.tberror { border: 1px solid red; }';
+            html += '.tbwarn { border: 1px solid yellow; background-color: yellow; }';
+            html += 'i.md-btn:disabled { color: #cccccc; cursor: auto; }';
+            html += 'i.md-btn[disabled] { color: #cccccc; cursor: auto; }';
+            html += 'i.md-btn { color: #006040; font-size: 13pt; cursor: pointer; }';
+            html += 'input.tbinvert { min-width: 16px; min-height: 16px; }';
+            html += 'div.conditions { width: 100%; }';
+            html += 'input.narrow { max-width: 6em; }';
+            html += 'div.conditiongroup { border-radius: 8px; border: 2px solid #006040; padding: 8px; }';
+            html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
+            html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
+            html += "</style>";
+            jQuery("head").append( html );
+
+            /* Body content */
+            html = '';
+            html += '<div class="row"><div class="col-cs-12 col-sm-12">Expressions allow you to do complex arithmetic, string, and other operations that otherwise cannot be done in the Conditions editor. When you create an expression, you specify a variable name into which its result is stored. You can then use that variable name in your conditions.</div></div>';
+            html += '<div id="variables"></div>';
+
+            html += footer();
+
+            api.setCpanelContent(html);
+
+            redrawVariables();
+        }
+        catch (e)
+        {
+            console.log( 'Error in ReactorSensor.doVariables(): ' + String( e ) );
+            alert( e.stack );
+        }
+    }
+
+
 
     function doConditions()
     {
         try {
+            if ( configModified && confirm( "You have unsaved changes. Press OK to save them, or Cancel to discard them." ) ) {
+                handleSaveClick( undefined );
+            }
+
             initModule();
 
             /* Load material design icons */
@@ -1755,10 +1940,7 @@ var ReactorSensor = (function(api) {
             html += '<div class="row"><div class="col-cs-12 col-sm-12">Conditions within a group are "AND", and groups are "OR". That is, the sensor will trip when any group succeeds, and for a group to succeed, all conditions in the group must be met.</div></div>';
             html += '<div id="conditions"></div>';
 
-            html += '<div class="clearfix">';
-
-            html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
-            html += '<div id="tbcopyright">Reactor ver 1.3develop &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>, All Rights Reserved. Please check out the <a href="https://www.toggledbits.com/reactor" target="_blank">online documentation</a> and <a href="http://forum.micasaverde.com/index.php/topic,87484.0.html" target="_blank">forum thread</a> for support.</div>';
+            html += footer();
 
             api.setCpanelContent(html);
 
@@ -1773,6 +1955,10 @@ var ReactorSensor = (function(api) {
         }
     }
 
+    function doSettings()
+    {
+    }
+
     myModule = {
         uuid: uuid,
         initModule: initModule,
@@ -1781,6 +1967,7 @@ var ReactorSensor = (function(api) {
         doTest: doTest,
         doSettings: doSettings,
         doConditions: doConditions,
+        doVariables: doVariables,
         doStatusPanel: doStatusPanel
     };
     return myModule;
