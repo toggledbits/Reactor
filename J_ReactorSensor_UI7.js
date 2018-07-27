@@ -61,13 +61,14 @@ var ReactorSensor = (function(api) {
     /* Evaluate input string as integer, strict (no non-numeric chars allowed other than leading/trailing whitespace, empty string fails). */
     function getInteger( s ) {
         s = String(s).replace( /^\s+|\s+$/gm, '' );
-        if ( s.match( /^[0-9]+$/ ) ) {
+        s = s.replace( /^\+/, '' ); /* leading + is fine, ignore */
+        if ( s.match( /^-?[0-9]+$/ ) ) {
             return parseInt( s );
         }
         return NaN;
     }
 
-    /* Load configuration data */
+    /* Load configuration data. */
     function loadConfigData( myid ) {
         var s = api.getDeviceState( myid, serviceId, "cdata" ) || "";
         if ( s.length !== 0 ) {
@@ -89,6 +90,7 @@ var ReactorSensor = (function(api) {
         if ( undefined === cdata.variables ) {
             /* Fixup v2 */
             cdata.variables = {};
+            configModified = true;
         }
         ixGroup = {}; ixCond = {};
         for ( var ig=0; ig<(cdata.conditions || {}).length; ig++ ) {
@@ -98,6 +100,8 @@ var ReactorSensor = (function(api) {
                 if ( grp.groupconditions[ic].operator === undefined && grp.groupconditions[ic].condition !== undefined ) {
                     /* Fixup v2 */
                     grp.groupconditions[ic].operator = grp.groupconditions[ic].condition;
+                    delete grp.groupconditions[ic].condition;
+                    configModified = true;
                 }
                 ixCond[ grp.groupconditions[ic].id ] = grp.groupconditions[ic];
             }
@@ -459,6 +463,15 @@ var ReactorSensor = (function(api) {
         }
         return el;
     }
+    
+    /**
+     * Update save/revert buttons (separate, because we use in two diff tabs
+     */
+    function updateSaveControls() {
+        var errors = jQuery('.tberror');
+        jQuery('button#saveconf').attr('disabled', ! ( configModified && errors.length === 0 ) );
+        jQuery('button#revertconf').attr('disabled', !configModified);
+    }
 
     /**
      * Update controls for current conditions.
@@ -471,10 +484,6 @@ var ReactorSensor = (function(api) {
 
         /* Disable "Add Group" button with same conditions. */
         jQuery('button#addgroup').attr('disabled', nset );
-
-        var errors = jQuery('.tberror');
-        jQuery('button#saveconf').attr('disabled', ! ( configModified && errors.length === 0 ) );
-        jQuery('button#revertconf').attr('disabled', !configModified);
 
         /* Up/down tools for conditions enabled except up for first and down
            for last. */
@@ -496,6 +505,8 @@ var ReactorSensor = (function(api) {
         if ( lastMo.length == 1 ) {
             jQuery('i.action-delete', lastMo).attr('disabled', true ).hide();
         }
+        
+        updateSaveControls();
     }
 
     /**
@@ -506,6 +517,7 @@ var ReactorSensor = (function(api) {
         var cond = ixCond[ condId ];
         var typ = jQuery("div.condtype select", row).val();
         cond.type = typ;
+        jQuery('.tberror', row).removeClass('tberror');
         switch (typ) {
             case 'comment':
                 cond.comment = jQuery("div.params input", row).val();
@@ -596,11 +608,11 @@ var ReactorSensor = (function(api) {
                 cond.operator = jQuery('div.params select.opmenu', row).val() || "after";
                 res = [];
                 var whence = jQuery('div.params select#sunstart', row).val() || "sunrise";
-                var offset = jQuery('div.params input#startoffset', row).val() || "0";
-                offset = getInteger( offset );
+                var offset = getInteger( jQuery('div.params input#startoffset', row).val() || "0" );
                 if ( isNaN( offset ) ) {
                     /* Validation error, flag and treat as 0 */
                     offset = 0;
+                    jQuery('div.params input#startoffset', row).addClass('tberror');
                 }
                 res.push( whence + ( offset < 0 ? '' : '+' ) + String(offset) );
                 if ( cond.operator == "bet" || cond.operator == "nob" ) {
@@ -609,6 +621,7 @@ var ReactorSensor = (function(api) {
                     offset = getInteger( jQuery('input#endoffset', row).val() || "0" );
                     if ( isNaN( offset ) ) {
                         offset = 0;
+                        jQuery('div.params input#endoffset', row).addClass('tberror');
                     }
                     res.push( whence + ( offset < 0 ? '' : '+' ) + String(offset) );
                 } else {
@@ -1331,8 +1344,18 @@ var ReactorSensor = (function(api) {
      * Handle revert button click: restore setting to last saved and redisplay.
      */
     function handleRevertClick( ev ) {
-        initModule();
-        redrawConditions();
+        loadConfigData( api.getCpanelDeviceId() );
+        configModified = false;
+        
+        /* Be careful about which tab we're on here. */
+        var ctx = jQuery( ev.currentTarget ).closest('div.row').parent().attr('id');
+        if ( ctx === "variables" ) {
+            redrawVariables();
+        } else if ( ctx === "conditions" ) {
+            redrawConditions();
+        } else {
+            alert("OK, I did the revert, but now I'm lost. Go back to the dashboard and come back in.");
+        }
     }
 
     /**
@@ -1391,16 +1414,18 @@ var ReactorSensor = (function(api) {
             }
         }
         /* Save to persistent state */
+        cdata.version = 2;
+        cdata.timestamp = Math.floor( new Date().getTime() / 1000 );
         api.setDeviceStatePersistent( api.getCpanelDeviceId(), serviceId, "cdata", JSON.stringify( cdata ),
         {
             'onSuccess' : function() {
                 configModified = false;
-                updateControls();
+                updateSaveControls();
             },
             'onFailure' : function() {
                 alert('There was a problem saving the configuration. Vera/Luup may have been restarting. Please try hitting the "Save" button again.');
                 configModified = true;
-                updateControls();
+                updateSaveControls();
             }
         });
     }
@@ -1851,8 +1876,7 @@ var ReactorSensor = (function(api) {
 
         updateVariableControls();
     }
-
-
+    
     function doVariables()
     {
         try {
