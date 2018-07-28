@@ -342,20 +342,16 @@ local function sensor_runOnce( tdev )
 
         -- Fix up category and subcategory
         luup.attr_set('category_num', 4, tdev)
-        luup.attr_set('subcategory_num', 1, tdev)
+        luup.attr_set('subcategory_num', 0, tdev)
 
         luup.variable_set( RSSID, "Version", _CONFIGVERSION, tdev )
         return
     end
 
     -- Consider per-version changes.
-    if s < 00103 then
-        -- Fix up category and subcategory
-        luup.attr_set('category_num', 4, tdev)
-        luup.attr_set('subcategory_num', 1, tdev)
-    end
-    
     if s < 00105 then
+        luup.attr_set('category_num', 4, tdev)
+        luup.attr_set('subcategory_num', 0, tdev)
         initVar( "ContinuousTimer", 0, tdev, RSSID )
         initVar( "Runtime", 0, tdev, RSSID )
         initVar( "MaxUpdateRate", "", tdev, RSSID )
