@@ -1011,7 +1011,7 @@ local function evaluateGroup( grp, cdata, tdev )
                 D("evaluateGroup() new condition state for %1=%2", cond.id, state)
                 cs = { id=cond.id, laststate=state, statestamp=now }
                 sensorState[skey].condState[cond.id] = cs
-                if state and cond.repeatcount > 1 then
+                if state and ( cond.repeatcount or 0 ) > 1 then
                     -- If true, store the first timestamp for repeat counter
                     cs.repeats = { now }
                 end
@@ -1687,6 +1687,61 @@ function request( lul_request, lul_parameters, lul_outputformat )
         else
             return "ERROR, device number invalid or is not a ReactorSensor", "text/plain"
         end
+    elseif action == "summary" then
+        local r, EOL = "", "\r\n"
+        for n,d in pairs( luup.devices ) do
+            if d.device_type == RSTYPE then
+                local s = luup.variable_get( RSSID, "cdata", n ) or ""
+                local cdata,pos,err = json.decode( s )
+                if err then
+                    r = r .. err .. EOL .. " in " .. s
+                    cdata = {}
+                end
+                if r ~= "" then r = r .. EOL end
+                r = r .. string.format("%s (#%d)", tostring(d.description), n) .. EOL
+                local nv=0
+                for _,vv in pairs( cdata.variables or {} ) do
+                    local lv = luup.variable_get( VARSID, vv.name, n ) or "(no value)"
+                    local le = luup.variable_get( VARSID, vv.name .. "_Error", n ) or ""
+                    r = r .. string.format("    Variable %s=%s (last %q)", vv.name or "?", vv.expression or "?", lv) .. EOL
+                    if le ~= "" then r = r .. "    ******** Error: " .. le .. EOL end
+                end
+                local ng=0
+                for _,gc in ipairs( cdata.conditions or {} ) do
+                    ng = ng + 1
+                    r = r .. "    Group #" .. ng .. " (" .. gc.groupid .. ")" .. EOL
+                    for _,cond in ipairs( gc.groupconditions or {} ) do
+                        r = r .. "        (" .. ( cond.type or "?type?" ) .. ") "
+                        if cond.type == "service" then
+                            r = r .. string.format("%s (%d) ", iif( luup.devices[cond.device]==nil, "(missing, " .. ( cond.devicename or "unknown" ) .. ")",
+                                luup.devices[cond.device].description), cond.device )
+                            r = r .. string.format("%s/%s %s %s", cond.service or "?", cond.variable or "?", cond.operator or cond.condition or "?",
+                                cond.value or "")
+                            if cond.duration then
+                                r = r .. " for " .. cond.duration .. " secs"
+                            end
+                            if cond.xxx then
+                                r = r .. " after " .. cond.xxx
+                            end
+                            if cond.repeatcount then
+                                r = r .. " repeat " .. cond.repeatcount .. " within " .. cond.repeatwithin .. " secs"
+                            end
+                        elseif cond.type == "comment" then
+                            r = r .. string.format("%q", cond.comment)
+                        elseif cond.type == "sun" then
+                            r = r .. ( cond.operator or cond.condition or "?" ) .. " " .. cond.value
+                        elseif cond.type == "trange" then
+                            r = r .. ( cond.operator or cond.condition or "?" ) .. " " .. cond.value
+                        else
+                            r = r .. json.encode(cond)
+                        end
+                        r = r .. " <" .. cond.id .. ">"
+                        r = r .. EOL
+                    end
+                end
+            end
+        end
+        return r, "text/plain"
     elseif action == "status" then
         local st = {
             name=_PLUGIN_NAME,
