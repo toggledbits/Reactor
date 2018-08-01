@@ -1957,6 +1957,7 @@ var ReactorSensor = (function(api) {
             html += 'div.conditiongroup { border-radius: 8px; border: 2px solid #006040; padding: 8px; }';
             html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
             html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
+            html += 'div.warning { color: red; }';
             html += "</style>";
             jQuery("head").append( html );
 
@@ -1964,6 +1965,12 @@ var ReactorSensor = (function(api) {
             html = '';
             html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>Conditions</h3></div></div>';
             html += '<div class="row"><div class="col-cs-12 col-sm-12">Conditions within a group are "AND", and groups are "OR". That is, the sensor will trip when any group succeeds, and for a group to succeed, all conditions in the group must be met.</div></div>';
+            
+            var rr = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "Retrigger" ) || "0";
+            if ( rr !== "0" ) {
+                html += '<div class="row"><div class="warning col-cs-12 col-sm-12">WARNING! Retrigger is on! You should avoid using house mode or time-related conditions in this ReactorSensor, as they will cause retriggers every 60 seconds!</div></div>'
+            }
+            
             html += '<div id="conditions"></div>';
 
             html += footer();
