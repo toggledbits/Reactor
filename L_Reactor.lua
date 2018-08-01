@@ -336,30 +336,28 @@ local function sensor_runOnce( tdev )
         initVar( "Tripped", 0, tdev, SENSOR_SID )
         initVar( "ArmedTripped", 0, tdev, SENSOR_SID )
         initVar( "LastTrip", 0, tdev, SENSOR_SID )
+        initVar( "AutoUntrip", 0, tdev, SENSOR_SID )
 
         -- Force this value.
         luup.variable_set( "urn:micasaverde-com:serviceId:HaDevice1", "ModeSetting", "1:;2:;3:;4:", tdev )
 
         -- Fix up category and subcategory
         luup.attr_set('category_num', 4, tdev)
-        luup.attr_set('subcategory_num', 1, tdev)
+        luup.attr_set('subcategory_num', 0, tdev)
 
         luup.variable_set( RSSID, "Version", _CONFIGVERSION, tdev )
         return
     end
 
     -- Consider per-version changes.
-    if s < 00103 then
-        -- Fix up category and subcategory
-        luup.attr_set('category_num', 4, tdev)
-        luup.attr_set('subcategory_num', 1, tdev)
-    end
-    
     if s < 00105 then
+        luup.attr_set('category_num', 4, tdev)
+        luup.attr_set('subcategory_num', 0, tdev)
         initVar( "ContinuousTimer", 0, tdev, RSSID )
         initVar( "Runtime", 0, tdev, RSSID )
         initVar( "MaxUpdateRate", "", tdev, RSSID )
         initVar( "MaxChangeRate", "", tdev, RSSID )
+        initVar( "AutoUntrip", 0, tdev, SENSOR_SID )
     end
 
     -- Update version last.
@@ -476,6 +474,36 @@ local function findCondition( condid, cdata )
     return nil
 end
 
+-- Find device type name or UDN
+local function finddevice( dev )
+    local vn
+    if type(dev) == "number" then
+        return dev
+    elseif type(dev) == "string" then
+        dev = string.lower( dev )
+        if devicesByName[ dev ] ~= nil then
+            return devicesByName[ dev ]
+        end
+        if dev:sub(1,5) == "uuid:" then 
+            for n,d in pairs( luup.devices ) do
+                if string.lower( d.udn ) == dev then
+                    devicesByName[ dev ] = n
+                    return n
+                end
+            end
+        else
+            for n,d in pairs( luup.devices ) do
+                if string.lower( d.description ) == dev then
+                    devicesByName[ dev ] = n
+                    return n
+                end
+            end
+        end
+        vn = tonumber( dev )
+    end
+    return vn
+end
+
 local function evaluateVariable( vname, ctx, cdata, tdev )
     D("evaluateVariable(%1,cdata,%2)", vname, tdev)
     local vdef = cdata.variables[vname]
@@ -522,8 +550,8 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
         L({level=2,msg="%2 (%1) failed evaluation of %3: result=%4, err=%5"}, tdev, luup.devices[tdev].description,
             vdef.expression, result, err)
         ctx[vname] = luaxp.NULL
-        local msg = err.message or "Failed"
-        if err.location ~= nil then msg = msg .. " at " .. tostring(err.location) end
+        local msg = (err or {}).message or "Failed"
+        if (err or {}).location ~= nil then msg = msg .. " at " .. tostring(err.location) end
         luup.variable_set( VARSID, vname .. "_Error", msg, tdev )
         return nil, err
     end
@@ -542,32 +570,18 @@ local function updateVariables( cdata, tdev )
     ctx.__functions.finddevice = function( args )
         local selector = unpack( args )
         D("findDevice(%1) selector=%2", args, selector)
-        local ns = tonumber(selector)
-        if ns ~= nil then
-            if luup.devices[ns] ~= nil then return ns end
-            return args.__context.NULL
+        local n = finddevice( selector )
+        if n == nil then 
+            return luaxp.NULL
         end
-        selector = string.lower( selector or "?" )
-        -- Cached?
-        if devicesByName[selector] then 
-            return devicesByName[selector]
-        end
-        for n,d in pairs(luup.devices) do
-            if string.lower(d.description) == selector then
-                devicesByName[selector] = n -- Cache for future lookups
-                return n
-            end
-        end
-        return args.__context.NULL
+        return n
     end
     ctx.__functions.getstate = function( args )
         local dev, svc, var = unpack( args )
-        local vn = tonumber(dev) or 0
+        local vn = finddevice( dev )
         D("getstate(%1), dev=%2, svc=%3, var=%4, vn=%5", args, dev, svc, var, vn)
-        if vn == 0 or luup.devices[vn] == nil then
-            L("%2 (%1) variable expression refers to invalid device %3", tdev,
-                luup.devices[tdev].description, dev)
-            return args.__context.NULL
+        if vn == nil or luup.devices[vn] == nil then
+            return luaxp.NULL
         end
         -- Create a watch if we don't have one?
         local watchkey = string.format("%d:%s/%s", vn, svc or "X", var or "X")
@@ -579,16 +593,15 @@ local function updateVariables( cdata, tdev )
             watchData[watchkey][tostring(tdev)] = true
         end
         -- Get and return value
-        return luup.variable_get( svc, var, vn ) or args.__context.NULL
+        return luup.variable_get( svc, var, vn ) or luaxp.NULL
     end
     -- Implement LuaXP extension resolver as recursive evaluation. This allows expressions
     -- to reference other variables, makes working order of evaluation.
     ctx.__functions.__resolve = function( name, c2x )
         D("__resolve(%1,c2x)", name)
         if (c2x.__resolving or {})[name] then
-            L("%2 (%1) circular reference detected in variable expression for %3",
-                tdev, luup.devices[tdev].description, name)
-            return nil
+            luaxp.evalerror("Circular reference detected (" .. name .. ")")
+            return luaxp.NULL
         end
         c2x.__resolving = c2x.__resolving or {}
         c2x.__resolving[name] = true

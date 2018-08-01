@@ -463,7 +463,7 @@ var ReactorSensor = (function(api) {
         }
         return el;
     }
-    
+
     /**
      * Update save/revert buttons (separate, because we use in two diff tabs
      */
@@ -505,7 +505,7 @@ var ReactorSensor = (function(api) {
         if ( lastMo.length == 1 ) {
             jQuery('i.action-delete', lastMo).attr('disabled', true ).hide();
         }
-        
+
         updateSaveControls();
     }
 
@@ -1346,7 +1346,7 @@ var ReactorSensor = (function(api) {
     function handleRevertClick( ev ) {
         loadConfigData( api.getCpanelDeviceId() );
         configModified = false;
-        
+
         /* Be careful about which tab we're on here. */
         var ctx = jQuery( ev.currentTarget ).closest('div.row').parent().attr('id');
         if ( ctx === "variables" ) {
@@ -1498,7 +1498,7 @@ var ReactorSensor = (function(api) {
         }
 
         initModule();
-        
+
         var html = "";
 
         html = '<style>';
@@ -1764,17 +1764,17 @@ var ReactorSensor = (function(api) {
 
         api.registerEventHandler('on_ui_deviceStatusChanged', ReactorSensor, 'onUIDeviceStatusChanged');
     }
-    
+
     function updateVariableControls() {
         var container = jQuery('div#variables');
         var errors = jQuery('.tberror', container);
         jQuery("button#saveconf", container).prop('disabled', ! ( configModified && errors.length === 0 ) );
         jQuery("button#revertconf", container).prop('disabled', !configModified);
     }
-    
+
     function handleVariableChange() {
         var container = jQuery('div#variables');
-        
+
         jQuery('.tberror', container).removeClass( 'tberror' );
         jQuery('div.row.var', container).each( function( ix, obj ) {
             var row = jQuery(obj);
@@ -1794,7 +1794,7 @@ var ReactorSensor = (function(api) {
 
         updateVariableControls();
     }
-    
+
     function handleDeleteVariableClick( ev ) {
         var row = jQuery( ev.currentTarget ).closest( 'div.row.var' );
         var vname = row.attr('id');
@@ -1805,10 +1805,10 @@ var ReactorSensor = (function(api) {
             updateVariableControls();
         }
     }
-        
+
     function handleAddVariableClick() {
         var container = jQuery('div#variables');
-        
+
         var editrow = jQuery('<div class="row editrow"></div>');
         editrow.append( '<div class="col-sm-6 col-md-2 col-lg-1"><input class="varname form-control form-control-sm"></div>' );
         editrow.append( '<div class="col-sm-12 col-md-9 col-lg-10"><input type="text" class="expr form-control form-control-sm"></div>' );
@@ -1876,7 +1876,7 @@ var ReactorSensor = (function(api) {
 
         updateVariableControls();
     }
-    
+
     function doVariables()
     {
         try {

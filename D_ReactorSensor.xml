@@ -14,7 +14,7 @@
         <modelName>Reactor Sensor</modelName>
         <handleChildren>0</handleChildren>
         <Category_Num>4</Category_Num>
-        <Subcategory_Num>1</Subcategory_Num>
+        <Subcategory_Num>0</Subcategory_Num>
         <serviceList>
           <service>
             <serviceType>urn:schemas-micasaverde-com:service:SecuritySensor:1</serviceType>
