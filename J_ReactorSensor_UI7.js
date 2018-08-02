@@ -28,7 +28,7 @@ var ReactorSensor = (function(api) {
     var configModified = false;
     var lastx = 0;
     var condTypeName = { "service": "Service/Variable", "housemode": "House Mode", "comment": "Comment", "weekday": "Weekday", 'time': "Date (deprecated)",
-        "sun": "Sunrise/Sunset", "trange": "Date/Time" };
+        "sun": "Sunrise/Sunset", "trange": "Date/Time", "reload": "Luup Reloaded" };
     var weekDayName = [ '?', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat' ];
     var monthName = [ '?', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec' ];
     var opName = { "bet": "between", "nob": "not between", "after": "after", "before": "before" };
@@ -337,6 +337,9 @@ var ReactorSensor = (function(api) {
                     str += ' and ' + textDateTime( t[5], t[6], t[7], t[8], t[9], true );
                 }
                 break;
+                
+            case 'reload':
+                break; /* no additional information */
 
             default:
                 str = JSON.stringify( cond );
@@ -631,6 +634,10 @@ var ReactorSensor = (function(api) {
                     res.push("");
                 }
                 cond.value = res.join(',');
+                break;
+            
+            case 'reload':
+                /* No parameters */
                 break;
 
             default:
@@ -1062,6 +1069,7 @@ var ReactorSensor = (function(api) {
                 jQuery("input", container).on( 'change.reactor', handleRowChange );
                 break;
 
+            case 'reload': /* fallthrough */
             default:
                 /* nada */
         }
@@ -1270,7 +1278,7 @@ var ReactorSensor = (function(api) {
         jQuery("div.controls", el).append('<i class="material-icons md-btn action-down">arrow_downward</i>');
         jQuery("div.controls", el).append('<i class="material-icons md-btn action-delete">clear</i>');
 
-        [ "comment", "service", "housemode", "sun", "weekday", "trange" ].forEach( function( k ) {
+        [ "comment", "service", "housemode", "sun", "weekday", "trange", "reload" ].forEach( function( k ) {
             jQuery( "div.condtype select", el ).append( jQuery( "<option/>" ).val( k ).text( condTypeName[k] ) );
         });
 
@@ -1410,6 +1418,8 @@ var ReactorSensor = (function(api) {
                     case 'trange':
                         removeConditionProperties( cond, 'operator,value' );
                         break;
+                    case 'reload':
+                        removeConditionProperties( cond, "" );
                     default:
                         /* Don't do anything */
                 }

@@ -12,7 +12,7 @@ local debugMode = false
 local _PLUGIN_NAME = "Reactor"
 local _PLUGIN_VERSION = "1.3develop"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
-local _CONFIGVERSION = 00105
+local _CONFIGVERSION = 00106
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -328,6 +328,7 @@ local function sensor_runOnce( tdev )
         initVar( "cdata", "", tdev, RSSID )
         initVar( "cstate", "", tdev, RSSID )
         initVar( "Runtime", 0, tdev, RSSID )
+        initVar( "TripCount", 0, tdev, RSSID )
         initVar( "ContinuousTimer", 0, tdev, RSSID )
         initVar( "MaxUpdateRate", "", tdev, RSSID )
         initVar( "MaxChangeRate", "", tdev, RSSID )
@@ -351,10 +352,15 @@ local function sensor_runOnce( tdev )
 
     -- Consider per-version changes.
     if s < 00105 then
+        -- Limited scope change. After 1.2 (config 00105), no more changes.
         luup.attr_set('category_num', 4, tdev)
         luup.attr_set('subcategory_num', 0, tdev)
+    end
+    
+    if s < 00106 then
         initVar( "ContinuousTimer", 0, tdev, RSSID )
         initVar( "Runtime", 0, tdev, RSSID )
+        initVar( "TripCount", 0, tdev, RSSID )
         initVar( "MaxUpdateRate", "", tdev, RSSID )
         initVar( "MaxChangeRate", "", tdev, RSSID )
         initVar( "AutoUntrip", 0, tdev, SENSOR_SID )
@@ -392,7 +398,7 @@ local function plugin_runOnce( pdev )
         initVar( "DebugMode", 0, pdev, MYSID )
     end
     
-    if s < 00103 then
+    if s < 00105 then
         luup.attr_set('category_num', 1, pdev)
         luup.attr_set('subcategory_num', "", pdev)
     end
@@ -978,6 +984,16 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         -- Shortcut. Comments are always true.
         cond.lastvalue = { value=cond.comment, timestamp=now }
         return true, false
+    elseif cond.type == "reload" then
+        -- True when loadtime changes. Self-resetting.
+        local loadtime = tonumber( ( luup.attr_get("LoadTime", 0) ) ) or 0
+        local lastload = getVarNumeric( "LastLoad", 0, tdev, RSSID )
+        local reloaded = loadtime ~= lastload
+        D("evaluateCondition() loadtime %1 lastload %2 reloaded %3", loadtime, lastload, reloaded)
+        cond.lastvalue = { value=reloaded, timestamp=now }
+        luup.variable_set( RSSID, "LastLoad", loadtime, tdev )
+        -- Return timer flag true when reloaded is true, so we get a reset shortly after.
+        return reloaded, reloaded
     else
         L({level=2,msg="Sensor %1 (%2) unknown condition type %3 for cond %4 in group %5; fails."},
             tdev, luup.devices[tdev].description, cond.type, cond.id, grp.groupid)
@@ -1207,6 +1223,7 @@ local function updateSensor( tdev )
                 sensorState[tostring(tdev)].changeThrottled = false
                 L("%2 (#%1) tripped state now %3", tdev, luup.devices[tdev].description, newTrip)
                 luup.variable_set( SENSOR_SID, "Tripped", iif( newTrip, "1", "0" ), tdev )
+                luup.variable_set( RSSID, "TripCount", getVarNumeric( "TripCount", 0, tdev, RSSID ) + 1, tdev )
                 addEvent{dev=tdev,event='sensorstate',state=newTrip}
                 if not newTrip then
                     -- Luup keeps (SecuritySensor1/)LastTrip, but we also keep LastReset
