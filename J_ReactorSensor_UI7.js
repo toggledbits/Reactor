@@ -645,8 +645,6 @@ var ReactorSensor = (function(api) {
         }
 
         updateControls();
-
-        console.log( JSON.stringify( cdata, null, 4 ) );
     }
 
     /**
@@ -1739,7 +1737,7 @@ var ReactorSensor = (function(api) {
                 if ( args.states[k].variable.match( /^(cdata|cstate|Tripped|Armed)$/ ) ||
                         args.states[k].service == "urn:toggledbits-com:serviceId:ReactorValues" ) {
                     doUpdate = true;
-                    console.log( args.states[k].service + '/' + args.states[k].variable + " updated!");
+                    // console.log( args.states[k].service + '/' + args.states[k].variable + " updated!");
                 }
             }
             if ( doUpdate ) {
