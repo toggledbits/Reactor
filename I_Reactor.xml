@@ -30,7 +30,7 @@
             <serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
             <name>Reset</name>
             <run>
-                Reactor.actionReset( false, lul_device )
+                Reactor.actionReset( lul_device )
                 return true
             </run>
         </action>
@@ -38,7 +38,7 @@
             <serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
             <name>Trip</name>
             <run>
-                Reactor.actionTrip( false, lul_device )
+                Reactor.actionTrip( lul_device )
                 return true
             </run>
         </action>
