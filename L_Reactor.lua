@@ -10,7 +10,7 @@ module("L_Reactor", package.seeall)
 local debugMode = false
 
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "1.3stable+180801"
+local _PLUGIN_VERSION = "1.3stable+180803"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _CONFIGVERSION = 00106
 
