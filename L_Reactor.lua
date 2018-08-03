@@ -232,7 +232,6 @@ local function addServiceWatch( dev, svc, var, target )
     if watchData[watchkey] == nil or watchData[watchkey][target] == nil then
         D("addServiceWatch() sensor %1 adding watch for %2", target, watchkey)
         luup.variable_watch( "reactorWatch", svc or "X", var or "X", dev or 0 )
-        watchData = watchData or {}
         watchData[watchkey] = watchData[watchkey] or {}
         watchData[watchkey][target] = true
     end
@@ -641,7 +640,11 @@ local function evaluateCondition( cond, grp, cdata, tdev )
     local hasTimer = false
     if cond.type == "service" then
         -- Can't succeed if referenced device doesn't exist.
-        if luup.devices[cond.device or 0] == nil then return false end
+        if luup.devices[cond.device or -1] == nil then 
+            L({level=2,msg="%1 (%2) condition %3 refers to device %4 (%5), does not exist, skipped"},
+                luup.devices[tdev].description, tdev, cond.id, cond.device, cond.devicename or "unknown")
+            return false, false
+        end
 
         -- Add service watch if we don't have one
         addServiceWatch( cond.device, cond.service, cond.variable, tdev )
@@ -1050,10 +1053,15 @@ local function evaluateGroup( grp, cdata, tdev )
             end
 
             -- Save actual value if changed (for status display)
-            cond.lastvalue.value = cond.lastvalue.value or ""
-            if cond.lastvalue.value ~= cs.lastvalue then
-                cs.lastvalue = cond.lastvalue.value
-                cs.valuestamp = now
+            if cond.lastvalue ~= nil then 
+                cond.lastvalue.value = cond.lastvalue.value or ""
+                if cond.lastvalue.value ~= cs.lastvalue then
+                    cs.lastvalue = cond.lastvalue.value
+                    cs.valuestamp = now
+                end
+            else
+                cs.lastvalue = nil
+                cs.valuestamp = nil
             end
 
             -- TODO??? Sort conditions by sequence/predecessor, so they are evaluated in the
