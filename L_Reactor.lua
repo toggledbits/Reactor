@@ -1501,13 +1501,13 @@ end
 
 function actionTrip( dev )
     L("Sensor %1 (%2) trigger action!", dev, luup.devices[dev].description)
-    luup.variable_set( SENSOR_SID, "Tripped", 1, dev );
+    luup.variable_set( SENSOR_SID, "Tripped", iif( getVarNumeric( "Invert", 0, dev, RSSID ) == 0, 1, 0 ), dev );
     setMessage("Tripped", dev);
 end
 
 function actionReset( dev )
     L("Sensor %1 (%2) reset action!", dev, luup.devices[dev].description)
-    luup.variable_set( SENSOR_SID, "Tripped", 0, dev );
+    luup.variable_set( SENSOR_SID, "Tripped", iif( getVarNumeric( "Invert", 0, dev, RSSID ) == 0, 0, 1 ), dev );
     setMessage("Not tripped", dev)
 end
 
