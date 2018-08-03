@@ -23,6 +23,11 @@
             <defaultValue>0</defaultValue>
             <shortCode>running</shortCode>
         </stateVariable>
+        <stateVariable sendEvents="yes">
+            <name>HouseMode</name>
+            <dataType>ui4</dataType>
+            <defaultValue>1</defaultValue>
+        </stateVariable>
     </serviceStateTable>
     <actionList>
         <action>

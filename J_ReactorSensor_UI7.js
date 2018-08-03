@@ -28,7 +28,7 @@ var ReactorSensor = (function(api) {
     var configModified = false;
     var lastx = 0;
     var condTypeName = { "service": "Service/Variable", "housemode": "House Mode", "comment": "Comment", "weekday": "Weekday", 'time': "Date (deprecated)",
-        "sun": "Sunrise/Sunset", "trange": "Date/Time" };
+        "sun": "Sunrise/Sunset", "trange": "Date/Time", "reload": "Luup Reloaded" };
     var weekDayName = [ '?', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat' ];
     var monthName = [ '?', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec' ];
     var opName = { "bet": "between", "nob": "not between", "after": "after", "before": "before" };
@@ -337,6 +337,9 @@ var ReactorSensor = (function(api) {
                     str += ' and ' + textDateTime( t[5], t[6], t[7], t[8], t[9], true );
                 }
                 break;
+                
+            case 'reload':
+                break; /* no additional information */
 
             default:
                 str = JSON.stringify( cond );
@@ -632,14 +635,16 @@ var ReactorSensor = (function(api) {
                 }
                 cond.value = res.join(',');
                 break;
+            
+            case 'reload':
+                /* No parameters */
+                break;
 
             default:
                 break;
         }
 
         updateControls();
-
-        console.log( JSON.stringify( cdata, null, 4 ) );
     }
 
     /**
@@ -1062,6 +1067,7 @@ var ReactorSensor = (function(api) {
                 jQuery("input", container).on( 'change.reactor', handleRowChange );
                 break;
 
+            case 'reload': /* fallthrough */
             default:
                 /* nada */
         }
@@ -1270,7 +1276,7 @@ var ReactorSensor = (function(api) {
         jQuery("div.controls", el).append('<i class="material-icons md-btn action-down">arrow_downward</i>');
         jQuery("div.controls", el).append('<i class="material-icons md-btn action-delete">clear</i>');
 
-        [ "comment", "service", "housemode", "sun", "weekday", "trange" ].forEach( function( k ) {
+        [ "comment", "service", "housemode", "sun", "weekday", "trange", "reload" ].forEach( function( k ) {
             jQuery( "div.condtype select", el ).append( jQuery( "<option/>" ).val( k ).text( condTypeName[k] ) );
         });
 
@@ -1410,6 +1416,8 @@ var ReactorSensor = (function(api) {
                     case 'trange':
                         removeConditionProperties( cond, 'operator,value' );
                         break;
+                    case 'reload':
+                        removeConditionProperties( cond, "" );
                     default:
                         /* Don't do anything */
                 }
@@ -1729,7 +1737,7 @@ var ReactorSensor = (function(api) {
                 if ( args.states[k].variable.match( /^(cdata|cstate|Tripped|Armed)$/ ) ||
                         args.states[k].service == "urn:toggledbits-com:serviceId:ReactorValues" ) {
                     doUpdate = true;
-                    console.log( args.states[k].service + '/' + args.states[k].variable + " updated!");
+                    // console.log( args.states[k].service + '/' + args.states[k].variable + " updated!");
                 }
             }
             if ( doUpdate ) {
@@ -1957,6 +1965,7 @@ var ReactorSensor = (function(api) {
             html += 'div.conditiongroup { border-radius: 8px; border: 2px solid #006040; padding: 8px; }';
             html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
             html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
+            html += 'div.warning { color: red; }';
             html += "</style>";
             jQuery("head").append( html );
 
@@ -1964,6 +1973,12 @@ var ReactorSensor = (function(api) {
             html = '';
             html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>Conditions</h3></div></div>';
             html += '<div class="row"><div class="col-cs-12 col-sm-12">Conditions within a group are "AND", and groups are "OR". That is, the sensor will trip when any group succeeds, and for a group to succeed, all conditions in the group must be met.</div></div>';
+            
+            var rr = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "Retrigger" ) || "0";
+            if ( rr !== "0" ) {
+                html += '<div class="row"><div class="warning col-cs-12 col-sm-12">WARNING! Retrigger is on! You should avoid using house mode or time-related conditions in this ReactorSensor, as they will cause retriggers every 60 seconds!</div></div>'
+            }
+            
             html += '<div id="conditions"></div>';
 
             html += footer();
