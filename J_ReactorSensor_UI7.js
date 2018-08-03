@@ -245,7 +245,7 @@ var ReactorSensor = (function(api) {
             case 'service':
                 str += ( undefined !== deviceByNumber[cond.device] ?
                         deviceByNumber[cond.device].friendlyName :
-                        '#' + cond.device + ( cond.devicename === undefined ? "name unknown" : cond.devicename ) + ' (missing)' );
+                        '#' + cond.device + ' ' + ( cond.devicename === undefined ? "name unknown" : cond.devicename ) + ' (missing)' );
                 str += ' ' + cond.variable + ' ' + cond.operator + ' ' + cond.value;
                 break;
 
