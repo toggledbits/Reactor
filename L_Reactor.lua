@@ -1753,10 +1753,13 @@ function request( lul_request, lul_parameters, lul_outputformat )
                             end
                         elseif cond.type == "comment" then
                             r = r .. string.format("%q", cond.comment)
+                        elseif cond.type == "housemode" then
+                            r = r .. "in " .. ( cond.value or "" )
                         elseif cond.type == "sun" then
-                            r = r .. ( cond.operator or cond.condition or "?" ) .. " " .. cond.value
+                            r = r .. ( cond.operator or cond.condition or "?" ) .. " " .. ( cond.value or "" )
                         elseif cond.type == "trange" then
-                            r = r .. ( cond.operator or cond.condition or "?" ) .. " " .. cond.value
+                            r = r .. ( cond.operator or cond.condition or "?" ) .. " " .. ( cond.value or "" )
+                        elseif cond.type == "reload" then
                         else
                             r = r .. json.encode(cond)
                         end
