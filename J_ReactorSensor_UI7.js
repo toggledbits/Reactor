@@ -54,7 +54,7 @@ var ReactorSensor = (function(api) {
     /* Create an ID that's functionally unique for our purposes. */
     function getUID( prefix ) {
         /* Not good, but enough. */
-        var newx = new Date().getTime();
+        var newx = Date.now();
         if ( newx == lastx ) ++newx;
         lastx = newx;
         return ( prefix === undefined ? "" : prefix ) + newx.toString(16);
@@ -89,11 +89,13 @@ var ReactorSensor = (function(api) {
                 }
             ]};
         }
+        var upgraded = false;
         if ( undefined === cdata.variables ) {
             /* Fixup v2 */
             cdata.variables = {};
-            configModified = true;
+            upgraded = true;
         }
+        /* Set up our indices. */
         ixGroup = {}; ixCond = {};
         for ( var ig=0; ig<(cdata.conditions || {}).length; ig++ ) {
             var grp = cdata.conditions[ig];
@@ -103,12 +105,20 @@ var ReactorSensor = (function(api) {
                     /* Fixup v2 */
                     grp.groupconditions[ic].operator = grp.groupconditions[ic].condition;
                     delete grp.groupconditions[ic].condition;
-                    configModified = true;
+                    upgraded = true;
                 }
                 ixCond[ grp.groupconditions[ic].id ] = grp.groupconditions[ic];
             }
         }
+        
+        cdata.version = 2;
+        cdata.device = myid;
+        if ( upgraded ) {
+            /* Write updated config. We don't care if it fails, as nothing we can't redo would be lost. */
+            api.setDeviceStatePersistent( myid, serviceId, "cdata", JSON.stringify( cdata ) );
+        }
 
+        configModified = false;
         return cdata;
     }
 
@@ -1424,9 +1434,8 @@ var ReactorSensor = (function(api) {
             }
         }
         /* Save to persistent state */
-        cdata.version = 2;
-        cdata.timestamp = Math.floor( new Date().getTime() / 1000 );
-        api.setDeviceStatePersistent( api.getCpanelDeviceId(), serviceId, "cdata", JSON.stringify( cdata ),
+        cdata.timestamp = Math.floor( Date.now() / 1000 );
+        api.setDeviceStatePersistent( cdata.device, serviceId, "cdata", JSON.stringify( cdata ),
         {
             'onSuccess' : function() {
                 configModified = false;
@@ -1453,7 +1462,7 @@ var ReactorSensor = (function(api) {
             return "";
         }
         var dtms = dt * 1000;
-        var ago = ( new Date().getTime() - dtms ) / 1000;
+        var ago = Math.floor( ( Date.now() - dtms ) / 1000 );
         if ( ago < 86400 ) {
             return new Date(dtms).toLocaleTimeString();
         }

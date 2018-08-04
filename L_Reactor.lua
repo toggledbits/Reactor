@@ -155,12 +155,6 @@ local function getVarNumeric( name, dflt, dev, sid )
     return s
 end
 
--- A ternary operator
-local function iif( cond, trueVal, falseVal )
-    if cond then return trueVal
-    else return falseVal end
-end
-
 local function rateFill( rh, tt ) 
     if tt == nil then tt = os.time() end
     local id = math.floor(tt / rh.divid)
@@ -214,13 +208,12 @@ local function rateLimit( rh, rateMax, bump)
     end
         
     -- Get rate
-    local nb = 0
-    local t = 0
+    local nb, t = 0, 0
     for i in pairs(rh.buckets) do
         t = t + rh.buckets[i]
         nb = nb + 1
     end
-    local r60 = iif( nb < 1, 0, t / ( rh.divid * nb ) ) * 60.0 -- 60-sec average
+    local r60 = ( nb < 1 ) and 0 or ( ( t / ( rh.divid * nb ) ) * 60.0 ) -- 60-sec average
     D("rateLimit() rate is %1 over %4 from %2 buckets, %3/minute avg", t, nb, r60, rh.divid*nb)
     return t > rateMax, t, r60
 end
@@ -559,7 +552,7 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
         -- Save on context for other evals
         ctx[vname] = result
         -- Canonify booleans by converting to number for storage as state variable
-        if type(result) == "boolean" then result = iif( result, "1", "0" ) end
+        if type(result) == "boolean" then result = result and "1" or "0" end
         local oldVal = luup.variable_get( VARSID, vname, tdev )
         if oldVal == nil or oldVal ~= result then
             luup.variable_set( VARSID, vname, tostring(result or ""), tdev )
@@ -854,13 +847,13 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         local tparam = split( cond.value or "sunrise+0,sunset+0" )
         local cp,offset = string.match( tparam[1], "^([^%+%-]+)(.*)" )
         offset = tonumber( offset or "0" ) or 0
-        local stt = iif( cp == "sunrise", sun[2], sun[3] )
+        local stt = ( cp == "sunrise" ) and sun[2] or sun[3]
         local sdt = os.date("*t", stt + offset*60)
         local startMSM = sdt.hour * 60 + sdt.min
         if op == "bet" or op == "nob" then
             local ep,eoffs = string.match( tparam[2] or "sunset+0", "^([^%+%-]+)(.*)" )
             eoffs = tonumber( eoffs or 0 ) or 0
-            local ett = iif( ep == "sunrise", sun[2], sun[3] )
+            local ett = ( ep == "sunrise" ) and sun[2] or sun[3]
             sdt = os.date("*t", ett + eoffs*60)
             local endMSM = sdt.hour * 60 + sdt.min
             D("evaluateCondition() cond %1 check %2 %3 %4 and %5", cond.id, nowMSM, op, startMSM, endMSM)
@@ -891,16 +884,16 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         local tparam = split( cond.value, ',' )
         for ix = #tparam+1, 10 do tparam[ix] = "" end -- pad
         local tpart = {}
-        tpart[1] = iif( tparam[1] == "", ndt.year, tparam[1] )
-        tpart[2] = iif( tparam[2] == "", ndt.month, tparam[2] )
-        tpart[3] = iif( tparam[3] == "", ndt.day, tparam[3] )
-        tpart[4] = iif( tparam[4] == "", ndt.hour, tparam[4] )
-        tpart[5] = iif( tparam[5] == "", ndt.min, tparam[5] )
-        tpart[6] = iif( tparam[6] == "", tpart[1], tparam[6] )
-        tpart[7] = iif( tparam[7] == "", tpart[2], tparam[7] )
-        tpart[8] = iif( tparam[8] == "", tpart[3], tparam[8] )
-        tpart[9] = iif( tparam[9] == "", tpart[4], tparam[9] )
-        tpart[10] = iif( tparam[10] == "", tpart[5], tparam[10] )
+        tpart[1] = ( tparam[1] == "" ) and ndt.year or tparam[1]
+        tpart[2] = ( tparam[2] == "" ) and ndt.month or tparam[2]
+        tpart[3] = ( tparam[3] == "" ) and ndt.day or tparam[3]
+        tpart[4] = ( tparam[4] == "" ) and ndt.hour or tparam[4]
+        tpart[5] = ( tparam[5] == "" ) and ndt.min or tparam[5]
+        tpart[6] = ( tparam[6] == "" ) and tpart[1] or tparam[6]
+        tpart[7] = ( tparam[7] == "" ) and tpart[2] or tparam[7]
+        tpart[8] = ( tparam[8] == "" ) and tpart[3] or tparam[8]
+        tpart[9] = ( tparam[9] == "" ) and tpart[4] or tparam[9]
+        tpart[10] = ( tparam[10] == "" ) and tpart[5] or tparam[10]
 
         if tparam[2] == "" then
             -- No date specified, only time components. Magnitude comparison.
@@ -1210,7 +1203,7 @@ local function updateSensor( tdev )
         newTrip, hasTimer = evaluateConditions( cdata, tdev )
         if invert then newTrip = not newTrip end
         D("updateSensor() trip %4was %1 now %2, retrig %3", currTrip, newTrip,
-            retrig, iif( invert, "(inverted) ", "" ) )
+            retrig, invert and "(inverted) " or "" )
             
         -- Update runtime based on last status
         local now = os.time()
@@ -1231,7 +1224,7 @@ local function updateSensor( tdev )
                 rateBump( sensorState[tostring(tdev)].changeRate )
                 sensorState[tostring(tdev)].changeThrottled = false
                 L("%2 (#%1) tripped state now %3", tdev, luup.devices[tdev].description, newTrip)
-                luup.variable_set( SENSOR_SID, "Tripped", iif( newTrip, "1", "0" ), tdev )
+                luup.variable_set( SENSOR_SID, "Tripped", newTrip and "1" or "0", tdev )
                 luup.variable_set( RSSID, "TripCount", getVarNumeric( "TripCount", 0, tdev, RSSID ) + 1, tdev )
                 addEvent{dev=tdev,event='sensorstate',state=newTrip}
                 if not newTrip then
@@ -1251,7 +1244,7 @@ local function updateSensor( tdev )
             end
         end
         if not sensorState[tostring(tdev)].changeThrottled then
-            setMessage( iif( newTrip, "Tripped", "Not tripped" ), tdev )
+            setMessage( newTrip and "Tripped" or "Not tripped", tdev )
         end
 
         -- Save the condition state.
@@ -1495,7 +1488,7 @@ function setEnabled( enabled, tdev )
     if wasEnabled ~= enabled then
         -- changing
         addEvent{ event="enable", dev=tdev, enabled=enabled }
-        luup.variable_set( RSSID, "Enabled", iif( enabled, "1", "0" ), tdev )
+        luup.variable_set( RSSID, "Enabled", enabled and "1" or "0", tdev )
         -- If disabling, do nothing else, so current actions complete/expire.
         if enabled then
             -- Kick off a new timer thread, which will also re-eval.
@@ -1509,20 +1502,20 @@ end
 
 function actionTrip( dev )
     L("Sensor %1 (%2) trigger action!", dev, luup.devices[dev].description)
-    luup.variable_set( SENSOR_SID, "Tripped", iif( getVarNumeric( "Invert", 0, dev, RSSID ) == 0, 1, 0 ), dev );
+    luup.variable_set( SENSOR_SID, "Tripped", ( getVarNumeric( "Invert", 0, dev, RSSID ) == 0 ) and "1" or "0", dev );
     setMessage("Tripped", dev);
 end
 
 function actionReset( dev )
     L("Sensor %1 (%2) reset action!", dev, luup.devices[dev].description)
-    luup.variable_set( SENSOR_SID, "Tripped", iif( getVarNumeric( "Invert", 0, dev, RSSID ) == 0, 0, 1 ), dev );
+    luup.variable_set( SENSOR_SID, "Tripped", ( getVarNumeric( "Invert", 0, dev, RSSID ) == 0 ) and "0" or "1", dev );
     setMessage("Not tripped", dev)
 end
 
 function actionSetArmed( armedVal, dev )
     L("Sensor %1 (%2) set armed to %4", dev, luup.devices[dev].description, armedVal)
     local armed = ( tonumber( armedVal ) or 0 ) ~= 0
-    luup.variable_set( SENSOR_SID, "Armed", iif( armed, 1, 0 ), dev )
+    luup.variable_set( SENSOR_SID, "Armed", armed and "1" or "0", dev )
 end
 
 function masterClear( dev )
@@ -1709,7 +1702,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
     if action == "debug" then
         debugMode = not debugMode
         D("debug set %1 by request", debugMode)
-        return "Debug is now " .. iif( debugMode, "on", "off" ), "text/plain"
+        return "Debug is now " .. ( debugMode and "on" or "off" ), "text/plain"
     end
 
     if action == "restart" then
@@ -1744,8 +1737,8 @@ function request( lul_request, lul_parameters, lul_outputformat )
                     for _,cond in ipairs( gc.groupconditions or {} ) do
                         r = r .. "        (" .. ( cond.type or "?type?" ) .. ") "
                         if cond.type == "service" then
-                            r = r .. string.format("%s (%d) ", iif( luup.devices[cond.device]==nil, "(missing, " .. ( cond.devicename or "unknown" ) .. ")",
-                                luup.devices[cond.device].description), cond.device )
+                            r = r .. string.format("%s (%d) ", ( luup.devices[cond.device]==nil ) and ( "*** missing " .. ( cond.devicename or "unknown" ) ) or
+                                luup.devices[cond.device].description, cond.device )
                             r = r .. string.format("%s/%s %s %s", cond.service or "?", cond.variable or "?", cond.operator or cond.condition or "?",
                                 cond.value or "")
                             if cond.duration then
