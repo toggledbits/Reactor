@@ -1746,7 +1746,6 @@ var ReactorSensor = (function(api) {
 
     function onUIDeviceStatusChanged( args ) {
         if ( !inStatusPanel ) {
-            console.log("Ignoring device update, not in status panel");
             return;
         }
         var pdev = api.getCpanelDeviceId();
