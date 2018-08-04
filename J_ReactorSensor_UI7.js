@@ -26,6 +26,7 @@ var ReactorSensor = (function(api) {
     var ixCond, ixGroup;
     var roomsByName = [];
     var configModified = false;
+    var inStatusPanel = false;
     var lastx = 0;
     var condTypeName = { "service": "Service/Variable", "housemode": "House Mode", "comment": "Comment", "weekday": "Weekday", 'time': "Date (deprecated)",
         "sun": "Sunrise/Sunset", "trange": "Date/Time", "reload": "Luup Reloaded" };
@@ -125,6 +126,9 @@ var ReactorSensor = (function(api) {
     /* Initialize the module */
     function initModule() {
         var myid = api.getCpanelDeviceId();
+        
+        /* Force this false every time, and make the status panel change it. */
+        inStatusPanel = false;
 
         /* Make device-indexed version of userdata devices, which is just an array */
         var ud = api.getUserData();
@@ -1077,7 +1081,8 @@ var ReactorSensor = (function(api) {
                 jQuery("input", container).on( 'change.reactor', handleRowChange );
                 break;
 
-            case 'reload': /* fallthrough */
+            case 'reload': 
+                /* falls through */
             default:
                 /* nada */
         }
@@ -1428,6 +1433,7 @@ var ReactorSensor = (function(api) {
                         break;
                     case 'reload':
                         removeConditionProperties( cond, "" );
+                        break;
                     default:
                         /* Don't do anything */
                 }
@@ -1600,7 +1606,7 @@ var ReactorSensor = (function(api) {
 
     function updateStatus( pdev ) {
         var stel = jQuery('div#reactorstatus');
-        if ( stel.length === 0 ) {
+        if ( stel.length === 0 || !inStatusPanel ) {
             /* If not displayed, do nothing. */
             return;
         }
@@ -1739,6 +1745,10 @@ var ReactorSensor = (function(api) {
     }
 
     function onUIDeviceStatusChanged( args ) {
+        if ( !inStatusPanel ) {
+            console.log("Ignoring device update, not in status panel");
+            return;
+        }
         var pdev = api.getCpanelDeviceId();
         var doUpdate = false;
         if ( args.id == pdev ) {
@@ -1779,9 +1789,10 @@ var ReactorSensor = (function(api) {
 
         api.setCpanelContent( '<div id="reactorstatus"></div>' );
 
-        updateStatus( api.getCpanelDeviceId() );
-
         api.registerEventHandler('on_ui_deviceStatusChanged', ReactorSensor, 'onUIDeviceStatusChanged');
+        inStatusPanel = true; /* Tell the event handler it's OK */
+
+        updateStatus( api.getCpanelDeviceId() );
     }
 
     function updateVariableControls() {
@@ -1985,7 +1996,7 @@ var ReactorSensor = (function(api) {
             
             var rr = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "Retrigger" ) || "0";
             if ( rr !== "0" ) {
-                html += '<div class="row"><div class="warning col-cs-12 col-sm-12">WARNING! Retrigger is on! You should avoid using house mode or time-related conditions in this ReactorSensor, as they will cause retriggers every 60 seconds!</div></div>'
+                html += '<div class="row"><div class="warning col-cs-12 col-sm-12">WARNING! Retrigger is on! You should avoid using house mode or time-related conditions in this ReactorSensor, as they will cause retriggers every 60 seconds!</div></div>';
             }
             
             html += '<div id="conditions"></div>';
