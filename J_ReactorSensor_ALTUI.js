@@ -28,8 +28,8 @@ var ReactorSensor_ALTUI = ( function( window, undefined ) {
             html += ALTUI_PluginDisplays.createOnOffButton( armed, "reactor-armed-" + device.altuiid, _T("Disarmed,Armed"), "pull-right");
             html += '</div>';
             html += '<div class="clearfix"></div>';
-            html += ('<div><button class=".btn-sm .btn-default reactor-cpbutton" id="reactor-reset-{0}">'+_T("Reset")+'</button>').format(device.altuiid);
-            html += ('<button class=".btn-sm .btn-warning reactor-cpbutton" id="reactor-trip-{0}">'+_T("Trip")+'</button></div>').format(device.altuiid);
+            html += ('<div><button class="btn-sm btn-default reactor-cpbutton" id="reactor-reset-{0}">'+_T("Reset")+'</button>').format(device.altuiid);
+            html += ('<button class="btn-sm btn-default reactor-cpbutton" id="reactor-trip-{0}">'+_T("Trip")+'</button></div>').format(device.altuiid);
             html += '<div>' + message + '</div>';
             html += '<script type="text/javascript">';
             html += '$("button#reactor-reset-{0}").on("click", function() { ReactorSensor_ALTUI._deviceAction("{0}", "Reset"); } );'.format(device.altuiid);
