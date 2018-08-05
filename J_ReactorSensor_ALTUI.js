@@ -25,17 +25,17 @@ var ReactorSensor_ALTUI = ( function( window, undefined ) {
             var armed = MultiBox.getStatus( device, "urn:micasaverde-com:serviceId:SecuritySensor1", "Armed");
             html += '<div class="pull-right">';
             html += ALTUI_PluginDisplays.createOnOffButton( enab, "reactor-enabled-" + device.altuiid, _T("Disabled,Enabled"), "pull-right");
-            html += ALTUI_PluginDisplays.createOnOffButton( armed, "ReactorSensor-armed-" + device.altuiid, _T("Disarmed,Armed"), "pull-right");
+            html += ALTUI_PluginDisplays.createOnOffButton( armed, "reactor-armed-" + device.altuiid, _T("Disarmed,Armed"), "pull-right");
             html += '</div>';
             html += '<div class="clearfix"></div>';
-            html += ('<div><button class=".btn-sm .btn-default reactor-cpbutton" id="reactor-reset-{0}">'+_T("Reset")+'</button>').format(device.altuiid);
-            html += ('<button class=".btn-sm .btn-warning reactor-cpbutton" id="reactor-trigger-{0}">'+_T("Trigger")+'</button></div>').format(device.altuiid);
+            html += ('<div><button class="btn-sm btn-default reactor-cpbutton" id="reactor-reset-{0}">'+_T("Reset")+'</button>').format(device.altuiid);
+            html += ('<button class="btn-sm btn-default reactor-cpbutton" id="reactor-trip-{0}">'+_T("Trip")+'</button></div>').format(device.altuiid);
             html += '<div>' + message + '</div>';
             html += '<script type="text/javascript">';
             html += '$("button#reactor-reset-{0}").on("click", function() { ReactorSensor_ALTUI._deviceAction("{0}", "Reset"); } );'.format(device.altuiid);
-            html += '$("button#reactor-trigger-{0}").on("click", function() { ReactorSensor_ALTUI._deviceAction("{0}", "Trigger"); } );'.format(device.altuiid);
+            html += '$("button#reactor-trip-{0}").on("click", function() { ReactorSensor_ALTUI._deviceAction("{0}", "Trip"); } );'.format(device.altuiid);
             html += "$('div#reactor-enabled-{0}').on('click', function() { ReactorSensor_ALTUI.toggleEnabled('{0}','div#reactor-enabled-{0}'); } );".format(device.altuiid);
-            html += "$('div#ReactorSensor-armed-{0}').on('click', function() { ReactorSensor_ALTUI.toggleArmed('{0}','div#ReactorSensor-armed-{0}'); } );".format(device.altuiid);
+            html += "$('div#reactor-armed-{0}').on('click', function() { ReactorSensor_ALTUI.toggleArmed('{0}','div#reactor-armed-{0}'); } );".format(device.altuiid);
             html += '</script>';
             return html;
     }
