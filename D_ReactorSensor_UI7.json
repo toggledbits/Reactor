@@ -17,15 +17,15 @@
             "value": "0"
         }]
     }],
-    "x": "2",
-    "y": "4",
-    "inScene": "1",
+    "x": 2,
+    "y": 4,
+    "inScene": 1,
     "Tabs": [{
             "Label": {
                 "lang_tag": "tabname_control",
                 "text": "Control"
             },
-            "Position": "0",
+            "Position": 0,
             "TabType": "flash",
             "top_navigation_tab": 1,
             "TopNavigationTab": 1,
@@ -44,23 +44,23 @@
             ],
             "SceneGroup": [{
                     "id": 1,
-                    "top": "0",
-                    "left": "0",
-                    "x": "4",
-                    "y": "2"
+                    "top": 0,
+                    "left": 0,
+                    "x": 4,
+                    "y": 2
                 },
                 {
                     "id": 2,
-                    "top": "1",
-                    "left": "0",
-                    "x": "2",
-                    "y": "2"
+                    "top": 1,
+                    "left": 0,
+                    "x": 2,
+                    "y": 2
                 }
             ],
             "Control": [{
                     "ControlType": "label",
-                    "top": "0",
-                    "left": "0",
+                    "top": 0,
+                    "left": 0,
                     "Label": {
                         "lang_tag": "tb_reactor_tag",
                         "text": "Manual Control"
@@ -75,8 +75,8 @@
                 {
                     "ControlGroup": 1,
                     "ControlType": "button",
-                    "top": "0",
-                    "left": "0",
+                    "top": 0,
+                    "left": 0,
                     "Label": {
                         "lang_tag": "cmd_reset",
                         "text": "Reset"
@@ -100,8 +100,8 @@
                 {
                     "ControlGroup": 1,
                     "ControlType": "button",
-                    "top": "0",
-                    "left": "1",
+                    "top": 0,
+                    "left": 1,
                     "Label": {
                         "lang_tag": "cmd_trip",
                         "text": "Trip"
@@ -122,8 +122,8 @@
                 {
                     "ControlGroup": 1,
                     "ControlType": "multi_state_button",
-                    "top": "0",
-                    "left": "3",
+                    "top": 0,
+                    "left": 3,
                     "Display": {
                         "Top": 30,
                         "Left": 255,
@@ -175,8 +175,8 @@
                 {
                     "ControlGroup": 1,
                     "ControlType": "multi_state_button",
-                    "top": "0",
-                    "left": "4",
+                    "top": 0,
+                    "left": 4,
                     "Display": {
                         "Top": 30,
                         "Left": 320,
@@ -226,14 +226,14 @@
                     ]
                 },
                 {
-                    "ControlGroup": "1",
+                    "ControlGroup": 1,
                     "ControlType": "line_break"
                 },
                 {
                     "ControlGroup": 1,
                     "ControlType": "variable",
-                    "top": "1",
-                    "left": "0",
+                    "top": 1,
+                    "left": 0,
                     "Display": {
                         "Top": 60,
                         "Left": 60,
@@ -246,8 +246,8 @@
                 },
                 {
                     "ControlType": "button",
-                    "top": "3",
-                    "left": "1",
+                    "top": 3,
+                    "left": 1,
                     "Label": {
                         "lang_tag": "cmd_restart",
                         "text": "Restart"
@@ -272,7 +272,7 @@
                 "lang_tag": "tb_reactorsensor_doConditions",
                 "text": "Conditions"
             },
-            "Position": "1",
+            "Position": 1,
             "TabType": "javascript",
             "top_navigation_tab": 1,
             "TopNavigationTab": 1,
@@ -284,7 +284,7 @@
                 "lang_tag": "tb_reactorsensor_doVariables",
                 "text": "Expressions"
             },
-            "Position": "2",
+            "Position": 2,
             "TabType": "javascript",
             "top_navigation_tab": 1,
             "TopNavigationTab": 1,
@@ -296,7 +296,7 @@
                 "lang_tag": "tb_reactorsensor_doTest",
                 "text": "Test"
             },
-            "Position": "3",
+            "Position": 3,
             "TabType": "javascript",
             "top_navigation_tab": 1,
             "TopNavigationTab": 1,
@@ -308,7 +308,7 @@
                 "lang_tag": "ui7_advanced",
                 "text": "Advanced"
             },
-            "Position": "4",
+            "Position": 4,
             "TabType": "javascript",
             "ScriptName": "shared.js",
             "Function": "advanced_device"
@@ -318,7 +318,7 @@
                 "lang_tag": "ui7_logs",
                 "text": "Logs"
             },
-            "Position": "5",
+            "Position": 5,
             "TabType": "javascript",
             "ScriptName": "shared.js",
             "Function": "device_logs"
@@ -328,7 +328,7 @@
                 "lang_tag": "ui7_notifications",
                 "text": "Notifications"
             },
-            "Position": "6",
+            "Position": 6,
             "TabType": "javascript",
             "ScriptName": "shared.js",
             "Function": "device_notifications"
@@ -338,7 +338,7 @@
                 "lang_tag": "ui7_device_scenes",
                 "text": "Scenes"
             },
-            "Position": "7",
+            "Position": 7,
             "TabType": "javascript",
             "ScriptName": "shared.js",
             "Function": "device_scenes"

@@ -26,6 +26,7 @@ var ReactorSensor = (function(api) {
     var ixCond, ixGroup;
     var roomsByName = [];
     var configModified = false;
+    var inStatusPanel = false;
     var lastx = 0;
     var condTypeName = { "service": "Service/Variable", "housemode": "House Mode", "comment": "Comment", "weekday": "Weekday", 'time': "Date (deprecated)",
         "sun": "Sunrise/Sunset", "trange": "Date/Time", "reload": "Luup Reloaded" };
@@ -39,7 +40,7 @@ var ReactorSensor = (function(api) {
         var html = '';
         html += '<div class="clearfix">';
         html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
-        html += '<div id="tbcopyright">Reactor ver 1.3stable-180803 &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
+        html += '<div id="tbcopyright">Reactor ver 1.3 &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
             ' All Rights Reserved. Please check out the <a href="https://www.toggledbits.com/reactor" target="_blank">online documentation</a>' +
             ' and <a href="http://forum.micasaverde.com/index.php/topic,87484.0.html" target="_blank">forum thread</a> for support.</div>';
         html += '<div id="supportlinks">Support links: ' +
@@ -54,7 +55,7 @@ var ReactorSensor = (function(api) {
     /* Create an ID that's functionally unique for our purposes. */
     function getUID( prefix ) {
         /* Not good, but enough. */
-        var newx = new Date().getTime();
+        var newx = Date.now();
         if ( newx == lastx ) ++newx;
         lastx = newx;
         return ( prefix === undefined ? "" : prefix ) + newx.toString(16);
@@ -89,11 +90,13 @@ var ReactorSensor = (function(api) {
                 }
             ]};
         }
+        var upgraded = false;
         if ( undefined === cdata.variables ) {
             /* Fixup v2 */
             cdata.variables = {};
-            configModified = true;
+            upgraded = true;
         }
+        /* Set up our indices. */
         ixGroup = {}; ixCond = {};
         for ( var ig=0; ig<(cdata.conditions || {}).length; ig++ ) {
             var grp = cdata.conditions[ig];
@@ -103,18 +106,29 @@ var ReactorSensor = (function(api) {
                     /* Fixup v2 */
                     grp.groupconditions[ic].operator = grp.groupconditions[ic].condition;
                     delete grp.groupconditions[ic].condition;
-                    configModified = true;
+                    upgraded = true;
                 }
                 ixCond[ grp.groupconditions[ic].id ] = grp.groupconditions[ic];
             }
         }
+        
+        cdata.version = 2;
+        cdata.device = myid;
+        if ( upgraded ) {
+            /* Write updated config. We don't care if it fails, as nothing we can't redo would be lost. */
+            api.setDeviceStatePersistent( myid, serviceId, "cdata", JSON.stringify( cdata ) );
+        }
 
+        configModified = false;
         return cdata;
     }
 
     /* Initialize the module */
     function initModule() {
         var myid = api.getCpanelDeviceId();
+        
+        /* Force this false every time, and make the status panel change it. */
+        inStatusPanel = false;
 
         /* Make device-indexed version of userdata devices, which is just an array */
         var ud = api.getUserData();
@@ -245,7 +259,7 @@ var ReactorSensor = (function(api) {
             case 'service':
                 str += ( undefined !== deviceByNumber[cond.device] ?
                         deviceByNumber[cond.device].friendlyName :
-                        '#' + cond.device + ( cond.devicename === undefined ? "name unknown" : cond.devicename ) + ' (missing)' );
+                        '#' + cond.device + ' ' + ( cond.devicename === undefined ? "name unknown" : cond.devicename ) + ' (missing)' );
                 str += ' ' + cond.variable + ' ' + cond.operator + ' ' + cond.value;
                 break;
 
@@ -1067,7 +1081,8 @@ var ReactorSensor = (function(api) {
                 jQuery("input", container).on( 'change.reactor', handleRowChange );
                 break;
 
-            case 'reload': /* fallthrough */
+            case 'reload': 
+                /* falls through */
             default:
                 /* nada */
         }
@@ -1418,15 +1433,15 @@ var ReactorSensor = (function(api) {
                         break;
                     case 'reload':
                         removeConditionProperties( cond, "" );
+                        break;
                     default:
                         /* Don't do anything */
                 }
             }
         }
         /* Save to persistent state */
-        cdata.version = 2;
-        cdata.timestamp = Math.floor( new Date().getTime() / 1000 );
-        api.setDeviceStatePersistent( api.getCpanelDeviceId(), serviceId, "cdata", JSON.stringify( cdata ),
+        cdata.timestamp = Math.floor( Date.now() / 1000 );
+        api.setDeviceStatePersistent( cdata.device, serviceId, "cdata", JSON.stringify( cdata ),
         {
             'onSuccess' : function() {
                 configModified = false;
@@ -1453,7 +1468,7 @@ var ReactorSensor = (function(api) {
             return "";
         }
         var dtms = dt * 1000;
-        var ago = ( new Date().getTime() - dtms ) / 1000;
+        var ago = Math.floor( ( Date.now() - dtms ) / 1000 );
         if ( ago < 86400 ) {
             return new Date(dtms).toLocaleTimeString();
         }
@@ -1591,7 +1606,7 @@ var ReactorSensor = (function(api) {
 
     function updateStatus( pdev ) {
         var stel = jQuery('div#reactorstatus');
-        if ( stel.length === 0 ) {
+        if ( stel.length === 0 || !inStatusPanel ) {
             /* If not displayed, do nothing. */
             return;
         }
@@ -1730,6 +1745,9 @@ var ReactorSensor = (function(api) {
     }
 
     function onUIDeviceStatusChanged( args ) {
+        if ( !inStatusPanel ) {
+            return;
+        }
         var pdev = api.getCpanelDeviceId();
         var doUpdate = false;
         if ( args.id == pdev ) {
@@ -1770,9 +1788,10 @@ var ReactorSensor = (function(api) {
 
         api.setCpanelContent( '<div id="reactorstatus"></div>' );
 
-        updateStatus( api.getCpanelDeviceId() );
-
         api.registerEventHandler('on_ui_deviceStatusChanged', ReactorSensor, 'onUIDeviceStatusChanged');
+        inStatusPanel = true; /* Tell the event handler it's OK */
+
+        updateStatus( api.getCpanelDeviceId() );
     }
 
     function updateVariableControls() {
@@ -1976,7 +1995,7 @@ var ReactorSensor = (function(api) {
             
             var rr = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "Retrigger" ) || "0";
             if ( rr !== "0" ) {
-                html += '<div class="row"><div class="warning col-cs-12 col-sm-12">WARNING! Retrigger is on! You should avoid using house mode or time-related conditions in this ReactorSensor, as they will cause retriggers every 60 seconds!</div></div>'
+                html += '<div class="row"><div class="warning col-cs-12 col-sm-12">WARNING! Retrigger is on! You should avoid using house mode or time-related conditions in this ReactorSensor, as they will cause retriggers every 60 seconds!</div></div>';
             }
             
             html += '<div id="conditions"></div>';
