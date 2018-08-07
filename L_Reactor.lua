@@ -13,7 +13,7 @@ local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
 local _PLUGIN_VERSION = "1.4develop"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
-local _CONFIGVERSION = 00106
+local _CONFIGVERSION = 00107
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -29,6 +29,8 @@ local sensorState = {}
 local tickTasks = {}
 local watchData = {}
 local devicesByName = {}
+local sceneData = {}
+local sceneWaiting = {}
 
 local runStamp = 0
 local pluginDevice = 0
@@ -156,7 +158,7 @@ local function getVarNumeric( name, dflt, dev, sid )
     return s
 end
 
-local function rateFill( rh, tt ) 
+local function rateFill( rh, tt )
     if tt == nil then tt = os.time() end
     local id = math.floor(tt / rh.divid)
     local minid = math.floor(( tt-rh.period ) / rh.divid) + 1
@@ -196,7 +198,7 @@ local function rateBump( rh, count )
     rateFill( rh, tt )
     rh.buckets[tostring(id)] = rh.buckets[tostring(id)] + count
 end
-    
+
 -- Check rate limit. Return true if rate for period (set in init)
 -- exceeds rateMax, rate over period, and 60-second average.
 local function rateLimit( rh, rateMax, bump)
@@ -207,7 +209,7 @@ local function rateLimit( rh, rateMax, bump)
     else
         rateFill( rh )
     end
-        
+
     -- Get rate
     local nb, t = 0, 0
     for i in pairs(rh.buckets) do
@@ -221,6 +223,8 @@ end
 
 -- Add, if not already set, a watch on a device and service
 local function addServiceWatch( dev, svc, var, target )
+    -- Don't watch our own variables--we update them in sequence anyway
+    if dev == target and svc == VARSID then return end
     target = tostring(target)
     local watchkey = string.format("%d:%s/%s", dev or 0, svc or "X", var or "X")
     if watchData[watchkey] == nil or watchData[watchkey][target] == nil then
@@ -251,9 +255,10 @@ end
 -- any currently scheduled time, the task tick is advanced; otherwise, it is
 -- ignored (as the existing task will come sooner), unless repl=true, in which
 -- case the existing task will be deferred until the provided time.
-local function scheduleTick( timeTick, repl, tdev )
-    D("scheduleTick(%1,%2,%3)", timeTick, repl, tdev)
-    local tkey = tostring(tdev)
+local function scheduleTick( timeTick, repl, tdev, tfunc, tId )
+    D("scheduleTick(%1,%2,%3,%4,%5)", timeTick, repl, tdev, tfunc, tId)
+    local function nulltick(d) L({level=1, "nulltick(%1)"},d) end
+    local tkey = tostring( tId or tdev )
     if timeTick == 0 or timeTick == nil then
         tickTasks[tkey] = nil
         return
@@ -261,26 +266,29 @@ local function scheduleTick( timeTick, repl, tdev )
         -- timer already set, see if new is sooner, or replacing
         if tickTasks[tkey].when == nil or timeTick < tickTasks[tkey].when or repl then
             tickTasks[tkey].when = timeTick
+            if tfunc ~= nil then tickTasks[tkey].tfunc = tfunc end -- replace func
         end
     else
-        tickTasks[tkey] = { dev=tdev, when=timeTick }
+        tickTasks[tkey] = { id=tkey, dev=tdev, when=timeTick, tfunc=tfunc or nulltick } -- new task
     end
-    -- If new tick is earlier than next master tick, reschedule master
-    if timeTick < tickTasks.master.when then
-        tickTasks.master.when = timeTick
+    -- If new tick is earlier than next plugin tick, reschedule
+    tickTasks._plugin = tickTasks._plugin or {}
+    if tickTasks._plugin.when == nil or timeTick < tickTasks._plugin.when then
+        tickTasks._plugin.when = timeTick
         local delay = timeTick - os.time()
         if delay < 1 then delay = 1 end
-        D("scheduleTick() rescheduling master tick for %1", delay)
+        D("scheduleTick() rescheduling plugin tick for %1", delay)
         runStamp = runStamp + 1
         luup.call_delay( "reactorTick", delay, runStamp )
     end
+    return tkey
 end
 
 -- Schedule a timer tick for after a delay (seconds). See scheduleTick above
 -- for additional info.
-local function scheduleDelay( delay, repl, tdev )
-    D("scheduleDelay(%1,%2,%3)", delay, repl, tdev)
-    scheduleTick( delay+os.time(), repl, tdev )
+local function scheduleDelay( delay, repl, tdev, tfunc, tId )
+    D("scheduleDelay(%1,%2,%3,%4,%5)", delay, repl, tdev, tfunc, tId)
+    return scheduleTick( delay+os.time(), repl, tdev, tfunc, tId )
 end
 
 -- Set the status message
@@ -290,10 +298,12 @@ local function setMessage(s, dev)
 end
 
 -- Return array of keys for a map (table). Pass array or new is created.
--- N.B. this version may insert duplicate keys if called multiple with r passed in (OK here)
 local function getKeys( m, r )
     if r == nil then r = {} end
     local seen = {}
+    for k,_ in pairs( r ) do
+        seen[k] = true
+    end
     for k,_ in pairs( m ) do
         if seen[k] == nil then
             table.insert( r, k )
@@ -338,6 +348,8 @@ local function sensor_runOnce( tdev )
         initVar( "ContinuousTimer", 0, tdev, RSSID )
         initVar( "MaxUpdateRate", "", tdev, RSSID )
         initVar( "MaxChangeRate", "", tdev, RSSID )
+        initVar( "UseReactorScenes", 1, tdev, RSSID )
+        initVar( "Scenes", "", tdev, RSSID )
 
         initVar( "Armed", 0, tdev, SENSOR_SID )
         initVar( "Tripped", 0, tdev, SENSOR_SID )
@@ -362,14 +374,16 @@ local function sensor_runOnce( tdev )
         luup.attr_set('category_num', 4, tdev)
         luup.attr_set('subcategory_num', 0, tdev)
     end
-    
-    if s < 00106 then
-        initVar( "ContinuousTimer", 0, tdev, RSSID )
+
+    if s < 00107 then
+        initVar( "ContinuousTimer", 0, tdev, RSSID ) -- 106
         initVar( "Runtime", 0, tdev, RSSID )
         initVar( "TripCount", 0, tdev, RSSID )
         initVar( "MaxUpdateRate", "", tdev, RSSID )
         initVar( "MaxChangeRate", "", tdev, RSSID )
         initVar( "AutoUntrip", 0, tdev, SENSOR_SID )
+        initVar( "UseReactorScenes", 1, tdev, RSSID ) -- 107
+        initVar( "Scenes", "", tdev, RSSID )
     end
 
     -- Update version last.
@@ -404,7 +418,7 @@ local function plugin_runOnce( pdev )
     if s < 00102 then
         initVar( "DebugMode", 0, pdev, MYSID )
     end
-    
+
     if s < 00105 then
         luup.attr_set('category_num', 1, pdev)
         luup.attr_set('subcategory_num', "", pdev)
@@ -425,34 +439,134 @@ local function getHouseMode( tdev )
     return luup.variable_get( MYSID, "HouseMode", pluginDevice ) or "1"
 end
 
-local function stopScene( tdev )
-    luup.variable_set( RSSID, "scene", "", tdev )
+-- Load scene data from Luup.
+local function loadScene( sceneId, pdev )
+    D("loadScene(%1,%2)", sceneId, pdev)
+    assert(luup.devices[pdev].device_type == MYTYPE)
+
+    -- Fetch from Luup. Horrid that we can't get this structure directly (have to make HTTP request)
+    local req = "http://localhost/port_3480/data_request?id=scene&action=list&output_format=json&scene=" .. tostring(sceneId)
+    if isOpenLuup then
+        req = "http://localhost:3480/data_request?id=scene&action=list&output_format=json&scene=" .. tostring(sceneId)
+    end
+    local success, body, httpStatus = luup.inet.wget(req)
+    if not success then
+        D("loadScene() failed scene request %2: %1", httpStatus, req)
+        return nil
+    end
+    local data, pos, err = json.decode(body)
+    if err then
+        L("Can't decode JSON response for scene %1: %2 at %3 in %4", sceneId, err, pos, body)
+        return nil
+    end
+    data.loadtime = luup.attr_get("LoadTime", 0)
+    if data.groups then
+        table.sort( data.groups, function( a, b ) return (a.delay or 0) < (b.delay or 0) end )
+    end
+    sceneData[tostring(sceneId)] = data
+    luup.variable_set( MYSID, "scenedata", json.encode(sceneData), pdev )
+    return data
 end
 
-local function runScene( scd, tdev )
-    D("runScene(%1,%2)", scd, tdev )
-    
-    local now = os.time()
-    
-    -- Check if scene running. If not, set up and run first scene group (maybe).
-    local sceneState = split( luup.variable_get( RSSID, "scene", tdev ) or "" )
-    -- sceneState: scene_id,execution_start,last_completed_group
-    if sceneState[1] == "" or tonumber( sceneState[1] ) ~= scd.id then
-        sceneState = { scd.id, now, 0 }
-        luup.variable_set( RSSID, "scene", sceneState:concat(','), tdev )
-        scd.groups:sort( function( a, b ) return a.delay < b.delay end )
+-- Process deferred scene load queue
+local function loadWaitingScenes( pdev )
+    local done = {}
+    for sk,sceneId in pairs(sceneWaiting) do
+        if loadScene( sceneId, pdev ) ~= nil then
+            table.insert( done, sk )
+        end
     end
+    for _,sk in ipairs( done ) do
+        sceneWaiting[sk] = nil
+    end
+    if next(sceneWaiting) ~= nil then
+        -- More to do, schedule it.
+        scheduleDelay( 60, false, pluginDevice, loadWaitingScenes, "sceneLoader" )
+    end
+end
+
+-- Get scene data from cache or Luup. Queue fetch/refetch if needed.
+local function getSceneData( sceneId, pdev )
+    D("getSceneData(%1,%2)", sceneId, pdev )
+
+    -- Figure out the parent device (if we're not the parent)
+    if pdev == nil then
+        pdev = pluginDevice
+    elseif luup.devices[pdev].device_type == RSTYPE then
+        pdev = luup.devices[pdev].device_num_parent
+    end
+
+    -- Load persistent scene data to cache if cache empty
+    if next(sceneData) == nil then
+        sceneData = json.decode( luup.variable_get( MYSID, "scenedata", pdev ) or "{}" ) or {}
+    end
+
+    -- See if we can return from cache
+    local skey = tostring(sceneId)
+    local scd = sceneData[skey]
+    if scd ~= nil then
+        if tostring(scd.loadtime or 0) ~= luup.attr_get("LoadTime", 0) then
+            -- Reload since cached, queue for refresh.
+            D("getSceneData() reload since scene last cached, queueing update")
+            sceneWaiting[skey] = sceneId
+            scheduleDelay( 5, false, pluginDevice, loadWaitingScenes, "sceneLoader" )
+        end
+        return scd -- return cached
+    end
+
+    local data = loadScene( sceneId, pdev )
+    if data == nil then
+        -- Didn't fetch scene data (commonn during Luup reload, system still initializing)
+        D("getSceneData() queueing later scene load for scene %1", sceneId)
+        sceneWaiting[skey] = sceneId
+        return nil
+    end
+
+    -- Save and return
+    D("getSceneData() saving and returning scene data")
+    sceneWaiting[skey] = nil -- remove any fetch queue entry
+    return data
+end
+
+-- Stop running scene.
+local function stopScene( tdev, sceneState )
+    D("stopScene(%1,%2)", tdev, sceneState)
+    if sceneState == nil then sceneState = split( luup.variable_get( RSSID, "runscene", tdev ) or "" ) end
+    if #sceneState >= 4 then
+        scheduleTick( 0, true, tdev, nil, sceneState[4] )
+    end
+    luup.variable_set( RSSID, "runscene", "", tdev )
+end
+
+-- Run the next scene group(s), until we run out of groups or a group delay
+-- restriction hasn't been met. Across reloads, scenes will "catch up," running
+-- groups that are now past-due (native Luup scenes don't do this).
+local function runSceneGroups( tdev )
+    D("runSceneGroups(%1)", tdev)
+    -- Get sceneState, make sure it's consistent with request.
+    local sceneState = split( luup.variable_get( RSSID, "runscene", tdev ) or "" )
+    if #sceneState < 4 or sceneState[1] == "" then return end -- No scene running.
+
+    local scd = getSceneData( tonumber(sceneState[1]) or -1 )
+    if scd == nil then
+        L({level=1,msg="Previously running scene %1 now not found/loaded. Aborting run."}, sceneState[1])
+        return stopScene(tdev)
+    end
+    
+    -- Run next scene group (and keep running groups until no more or delay needed)
     local nextGroup = ( tonumber( sceneState[3] ) or 0 ) + 1
-    while nextGroup <= #scd.groups do 
-        -- Wait?
-        local tt = tonumber( sceneState[2] ) + scd.groups[nextGroup].delay
-        if tt > now then 
-            -- It's not time yet
-            local delay = tt - now
-            scheduleDelay( delay, false, tdev )
+    while nextGroup <= #scd.groups do
+        D("runSceneGroups() now at group %1 of scene %2 (%3)", nextGroup, scd.id, scd.name)
+        -- If scene group has a delay, see if we're there yet.
+        local now = os.time() -- update time, as scene groups can take a long time to execute
+        local tt = tonumber( sceneState[2] ) + ( scd.groups[nextGroup].delay or 0 )
+        if tt > now then
+            -- It's not time yet. Schedule task to continue.
+            D("runSceneGroups() scene group %1 must delay to %2", nextGroup, tt)
+            scheduleTick( tt, false, tdev, runSceneGroups, sceneState[4] )
             return
         end
-        
+
         -- Run this group.
         for _,action in ipairs( scd.groups[nextGroup].actions or {} ) do
             local devnum = tonumber( action.device )
@@ -464,17 +578,134 @@ local function runScene( scd, tdev )
                 for k,p in ipairs( action.arguments or {} ) do
                     param[p.name or tostring(k)] = p.value
                 end
-                D("runScene() dev %4 (%5) do %1/%2(%3)", action.service, action.action,
-                    param, devnum)
+                D("runSceneGroups() dev %4 (%5) do %1/%2(%3)", action.service,
+                    action.action, param, devnum, 
+                    (luup.devices[devnum] or {}).description)
                 luup.call_action( action.service, action.action, param, devnum )
             end
         end
-        luup.variable_set( RSSID, "scene", sceneState:concat(','), tdev )
-        nextGroup = nextGroup + 1
+
+        -- Update (save) last group to finish.
+        sceneState[3] = nextGroup
+        luup.variable_set( RSSID, "runscene", table.concat( sceneState, ','), tdev )
+        nextGroup = nextGroup + 1 -- ...and we're moving on...
     end
 
-    D("runScene() reached end of scene %1 (%2)", scd.id, scd.name)
-    stopScene( tdev )
+    -- We've run out of groups!
+    D("runSceneGroups() reached end of scene %1 (%2)", scd.id, scd.name)
+    stopScene( tdev, sceneState )
+end
+
+-- Continue a previously-running scene, if any.
+local function resumeScene( tdev )
+    local sceneState = split( luup.variable_get( RSSID, "runscene", tdev ) or "" )
+    if #sceneState >= 4 then
+        L("%1 (%2) resuming scene %3, interrupted by restart.", tdev, sceneState[1])
+        scheduleDelay( 1, false, tdev, runSceneGroups, sceneState[4] )
+    else
+        luup.variable_set( RSSID, "runscene", "", tdev )
+    end
+end
+   
+-- Start a scene. Any running scene is immediately terminated, and this scene
+-- replaces it. Scene Lua works for conditional execution.   
+local function runScene( scene, tdev, forceReactor )
+    D("runScene(%1,%2,%3)", scene, tdev, forceReactor )
+
+    -- If using Luup scenes, short-cut
+    if getVarNumeric("UseReactorScenes", 1, tdev, RSSID) == 0 and not forceReactor then
+        D("runScene() handing-off scene run to Luup")
+        luup.call_action( "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "RunScene", { SceneNum=scene }, 0 )
+        return
+    end
+
+    -- We're using Reactor-run scenes
+    local now = os.time()
+    local scd = getSceneData( scene )
+    if scd == nil then
+        L({level=1,msg="%1 (%2) can't run scene %3, not found/loaded."}, tdev,
+            luup.devices[tdev].description, scene)
+        return
+    end
+
+    -- Check if scene running. If not, set up and run first scene group (maybe).
+    local sceneState = split( luup.variable_get( RSSID, "runscene", tdev ) or "" )
+    -- sceneState: scene_id,execution_start,last_completed_group,taskid
+    D("runScene() state is %1", sceneState)
+    if #sceneState < 4 or tonumber( sceneState[1] ) ~= scd.id then
+        if #sceneState >= 4 then
+            stopScene( tdev, sceneState )
+        end
+
+        -- If there's scene lua, try to run it.
+        if ( scd.lua or "" ) ~= "" then
+            D("runScene() handling scene Lua")
+            local luafragment
+            if ( scd.encoded_lua or 0 ) == 1 then
+                local mime = require('mime')
+                luafragment = mime.unb64( scd.lua )
+                if luafragment == nil then
+                    L({level=1,msg="Aborting scene %1 (%2) run, unable to decode scene Lua: %3"}, scd.id, scd.name, err)
+                    return
+                end
+            else
+                luafragment = scd.lua or ""
+            end
+            local fname = string.format("_reactor%d_exec_%d", tdev, scd.id)
+            local funcb = string.format("function %s(reactor_id) %s end return %s(%d)", fname, luafragment, fname, tdev) -- note: passes in RS dev#
+            D("runScene() running scene Lua as %1", funcb)
+            local fnc,err = loadstring(funcb)
+            if fnc == nil then
+                L({level=1,msg="%1 %(2) scene %3 (%4) Lua failed, %5 in %6"}, tdev, luup.devices[tdev].description,
+                    scd.id, scd.name, err, luafragment)
+                return
+            else
+                local res = fnc() 
+                -- Warning if return type isn't what we expect.
+                if type(res) ~= "boolean" then 
+                    L({level=2,msg="Scene %1 (%2) Lua returned type %3; your scene Lua should always return boolean true or false."}, scd.id, scd.name, type(res))
+                end
+                -- Evaluate return value
+                if not res then
+                    D("runScene() scene Lua returned (%1)%2, not running scene groups.", type(res), res)
+                    return
+                end
+            end
+        end
+
+        -- We are going to run groups. Set up for it.
+        D("runScene() setting up to run groups for scene")
+        local taskid = string.format("re%d_sc%d", tdev, scd.id)
+        sceneState = { scd.id, now, 0, taskid } -- scene id, start time, last group, timer task id
+        luup.variable_set( RSSID, "runscene", table.concat(sceneState, ','), tdev )
+    else
+        D("runScene() continuing scene %1, last state ", sceneState)
+    end
+
+    runSceneGroups( tdev )
+end
+
+--
+local function trip( state, tdev )
+    L("%2 (#%1) tripped state now %3", tdev, luup.devices[tdev].description, state)
+    luup.variable_set( SENSOR_SID, "Tripped", state and "1" or "0", tdev )
+    luup.variable_set( RSSID, "TripCount", getVarNumeric( "TripCount", 0, tdev, RSSID ) + 1, tdev )
+    addEvent{dev=tdev,event='sensorstate',state=state}
+    local sc = split( luup.variable_get( RSSID, "Scenes", tdev ) or "" )
+    D("trip() scenes are %1", sc)
+    if not state then
+        -- Luup keeps (SecuritySensor1/)LastTrip, but we also keep LastReset
+        luup.variable_set( RSSID, "LastReset", now, tdev )
+        -- Run the reset scene, if we have one.
+        if #sc > 1 and sc[2] ~= "" then
+            runScene( tonumber(sc[2]) or -1, tdev )
+        end
+    else
+        -- Run the trip scene, if we have one.
+        if #sc > 0 and sc[1] ~= "" then
+            runScene( tonumber(sc[1]) or -1, tdev )
+        end
+    end
 end
 
 -- Find a condition hiding in a group (or is it?)
@@ -497,7 +728,7 @@ local function finddevice( dev )
         if devicesByName[ dev ] ~= nil then
             return devicesByName[ dev ]
         end
-        if dev:sub(1,5) == "uuid:" then 
+        if dev:sub(1,5) == "uuid:" then
             for n,d in pairs( luup.devices ) do
                 if string.lower( d.udn ) == dev then
                     devicesByName[ dev ] = n
@@ -521,7 +752,7 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
     D("evaluateVariable(%1,cdata,%2)", vname, tdev)
     local vdef = cdata.variables[vname]
     if vdef == nil then
-        L({level=1,msg="%2 (%1) Invalid variable reference to %3, not configured"}, 
+        L({level=1,msg="%2 (%1) Invalid variable reference to %3, not configured"},
             tdev, luup.devices[tdev].description, vname)
         return
     end
@@ -572,7 +803,7 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
 end
 
 local function updateVariables( cdata, tdev )
-    -- Make a list of variable names to iterate over. This also facilitates a 
+    -- Make a list of variable names to iterate over. This also facilitates a
     -- quick test in case there are no variables, bypassing a bit of work.
     local vars = {}
     for n,_ in pairs(cdata.variables or {}) do table.insert( vars, n ) end
@@ -584,7 +815,7 @@ local function updateVariables( cdata, tdev )
         local selector = unpack( args )
         D("findDevice(%1) selector=%2", args, selector)
         local n = finddevice( selector )
-        if n == nil then 
+        if n == nil then
             return luaxp.NULL
         end
         return n
@@ -634,7 +865,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
     local hasTimer = false
     if cond.type == "service" then
         -- Can't succeed if referenced device doesn't exist.
-        if luup.devices[cond.device or -1] == nil then 
+        if luup.devices[cond.device or -1] == nil then
             L({level=2,msg="%1 (%2) condition %3 refers to device %4 (%5), does not exist, skipped"},
                 luup.devices[tdev].description, tdev, cond.id, cond.device, cond.devicename or "unknown")
             return false, false
@@ -865,7 +1096,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
                 between = nowMSM >= startMSM and nowMSM < endMSM
             end
             if ( op == "bet" and not between ) or
-                ( op == "nob" and between ) then 
+                ( op == "nob" and between ) then
                 return false, true
             end
         elseif cond.operator == "before" then
@@ -880,7 +1111,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         hasTimer = true
         cond.lastvalue = { value=now, timestamp=now }
         local op = cond.operator or cond.condition or "bet" -- ??? legacy
-        -- Split, pad, and complete date. Any missing parts are filled in with the 
+        -- Split, pad, and complete date. Any missing parts are filled in with the
         -- current date/time's corresponding part.
         local tparam = split( cond.value, ',' )
         for ix = #tparam+1, 10 do tparam[ix] = "" end -- pad
@@ -919,8 +1150,8 @@ local function evaluateCondition( cond, grp, cdata, tdev )
                 D("evaluateCondition() time-only comparison %1 %2 %3 %4 (between=%5)",
                     nowMSM, op, startMSM, endMSM, between)
                 if ( op == "nob" and between ) or
-                    ( op == "bet" and not between ) then 
-                    return false, true 
+                    ( op == "bet" and not between ) then
+                    return false, true
                 end
             end
         elseif tparam[1] == "" then
@@ -933,7 +1164,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
             if op == "before" then
                 D("evaluateCondition() M/D H:M test %1 %2 %3", nowz, op, stz)
                 if nowz >= stz then return false, true end
-            elseif op == "after" then   
+            elseif op == "after" then
                 D("evaluateCondition() M/D H:M test %1 %2 %3", nowz, op, stz)
                 if nowz < stz then return false, true end
             else
@@ -1047,7 +1278,7 @@ local function evaluateGroup( grp, cdata, tdev )
             end
 
             -- Save actual value if changed (for status display)
-            if cond.lastvalue ~= nil then 
+            if cond.lastvalue ~= nil then
                 cond.lastvalue.value = cond.lastvalue.value or ""
                 if cond.lastvalue.value ~= cs.lastvalue then
                     cs.lastvalue = cond.lastvalue.value
@@ -1061,7 +1292,7 @@ local function evaluateGroup( grp, cdata, tdev )
             -- TODO??? Sort conditions by sequence/predecessor, so they are evaluated in the
             -- order needed, and use evalstamp rather than statestamp for all work below.
             -- That sort should also be able to detect loops.
-            
+
             -- Check for predecessor/sequence
             if state and ( cond.after or "" ) ~= "" then
                 -- Sequence; this condition must become true after named sequence becomes true
@@ -1081,11 +1312,11 @@ local function evaluateGroup( grp, cdata, tdev )
                     end
                 end
             end
-            
+
             if state and ( cond.repeatcount or 0 ) > 1 then
                 -- Repeat count over duration (don't need hasTimer, it's leading-edge-driven)
                 -- The repeats array contains the most recent repeatcount (or fewer) timestamps
-                -- of when the condition was met. If (a) the array has the required number of 
+                -- of when the condition was met. If (a) the array has the required number of
                 -- events, and (b) the delta from the first to now is <= the repeat window, we're
                 -- true.
                 D("evaluateGroup() cond %1 repeat check %2x in %3s from %4", cond.id,
@@ -1098,7 +1329,7 @@ local function evaluateGroup( grp, cdata, tdev )
                     D("evaluateGroup() cond %1 repeated %2x in %3s--too long!",
                         cond.id, #cs.repeats, now - cs.repeats[1])
                     state = false
-                else 
+                else
                     D("evaluateGroup() cond %1 repeated %2x in %3s (seeking %4 within %5, good!)",
                         cond.id, #cs.repeats, now-cs.repeats[1], cond.repeatcount, cond.repeatwithin)
                 end
@@ -1169,7 +1400,7 @@ local function updateSensor( tdev )
         D("updateSensor() disabled; no action")
         return
     end
-    
+
     -- Check throttling for update rate
     local hasTimer = false
     local maxUpdate = getVarNumeric( "MaxUpdateRate", 30, tdev, RSSID )
@@ -1177,7 +1408,7 @@ local function updateSensor( tdev )
     if maxUpdate == 0 or rate60 <= maxUpdate then
         rateBump( sensorState[tostring(tdev)].updateRate )
         sensorState[tostring(tdev)].updateThrottled = false
-        
+
         -- Fetch the condition data.
         local s = luup.variable_get( RSSID, "cdata", tdev ) or ""
         if s == "" then return false end
@@ -1205,7 +1436,7 @@ local function updateSensor( tdev )
         if invert then newTrip = not newTrip end
         D("updateSensor() trip %4was %1 now %2, retrig %3", currTrip, newTrip,
             retrig, invert and "(inverted) " or "" )
-            
+
         -- Update runtime based on last status
         local now = os.time()
         local lastUpdate = getVarNumeric( "lastacc", now, tdev, RSSID )
@@ -1215,7 +1446,7 @@ local function updateSensor( tdev )
             luup.variable_set( RSSID, "Runtime", getVarNumeric( "Runtime", 0, tdev, RSSID  ) + delta, tdev )
         end
         luup.variable_set( RSSID, "lastacc", now, tdev )
-        
+
         -- Set tripped state based on change in status.
         if currTrip ~= newTrip or ( newTrip and retrig ) then
             -- Changed, or retriggerable.
@@ -1224,15 +1455,7 @@ local function updateSensor( tdev )
             if maxTrip == 0 or rate60 <= maxTrip then
                 rateBump( sensorState[tostring(tdev)].changeRate )
                 sensorState[tostring(tdev)].changeThrottled = false
-                L("%2 (#%1) tripped state now %3", tdev, luup.devices[tdev].description, newTrip)
-                luup.variable_set( SENSOR_SID, "Tripped", newTrip and "1" or "0", tdev )
-                luup.variable_set( RSSID, "TripCount", getVarNumeric( "TripCount", 0, tdev, RSSID ) + 1, tdev )
-                addEvent{dev=tdev,event='sensorstate',state=newTrip}
-                if not newTrip then
-                    -- Luup keeps (SecuritySensor1/)LastTrip, but we also keep LastReset
-                    luup.variable_set( RSSID, "LastReset", now, tdev )
-                end
-                
+                trip( newTrip, tdev )
             else
                 if not sensorState[tostring(tdev)].changeThrottled then
                     L({level=2,msg="%2 (#%1) trip state changing too fast (%4 > %3/min)! Throttling..."},
@@ -1250,10 +1473,10 @@ local function updateSensor( tdev )
 
         -- Save the condition state.
         luup.variable_set( RSSID, "cstate", json.encode(sensorState[tostring(tdev)].condState), tdev )
-    else 
+    else
 
         if not sensorState[tostring(tdev)].updateThrottled then
-            L({level=2,msg="%2 (#%1) updating too fast (%4 > %3/min)! Throttling..."}, 
+            L({level=2,msg="%2 (#%1) updating too fast (%4 > %3/min)! Throttling..."},
                 tdev, luup.devices[tdev].description, maxUpdate, rate60)
             setMessage( "Throttled! (high update rate)", tdev )
             sensorState[tostring(tdev)].updateThrottled = true
@@ -1328,6 +1551,34 @@ local function loadCleanState( tdev )
     return cstate
 end
 
+local function sensorTick(tdev)
+    D("sensorTick(%1)", tdev)
+
+    -- updateSensor will schedule next tick if needed
+    if isEnabled( tdev ) then
+        updateSensor( tdev )
+    else
+        setMessage("Disabled", tdev)
+    end
+end
+
+-- Tick handler for master device
+local function masterTick(pdev)
+    D("masterTick(%1)", pdev)
+    assert(pdev == pluginDevice)
+    local nextTick = os.time() + 60
+
+    -- Check and update house mode. We do this on the master tick/device so that
+    -- children get watch notification of changes.
+    local mode = luup.attr_get( "Mode", 0 ) or "1"
+    local oldMode = luup.variable_get( MYSID, "HouseMode", pdev )
+    if mode ~= oldMode then
+        D("tick() master tick detected house mode change, was %1 now %2", oldMode, mode)
+        luup.variable_set( MYSID, "HouseMode", mode, pdev )
+    end
+
+    scheduleTick( nextTick, false, pdev, masterTick, tostring(pdev) )
+end
 
 -- Start an instance
 local function startSensor( tdev, pdev )
@@ -1342,19 +1593,30 @@ local function startSensor( tdev, pdev )
     sensorState[tostring(tdev)].updateThrottled = false
     sensorState[tostring(tdev)].changeRate = initRate( 60, 15 )
     sensorState[tostring(tdev)].changeThrottled = false
-    
+
     -- Clean and restore our condition state.
     sensorState[tostring(tdev)].condState = loadCleanState( tdev )
 
     addEvent{dev=tdev,event='start'}
-    
+
     -- Watch our own cdata; when it changes, re-evaluate.
     luup.variable_watch( "reactorWatch", RSSID, "cdata", tdev )
 
     setMessage("Starting...", tdev)
 
-    -- Use a tick task for initial evaluation.
-    scheduleDelay( 5, true, tdev )
+    -- Start the sensor's tick.
+    scheduleDelay( 5, true, tdev, sensorTick )
+
+    -- If this sensor uses scenes (and we run them), try to load them.
+    if getVarNumeric( "UseReactorScenes", 1, tdev, RSSID ) ~= 0 then
+        local sc = split( luup.variable_get( RSSID, "Scenes", tdev ) or "" )
+        for _,k in ipairs(sc) do
+            getSceneData( tonumber(k), tdev )
+        end
+    end
+
+    -- Resume any scene that was running prior to restart
+    resumeScene( tdev )
 
     luup.set_failure( 0, tdev )
 end
@@ -1371,6 +1633,8 @@ function startPlugin( pdev )
     isOpenLuup = false
     sensorState = {}
     watchData = {}
+    sceneData = {}
+    sceneWaiting = {}
 
     -- Debug?
     if getVarNumeric( "DebugMode", 0, pdev, MYSID ) ~= 0 then
@@ -1416,10 +1680,12 @@ function startPlugin( pdev )
     -- One-time stuff
     plugin_runOnce( pdev )
 
-    -- Initialize and start the master timer tick
+    -- Initialize and start the plugin time and master tick
     runStamp = 1
-    tickTasks = { master={ when=os.time()+10, dev=pdev } }
-    luup.call_delay( "reactorTick", 10, runStamp )
+    scheduleDelay( 60, true, pdev, masterTick )
+    
+    -- Resume any scene that was running prior to restart
+    resumeScene( pdev )
 
     -- Ready to go. Start our children.
     local count = 0
@@ -1450,7 +1716,7 @@ function startPlugin( pdev )
 end
 
 -- Add a child (used as both action and local function)
-function addSensor( pdev )
+function actionAddSensor( pdev )
     D("addSensor(%1)", pdev)
     local ptr = luup.chdev.start( pdev )
     local highd = 0
@@ -1472,7 +1738,7 @@ function addSensor( pdev )
     -- Should cause reload immediately.
 end
 
-function setEnabled( enabled, tdev )
+function actionSetEnabled( enabled, tdev )
     D("setEnabled(%1,%2)", enabled, tdev)
     if type(enabled) == "string" then
         if enabled:lower() == "false" or enabled:lower() == "disabled" or enabled == "0" then
@@ -1503,13 +1769,13 @@ end
 
 function actionTrip( dev )
     L("Sensor %1 (%2) trigger action!", dev, luup.devices[dev].description)
-    luup.variable_set( SENSOR_SID, "Tripped", ( getVarNumeric( "Invert", 0, dev, RSSID ) == 0 ) and "1" or "0", dev );
+    trip( true, dev )
     setMessage("Tripped", dev);
 end
 
 function actionReset( dev )
     L("Sensor %1 (%2) reset action!", dev, luup.devices[dev].description)
-    luup.variable_set( SENSOR_SID, "Tripped", ( getVarNumeric( "Invert", 0, dev, RSSID ) == 0 ) and "0" or "1", dev );
+    trip( false, dev )
     setMessage("Not tripped", dev)
 end
 
@@ -1517,13 +1783,6 @@ function actionSetArmed( armedVal, dev )
     L("Sensor %1 (%2) set armed to %4", dev, luup.devices[dev].description, armedVal)
     local armed = ( tonumber( armedVal ) or 0 ) ~= 0
     luup.variable_set( SENSOR_SID, "Armed", armed and "1" or "0", dev )
-end
-
-function masterClear( dev )
-    -- Remove all child devices.
-    local ptr = luup.chdev.start( dev )
-    luup.chdev.sync( dev, ptr )
-    -- Should cause reload immediately.
 end
 
 function actionRestart( dev )
@@ -1541,7 +1800,20 @@ function actionRestart( dev )
     end
 end
 
-function setDebug( state, tdev )
+function actionRunScene( scene, dev )
+    L("RunScene action request, scene %1", scene)
+    scene = tonumber( scene or "-1" ) or -1
+    runScene( scene, dev, true ) -- force Reactor scene execution on our action
+end
+
+function actionMasterClear( dev )
+    -- Remove all child devices.
+    local ptr = luup.chdev.start( dev )
+    luup.chdev.sync( dev, ptr )
+    -- Should cause reload immediately.
+end
+
+function actionSetDebug( state, tdev )
     debugMode = state or false
     addEvent{ event="debug", dev=tdev, debugMode=debugMode }
     if debugMode then
@@ -1549,25 +1821,13 @@ function setDebug( state, tdev )
     end
 end
 
-local function sensorTick(tdev)
-    D("sensorTick(%1)", tdev)
-
-    -- updateSensor will schedule next tick if needed
-    if isEnabled( tdev ) then
-        updateSensor( tdev )
-    else
-        setMessage("Disabled", tdev)
-    end
-end
-
--- Master (plugin) timer tick. Using the tickTasks table, we keep track of
+-- Plugin timer tick. Using the tickTasks table, we keep track of
 -- tasks that need to be run and when, and try to stay on schedule. This
 -- keeps us light on resources: typically one system timer only for any
 -- number of devices.
+local functions = { [tostring(masterTick)]="masterTick", [tostring(sensorTick)]="sensorTick" }
 function tick(p)
-    D("tick(%1) pluginDevice=%2, luup.device=%3", p, pluginDevice, luup.device)
-    local now = os.time()
-
+    D("tick(%1) pluginDevice=%2", p, pluginDevice)
     local stepStamp = tonumber(p,10)
     assert(stepStamp ~= nil)
     if stepStamp ~= runStamp then
@@ -1576,53 +1836,54 @@ function tick(p)
         return
     end
 
+    local now = os.time()
+    local nextTick = now + 60 -- Try to start minute to minute at least
+    tickTasks._plugin.when = 0
+
     -- Since the tasks can manipulate the tickTasks table, the iterator
     -- is likely to be disrupted, so make a separate list of tasks that
     -- need service, and service them using that list.
     local todo = {}
     for t,v in pairs(tickTasks) do
-        if t ~= "master" and v.when ~= nil and v.when <= now then
+        if t ~= "_plugin" and v.when ~= nil and v.when <= now then
             -- Task is due or past due
             v.when = nil -- clear time; sensorTick() will need to reschedule
-            table.insert( todo, v.dev )
+            D("tick() inserting eligible task %1", v)
+            table.insert( todo, v )
         end
     end
-    for _,t in ipairs(todo) do
-        local success, err = pcall( sensorTick, t )
+
+    -- Run the to-do list.
+    D("tick() to-do list is %1", todo)
+    for _,v in ipairs(todo) do
+        D("tick() calling tick function %3() for %1 (%2)", v.dev, (luup.devices[v.dev] or {}).description, functions[tostring(v.tfunc)] or tostring(v.tfunc))
+        local success, err = pcall( v.tfunc, v.dev, v.id )
         if not success then
-            L({level=1,msg="Sensor %1 (%2) tick failed: %3"}, t, luup.devices[t].description, err)
+            L({level=1,msg="Reactor device %1 (%2) tick failed: %3"}, v.dev, (luup.devices[v.dev] or {}).description, err)
         else
-            D("tick() successful return from sensorTick(%1)", t)
+            D("tick() successful return from %2(%1)", v.dev, functions[tostring(v.tfunc)] or tostring(v.tfunc))
         end
     end
 
     -- Things change while we work. Take another pass to find next task.
-    local nextTick = nil
     for t,v in pairs(tickTasks) do
-        if v.when ~= nil and t ~= "master" then
+        if t ~= "_plugin" and v.when ~= nil then
             if nextTick == nil or v.when < nextTick then
                 nextTick = v.when
             end
         end
     end
 
-    -- Figure out next master tick: soonest timer task tick, or 60 seconds
-    local delay = 60
+    -- Figure out next master tick, or don't resched if no tasks waiting.
     if nextTick ~= nil then
-        delay = nextTick - now
+        now = os.time() -- Get the actual time now; above tasks can take a while.
+        local delay = nextTick - now
         if delay < 1 then delay = 1 elseif delay > 60 then delay = 60 end
-    end
-    tickTasks.master.when = now + delay
-    D("tick() scheduling next master tick for %1 delay %2", tickTasks.master.when, delay)
-    luup.call_delay( "reactorTick", delay, p )
-    
-    -- Check and update house mode. We do this on the master tick/device so that
-    -- children get watch notification of changes.
-    local mode = luup.attr_get( "Mode", 0 ) or "1"
-    local oldMode = luup.variable_get( MYSID, "HouseMode", pluginDevice )
-    if mode ~= oldMode then
-        D("tick() master tick detected house mode change, was %1 now %2", oldMode, mode)
-        luup.variable_set( MYSID, "HouseMode", mode, pluginDevice )
+        tickTasks._plugin.when = now + delay
+        D("tick() scheduling next tick(%3) for %1 (%2)", delay, tickTasks._plugin.when,p)
+        luup.call_delay( "reactorTick", delay, p )
+    else
+        D("tick() not rescheduling, nextTick=%1, stepStamp=%2, runStamp=%3", nextTick, stepStamp, runStamp)
     end
 end
 
