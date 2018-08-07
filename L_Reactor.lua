@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "1.3"
+local _PLUGIN_VERSION = "1.4stable-180806"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _CONFIGVERSION = 00106
 
@@ -221,6 +221,8 @@ end
 
 -- Add, if not already set, a watch on a device and service
 local function addServiceWatch( dev, svc, var, target )
+    -- Don't watch our own variables--we update them in sequence anyway
+    if dev == target and svc == VARSID then return end
     target = tostring(target)
     local watchkey = string.format("%d:%s/%s", dev or 0, svc or "X", var or "X")
     if watchData[watchkey] == nil or watchData[watchkey][target] == nil then
