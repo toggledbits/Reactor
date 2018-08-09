@@ -474,7 +474,7 @@ var ReactorSensor = (function(api) {
 
     function makeDateTimeOpMenu( cond ) {
         var el = jQuery('<select class="opmenu form-control form-control-sm pull-left"></select>');
-        el.append('<option value="bet">between</option>');
+        el.append( '<option value="bet">between</option>' );
         el.append( '<option value="nob">not between</option>' );
 
         if ( undefined !== cond ) {
@@ -1995,7 +1995,7 @@ var ReactorSensor = (function(api) {
             
             var rr = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "Retrigger" ) || "0";
             if ( rr !== "0" ) {
-                html += '<div class="row"><div class="warning col-cs-12 col-sm-12">WARNING! Retrigger is on! You should avoid using house mode or time-related conditions in this ReactorSensor, as they will cause retriggers every 60 seconds!</div></div>';
+                html += '<div class="row"><div class="warning col-cs-12 col-sm-12">WARNING! Retrigger is on! You should avoid using time-related conditions in this ReactorSensor, as they may cause retriggers frequent retriggers!</div></div>';
             }
             
             html += '<div id="conditions"></div>';
