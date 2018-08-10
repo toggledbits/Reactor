@@ -252,24 +252,30 @@ end
 -- any currently scheduled time, the task tick is advanced; otherwise, it is
 -- ignored (as the existing task will come sooner), unless repl=true, in which
 -- case the existing task will be deferred until the provided time.
-local function scheduleTick( timeTick, repl, tdev, tfunc, tId )
-    D("scheduleTick(%1,%2,%3,%4,%5)", timeTick, repl, tdev, tfunc, tId)
-    local function nulltick(d) L({level=1, "nulltick(%1)"},d) end
-    local tkey = tostring( tId or tdev )
-    if timeTick == 0 or timeTick == nil then
-        D("scheduleTick() cleared task %1", tkey)
+local function scheduleTick( tinfo, timeTick, flags )
+    D("scheduleTick(%1,%2,%3)", tinfo, timeTick, flags)
+    flags = flags or {}
+    local function nulltick(d,p) L({level=1, "nulltick(%1,%2)"},d,p) end
+    local tkey = tostring( type(tinfo) == "table" and tinfo.id or tinfo )
+    assert(tkey ~= nil)
+    if ( timeTick or 0 ) == 0 then
+        D("scheduleTick() clearing task %1", tinfo)
         tickTasks[tkey] = nil
         return
     elseif tickTasks[tkey] then
-        -- timer already set, see if new is sooner, or replacing
-        if tickTasks[tkey].when == nil or timeTick < tickTasks[tkey].when or repl then
+        -- timer already set, update
+        tickTasks[tkey].func = tinfo.func or tickTasks[tkey].func
+        tickTasks[tkey].args = tinfo.args or tickTasks[tkey].args
+        if tickTasks[tkey].when == nil or timeTick < tickTasks[tkey].when or flags.replace then
+            -- Not scheduled, requested sooner than currently scheduled, or forced replacement
             tickTasks[tkey].when = timeTick
-            if tfunc ~= nil then tickTasks[tkey].tfunc = tfunc end -- replace func
-            D("scheduleTick() rescheduled %1 for %3 to %2", tkey, timeTick, tickTasks[tkey].dev)
         end
+        D("scheduleTick() updated %1", tickTasks[tkey])
     else
-        tickTasks[tkey] = { id=tkey, dev=tdev, when=timeTick, tfunc=tfunc or nulltick } -- new task
-        D("scheduleTick() new task %1 for %3 at %2", tkey, timeTick, tdev)
+        assert(tinfo.owner ~= nil)
+        assert(tinfo.func ~= nil)
+        tickTasks[tkey] = { id=tostring(tinfo.id), owner=tinfo.owner, when=timeTick, func=tinfo.func or nulltick, args=tinfo.args or {} } -- new task
+        D("scheduleTick() new task %1 at %2", tinfo, timeTick, tdev)
     end
     -- If new tick is earlier than next plugin tick, reschedule
     tickTasks._plugin = tickTasks._plugin or {}
@@ -286,9 +292,10 @@ end
 
 -- Schedule a timer tick for after a delay (seconds). See scheduleTick above
 -- for additional info.
-local function scheduleDelay( delay, repl, tdev, tfunc, tId )
-    D("scheduleDelay(%1,%2,%3,%4,%5)", delay, repl, tdev, tfunc, tId)
-    return scheduleTick( delay+os.time(), repl, tdev, tfunc, tId )
+local function scheduleDelay( tinfo, delay, flags )
+    D("scheduleDelay(%1,%2,%3)", tinfo, delay, flags )
+    if delay < 1 then delay = 1 end
+    return scheduleTick( tinfo, delay+os.time(), flags )
 end
 
 -- Set the status message
@@ -467,7 +474,8 @@ local function loadScene( sceneId, pdev )
 end
 
 -- Process deferred scene load queue
-local function loadWaitingScenes( pdev )
+local function loadWaitingScenes( pdev, ptask )
+    D("loadWaitingScenes(%1)", pdev)
     local done = {}
     for sk,sceneId in pairs(sceneWaiting) do
         if loadScene( sceneId, pdev ) ~= nil then
@@ -479,7 +487,7 @@ local function loadWaitingScenes( pdev )
     end
     if next(sceneWaiting) ~= nil then
         -- More to do, schedule it.
-        scheduleDelay( 60, false, pluginDevice, loadWaitingScenes, "sceneLoader" )
+        scheduleDelay( ptask, 60 )
     end
 end
 
@@ -509,7 +517,7 @@ local function getSceneData( sceneId, tdev )
             -- Reload since cached, queue for refresh.
             D("getSceneData() reload since scene last cached, queueing update")
             sceneWaiting[skey] = sceneId
-            scheduleDelay( 5, false, pluginDevice, loadWaitingScenes, "sceneLoader" )
+            scheduleDelay( { id="sceneLoader", func=loadWaitingScenes, owner=pluginDevice }, 5 )
         end
         return scd -- return cached
     end
@@ -519,7 +527,7 @@ local function getSceneData( sceneId, tdev )
         -- Couldn't get it. Try again later.
         D("getSceneData() queueing later scene load for scene %1", sceneId)
         sceneWaiting[skey] = sceneId
-        scheduleDelay( 5, false, pluginDevice, loadWaitingScenes, "sceneLoader" )
+        scheduleDelay( { id="sceneLoader", func=loadWaitingScenes, owner=pluginDevice }, 5 )
         return
     end
     sceneWaiting[skey] = nil -- remove any fetch queue entry
@@ -528,11 +536,11 @@ end
 
 -- Stop running scenes ???
 local function stopScene( tdev, taskid )
-    D("stopScene(%1)", taskid)
+    D("stopScene(%1,%2)", tdev, taskid)
     for tid,d in pairs(sceneState) do
         if ( tdev == nil or tdev == d.owner ) and ( taskid == nil or taskid == tid ) then
-            scheduleTick( 0, true, pluginDevice, nil, taskid )
-            sceneState[taskid] = nil
+            scheduleTick( tid, 0 )
+            sceneState[tid] = nil
         end
     end
     luup.variable_set( MYSID, "runscene", json.encode(sceneState), pluginDevice )
@@ -565,7 +573,7 @@ local function runSceneGroups( tdev, taskid )
         if tt > now then
             -- It's not time yet. Schedule task to continue.
             D("runSceneGroups() scene group %1 must delay to %2", nextGroup, tt)
-            scheduleTick( tt, false, tdev, runSceneGroups, taskid )
+            scheduleTick( { id=sst.taskid, owner=sst.owner, func=runSceneGroups }, tt )
             return taskid
         end
 
@@ -627,9 +635,7 @@ local function runScene( scene, tdev, forceReactor )
     -- If the scene is already running, stop it.
     if sst ~= nil then
         -- Cancel running scene.
-        scheduleTick( 0, true, pluginDevice, nil, taskid )
-        sceneState[taskid] = nil
-        luup.variable_set( MYSID, "runscene", json.encode(sceneState), pluginDevice )
+        stopScene( tdev )
     end
 
     -- If there's scene lua, try to run it.
@@ -1348,7 +1354,7 @@ local function evaluateGroup( grp, cdata, tdev )
                         cond.id, age, cond.duration)
                     state = false
                     local rem = math.max( 2, cond.duration - age )
-                    scheduleDelay( rem, false, tdev )
+                    scheduleDelay( tostring(tdev), rem )
                 else
                     D("evaluateGroup() cond %1 age %2 (>=%3) success", cond.id, age, cond.duration)
                 end
@@ -1495,7 +1501,7 @@ local function updateSensor( tdev )
     -- type (hasTimer), polling enabled, or ContinuousTimer set.
     if hasTimer or getVarNumeric( "ContinuousTimer", 0, tdev, RSSID ) ~= 0 then
         local v = 10 + ( 60 - ( os.time() % 60 ) ) -- 10 seconds after minute
-        scheduleDelay( v, false, tdev )
+        scheduleDelay( tostring(tdev), v )
     end
 end
 
@@ -1582,7 +1588,7 @@ local function masterTick(pdev)
         luup.variable_set( MYSID, "HouseMode", mode, pdev )
     end
 
-    scheduleTick( nextTick, false, pdev, masterTick, tostring(pdev) )
+    scheduleTick( tostring(pdev), nextTick )
 end
 
 -- Start an instance
@@ -1610,7 +1616,7 @@ local function startSensor( tdev, pdev )
     setMessage("Starting...", tdev)
 
     -- Start the sensor's tick.
-    scheduleDelay( 5, true, tdev, sensorTick )
+    scheduleDelay( { id=tostring(tdev), func=sensorTick, owner=tdev }, 5 )
 
     -- If this sensor uses scenes (and we run them), try to load them.
     if getVarNumeric( "UseReactorScenes", 1, tdev, RSSID ) ~= 0 then
@@ -1632,7 +1638,7 @@ local function waitSystemReady( pdev )
                 -- Z-wave not yet ready
                 D("Waiting for Z-wave ready, status %1", sysStatus)
                 luup.variable_set( MYSID, "Message", "Waiting for Z-wave ready", pdev )
-                scheduleDelay( 5, false, pdev, waitSystemReady )
+                scheduleDelay( { id=tostring(pdev), func=waitSystemReady, owner=pluginDevice }, 5 )
                 return
             end
             break
@@ -1643,7 +1649,7 @@ local function waitSystemReady( pdev )
     luup.variable_set( MYSID, "Message", "Starting...", pdev )
     
     -- Start the master tick
-    scheduleDelay( 60, true, pdev, masterTick, tostring(pdev) )
+    scheduleDelay( { id=tostring(pdev), func=masterTick, owner=pdev }, 60, { replace=true } )
     
     -- Resume any scenes that were running prior to restart
     resumeScenes()
@@ -1751,7 +1757,7 @@ function startPlugin( pdev )
 
     -- Initialize and start the plugin timer and master tick
     runStamp = 1
-    scheduleDelay( 5, true, pdev, waitSystemReady )
+    scheduleDelay( { id=tostring(pdev), func=waitSystemReady, owner=pdev }, 5 )
 
     -- Return success
     luup.set_failure( 0, pdev )
@@ -1802,7 +1808,7 @@ function actionSetEnabled( enabled, tdev )
         -- If disabling, do nothing else, so current actions complete/expire.
         if enabled then
             -- Kick off a new timer thread, which will also re-eval.
-            scheduleDelay( 2, false, tdev )
+            scheduleDelay( { id=tostring(tdev), func=sensorTick, owner=tdev }, 2 )
             setMessage( "Enabling...", tdev )
         else
             setMessage( "Disabled", tdev )
@@ -1891,21 +1897,21 @@ function tick(p)
         if t ~= "_plugin" and v.when ~= nil and v.when <= now then
             -- Task is due or past due
             D("tick() inserting eligible task %1 when %2 now %3", v.id, v.when, now)
-            v.when = nil -- clear time; sensorTick() will need to reschedule
+            v.when = nil -- clear time; timer function will need to reschedule
             table.insert( todo, v )
         end
     end
 
     -- Run the to-do list.
-    D("tick() to-do list is %1", todo)
+    D("tick() sorted to-do list is %1", todo)
     for _,v in ipairs(todo) do
-        D("tick() calling tick function %3(%4,%5) for %1 (%2)", v.dev, (luup.devices[v.dev] or {}).description, functions[tostring(v.tfunc)] or tostring(v.tfunc),
-            v.dev,v.id)
-        local success, err = pcall( v.tfunc, v.dev, v.id )
+        D("tick() calling tick function %3(%4,%5) for %1 (%2)", v.owner, (luup.devices[v.owner] or {}).description, functions[tostring(v.func)] or tostring(v.func),
+            v.owner,v.id)
+        local success, err = pcall( v.func, v.owner, v.id, v.args )
         if not success then
-            L({level=1,msg="Reactor device %1 (%2) tick failed: %3"}, v.dev, (luup.devices[v.dev] or {}).description, err)
+            L({level=1,msg="Reactor device %1 (%2) tick failed: %3"}, v.owner, (luup.devices[v.owner] or {}).description, err)
         else
-            D("tick() successful return from %2(%1)", v.dev, functions[tostring(v.tfunc)] or tostring(v.tfunc))
+            D("tick() successful return from %2(%1)", v.owner, functions[tostring(v.func)] or tostring(v.func))
         end
     end
 
@@ -1928,6 +1934,7 @@ function tick(p)
         luup.call_delay( "reactorTick", delay, p )
     else
         D("tick() not rescheduling, nextTick=%1, stepStamp=%2, runStamp=%3", nextTick, stepStamp, runStamp)
+        tickTasks._plugin = nil
     end
 end
 
@@ -1999,6 +2006,27 @@ local function getDevice( dev, pdev, v )
     if d ~= nil and d[key] ~= nil and d[key].states ~= nil then d = d[key].states else d = nil end
     devinfo.states = d or {}
     return devinfo
+end
+
+local function alt_json_encode( st )
+    str = "{"
+    local comma = false
+    for k,v in pairs(st) do 
+        str = str .. ( comma and "," or "" )
+        comma = true
+        str = str .. '"' .. k .. '":'
+        if type(v) == "table" then
+            str = str .. alt_json_encode( v )
+        elseif type(v) == "number" then
+            str = str .. tostring(v)
+        elseif type(v) == "boolean" then
+            str = str .. ( v and "true" or "false" )
+        else
+            str = str .. string.format("%q", tostring(v))
+        end
+    end
+    str = str .. "}"
+    return str
 end
 
 function request( lul_request, lul_parameters, lul_outputformat )
@@ -2103,7 +2131,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
                 table.insert( st.devices, devinfo )
             end
         end
-        return json.encode( st ), "application/json"
+        return alt_json_encode( st ), "application/json"
     else
         return "Not implemented: " .. action, "text/plain"
     end
