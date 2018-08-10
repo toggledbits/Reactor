@@ -266,6 +266,7 @@ local function scheduleTick( tinfo, timeTick, flags )
         -- timer already set, update
         tickTasks[tkey].func = tinfo.func or tickTasks[tkey].func
         tickTasks[tkey].args = tinfo.args or tickTasks[tkey].args
+        tickTasks[tkey].info = tinfo.info or tickTasks[tkey].info
         if tickTasks[tkey].when == nil or timeTick < tickTasks[tkey].when or flags.replace then
             -- Not scheduled, requested sooner than currently scheduled, or forced replacement
             tickTasks[tkey].when = timeTick
@@ -274,7 +275,8 @@ local function scheduleTick( tinfo, timeTick, flags )
     else
         assert(tinfo.owner ~= nil)
         assert(tinfo.func ~= nil)
-        tickTasks[tkey] = { id=tostring(tinfo.id), owner=tinfo.owner, when=timeTick, func=tinfo.func or nulltick, args=tinfo.args or {} } -- new task
+        tickTasks[tkey] = { id=tostring(tinfo.id), owner=tinfo.owner, when=timeTick, func=tinfo.func or nulltick, args=tinfo.args or {},
+            info=tinfo.info or "" } -- new task
         D("scheduleTick() new task %1 at %2", tinfo, timeTick, tdev)
     end
     -- If new tick is earlier than next plugin tick, reschedule
@@ -869,6 +871,20 @@ local function updateVariables( cdata, tdev )
     end
 end
 
+-- Helper to schedule next condition update
+local function doNextCondCheck( taskinfo, nowMSM, startMSM, endMSM )
+    D("doNextCondCheck(%1,%2,%3)", nowMSM, startMSM, endMSM)
+    local edge = 1440
+    if nowMSM < startMSM then
+        edge = startMSM
+    elseif endMSM ~= nil and nowMSM < endMSM then
+        edge = endMSM
+    end
+    local delay = edge - nowMSM
+    D("doNextCondCheck() scheduling next check for %1 (delay %2m = %3s)", edge, delay, 60*delay)
+    scheduleDelay( taskinfo, 60*delay )
+end
+
 local function evaluateCondition( cond, grp, cdata, tdev )
     D("evaluateCondition(%1,%2,cdata,%3)", cond, grp.groupid, tdev)
     local now = cdata.timebase
@@ -950,12 +966,14 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         if not isOnList( modes, mode ) then return false,false end
     elseif cond.type == "weekday" then
         -- Weekday; Lua 1=Sunday, 2=Monday, ..., 7=Saturday
-        hasTimer = true
+        local nextDay = os.time{year=ndt.year,month=ndt.month,day=ndt.day+1,hour=0,['min']=0,sec=10}
+        D("evaluateCondition() weekday condition, setting next check for %1", nextDay)
+        scheduleTick( { id=tdev, info="weekday "..cond.id }, nextDay )
         cond.lastvalue = { value=ndt.wday, timestamp=now }
         local wd = split( cond.value )
         local op = cond.operator or cond.condition -- ??? legacy
         D("evaluateCondition() weekday %1 among %2", ndt.wday, wd)
-        if not isOnList( wd, tostring( ndt.wday ) ) then return false,true end
+        if not isOnList( wd, tostring( ndt.wday ) ) then return false,false end
         -- OK, we're on the right day of the week. Which week?
         if ( op or "" ) ~= "" then -- blank means "every"
             D("evaluateCondition() is today %1 %2-%3 the %4th?", ndt.wday, ndt.month,
@@ -965,7 +983,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
                 -- to current date, the new date should be next month.
                 local nt = os.date( "*t", now + ( 7 * 86400 ) )
                 D("evaluateCondition() weekday %1 %2? today=%3, nextweek=%4", ndt.wday, op, ndt, nt)
-                if nt.month == ndt.month then return false,true end -- same
+                if nt.month == ndt.month then return false,false end -- same
             else
                 local nth = tonumber( op )
                 -- Move back N-1 weeks; we should still be in same month. Then
@@ -975,10 +993,10 @@ local function evaluateCondition( cond, grp, cdata, tdev )
                 if nth > 1 then
                     ref = ref - ( (nth-1) * 7 * 86400 )
                     pt = os.date( "*t", ref )
-                    if pt.month ~= ndt.month then return false,true end
+                    if pt.month ~= ndt.month then return false,false end
                 end
                 pt = os.date( "*t", ref - ( 7 * 86400 ) )
-                if pt.month == ndt.month then return false,true end
+                if pt.month == ndt.month then return false,false end
             end
             D("evaluateCondition() yes, today %1 %2-%3 IS #%4 in month", ndt.wday,
                 ndt.month, ndt.day, op)
@@ -1072,7 +1090,6 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         end
     elseif cond.type == "sun" then
         -- Sun condition (sunrise/set)
-        hasTimer = true
         cond.lastvalue = { value=now, timestamp=now }
         -- Figure out sunrise/sunset. We keep a daily cache, because Vera's times
         -- recalculate to that of the following day once the time has passwed, and
@@ -1100,6 +1117,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
             sdt = os.date("*t", ett + eoffs*60)
             local endMSM = sdt.hour * 60 + sdt.min
             D("evaluateCondition() cond %1 check %2 %3 %4 and %5", cond.id, nowMSM, op, startMSM, endMSM)
+            doNextCondCheck( { id=tdev,info="sun "..cond.id }, nowMSM, startMSM, endMSM )
             local between
             if endMSM <= startMSM then
                 between = nowMSM >= startMSM or nowMSM < endMSM
@@ -1108,18 +1126,19 @@ local function evaluateCondition( cond, grp, cdata, tdev )
             end
             if ( op == "bet" and not between ) or
                 ( op == "nob" and between ) then
-                return false, true
+                return false,false
             end
         elseif cond.operator == "before" then
             D("evaluateCondition() cond %1 check %2 before %3", cond.id, nowMSM, startMSM)
-            if nowMSM >= startMSM then return false, true end
+            doNextCondCheck( { id=tdev,info="sun "..cond.id }, nowMSM, startMSM )
+            if nowMSM >= startMSM then return false,false end
         else
             D("evaluateCondition() cond %1 check %2 after %3", cond.id, nowMSM, startMSM)
-            if nowMSM < startMSM then return false, true end -- after
+            doNextCondCheck( { id=tdev,info="sun "..cond.id }, nowMSM, startMSM )
+            if nowMSM < startMSM then return false,false end -- after
         end
     elseif cond.type == "trange" then
         -- Time, with various components specified, or not.
-        hasTimer = true
         cond.lastvalue = { value=now, timestamp=now }
         local op = cond.operator or cond.condition or "bet" -- ??? legacy
         -- Split, pad, and complete date. Any missing parts are filled in with the
@@ -1145,10 +1164,12 @@ local function evaluateCondition( cond, grp, cdata, tdev )
             local startMSM = tonumber( tparam[4] ) * 60 + tonumber( tparam[5] )
             if op == "after" then
                 D("evaluateCondition() time-only comparison %1 after %2", nowMSM, startMSM)
-                if nowMSM < startMSM then return false, true end
+                doNextCondCheck( { id=tdev,info="trangeHM "..cond.id }, nowMSM, startMSM )
+                if nowMSM < startMSM then return false,false end
             elseif op == "before" then
                 D("evaluateCondition() time-only comparison %1 before %2", nowMSM, startMSM)
-                if nowMSM >= startMSM then return false, true end
+                doNextCondCheck( { id=tdev,info="trangeHM "..cond.id }, nowMSM, startMSM )
+                if nowMSM >= startMSM then return false,false end
             else
                 -- Between, or not
                 local endMSM = tonumber( tparam[9] ) * 60 + tonumber( tparam[10] )
@@ -1160,14 +1181,17 @@ local function evaluateCondition( cond, grp, cdata, tdev )
                 end
                 D("evaluateCondition() time-only comparison %1 %2 %3 %4 (between=%5)",
                     nowMSM, op, startMSM, endMSM, between)
+                doNextCondCheck( { id=tdev,info="trangeHM "..cond.id }, nowMSM, startMSM, endMSM )
                 if ( op == "nob" and between ) or
                     ( op == "bet" and not between ) then
-                    return false, true
+                    return false,false
                 end
             end
         elseif tparam[1] == "" then
             -- No-year given, just M/D H:M. We can do comparison by magnitude,
             -- which works better for year-spanning ranges.
+            -- ??? needs next check scheduling so we can hasTimer=false
+            hasTimer = true
             local nowz = tonumber( ndt.month ) * 100 + tonumber( ndt.day )
             local stz = tonumber( tpart[2] ) * 100 + tonumber( tpart[3] )
             nowz = nowz * 3600 + ndt.hour * 60 + ndt.min
@@ -1205,19 +1229,26 @@ local function evaluateCondition( cond, grp, cdata, tdev )
             D("evaluateCondition() time end %1", os.date( "%x.%X", ett ))
             if stt == ett then ett = ett + 60 end -- special case
             D("evaluateCondition() compare now %1 %2 %3 and %4", now, op, stt, ett)
+            -- Before doing condition check, schedule next time for condition check
+            local edge = ( now < stt ) and stt or ( ( now < ett ) and ett or nil )
+            if edge ~= nil then
+                scheduleTick( { id=tdev,info="trangeFULL "..cond.id }, edge )
+            else    
+                D("evaluateCondition() cond %1 past end time, not scheduling further checks", cond.id)
+            end
             local cp = op
             if cp == "bet" then
-                if now < stt or now >= ett then return false, true end
+                if now < stt or now >= ett then return false,false end
             elseif cp == "nob" then
-                if now >= stt and now < ett then return false, true end
+                if now >= stt and now < ett then return false,false end
             elseif cp == "before" then
-                if now >= stt then return false, true end
+                if now >= stt then return false,false end
             elseif cp == "after" then
-                if now < stt then return false, true end
+                if now < stt then return false,false end
             else
                 L({level=1,msg="Unrecognized condition %1 in time spec for cond %2 of %3 (%4)"},
                     cp, cond.id, tdev, luup.devices[tdev].description)
-                return false, false
+                return false,false
             end
         end
     elseif cond.type == "comment" then
@@ -1500,6 +1531,7 @@ local function updateSensor( tdev )
     -- No need to reschedule timer if no demand. Demand is created by condition
     -- type (hasTimer), polling enabled, or ContinuousTimer set.
     if hasTimer or getVarNumeric( "ContinuousTimer", 0, tdev, RSSID ) ~= 0 then
+        D("updateSensor() hasTimer or ContinuousTimer, scheduling update")
         local v = 10 + ( 60 - ( os.time() % 60 ) ) -- 10 seconds after minute
         scheduleDelay( tostring(tdev), v )
     end
