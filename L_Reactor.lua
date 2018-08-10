@@ -141,9 +141,12 @@ end
 local function initVar( name, dflt, dev, sid )
     assert( dev ~= nil )
     assert( sid ~= nil )
-    if luup.variable_get( sid, name, dev ) == nil then
+    local currVal = luup.variable_get( sid, name, dev )
+    if currVal == nil then
         luup.variable_set( sid, name, tostring(dflt), dev )
+        return tostring(dflt)
     end
+    return currVal
 end
 
 -- Get numeric variable, or return default value if not set or blank
@@ -871,7 +874,7 @@ local function updateVariables( cdata, tdev )
     end
 end
 
--- Helper to schedule next condition update
+-- Helper to schedule next condition update. Times are MSM (mins since midnight)
 local function doNextCondCheck( taskinfo, nowMSM, startMSM, endMSM )
     D("doNextCondCheck(%1,%2,%3)", nowMSM, startMSM, endMSM)
     local edge = 1440
@@ -880,9 +883,11 @@ local function doNextCondCheck( taskinfo, nowMSM, startMSM, endMSM )
     elseif endMSM ~= nil and nowMSM < endMSM then
         edge = endMSM
     end
-    local delay = edge - nowMSM
-    D("doNextCondCheck() scheduling next check for %1 (delay %2m = %3s)", edge, delay, 60*delay)
-    scheduleDelay( taskinfo, 60*delay )
+    local delay = (edge - nowMSM) * 60
+    -- Round the time to the start of a minute (more definitive)
+    local tt = math.floor( ( os.time() + delay ) / 60 ) * 60
+    D("doNextCondCheck() scheduling next check for %1 (delay %2secs)", tt, delay)
+    scheduleTick( taskinfo, tt )
 end
 
 local function evaluateCondition( cond, grp, cdata, tdev )
@@ -1609,7 +1614,7 @@ end
 local function masterTick(pdev)
     D("masterTick(%1)", pdev)
     assert(pdev == pluginDevice)
-    local nextTick = os.time() + 60
+    local nextTick = math.floor( os.time() / 60 + 1 ) * 60
 
     -- Check and update house mode. We do this on the master tick/device so that
     -- children get watch notification of changes.
@@ -1618,6 +1623,20 @@ local function masterTick(pdev)
     if mode ~= oldMode then
         D("tick() master tick detected house mode change, was %1 now %2", oldMode, mode)
         luup.variable_set( MYSID, "HouseMode", mode, pdev )
+    end
+    
+    -- Check DST change. Re-eval all conditions if changed, just to be safe.
+    local dot = os.date("*t").isdst and "1" or "0"
+    local lastdst = initVar( "LastDST", dot, pdev, MYSID )
+    D("masterTick() current DST %1, last %2", dot, lastdst)
+    if dot ~= lastdst then
+        L({level=2,msg="DST change detected! Re-evaluating all children."})
+        luup.variable_set( MYSID, "LastDST", dot, pdev )
+        for k,v in pairs(luup.devices) do
+            if v.device_type == RSTYPE then
+                luup.call_action( RSSID, "Restart", {}, k ) -- runs as job
+            end
+        end
     end
 
     scheduleTick( tostring(pdev), nextTick )
@@ -1681,7 +1700,8 @@ local function waitSystemReady( pdev )
     luup.variable_set( MYSID, "Message", "Starting...", pdev )
     
     -- Start the master tick
-    scheduleDelay( { id=tostring(pdev), func=masterTick, owner=pdev }, 60, { replace=true } )
+    local tt = math.floor( os.time() / 60 + 1 ) * 60 -- next minute
+    scheduleTick( { id=tostring(pdev), func=masterTick, owner=pdev }, tt, { replace=true } )
     
     -- Resume any scenes that were running prior to restart
     resumeScenes()
