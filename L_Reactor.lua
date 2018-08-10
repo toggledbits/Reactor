@@ -410,7 +410,7 @@ local function plugin_runOnce( pdev )
         initVar( "NumChildren", 0, pdev, MYSID )
         initVar( "NumRunning", 0, pdev, MYSID )
         initVar( "Message", "", pdev, MYSID )
-        initVar( "HouseMode", luup.attr_get( "Mode", 0 ) or "1", MYSID )
+        initVar( "HouseMode", luup.attr_get( "Mode", 0 ) or "1", pdev, MYSID )
         initVar( "DebugMode", 0, pdev, MYSID )
 
         luup.attr_set('category_num', 1, pdev)
