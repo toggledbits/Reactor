@@ -1081,16 +1081,16 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         D("evaluateCondition() compare current time %1 between %2 and %3", hm, shm, ehm)
         if shm == nil then
             -- No starting time, consider only end.
-            if ehm ~= nil and hm >= ehm then return false, true end
+            if ehm ~= nil and hm >= ehm then return false,true end
         elseif ehm == nil then
             -- No end time, consider only start.
-            if shm ~= nil and hm < shm then return false, true end
+            if shm ~= nil and hm < shm then return false,true end
         else
             if shm <= ehm then
-                if hm < shm or hm >= ehm then return false, true end
+                if hm < shm or hm >= ehm then return false,true end
             else
                 -- Time spec spans midnight (e.g. sunset to sunrise or 2200 to 0600)
-                if not ( hm >= shm or hm < ehm ) then return false, true end
+                if not ( hm >= shm or hm < ehm ) then return false,true end
             end
         end
     elseif cond.type == "sun" then
@@ -1203,10 +1203,10 @@ local function evaluateCondition( cond, grp, cdata, tdev )
             stz = stz * 3600 + tpart[4] * 60 + tpart[5]
             if op == "before" then
                 D("evaluateCondition() M/D H:M test %1 %2 %3", nowz, op, stz)
-                if nowz >= stz then return false, true end
+                if nowz >= stz then return false,true end
             elseif op == "after" then
                 D("evaluateCondition() M/D H:M test %1 %2 %3", nowz, op, stz)
-                if nowz < stz then return false, true end
+                if nowz < stz then return false,true end
             else
                 local enz = tonumber( tpart[7] ) * 100 + tonumber( tpart[8] )
                 enz = enz * 3600 + tpart[9] * 60 + tpart[10]
@@ -1219,7 +1219,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
                 end
                 if ( op == "bet" and not between ) or
                     ( op == "nob" and between ) then
-                    return false, true
+                    return false,true
                 end
             end
         else
@@ -1955,9 +1955,9 @@ function tick(p)
     end
 
     -- Run the to-do list.
-    D("tick() sorted to-do list is %1", todo)
+    D("tick() to-do list is %1", todo)
     for _,v in ipairs(todo) do
-        D("tick() calling tick function %3(%4,%5) for %1 (%2)", v.owner, (luup.devices[v.owner] or {}).description, functions[tostring(v.func)] or tostring(v.func),
+        D("tick() calling task function %3(%4,%5) for %1 (%2)", v.owner, (luup.devices[v.owner] or {}).description, functions[tostring(v.func)] or tostring(v.func),
             v.owner,v.id)
         local success, err = pcall( v.func, v.owner, v.id, v.args )
         if not success then
@@ -1980,7 +1980,7 @@ function tick(p)
     if nextTick ~= nil then
         now = os.time() -- Get the actual time now; above tasks can take a while.
         local delay = nextTick - now
-        if delay < 1 then delay = 1 elseif delay > 60 then delay = 60 end
+        if delay < 1 then delay = 1 end
         tickTasks._plugin.when = now + delay
         D("tick() scheduling next tick(%3) for %1 (%2)", delay, tickTasks._plugin.when,p)
         luup.call_delay( "reactorTick", delay, p )
