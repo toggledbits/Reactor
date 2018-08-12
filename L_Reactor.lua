@@ -900,7 +900,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         if luup.devices[cond.device or -1] == nil then
             L({level=2,msg="%1 (%2) condition %3 refers to device %4 (%5), does not exist, skipped"},
                 luup.devices[tdev].description, tdev, cond.id, cond.device, cond.devicename or "unknown")
-            return false, false
+            return false,false
         end
 
         -- Add service watch if we don't have one
@@ -971,7 +971,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         if not isOnList( modes, mode ) then return false,false end
     elseif cond.type == "weekday" then
         -- Weekday; Lua 1=Sunday, 2=Monday, ..., 7=Saturday
-        local nextDay = os.time{year=ndt.year,month=ndt.month,day=ndt.day+1,hour=0,['min']=0,sec=10}
+        local nextDay = os.time{year=ndt.year,month=ndt.month,day=ndt.day+1,hour=0,['min']=0,sec=0}
         D("evaluateCondition() weekday condition, setting next check for %1", nextDay)
         scheduleTick( { id=tdev, info="weekday "..cond.id }, nextDay )
         cond.lastvalue = { value=ndt.wday, timestamp=now }
@@ -1538,7 +1538,7 @@ local function updateSensor( tdev )
     if hasTimer or getVarNumeric( "ContinuousTimer", 0, tdev, RSSID ) ~= 0 then
         D("updateSensor() hasTimer or ContinuousTimer, scheduling update")
         local v = 10 + ( 60 - ( os.time() % 60 ) ) -- 10 seconds after minute
-        scheduleDelay( tostring(tdev), v )
+        scheduleDelay( {id=tostring(tdev),info="hasTimer"}, v )
     end
 end
 
@@ -2158,6 +2158,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
     elseif action == "status" then
         local st = {
             name=_PLUGIN_NAME,
+            plugin=_PLUGIN_ID,
             version=_PLUGIN_VERSION,
             configversion=_CONFIGVERSION,
             author="Patrick H. Rigney (rigpapa)",
