@@ -2,6 +2,7 @@
 
 ## Version 1.5 (develop branch) ##
 
+* The deprecated form of time test (from 1.1) has been removed; if a user config still contains a reference to this condition type, it will throw an error.
 * Considerable optimization of time handling, to further reduce CPU load when time-related conditions (including weekday and sun) are used.
 * Incorporate my scene runner from SceneSlayer (another plugin of mine, as yet unpublished). This improves on Vera's native scenes by (a) making delayed scene groups resilient against Luup restarts and reboots, and (b) providing the ability to stop a running scene (i.e. delayed groups that have not yet executed can be abandoned at any time).
 

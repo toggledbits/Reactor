@@ -28,7 +28,7 @@ var ReactorSensor = (function(api) {
     var configModified = false;
     var inStatusPanel = false;
     var lastx = 0;
-    var condTypeName = { "service": "Service/Variable", "housemode": "House Mode", "comment": "Comment", "weekday": "Weekday", 'time': "Date (deprecated)",
+    var condTypeName = { "service": "Service/Variable", "housemode": "House Mode", "comment": "Comment", "weekday": "Weekday",
         "sun": "Sunrise/Sunset", "trange": "Date/Time", "reload": "Luup Reloaded" };
     var weekDayName = [ '?', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat' ];
     var monthName = [ '?', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec' ];
@@ -325,20 +325,6 @@ var ReactorSensor = (function(api) {
                 }
                 break;
 
-            case 'time':
-                var t = ( cond.value || "" ).split(/,/);
-                var ds = textDate( t[0], t[1], t[2], false ) || "";
-                var de = textDate( t[5], t[6], t[7], true ) || "";
-                str += (cond.operator != "bet" ? "nob " : "") + 'between ' +
-                    ds +
-                    ' ' +
-                    ( isEmpty( t[3] ) ? "*" : t[3] ) + ':' + ( isEmpty( t[4] ) ? "*" : t[4] ) +
-                    ' and ' +
-                    de +
-                    ' ' +
-                    ( isEmpty( t[8] ) ? "*" : t[8] ) + ':' + ( isEmpty( t[9] ) ? "*" : t[9] );
-                break;
-
             case 'trange':
                 if ( opName[ cond.operator ] !== undefined ) {
                     str += opName[ cond.operator ];
@@ -563,7 +549,6 @@ var ReactorSensor = (function(api) {
                 cond.value = res.join(',');
                 break;
 
-            case 'time':
             case 'trange':
                 /* Pre-sanity check */
                 if ( typ === "trange" && target !== undefined && target.hasClass('year') ) {
@@ -961,55 +946,6 @@ var ReactorSensor = (function(api) {
                 }
                 jQuery("select#sunend", container).on( 'change.reactor', handleRowChange ).val( k[1] );
                 jQuery("input#endoffset", container).on( 'change.reactor', handleRowChange ).val( k[2] );
-                break;
-
-            case 'time':
-                var pp = makeDateTimeOpMenu( cond.operator );
-                container.append(pp);
-                var months = jQuery('<select class="monthmenu form-control form-control-sm"><option value=""></option></select>');
-                for ( var mon=1; mon<=12; mon++ ) {
-                    months.append('<option value="' + mon + '">' + monthName[mon] + ' (' + mon + ')</option>');
-                }
-                var days = jQuery('<select class="daymenu form-control form-control-sm"></select>');
-                for ( var day=1; day<=31; day++ ) {
-                    days.append('<option value="' + day + '">' + day + '</option>');
-                }
-                var hours = jQuery('<select class="hourmenu form-control form-control-sm"><option value="">(every hour)</option></select>');
-                hours.append('<option value="sunrise">Sunrise</option><option value="sunset">Sunset</option>');
-                for ( var hr = 0; hr<24; hr++ ) {
-                    var hh = hr % 12;
-                    if ( hh === 0 ) {
-                        hh = 12;
-                    }
-                    hours.append('<option value="' + hr + '">' + hr + ' (' + hh + ( hr < 12 ? "am" : "pm" ) + ')</option>');
-                }
-                var mins = jQuery('<select class="minmenu form-control form-control-sm"><option value="">(any min)</option></select>');
-                for ( var mn=0; mn<60; mn+=5 ) {
-                    mins.append('<option value="' + mn + '">:' + (mn < 10 ? '0' : '') + mn + '</option>');
-                }
-                container.append('<div class="start"></div> and ').append('<div class="end"></div>');
-                jQuery("div.start", container).append( months.clone() )
-                    .append( days.clone() )
-                    .append('<input type="text" placeholder="yyyy" class="year narrow form-control form-control-sm">')
-                    .append( hours.clone() )
-                    .append( mins.clone() );
-                jQuery("div.end", container).append( months )
-                    .append( days )
-                    .append('<input type="text" placeholder="yyyy" class="year narrow form-control form-control-sm">')
-                    .append( hours )
-                    .append( mins );
-                /* Restore values */
-                var vals = (cond.value || "").split(',');
-                var flist = [ 'div.start input.year', 'div.start select.monthmenu','div.start select.daymenu',
-                              'div.start select.hourmenu', 'div.start select.minmenu',
-                              'div.end input.year','div.end select.monthmenu', 'div.end select.daymenu',
-                              'div.end select.hourmenu','div.end select.minmenu'
-                ];
-                for ( var fx=0; fx<flist.length; fx++ ) {
-                    jQuery( flist[fx], container ).val( fx < vals.length ? vals[fx] : '' );
-                }
-                jQuery("select", container).on( 'change.reactor', handleRowChange );
-                jQuery("input", container).on( 'change.reactor', handleRowChange );
                 break;
 
             case 'trange':
@@ -1423,9 +1359,6 @@ var ReactorSensor = (function(api) {
                     case 'weekday':
                         removeConditionProperties( cond, 'operator,value' );
                         break;
-                    case 'time':
-                        removeConditionProperties( cond, 'operator,value' );
-                        break;
                     case 'sun':
                         removeConditionProperties( cond, 'operator,value' );
                         break;
@@ -1694,7 +1627,6 @@ var ReactorSensor = (function(api) {
                         }
                         break;
 
-                    case 'time':
                     case 'sun':
                     case 'trange':
                         if ( currentValue !== undefined ) {

@@ -499,12 +499,12 @@ end
 -- Get scene data from cache or Luup. Queue fetch/refetch if needed.
 local function getSceneData( sceneId, tdev )
     D("getSceneData(%1,%2)", sceneId, tdev )
-    
+
     -- Load persistent scene data to cache if cache empty
     if next(sceneData) == nil then
         sceneData = json.decode( luup.variable_get( MYSID, "scenedata", pluginDevice ) or "{}" ) or {}
     end
-    
+
     -- Still a valid scene?
     local skey = tostring(sceneId)
     if luup.scenes[sceneId] == nil then
@@ -556,18 +556,18 @@ end
 -- groups that are now past-due (native Luup scenes don't do this).
 local function runSceneGroups( tdev, taskid )
     D("runSceneGroups(%1,%2)", tdev, taskid )
-    
+
     -- Get sceneState, make sure it's consistent with request.
     local sst = sceneState[taskid]
     D("scene state %1", sst)
     if sst == nil then return end
-    
+
     local scd = getSceneData(sst.scene)
     if scd == nil then
         L({level=1,msg="Previously running scene %1 now not found/loaded. Aborting run."}, sst.scene)
         return stopScene( nil, taskid )
     end
-    
+
     -- Run next scene group (and keep running groups until no more or delay needed)
     local nextGroup = sst.lastgroup + 1
     while nextGroup <= #scd.groups do
@@ -594,7 +594,7 @@ local function runSceneGroups( tdev, taskid )
                     param[p.name or tostring(k)] = p.value
                 end
                 D("runSceneGroups() dev %4 (%5) do %1/%2(%3)", action.service,
-                    action.action, param, devnum, 
+                    action.action, param, devnum,
                     (luup.devices[devnum] or {}).description)
                 luup.call_action( action.service, action.action, param, devnum )
             end
@@ -613,7 +613,7 @@ local function runSceneGroups( tdev, taskid )
 end
 
 -- Start a scene. Any running scene is immediately terminated, and this scene
--- replaces it. Scene Lua works for conditional execution.   
+-- replaces it. Scene Lua works for conditional execution.
 local function runScene( scene, tdev, forceReactor )
     D("runScene(%1,%2,%3)", scene, tdev, forceReactor )
 
@@ -666,9 +666,9 @@ local function runScene( scene, tdev, forceReactor )
                 scd.id, scd.name, err, luafragment)
             return
         else
-            local res = fnc() 
+            local res = fnc()
             -- Warning if return type isn't what we expect.
-            if type(res) ~= "boolean" then 
+            if type(res) ~= "boolean" then
                 L({level=2,msg="Scene %1 (%2) Lua returned type %3; your scene Lua should always return boolean true or false."}, scd.id, scd.name, type(res))
             end
             -- Evaluate return value
@@ -1006,93 +1006,6 @@ local function evaluateCondition( cond, grp, cdata, tdev )
             D("evaluateCondition() yes, today %1 %2-%3 IS #%4 in month", ndt.wday,
                 ndt.month, ndt.day, op)
         end
-    elseif cond.type == "time" then
-        -- Time, with various components specified, or not.
-        L({level=2,msg="ReactorSensor %1 (%2) uses the deprecated form of 'time' condition.  This form will cease to function at rev 1.5 (current running %3). Please reconfigure using the new 'trange' (or 'sun') form and delete the old one."}, tdev, luup.devices[tdev].description, _PLUGIN_VERSION)
-        hasTimer = true
-        cond.lastvalue = { value=now, timestamp=now }
-        local hm = ndt.hour * 60 + ndt.min -- msm (minutes since midnight)
-        -- Figure out sunrise/sunset. We keep a daily cache, because Vera's times
-        -- recalculate to that of the following day once the time has passwed, and
-        -- we need stable with a day.
-        local stamp = (ndt.year % 100) * 10000 + ndt.month * 100 + ndt.day
-        local sun = split( luup.variable_get( RSSID, "sundata", tdev ) or "" )
-        if #sun ~= 3 or sun[1] ~= tostring(stamp) then
-            D("evaluateCondition() didn't like what I got for sun: %1; expected stamp is %2; storing new.", sun, stamp)
-            sun = { stamp, luup.sunrise(), luup.sunset() }
-            luup.variable_set( RSSID, "sundata", table.concat( sun, "," ) , tdev )
-        end
-        D("evaluateCondition() sunrise/sunset %1", sun)
-        -- Split, pad, and compare date.
-        local tparam = split( cond.value, ',' )
-        for ix = #tparam+1, 10 do tparam[ix] = "" end -- pad
-        local cp = cond.operator or cond.condition
-        -- ??? between or not?
-        D("evaluateCondition() time check now %1 vs config %2", ndt, tparam)
-        if tparam[1] ~= "" and ndt.year < tonumber( tparam[1] ) then return false,true end
-        if tparam[6] ~= "" and ndt.year > tonumber( tparam[6] ) then return false,true end
-        if tparam[2] ~= "" and ndt.month < tonumber( tparam[2] ) then return false,true end
-        if tparam[7] ~= "" and ndt.month > tonumber( tparam[7] ) then return false,true end
-        if tparam[3] ~= "" and ndt.day < tonumber( tparam[3] ) then return false,true end
-        if tparam[8] ~= "" and ndt.day > tonumber( tparam[8] ) then return false,true end
-        -- Date passes. Get start time.
-        local shm, ehm
-        if tparam[4] == "" then
-            -- No hour, just check minute
-            if tparam[5] ~= "" and ndt.min < tonumber( tparam[5] ) then return false,true end
-        else
-            if tparam[4] == "sunrise" then
-                local xt = os.date("*t", sun[2])
-                shm = xt.hour * 60 + xt.min
-            elseif tparam[4] == "sunset" then
-                local xt = os.date("*t", sun[3])
-                shm = xt.hour * 60 + xt.min
-            elseif tparam[4] ~= "" then
-                shm = tonumber( tparam[4] ) * 60;
-                if tparam[5] ~= "" then
-                    shm = shm + tonumber( tparam[5] )
-                end
-            end
-        end
-        -- Get end time.
-        if tparam[9] == "" then
-            -- No hour, just check minute
-            if tparam[10] ~= "" and ndt.min > tonumber( tparam[10] ) then return false,true end
-        else
-            if tparam[9] == "sunrise" then
-                local xt = os.date("*t", sun[2])
-                ehm = xt.hour * 60 + xt.min
-            elseif tparam[9] == "sunset" then
-                local xt = os.date("*t", sun[3])
-                ehm = xt.hour * 60 + xt.min
-            elseif tparam[9] ~= "" then
-                ehm = tonumber( tparam[9] ) * 60;
-                if tparam[10] ~= "" then
-                    ehm = ehm + tonumber( tparam[10] )
-                else
-                    -- Since no selection means "any minute", stretch end time for
-                    -- comparison to include full hour (e.g. an end time of hour=22,
-                    -- minute=any is equivalent to hour=23 minute=0)
-                    ehm = ehm + 60
-                end
-            end
-        end
-        -- Compare start and end time specs to current time.
-        D("evaluateCondition() compare current time %1 between %2 and %3", hm, shm, ehm)
-        if shm == nil then
-            -- No starting time, consider only end.
-            if ehm ~= nil and hm >= ehm then return false,true end
-        elseif ehm == nil then
-            -- No end time, consider only start.
-            if shm ~= nil and hm < shm then return false,true end
-        else
-            if shm <= ehm then
-                if hm < shm or hm >= ehm then return false,true end
-            else
-                -- Time spec spans midnight (e.g. sunset to sunrise or 2200 to 0600)
-                if not ( hm >= shm or hm < ehm ) then return false,true end
-            end
-        end
     elseif cond.type == "sun" then
         -- Sun condition (sunrise/set)
         cond.lastvalue = { value=now, timestamp=now }
@@ -1238,7 +1151,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
             local edge = ( now < stt ) and stt or ( ( now < ett ) and ett or nil )
             if edge ~= nil then
                 scheduleTick( { id=tdev,info="trangeFULL "..cond.id }, edge )
-            else    
+            else
                 D("evaluateCondition() cond %1 past end time, not scheduling further checks", cond.id)
             end
             local cp = op
@@ -1259,7 +1172,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
     elseif cond.type == "comment" then
         -- Shortcut. Comments are always true.
         cond.lastvalue = { value=cond.comment, timestamp=now }
-        return true, false
+        return true,false
     elseif cond.type == "reload" then
         -- True when loadtime changes. Self-resetting.
         local loadtime = tonumber( ( luup.attr_get("LoadTime", 0) ) ) or 0
@@ -1269,7 +1182,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         cond.lastvalue = { value=reloaded, timestamp=now }
         luup.variable_set( RSSID, "LastLoad", loadtime, tdev )
         -- Return timer flag true when reloaded is true, so we get a reset shortly after.
-        return reloaded, reloaded
+        return reloaded,reloaded
     else
         L({level=2,msg="Sensor %1 (%2) unknown condition type %3 for cond %4 in group %5; fails."},
             tdev, luup.devices[tdev].description, cond.type, cond.id, grp.groupid)
@@ -1624,7 +1537,7 @@ local function masterTick(pdev)
         D("tick() master tick detected house mode change, was %1 now %2", oldMode, mode)
         luup.variable_set( MYSID, "HouseMode", mode, pdev )
     end
-    
+
     -- Check DST change. Re-eval all conditions if changed, just to be safe.
     local dot = os.date("*t").isdst and "1" or "0"
     local lastdst = initVar( "LastDST", dot, pdev, MYSID )
@@ -1680,7 +1593,7 @@ local function startSensor( tdev, pdev )
     luup.set_failure( 0, tdev )
 end
 
-local function waitSystemReady( pdev )  
+local function waitSystemReady( pdev )
     D("waitSystemReady(%1)", pdev)
     for n,d in pairs(luup.devices) do
         if d.device_type == "urn:schemas-micasaverde-com:device:ZWaveNetwork:1" then
@@ -1698,11 +1611,11 @@ local function waitSystemReady( pdev )
 
     -- System is now ready. Finish initialization and start timers.
     luup.variable_set( MYSID, "Message", "Starting...", pdev )
-    
+
     -- Start the master tick
     local tt = math.floor( os.time() / 60 + 1 ) * 60 -- next minute
     scheduleTick( { id=tostring(pdev), func=masterTick, owner=pdev }, tt, { replace=true } )
-    
+
     -- Resume any scenes that were running prior to restart
     resumeScenes()
 
@@ -1762,7 +1675,7 @@ function startPlugin( pdev )
     sceneData = {}
     sceneWaiting = {}
     sceneState = {}
-    
+
     -- Debug?
     if getVarNumeric( "DebugMode", 0, pdev, MYSID ) ~= 0 then
         debugMode = true
@@ -1806,7 +1719,7 @@ function startPlugin( pdev )
 
     -- One-time stuff
     plugin_runOnce( pdev )
-
+    
     -- Initialize and start the plugin timer and master tick
     runStamp = 1
     scheduleDelay( { id=tostring(pdev), func=waitSystemReady, owner=pdev }, 5 )
@@ -2063,7 +1976,7 @@ end
 local function alt_json_encode( st )
     str = "{"
     local comma = false
-    for k,v in pairs(st) do 
+    for k,v in pairs(st) do
         str = str .. ( comma and "," or "" )
         comma = true
         str = str .. '"' .. k .. '":'
