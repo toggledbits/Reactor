@@ -1,6 +1,11 @@
 # Change Log #
 
-## Version 1.4 (develop branch) ##
+## Version 1.5 (develop branch) ##
+
+* Considerable optimization of time handling, to further reduce CPU load when time-related conditions (including weekday and sun) are used.
+* Incorporate my scene runner from SceneSlayer (another plugin of mine, as yet unpublished). This improves on Vera's native scenes by (a) making delayed scene groups resilient against Luup restarts and reboots, and (b) providing the ability to stop a running scene (i.e. delayed groups that have not yet executed can be abandoned at any time).
+
+## Version 1.4 (released) ##
 
 * Remove self-watches on expressions (eval optimization).
 
