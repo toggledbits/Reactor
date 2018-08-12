@@ -7,7 +7,9 @@
 
 ## Version 1.4 (released) ##
 
-* Remove self-watches on expressions (eval optimization).
+* Fix a bug in the initialization of house mode that causes a startup error.
+* Fix initialization of servce options in UI so that repeat count isn't default.
+* Skip self-watches of expression variables (optimizes evaluation count).
 
 ## Version 1.3 (released) ##
 
