@@ -1,5 +1,11 @@
 # Change Log #
 
+## Version 1.4 (released) ##
+
+* Fix a bug in the initialization of house mode that causes a startup error.
+* Fix initialization of servce options in UI so that repeat count isn't default.
+* Skip self-watches of expression variables (optimizes evaluation count).
+
 ## Version 1.3 (released) ##
 
 * Repeats over time. It is now possible to create a condition matching a number of repeats of a state over time, for example, a sensor that trips 3 or more times within a 5 minute period. This is configured in the condition options for service/variable conditions.
