@@ -792,7 +792,6 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
     end
     -- if debugMode then luaxp._DEBUG = D end
     ctx.NULL = luaxp.NULL
-    D("evaluateVariable() evaluating %1", vdef.expression)
     local result, err = luaxp.evaluate( vdef.expression or "?", ctx )
     if not ( err or luaxp.isNull(result) ) then
         D("evaluateVariable() %2 (%1) %3 evaluates to %4", tdev, luup.devices[tdev].description,
@@ -958,7 +957,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         elseif op == "isfalse" then
             if vv ~= 0 then return false end
         else
-            L("evaluateCondition() unknown condition %1 in cond %2 of group", op, cv)
+            L({level=1,msg="evaluateCondition() unknown op %1 in cond %2"}, op, cv)
             return false
         end
     elseif cond.type == "housemode" then
@@ -1021,7 +1020,6 @@ local function evaluateCondition( cond, grp, cdata, tdev )
             sun = { stamp, luup.sunrise(), luup.sunset() }
             luup.variable_set( RSSID, "sundata", table.concat( sun, "," ) , tdev )
         end
-        D("evaluateCondition() sunrise/sunset %1", sun)
         local tparam = split( cond.value or "sunrise+0,sunset+0" )
         local cp,offset = string.match( tparam[1], "^([^%+%-]+)(.*)" )
         offset = tonumber( offset or "0" ) or 0
@@ -1204,7 +1202,7 @@ local function evaluateGroup( grp, cdata, tdev )
     for _,cond in ipairs( grp.groupconditions ) do
         if cond.type ~= "comment" then
             local state, condTimer = evaluateCondition( cond, grp, cdata, tdev )
-            D("evaluateGroup() eval group %1 cond %2 state %3 timer %4", grp.groupid,
+            D("evaluateGroup() eval group %1 cond %2 result is state %3 timer %4", grp.groupid,
                 cond.id, state, condTimer)
 
             hasTimer = condTimer or hasTimer
@@ -2068,6 +2066,21 @@ function request( lul_request, lul_parameters, lul_outputformat )
             end
         end
         return r, "text/plain"
+    elseif action == "config" then
+        local st = { _comment="Reactor configuration " .. os.date("%x %X"), timestamp=os.time(), version=_PLUGIN_VERSION, sensors={} }
+        for k,v in pairs( luup.devices ) do
+            if v.device_type == RSTYPE then
+                st.sensors[tostring(k)] = { name=v.description }
+                local x = luup.variable_get( RSSID, "cdata", k ) or "{}"
+                local c,pos,err = json.decode( x )
+                if not c then
+                    st.sensors[tostring(k)]._comment = "Unable to parse configuration"
+                else
+                    st.sensors[tostring(k)].config = c
+                end
+            end
+        end
+        return json.encode( st ), "application/json"
     elseif action == "status" then
         local st = {
             name=_PLUGIN_NAME,
