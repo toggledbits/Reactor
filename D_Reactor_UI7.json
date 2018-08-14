@@ -11,7 +11,7 @@
             },
             "Position": 0,
             "TabType": "flash",
-            "top_navigation_tab": 1,
+            "TopNavigationTab": 1,
             "ControlGroup": [{
                     "id": 1,
                     "scenegroup": 1

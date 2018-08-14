@@ -27,7 +27,6 @@
             },
             "Position": 0,
             "TabType": "flash",
-            "top_navigation_tab": 1,
             "TopNavigationTab": 1,
             "AfterInit": {
                 "ScriptName": "J_ReactorSensor_UI7.js",
@@ -274,7 +273,6 @@
             },
             "Position": 1,
             "TabType": "javascript",
-            "top_navigation_tab": 1,
             "TopNavigationTab": 1,
             "ScriptName": "J_ReactorSensor_UI7.js",
             "Function": "ReactorSensor.doConditions"
@@ -286,7 +284,6 @@
             },
             "Position": 2,
             "TabType": "javascript",
-            "top_navigation_tab": 1,
             "TopNavigationTab": 1,
             "ScriptName": "J_ReactorSensor_UI7.js",
             "Function": "ReactorSensor.doVariables"
@@ -298,7 +295,6 @@
             },
             "Position": 3,
             "TabType": "javascript",
-            "top_navigation_tab": 1,
             "TopNavigationTab": 1,
             "ScriptName": "J_ReactorSensor_UI7.js",
             "Function": "ReactorSensor.doTest"
