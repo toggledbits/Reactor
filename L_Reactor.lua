@@ -149,6 +149,16 @@ local function initVar( name, dflt, dev, sid )
     return currVal
 end
 
+-- Set variable, only if value has changed.
+local function setVar( sid, name, val, dev )
+    local s = luup.variable_get( sid, name, dev )
+    if s ~= val then
+        luup.variable_set( sid, name, val, dev )
+        return val
+    end
+    return s
+end
+
 -- Get numeric variable, or return default value if not set or blank
 local function getVarNumeric( name, dflt, dev, sid )
     assert( dev ~= nil )
@@ -159,6 +169,32 @@ local function getVarNumeric( name, dflt, dev, sid )
     s = tonumber(s, 10)
     if (s == nil) then return dflt end
     return s
+end
+
+-- Check system battery (VeraSecure)
+local function checkSystemBattery( pdev )
+    local level, source = "", ""
+    local f = io.popen("battery get powersource") -- powersource=DC mode/Battery mode
+    if f then
+        local s = f:read("*a") or ""
+        D("checkSystemBattery() source query returned %1", s)
+        if s ~= "" then
+            source = string.match(s, "powersource=(.*)") or ""
+            if string.find( source:lower(), "battery" ) then source = "battery"
+            elseif string.find( source:lower(), "dc mode" ) then source = "utility"
+            end
+            f:close()
+            f = io.popen("battery get level") -- level=%%%
+            if f then
+                s = f:read("*a") or ""
+                D("checkSystemBattery() level query returned %1", s)
+                level = string.match( s, "level=(\d+)" ) or ""
+                f:close()
+            end
+        end
+    end
+    setVar( MYSID, "SystemPowerSource", source, pdev )
+    setVar( MYSID, "SystemBatteryLevel", level, pdev )
 end
 
 local function rateFill( rh, tt )
@@ -1527,14 +1563,11 @@ local function masterTick(pdev)
     assert(pdev == pluginDevice)
     local nextTick = math.floor( os.time() / 60 + 1 ) * 60
 
-    -- Check and update house mode. We do this on the master tick/device so that
-    -- children get watch notification of changes.
-    local mode = luup.attr_get( "Mode", 0 ) or "1"
-    local oldMode = luup.variable_get( MYSID, "HouseMode", pdev )
-    if mode ~= oldMode then
-        D("tick() master tick detected house mode change, was %1 now %2", oldMode, mode)
-        luup.variable_set( MYSID, "HouseMode", mode, pdev )
-    end
+    -- Check and update house mode.
+    setVar( MYSID, "HouseMode", luup.attr_get( "Mode", 0 ) or "1", pdev )
+    
+    -- Vera Secure has battery, check it.
+    pcall( checkSystemBattery, pdev )
 
     -- Check DST change. Re-eval all conditions if changed, just to be safe.
     local dot = os.date("*t").isdst and "1" or "0"
