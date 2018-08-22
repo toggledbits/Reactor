@@ -1,5 +1,12 @@
 # Change Log #
 
+## Version 1.5 (develop branch) ##
+
+* Master device now checks power source and battery level for Vera Secure, and stores the values for access via expressions. Reacting to power loss (Vera on battery power) and battery level should now be possible, on VeraSecure only. These values will be blank on all other platforms.
+* The deprecated form of time test (from 1.1) has been removed; if a user config still contains a reference to this condition type, it will throw an error.
+* Considerable optimization of time handling, to further reduce CPU load when time-related conditions (including weekday and sun) are used.
+* Incorporate my scene runner from SceneSlayer (another plugin of mine, as yet unpublished). This improves on Vera's native scenes by (a) making delayed scene groups resilient against Luup restarts and reboots, and (b) providing the ability to stop a running scene (i.e. delayed groups that have not yet executed can be abandoned at any time).
+
 ## Version 1.4 (released) ##
 
 * Fix a bug in the initialization of house mode that causes a startup error.

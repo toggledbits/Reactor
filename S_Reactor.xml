@@ -36,6 +36,24 @@
             </argumentList>
         </action>
         <action>
+          <name>RunScene</name>
+          <argumentList>
+            <argument>
+              <name>SceneNum</name>
+              <direction>in</direction>
+            </argument>
+          </argumentList>
+        </action>
+        <action>
+          <name>StopScene</name>
+          <argumentList>
+            <argument>
+              <name>SceneNum</name>
+              <direction>in</direction>
+            </argument>
+          </argumentList>
+        </action>
+        <action>
             <name>MasterClear</name>
             <argumentList>
             </argumentList>

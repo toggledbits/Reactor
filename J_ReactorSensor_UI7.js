@@ -6,7 +6,7 @@
  * Copyright 2018 Patrick H. Rigney, All Rights Reserved.
  * This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
  */
-/* globals api,jQuery */
+/* globals api,jsonp,jQuery */
 
 //"use strict"; // fails on UI7, works fine with ALTUI
 
@@ -28,7 +28,7 @@ var ReactorSensor = (function(api) {
     var configModified = false;
     var inStatusPanel = false;
     var lastx = 0;
-    var condTypeName = { "service": "Service/Variable", "housemode": "House Mode", "comment": "Comment", "weekday": "Weekday", 'time': "Date (deprecated)",
+    var condTypeName = { "service": "Service/Variable", "housemode": "House Mode", "comment": "Comment", "weekday": "Weekday",
         "sun": "Sunrise/Sunset", "trange": "Date/Time", "reload": "Luup Reloaded" };
     var weekDayName = [ '?', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat' ];
     var monthName = [ '?', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec' ];
@@ -40,7 +40,7 @@ var ReactorSensor = (function(api) {
         var html = '';
         html += '<div class="clearfix">';
         html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
-        html += '<div id="tbcopyright">Reactor ver 1.4 &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
+        html += '<div id="tbcopyright">Reactor ver 1.5develop &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
             ' All Rights Reserved. Please check out the <a href="https://www.toggledbits.com/reactor" target="_blank">online documentation</a>' +
             ' and <a href="http://forum.micasaverde.com/index.php/topic,87484.0.html" target="_blank">forum thread</a> for support.</div>';
         html += '<div id="supportlinks">Support links: ' +
@@ -325,20 +325,6 @@ var ReactorSensor = (function(api) {
                 }
                 break;
 
-            case 'time':
-                var t = ( cond.value || "" ).split(/,/);
-                var ds = textDate( t[0], t[1], t[2], false ) || "";
-                var de = textDate( t[5], t[6], t[7], true ) || "";
-                str += (cond.operator != "bet" ? "nob " : "") + 'between ' +
-                    ds +
-                    ' ' +
-                    ( isEmpty( t[3] ) ? "*" : t[3] ) + ':' + ( isEmpty( t[4] ) ? "*" : t[4] ) +
-                    ' and ' +
-                    de +
-                    ' ' +
-                    ( isEmpty( t[8] ) ? "*" : t[8] ) + ':' + ( isEmpty( t[9] ) ? "*" : t[9] );
-                break;
-
             case 'trange':
                 if ( opName[ cond.operator ] !== undefined ) {
                     str += opName[ cond.operator ];
@@ -474,7 +460,7 @@ var ReactorSensor = (function(api) {
 
     function makeDateTimeOpMenu( cond ) {
         var el = jQuery('<select class="opmenu form-control form-control-sm pull-left"></select>');
-        el.append('<option value="bet">between</option>');
+        el.append( '<option value="bet">between</option>' );
         el.append( '<option value="nob">not between</option>' );
 
         if ( undefined !== cond ) {
@@ -563,7 +549,6 @@ var ReactorSensor = (function(api) {
                 cond.value = res.join(',');
                 break;
 
-            case 'time':
             case 'trange':
                 /* Pre-sanity check */
                 if ( typ === "trange" && target !== undefined && target.hasClass('year') ) {
@@ -961,55 +946,6 @@ var ReactorSensor = (function(api) {
                 }
                 jQuery("select#sunend", container).on( 'change.reactor', handleRowChange ).val( k[1] );
                 jQuery("input#endoffset", container).on( 'change.reactor', handleRowChange ).val( k[2] );
-                break;
-
-            case 'time':
-                var pp = makeDateTimeOpMenu( cond.operator );
-                container.append(pp);
-                var months = jQuery('<select class="monthmenu form-control form-control-sm"><option value=""></option></select>');
-                for ( var mon=1; mon<=12; mon++ ) {
-                    months.append('<option value="' + mon + '">' + monthName[mon] + ' (' + mon + ')</option>');
-                }
-                var days = jQuery('<select class="daymenu form-control form-control-sm"></select>');
-                for ( var day=1; day<=31; day++ ) {
-                    days.append('<option value="' + day + '">' + day + '</option>');
-                }
-                var hours = jQuery('<select class="hourmenu form-control form-control-sm"><option value="">(every hour)</option></select>');
-                hours.append('<option value="sunrise">Sunrise</option><option value="sunset">Sunset</option>');
-                for ( var hr = 0; hr<24; hr++ ) {
-                    var hh = hr % 12;
-                    if ( hh === 0 ) {
-                        hh = 12;
-                    }
-                    hours.append('<option value="' + hr + '">' + hr + ' (' + hh + ( hr < 12 ? "am" : "pm" ) + ')</option>');
-                }
-                var mins = jQuery('<select class="minmenu form-control form-control-sm"><option value="">(any min)</option></select>');
-                for ( var mn=0; mn<60; mn+=5 ) {
-                    mins.append('<option value="' + mn + '">:' + (mn < 10 ? '0' : '') + mn + '</option>');
-                }
-                container.append('<div class="start"></div> and ').append('<div class="end"></div>');
-                jQuery("div.start", container).append( months.clone() )
-                    .append( days.clone() )
-                    .append('<input type="text" placeholder="yyyy" class="year narrow form-control form-control-sm">')
-                    .append( hours.clone() )
-                    .append( mins.clone() );
-                jQuery("div.end", container).append( months )
-                    .append( days )
-                    .append('<input type="text" placeholder="yyyy" class="year narrow form-control form-control-sm">')
-                    .append( hours )
-                    .append( mins );
-                /* Restore values */
-                var vals = (cond.value || "").split(',');
-                var flist = [ 'div.start input.year', 'div.start select.monthmenu','div.start select.daymenu',
-                              'div.start select.hourmenu', 'div.start select.minmenu',
-                              'div.end input.year','div.end select.monthmenu', 'div.end select.daymenu',
-                              'div.end select.hourmenu','div.end select.minmenu'
-                ];
-                for ( var fx=0; fx<flist.length; fx++ ) {
-                    jQuery( flist[fx], container ).val( fx < vals.length ? vals[fx] : '' );
-                }
-                jQuery("select", container).on( 'change.reactor', handleRowChange );
-                jQuery("input", container).on( 'change.reactor', handleRowChange );
                 break;
 
             case 'trange':
@@ -1423,9 +1359,6 @@ var ReactorSensor = (function(api) {
                     case 'weekday':
                         removeConditionProperties( cond, 'operator,value' );
                         break;
-                    case 'time':
-                        removeConditionProperties( cond, 'operator,value' );
-                        break;
                     case 'sun':
                         removeConditionProperties( cond, 'operator,value' );
                         break;
@@ -1694,7 +1627,6 @@ var ReactorSensor = (function(api) {
                         }
                         break;
 
-                    case 'time':
                     case 'sun':
                     case 'trange':
                         if ( currentValue !== undefined ) {
@@ -1956,8 +1888,6 @@ var ReactorSensor = (function(api) {
         }
     }
 
-
-
     function doConditions()
     {
         try {
@@ -1992,11 +1922,11 @@ var ReactorSensor = (function(api) {
             /* Body content */
             html = '';
             html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>Conditions</h3></div></div>';
-            html += '<div class="row"><div class="col-cs-12 col-sm-12">Conditions within a group are "AND", and groups are "OR". That is, the sensor will trip when any group succeeds, and for a group to succeed, all conditions in the group must be met.</div></div>';
+            html += '<div class="row"><div class="col-xs-12 col-sm-12">Conditions within a group are "AND", and groups are "OR". That is, the sensor will trip when any group succeeds, and for a group to succeed, all conditions in the group must be met.</div></div>';
             
             var rr = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "Retrigger" ) || "0";
             if ( rr !== "0" ) {
-                html += '<div class="row"><div class="warning col-cs-12 col-sm-12">WARNING! Retrigger is on! You should avoid using house mode or time-related conditions in this ReactorSensor, as they will cause retriggers every 60 seconds!</div></div>';
+                html += '<div class="row"><div class="warning col-cs-12 col-sm-12">WARNING! Retrigger is on! You should avoid using time-related conditions in this ReactorSensor, as they may cause retriggers frequent retriggers!</div></div>';
             }
             
             html += '<div id="conditions"></div>';
@@ -2016,8 +1946,123 @@ var ReactorSensor = (function(api) {
         }
     }
 
-    function doSettings()
+    function doSettings() {}
+
+    function changeSelectedScene( ev )
     {
+        var t1 = jQuery('select#tripscene').val();
+        var t2 = jQuery('select#untripscene').val();
+        if ( t1 === "" && t2 === "" ) {
+            api.setDeviceStatePersistent( api.getCpanelDeviceId(), serviceId, "Scenes", "")
+        } else {
+            var ll = t1 + "," + t2;
+            api.setDeviceStatePersistent( api.getCpanelDeviceId(), serviceId, "Scenes", ll)
+        }
+        var uri = api.getDataRequestURL() + "?id=lr_Reactor&device=" + api.getCpanelDeviceId() + "&action=loadscenes";
+        jQuery.ajax({
+            url: uri,
+            dataType: "json",
+            timeout: 5000,
+        }).done( function( data, statusText, jqXHR ) {
+            // Excellent.
+            console.log(jqXHR.responseText);
+        }).fail( function( jqXHR, textStatus, errorThrown ) {
+            // Bummer.
+            console.log("Failed to load scenes: " + textStatus + " " + String(errorThrown));
+            console.log(jqXHR.responseText);
+        });
+    }
+
+    function doActivities()
+    {
+        try {
+            if ( configModified && confirm( "You have unsaved changes. Press OK to save them, or Cancel to discard them." ) ) {
+                handleSaveClick( undefined );
+            }
+
+            initModule();
+
+            /* Load material design icons */
+            jQuery("head").append('<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">');
+
+            /* Our styles. */
+            var html = "<style>";
+            html += ".tb-about { margin-top: 24px; }";
+            html += ".color-green { color: #006040; }";
+            html += '.tberror { border: 1px solid red; }';
+            html += '.tbwarn { border: 1px solid yellow; background-color: yellow; }';
+            html += 'i.md-btn:disabled { color: #cccccc; cursor: auto; }';
+            html += 'i.md-btn[disabled] { color: #cccccc; cursor: auto; }';
+            html += 'i.md-btn { color: #006040; font-size: 12pt; cursor: pointer; }';
+            html += 'input.tbinvert { min-width: 16px; min-height: 16px; }';
+            html += 'div.conditions { width: 100%; }';
+            html += 'input.narrow { max-width: 6em; }';
+            html += 'div.conditiongroup { border-radius: 8px; border: 2px solid #006040; padding: 8px; }';
+            html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
+            html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
+            html += 'div.warning { color: red; }';
+            html += "</style>";
+            jQuery("head").append( html );
+
+            /* Body content */
+            html = '';
+            html += '<div class="reactorscenes">';
+            html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>ReactorScenes</h3></div></div>';
+            html += '<div class="row"><div class="col-xs-12 col-sm-12">ReactorScenes is a feature that enhances existing Vera scenes by making delayed activity groups work across Vera reboots and reloads. When using Reactor to run your scenes, make sure you do not have a device trigger in the scene definition that refers to this ReactorSensor, or your scene will run twice on every execution. Naming the scene below is sufficient to trigger it from this ReactorSensor.</div></div>';
+            html += '<div class="row"><div class="col-xs col-sm-12"><label for="tripscene">Trip Scene: <select id="tripscene" class="rsceneselect"></select></label></div></div>';
+            html += '<div class="row"><div class="col-xs col-sm-12"><label for="untripscene">Un-trip Scene: <select id="untripscene" class="rsceneselect"></select></label></div></div>';
+            html += '</div>';
+            
+            html += footer();
+            api.setCpanelContent(html);
+
+            /* Build the scene menus */
+            var scenes = api.cloneObject( jsonp.ud.scenes ); /* There is no api.getListOfScenes(). Really? */
+            scenes.sort( function(a, b) { return a.name < b.name ? -1 : 1; } );
+            var menu = jQuery('<select class="rsceneselect form-control-sm form-control">');
+            menu.append("<option value=''>--none--</option>");
+            for (var i=0; i<scenes.length; ++i) {
+                var opt = jQuery('<option value="' + scenes[i].id + '"></option>');
+                opt.text( scenes[i].name || ( "#" + scenes[i].id ) );
+                menu.append( opt );
+            }
+            menu.attr("id", "tripscene");
+            jQuery("select#tripscene").replaceWith( menu.clone() );
+            menu.attr("id", "untripscene");
+            jQuery("select#untripscene").replaceWith( menu );
+
+            /* Restore selected scenes */
+            var rr = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "Scenes" ) || "";
+            if ( rr !== "" ) {
+                var selected = rr.split( ',' );
+                var selopt;
+                if ( selected.length > 0 && selected[0] !== "" ) {
+                    selopt = jQuery('select#tripscene option[value="' + selected[0] + '"]');
+                    if ( selopt.length ) {
+                        jQuery("select#tripscene").val( selected[0] );
+                    } else {
+                        jQuery('select#tripscene').append('<option value="' + selected[0] + '" selected>#' + selected[0] + '*</option>');
+                    }
+                }
+                if ( selected.length > 1 && selected[1] !== "" ) {
+                    selopt = jQuery('select#tripscene option[value="' + selected[1] + '"]');
+                    if ( selopt.length ) {
+                        jQuery("select#untripscene").val( selected[1] );
+                    } else {
+                        jQuery('select#untripscene').append('<option value="' + selected[1] + '" selected>#' + selected[1] + '*</option>');
+                    }
+                }
+            }
+            
+            jQuery("select.rsceneselect").on( 'change.reactor', changeSelectedScene )
+
+            api.registerEventHandler('on_ui_cpanel_before_close', ReactorSensor, 'onBeforeCpanelClose');
+        }
+        catch (e)
+        {
+            console.log( 'Error in ReactorSensor.doConditions(): ' + String( e ) );
+            alert( e.stack );
+        }
     }
 
     myModule = {
@@ -2027,6 +2072,7 @@ var ReactorSensor = (function(api) {
         onUIDeviceStatusChanged: onUIDeviceStatusChanged,
         doTest: doTest,
         doSettings: doSettings,
+        doActivities: doActivities,
         doConditions: doConditions,
         doVariables: doVariables,
         doStatusPanel: doStatusPanel

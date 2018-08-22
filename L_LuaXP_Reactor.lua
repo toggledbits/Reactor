@@ -34,6 +34,10 @@ binops = {
     , { op='&',  prec= 8 }
     , { op='^',  prec= 9 }
     , { op='|',  prec=10 }
+    , { op='&&', prec=11 }
+    , { op='and', prec=11 }
+    , { op='||', prec=12 }
+    , { op='or', prec=12 }
     , { op='=',  prec=14 }
 }
 local MAXPREC = 99 -- value doesn't matter as long as it's >= any used in binops
@@ -455,6 +459,12 @@ local function xp_iter( ctx, arr, iter, nom )
     return r
 end
 
+local function xp_tlen( t )
+    local n = 0
+    for _,v in pairs(t) do n = n + 1 end
+    return n
+end
+
 local nativeFuncs = {
       ['abs']   = { nargs = 1, impl = function( argv ) if argv[1] < 0 then return -argv[1] else return argv[1] end end }
     , ['sgn']   = { nargs = 1, impl = function( argv ) if argv[1] < 0 then return -1 elseif (argv[1] == 0) then return 0 else return 1 end end }
@@ -470,7 +480,7 @@ local nativeFuncs = {
     , ['sqrt']  = { nargs = 1, impl = function( argv ) return math.sqrt( argv[1] ) end }
     , ['min']   = { nargs = 2, impl = function( argv ) if argv[1] <= argv[2] then return argv[1] else return argv[2] end end }
     , ['max']   = { nargs = 2, impl = function( argv ) if argv[1] >= argv[2] then return argv[1] else return argv[2] end end }
-    , ['len']   = { nargs = 1, impl = function( argv ) return string.len(tostring(argv[1])) end }
+    , ['len']   = { nargs = 1, impl = function( argv ) if isNull(argv[1]) then return 0 elseif type(argv[1]) == "table" then return xp_tlen(argv[1]) else return string.len(tostring(argv[1])) end end }
     , ['sub']   = { nargs = 2, impl = function( argv ) local st = tostring(argv[1]) local p = argv[2] local l = (argv[3] or -1) return string.sub(st, p, l) end }
     , ['find']  = { nargs = 2, impl = function( argv ) local st = tostring(argv[1]) local p = tostring(argv[2]) local i = argv[3] or 1 return (string.find(st, p, i) or 0) end }
     , ['upper'] = { nargs = 1, impl = function( argv ) return string.upper(tostring(argv[1])) end }
@@ -968,6 +978,10 @@ local function isNumeric(val)
     end
 end
 
+local function getOption( ctx, name )
+    return ((ctx or {}).__options or {})[name] and true or false
+end
+
 -- Pop an item off the stack. If it's a variable reference, resolve it now.
 local function fetch( stack, ctx )
     local v
@@ -1002,7 +1016,13 @@ local function fetch( stack, ctx )
             D("fetch: applying subscript: %1[%2]", e.name, ix)
             if ix ~= nil then
                 v = v[ix]
-                if v == nil then evalerror("Subscript " .. ix .. " out of range for " .. e.name, e.pos) end
+                if v == nil then
+                    if getOption( ctx, "subscriptmissnull" ) then
+                        v = NULLATOM
+                    else
+                        evalerror("Subscript " .. ix .. " out of range for " .. e.name, e.pos)
+                    end
+                end
             else
                 evalerror("Subscript evaluation failed", e.pos)
             end
@@ -1030,7 +1050,10 @@ _run = function( ce, ctx, stack )
         elseif isAtom( e, BINOP ) then
             D("_run: handling BINOP %1", e.op)
             local v2
-            if e.op == '.' then
+            if e.op == 'and' or e.op == '&&' or e.op == 'or' or e.op == '||' then
+                v2 = table.remove( stack, 1 )
+                D("_run: logical lookahead is %1", v2)
+            elseif e.op == '.' then
                 v2 = table.remove( stack, 1 )
                 D("_run: subref lookahead is %1", v2)
             else
@@ -1046,29 +1069,58 @@ _run = function( ce, ctx, stack )
                 v1 = fetch(stack, ctx)
             end
             D("_run: operands are %1, %2", v1, v2)
-            if (e.op == '.') then
+            if e.op == '.' then
                 D("_run: descend to %1", v2)
-                if isNull(v1) then evalerror("Can't reference through null") end
-                if isAtom(v1) then evalerror("Invalid type in reference") end
-                if not check_operand(v1, "table") then evalerror("Cannot subreference a " .. base.type(v1), e.pos) end
-                if not isAtom( v2, VREF ) then evalerror("Invalid subreference", e.pos) end
-                if (v2.name or "") == "" and v2.index ~= nil then
-                    -- Handle ['reference'] form of vref... name is in index
-                    v2.name = _run( v2.index, ctx, stack )
-                    v2.index = nil
+                if isNull(v1) then
+                    if getOption( ctx, "nullderefnull" ) then
+                        v = NULLATOM
+                    else
+                        evalerror("Can't dereference through null", e.pos)
+                    end
+                else
+                    if isAtom(v1) then evalerror("Invalid type in reference") end
+                    if not check_operand(v1, "table") then evalerror("Cannot subreference a " .. base.type(v1), e.pos) end
+                    if not isAtom( v2, VREF ) then evalerror("Invalid subreference", e.pos) end
+                    if (v2.name or "") == "" and v2.index ~= nil then
+                        -- Handle ['reference'] form of vref... name is in index
+                        v2.name = _run( v2.index, ctx, stack )
+                        v2.index = nil
+                    end
+                    v = v1[v2.name]
+                    if v2.index ~= nil then
+                        -- Handle subscript in tree descent
+                        local ix = _run(v2.index, ctx, {})
+                        D("_run: applying subscript [%1] in descent to %2", ix, v2.name)
+                        if ix == nil then evalerror("Subscript evaluation failed for " .. v2.name, v2.pos) end
+                        v = v[ix]
+                        if v == nil then
+                            if getOption( ctx, "subscriptmissnull" ) then
+                                v = NULLATOM
+                            else
+                                evalerror("Subscript out of range: " .. tostring(v2.name) .. "[" .. ix .. "]", v2.pos)
+                            end
+                        end
+                    end
+                    if v == nil then
+                        -- Convert nil to NULL (not error, yet--depends on what expression does with it)
+                        v = NULLATOM
+                    end
                 end
-                v = v1[v2.name]
-                if v2.index ~= nil then
-                    -- Handle subscript in tree descent
-                    local ix = _run(v2.index, ctx, {})
-                    D("_run: applying subscript [%1] in descent to %2", ix, v2.name)
-                    if ix == nil then evalerror("Subscript evaluation failed for " .. v2.name, v2.pos) end
-                    v = v[ix]
-                    if v == nil then evalerror("Subscript out of range: " .. tostring(v2.name) .. "[" .. ix .. "]", v2.pos) end
+            elseif e.op == 'and' or e.op == '&&' then
+                if v1 == nil or not coerce(v1, "boolean") then
+                    D("_run: shortcut and/&& op1 is false")
+                    v = v1 -- shortcut lead expression if false (in "a and b", no need to eval b if a is false)
+                else
+                    D("_run: op1 for and/&& is true, evaluate op2=%1", v2)
+                    v = _run( { v2 }, ctx, {} )
                 end
-                if v == nil then
-                    -- Convert nil to NULL (not error, yet--depends on what expression does with it)
-                    v = NULLATOM
+            elseif e.op == 'or' or e.op == '||' then
+                if v1 == nil or not coerce(v1, "boolean") then
+                    D("_run: op1 for or/|| false, evaluate op2=%1", v2)
+                    v = _run( { v2 }, ctx, {} )
+                else
+                    D("_run: shortcut or/|| op1 is true")
+                    v = v1 -- shortcut lead exp is true (in "a or b", no need to eval b if a is true)
                 end
             elseif (e.op == '+') then
                 -- Special case for +, if either operand is a string, treat as concatenation
@@ -1177,7 +1229,7 @@ _run = function( ce, ctx, stack )
                 if vt == "string" then
                     v = #v
                 elseif vt == "table" then
-                    v = #v
+                    v = xp_tlen( v )
                 elseif isNull(v) then
                     v = 0
                 else
@@ -1189,47 +1241,63 @@ _run = function( ce, ctx, stack )
         elseif isAtom( e, FREF ) then
             -- Function reference
             D("_run: Handling function %1 with %2 args passed", e.name, #e.args)
-            -- Parse our arguments and put each on the stack; push them in reverse so they pop correctly (first to pop is first passed)
-            local v1, argv
-            local argc = #e.args
-            argv = {}
-            for n=1,argc do
-                v = e.args[n]
-                D("_run: evaluate function argument %1: %2", n, v)
-                v1 = _run(v, ctx, stack)
-                if v1 == nil then v1 = NULLATOM end
-                D("_run: adding argument result %1", v1)
-                argv[n] = v1
-            end
-            -- Locate the implementation
-            local impl = nil
-            if nativeFuncs[e.name] ~= nil then
-                D("_run: found native func %1", nativeFuncs[e.name])
-                impl = nativeFuncs[e.name].impl
-                if (argc < nativeFuncs[e.name].nargs) then evalerror("Insufficient arguments to " .. e.name .. "(), need " .. nativeFuncs[e.name].nargs .. ", got " .. argc, e.pos) end
-            end
-            if (impl == nil and ctx['__functions'] ~= nil) then
-                impl = ctx['__functions'][e.name]
-                D("_run: context __functions provides implementation")
-            end
-            if impl == nil then
-                D("_run: context provides DEPRECATED-STYLE implementation")
-                impl = ctx[e.name]
-            end
-            if (impl == nil) then evalerror("Unrecognized function: " .. e.name, e.pos) end
-            if (base.type(impl) ~= "function") then evalerror("Reference is not a function: " .. e.name, e.pos) end
-            -- Run the implementation
-            local status
-            D("_run: calling %1 with args=%2", e.name, argv)
-            argv.__context = ctx -- trickery
-            status, v = pcall(impl, argv)
-            D("_run: finished %1() call, status=%2, result=%3", e.name, status, v)
-            if not status then
-                if base.type(v) == "table" and v.__source == "luaxp" then
-                    v.location = e.pos
-                    error(v) -- that one of our errors, just pass along
+            if e.name == "if" then
+                -- Special-case the if() function, which evaluates only the sub-expression needed based on the result of the first argument.
+                -- This allows, for example, test for null before attempting to reference through it, as in if( x, x.name, "no name" ),
+                -- because arguments are normally evaluated prior to calling the function implementation, but this would cause "x.name" to
+                -- be attempted, which would fail and throw an error if x is null.
+                if #e.args < 2 then evalerror("if() requires two or three arguments", e.pos) end
+                local v1 = _run( e.args[1], ctx, stack )
+                if v1 == nil or not coerce( v1, "boolean" ) then
+                    -- False
+                    v = #e.args > 2 and _run( e.args[3], ctx, stack ) or NULLATOM
+                else
+                    -- True
+                    v = _run( e.args[2], ctx, stack )
                 end
-                error("Execution of function " .. e.name .. "() threw an error: " .. tostring(v))
+            else
+                -- Parse our arguments and put each on the stack; push them in reverse so they pop correctly (first to pop is first passed)
+                local v1, argv
+                local argc = #e.args
+                argv = {}
+                for n=1,argc do
+                    v = e.args[n]
+                    D("_run: evaluate function argument %1: %2", n, v)
+                    v1 = _run(v, ctx, stack)
+                    if v1 == nil then v1 = NULLATOM end
+                    D("_run: adding argument result %1", v1)
+                    argv[n] = v1
+                end
+                -- Locate the implementation
+                local impl = nil
+                if nativeFuncs[e.name] ~= nil then
+                    D("_run: found native func %1", nativeFuncs[e.name])
+                    impl = nativeFuncs[e.name].impl
+                    if (argc < nativeFuncs[e.name].nargs) then evalerror("Insufficient arguments to " .. e.name .. "(), need " .. nativeFuncs[e.name].nargs .. ", got " .. argc, e.pos) end
+                end
+                if (impl == nil and ctx['__functions'] ~= nil) then
+                    impl = ctx['__functions'][e.name]
+                    D("_run: context __functions provides implementation")
+                end
+                if impl == nil then
+                    D("_run: context provides DEPRECATED-STYLE implementation")
+                    impl = ctx[e.name]
+                end
+                if (impl == nil) then evalerror("Unrecognized function: " .. e.name, e.pos) end
+                if (base.type(impl) ~= "function") then evalerror("Reference is not a function: " .. e.name, e.pos) end
+                -- Run the implementation
+                local status
+                D("_run: calling %1 with args=%2", e.name, argv)
+                argv.__context = ctx -- trickery
+                status, v = pcall(impl, argv)
+                D("_run: finished %1() call, status=%2, result=%3", e.name, status, v)
+                if not status then
+                    if base.type(v) == "table" and v.__source == "luaxp" then
+                        v.location = e.pos
+                        error(v) -- that one of our errors, just pass along
+                    end
+                    error("Execution of function " .. e.name .. "() threw an error: " .. tostring(v))
+                end
             end
         elseif isAtom( e, VREF ) then
             D("_run: handling vref, name=%1, push to stack for later eval", e.name)
