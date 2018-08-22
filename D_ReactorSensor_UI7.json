@@ -290,10 +290,21 @@
         },
         {
             "Label": {
+                "lang_tag": "tb_reactorsensor_doActivities",
+                "text": "Activities"
+            },
+            "Position": 3,
+            "TabType": "javascript",
+            "TopNavigationTab": 1,
+            "ScriptName": "J_ReactorSensor_UI7.js",
+            "Function": "ReactorSensor.doActivities"
+        },
+        {
+            "Label": {
                 "lang_tag": "tb_reactorsensor_doTest",
                 "text": "Test"
             },
-            "Position": 3,
+            "Position": 4,
             "TabType": "javascript",
             "TopNavigationTab": 1,
             "ScriptName": "J_ReactorSensor_UI7.js",
@@ -304,7 +315,7 @@
                 "lang_tag": "ui7_advanced",
                 "text": "Advanced"
             },
-            "Position": 4,
+            "Position": 5,
             "TabType": "javascript",
             "ScriptName": "shared.js",
             "Function": "advanced_device"
@@ -314,7 +325,7 @@
                 "lang_tag": "ui7_logs",
                 "text": "Logs"
             },
-            "Position": 5,
+            "Position": 6,
             "TabType": "javascript",
             "ScriptName": "shared.js",
             "Function": "device_logs"
@@ -324,7 +335,7 @@
                 "lang_tag": "ui7_notifications",
                 "text": "Notifications"
             },
-            "Position": 6,
+            "Position": 7,
             "TabType": "javascript",
             "ScriptName": "shared.js",
             "Function": "device_notifications"
@@ -334,7 +345,7 @@
                 "lang_tag": "ui7_device_scenes",
                 "text": "Scenes"
             },
-            "Position": 7,
+            "Position": 8,
             "TabType": "javascript",
             "ScriptName": "shared.js",
             "Function": "device_scenes"

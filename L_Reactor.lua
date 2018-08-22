@@ -598,7 +598,7 @@ local function runSceneGroups( tdev, taskid )
     D("scene state %1", sst)
     if sst == nil then return end
 
-    local scd = getSceneData(sst.scene)
+    local scd = getSceneData(sst.scene, tdev)
     if scd == nil then
         L({level=1,msg="Previously running scene %1 now not found/loaded. Aborting run."}, sst.scene)
         return stopScene( nil, taskid )
@@ -650,11 +650,12 @@ end
 
 -- Start a scene. Any running scene is immediately terminated, and this scene
 -- replaces it. Scene Lua works for conditional execution.
-local function runScene( scene, tdev, forceReactor )
-    D("runScene(%1,%2,%3)", scene, tdev, forceReactor )
-
+local function runScene( scene, tdev, options )
+    D("runScene(%1,%2,%3)", scene, tdev, options )
+    options = options or {}
+    
     -- If using Luup scenes, short-cut
-    if getVarNumeric("UseReactorScenes", 1, tdev, RSSID) == 0 and not forceReactor then
+    if getVarNumeric("UseReactorScenes", 1, tdev, RSSID) == 0 and not options.forceReactorScenes then
         D("runScene() handing-off scene run to Luup")
         luup.call_action( "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "RunScene", { SceneNum=scene }, 0 )
         return
@@ -662,21 +663,19 @@ local function runScene( scene, tdev, forceReactor )
 
     -- We're using Reactor-run scenes
     local now = os.time()
-    local scd = getSceneData( scene )
+    local scd = getSceneData( scene, tdev )
     if scd == nil then
         L({level=1,msg="%1 (%2) can't run scene %3, not found/loaded."}, tdev,
             luup.devices[tdev].description, scene)
         return
     end
 
-    -- Check if scene running. If not, set up and run first scene group (maybe).
+    -- Check if scene running. If so, stop it.
     local taskid = string.format("runscene-%d-%d", tdev, scd.id)
-    local sst = sceneState[taskid] or {}
+    local sst = sceneState[taskid]
     D("runScene() state is %1", sst)
-    -- If the scene is already running, stop it.
-    if sst ~= nil then
-        -- Cancel running scene.
-        stopScene( tdev )
+    if sst ~= nil and options.stopPriorScenes then
+        stopScene( tdev, nil )
     end
 
     -- If there's scene lua, try to run it.
@@ -713,12 +712,12 @@ local function runScene( scene, tdev, forceReactor )
                 return
             end
         end
-
-        -- We are going to run groups. Set up for it.
-        D("runScene() setting up to run groups for scene")
-        sceneState[taskid] = { scene=scd.id, starttime=now, lastgroup=0, taskid=taskid, owner=tdev } -- scene id, start time, last group, timer task id
-        luup.variable_set( MYSID, "runscene", json.encode(sceneState), pluginDevice )
     end
+
+    -- We are going to run groups. Set up for it.
+    D("runScene() setting up to run groups for scene")
+    sceneState[taskid] = { scene=scd.id, starttime=now, lastgroup=0, taskid=taskid, owner=tdev } -- scene id, start time, last group, timer task id
+    luup.variable_set( MYSID, "runscene", json.encode(sceneState), pluginDevice )
 
     return runSceneGroups( tdev, taskid )
 end
@@ -749,13 +748,13 @@ local function trip( state, tdev )
         -- Run the reset scene, if we have one.
         if #sc > 1 and sc[2] ~= "" then
             stopScene( tdev ) -- stop any other running scene for this sensor -- ??? user config
-            runScene( tonumber(sc[2]) or -1, tdev )
+            runScene( tonumber(sc[2]) or -1, tdev, { stopPriorScenes=true } )
         end
     else
         -- Run the trip scene, if we have one.
         if #sc > 0 and sc[1] ~= "" then
             stopScene( tdev ) -- stop any other running scene for this sensor -- ??? user config
-            runScene( tonumber(sc[1]) or -1, tdev )
+            runScene( tonumber(sc[1]) or -1, tdev, { stopPriorScenes=true } )
         end
     end
 end
@@ -1845,10 +1844,26 @@ function actionRestart( dev )
     end
 end
 
-function actionRunScene( scene, dev )
+-- Run a scene. By default, it's assumed this action is being called from outside
+-- Reactor, so starting a scene does not stop prior started scenes, and ReactorScenes
+-- are forced (if you don't want ReactorScenes, call the HomeAutomationGateway1 action).
+function actionRunScene( scene, options, dev )
     L("RunScene action request, scene %1", scene)
     scene = tonumber( scene or "-1" ) or -1
-    runScene( scene, dev, true ) -- force Reactor scene execution on our action
+    options = options or {}
+    options.forceReactorScenes = true
+    if options.stopPriorScenes == nil then options.stopPriorScenes = false end
+    runScene( scene, options, dev ) -- force Reactor scene execution on our action
+end
+
+-- Stop running scene. If scene is not provided or 0, all scenes are stopped.
+function actionStopScene( scene, dev )
+    L("StopScene action, scene %1", scene)
+    local taskid = nil 
+    if scene ~= nil and scene ~= 0 then
+        taskid = string.format("runscene-%d-%s", dev, tostring(scene))
+    end
+    stopScene( dev, taskid )
 end
 
 function actionMasterClear( dev )
@@ -2042,6 +2057,19 @@ function request( lul_request, lul_parameters, lul_outputformat )
         else
             return "ERROR, device number invalid or is not a ReactorSensor", "text/plain"
         end
+    elseif action == "loadscenes" then
+        -- Preload scenes used by a ReactorSensor. Call by UI during edit.
+        -- ??? Put on waiting scenes list instead?
+        local v = luup.variable_get( RSSID, "Scenes", deviceNum or -1 ) or ""
+        local r = split(v, ",")
+        local res = { scenes={} }
+        for _,s in ipairs(r) do
+            if s ~= "" then
+                status, msg = pcall( loadScene, tonumber(s), pluginDevice )
+                table.insert( res.scenes, { scene=s, status=status } )
+            end
+        end
+        return json.encode( res ), "application/json"
     elseif action == "summary" then
         local r, EOL = "", "\r\n"
         for n,d in pairs( luup.devices ) do

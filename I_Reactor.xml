@@ -79,9 +79,16 @@
             <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
             <name>RunScene</name>
             <job>
-                Reactor.actionRunScene( lul_settings.SceneNum, lul_device )
+                Reactor.actionRunScene( lul_settings.SceneNum, lul_settings.Options or {}, lul_device )
                 return 4,0
             </job>
+        </action>
+        <action>
+            <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
+            <name>StopScene</name>
+            <run>
+                Reactor.actionStopScene( lul_settings.SceneNum, lul_device )
+            </run>
         </action>
         <action>
             <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>

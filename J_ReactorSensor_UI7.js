@@ -6,7 +6,7 @@
  * Copyright 2018 Patrick H. Rigney, All Rights Reserved.
  * This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
  */
-/* globals api,jQuery */
+/* globals api,jsonp,jQuery */
 
 //"use strict"; // fails on UI7, works fine with ALTUI
 
@@ -1888,8 +1888,6 @@ var ReactorSensor = (function(api) {
         }
     }
 
-
-
     function doConditions()
     {
         try {
@@ -1924,7 +1922,7 @@ var ReactorSensor = (function(api) {
             /* Body content */
             html = '';
             html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>Conditions</h3></div></div>';
-            html += '<div class="row"><div class="col-cs-12 col-sm-12">Conditions within a group are "AND", and groups are "OR". That is, the sensor will trip when any group succeeds, and for a group to succeed, all conditions in the group must be met.</div></div>';
+            html += '<div class="row"><div class="col-xs-12 col-sm-12">Conditions within a group are "AND", and groups are "OR". That is, the sensor will trip when any group succeeds, and for a group to succeed, all conditions in the group must be met.</div></div>';
             
             var rr = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "Retrigger" ) || "0";
             if ( rr !== "0" ) {
@@ -1948,8 +1946,123 @@ var ReactorSensor = (function(api) {
         }
     }
 
-    function doSettings()
+    function doSettings() {}
+
+    function changeSelectedScene( ev )
     {
+        var t1 = jQuery('select#tripscene').val();
+        var t2 = jQuery('select#untripscene').val();
+        if ( t1 === "" && t2 === "" ) {
+            api.setDeviceStatePersistent( api.getCpanelDeviceId(), serviceId, "Scenes", "")
+        } else {
+            var ll = t1 + "," + t2;
+            api.setDeviceStatePersistent( api.getCpanelDeviceId(), serviceId, "Scenes", ll)
+        }
+        var uri = api.getDataRequestURL() + "?id=lr_Reactor&device=" + api.getCpanelDeviceId() + "&action=loadscenes";
+        jQuery.ajax({
+            url: uri,
+            dataType: "json",
+            timeout: 5000,
+        }).done( function( data, statusText, jqXHR ) {
+            // Excellent.
+            console.log(jqXHR.responseText);
+        }).fail( function( jqXHR, textStatus, errorThrown ) {
+            // Bummer.
+            console.log("Failed to load scenes: " + textStatus + " " + String(errorThrown));
+            console.log(jqXHR.responseText);
+        });
+    }
+
+    function doActivities()
+    {
+        try {
+            if ( configModified && confirm( "You have unsaved changes. Press OK to save them, or Cancel to discard them." ) ) {
+                handleSaveClick( undefined );
+            }
+
+            initModule();
+
+            /* Load material design icons */
+            jQuery("head").append('<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">');
+
+            /* Our styles. */
+            var html = "<style>";
+            html += ".tb-about { margin-top: 24px; }";
+            html += ".color-green { color: #006040; }";
+            html += '.tberror { border: 1px solid red; }';
+            html += '.tbwarn { border: 1px solid yellow; background-color: yellow; }';
+            html += 'i.md-btn:disabled { color: #cccccc; cursor: auto; }';
+            html += 'i.md-btn[disabled] { color: #cccccc; cursor: auto; }';
+            html += 'i.md-btn { color: #006040; font-size: 12pt; cursor: pointer; }';
+            html += 'input.tbinvert { min-width: 16px; min-height: 16px; }';
+            html += 'div.conditions { width: 100%; }';
+            html += 'input.narrow { max-width: 6em; }';
+            html += 'div.conditiongroup { border-radius: 8px; border: 2px solid #006040; padding: 8px; }';
+            html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
+            html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
+            html += 'div.warning { color: red; }';
+            html += "</style>";
+            jQuery("head").append( html );
+
+            /* Body content */
+            html = '';
+            html += '<div class="reactorscenes">';
+            html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>ReactorScenes</h3></div></div>';
+            html += '<div class="row"><div class="col-xs-12 col-sm-12">ReactorScenes is a feature that enhances existing Vera scenes by making delayed activity groups work across Vera reboots and reloads. When using Reactor to run your scenes, make sure you do not have a device trigger in the scene definition that refers to this ReactorSensor, or your scene will run twice on every execution. Naming the scene below is sufficient to trigger it from this ReactorSensor.</div></div>';
+            html += '<div class="row"><div class="col-xs col-sm-12"><label for="tripscene">Trip Scene: <select id="tripscene" class="rsceneselect"></select></label></div></div>';
+            html += '<div class="row"><div class="col-xs col-sm-12"><label for="untripscene">Un-trip Scene: <select id="untripscene" class="rsceneselect"></select></label></div></div>';
+            html += '</div>';
+            
+            html += footer();
+            api.setCpanelContent(html);
+
+            /* Build the scene menus */
+            var scenes = api.cloneObject( jsonp.ud.scenes ); /* There is no api.getListOfScenes(). Really? */
+            scenes.sort( function(a, b) { return a.name < b.name ? -1 : 1; } );
+            var menu = jQuery('<select class="rsceneselect form-control-sm form-control">');
+            menu.append("<option value=''>--none--</option>");
+            for (var i=0; i<scenes.length; ++i) {
+                var opt = jQuery('<option value="' + scenes[i].id + '"></option>');
+                opt.text( scenes[i].name || ( "#" + scenes[i].id ) );
+                menu.append( opt );
+            }
+            menu.attr("id", "tripscene");
+            jQuery("select#tripscene").replaceWith( menu.clone() );
+            menu.attr("id", "untripscene");
+            jQuery("select#untripscene").replaceWith( menu );
+
+            /* Restore selected scenes */
+            var rr = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "Scenes" ) || "";
+            if ( rr !== "" ) {
+                var selected = rr.split( ',' );
+                var selopt;
+                if ( selected.length > 0 && selected[0] !== "" ) {
+                    selopt = jQuery('select#tripscene option[value="' + selected[0] + '"]');
+                    if ( selopt.length ) {
+                        jQuery("select#tripscene").val( selected[0] );
+                    } else {
+                        jQuery('select#tripscene').append('<option value="' + selected[0] + '" selected>#' + selected[0] + '*</option>');
+                    }
+                }
+                if ( selected.length > 1 && selected[1] !== "" ) {
+                    selopt = jQuery('select#tripscene option[value="' + selected[1] + '"]');
+                    if ( selopt.length ) {
+                        jQuery("select#untripscene").val( selected[1] );
+                    } else {
+                        jQuery('select#untripscene').append('<option value="' + selected[1] + '" selected>#' + selected[1] + '*</option>');
+                    }
+                }
+            }
+            
+            jQuery("select.rsceneselect").on( 'change.reactor', changeSelectedScene )
+
+            api.registerEventHandler('on_ui_cpanel_before_close', ReactorSensor, 'onBeforeCpanelClose');
+        }
+        catch (e)
+        {
+            console.log( 'Error in ReactorSensor.doConditions(): ' + String( e ) );
+            alert( e.stack );
+        }
     }
 
     myModule = {
@@ -1959,6 +2072,7 @@ var ReactorSensor = (function(api) {
         onUIDeviceStatusChanged: onUIDeviceStatusChanged,
         doTest: doTest,
         doSettings: doSettings,
+        doActivities: doActivities,
         doConditions: doConditions,
         doVariables: doVariables,
         doStatusPanel: doStatusPanel
