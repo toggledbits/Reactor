@@ -13,7 +13,7 @@ local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
 local _PLUGIN_VERSION = "1.5develop"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
-local _CONFIGVERSION = 00107
+local _CONFIGVERSION = 00108
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -39,8 +39,6 @@ local isALTUI = false
 local isOpenLuup = false
 
 local json = require("dkjson")
-if json == nil then json = require("json") end
-if json == nil then luup.log(_PLUGIN_NAME .. " cannot load JSON library, exiting.", 1) return end
 local luaxp -- will only be loaded if needed
 
 local function dump(t, seen)
@@ -392,6 +390,7 @@ local function sensor_runOnce( tdev )
         initVar( "cstate", "", tdev, RSSID )
         initVar( "Runtime", 0, tdev, RSSID )
         initVar( "TripCount", 0, tdev, RSSID )
+        initVar( "RuntimeSince", os.time(), tdev, RSSID )
         initVar( "ContinuousTimer", 0, tdev, RSSID )
         initVar( "MaxUpdateRate", "", tdev, RSSID )
         initVar( "MaxChangeRate", "", tdev, RSSID )
@@ -431,6 +430,11 @@ local function sensor_runOnce( tdev )
         initVar( "AutoUntrip", 0, tdev, SENSOR_SID )
         initVar( "UseReactorScenes", 1, tdev, RSSID ) -- 107
         initVar( "Scenes", "", tdev, RSSID )
+    end
+
+    if s < 00108 then
+        -- Add marktime for Runtime and TripCount, for date those vars where introduced.
+        initVar( "RuntimeSince", 1533528000, tdev, RSSID ) -- 2018-08-16.00:00:00-0400
     end
 
     -- Update version last.
@@ -653,7 +657,7 @@ end
 local function runScene( scene, tdev, options )
     D("runScene(%1,%2,%3)", scene, tdev, options )
     options = options or {}
-    
+
     -- If using Luup scenes, short-cut
     if getVarNumeric("UseReactorScenes", 1, tdev, RSSID) == 0 and not options.forceReactorScenes then
         D("runScene() handing-off scene run to Luup")
@@ -693,7 +697,9 @@ local function runScene( scene, tdev, options )
             luafragment = scd.lua or ""
         end
         local fname = string.format("_reactor%d_scene%d", tdev, scd.id)
-        local funcb = string.format("function %s(reactor_id)\n%s\nend return %s(%d)", fname, luafragment, fname, tdev) -- note: passes in RS dev#
+        local extarg = "nil"
+        if options.externalArgument then extArg = string.format("%q", tostring(options.externalArgument)) end
+        local funcb = string.format("function %s(reactor_device, reactor_ext_arg)\n%s\nend return %s(%d,%s)", fname, luafragment, fname, tdev, extarg) -- note: passes in RS dev#
         D("runScene() running scene Lua as " .. funcb)
         local fnc,err = loadstring(funcb)
         if fnc == nil then
@@ -716,7 +722,7 @@ local function runScene( scene, tdev, options )
 
     -- We are going to run groups. Set up for it.
     D("runScene() setting up to run groups for scene")
-    sceneState[taskid] = { scene=scd.id, starttime=now, lastgroup=0, taskid=taskid, owner=tdev } -- scene id, start time, last group, timer task id
+    sceneState[taskid] = { scene=scd.id, starttime=now, lastgroup=0, taskid=taskid, owner=tdev }
     luup.variable_set( MYSID, "runscene", json.encode(sceneState), pluginDevice )
 
     return runSceneGroups( tdev, taskid )
@@ -724,6 +730,7 @@ end
 
 -- Continue running scenes on restart.
 local function resumeScenes()
+    D("resumeScenes()")
     local s = luup.variable_get( MYSID, "runscene", pluginDevice ) or "{}"
     local d,pos,err = json.decode(s)
     sceneState = d or {}
@@ -1506,8 +1513,8 @@ local function loadCleanState( tdev )
         -- Fetch cdata
         s = luup.variable_get( RSSID, "cdata", tdev ) or ""
         if s == "" then
-            luup.variable_set( RSSID, "cstate", "", tdev )
-            return
+            luup.variable_set( RSSID, "cstate", "{}", tdev )
+            return {}
         end
         local cdata
         cdata,_,err = json.decode( s )
@@ -1564,7 +1571,7 @@ local function masterTick(pdev)
 
     -- Check and update house mode.
     setVar( MYSID, "HouseMode", luup.attr_get( "Mode", 0 ) or "1", pdev )
-    
+
     -- Vera Secure has battery, check it.
     pcall( checkSystemBattery, pdev )
 
@@ -1749,7 +1756,7 @@ function startPlugin( pdev )
 
     -- One-time stuff
     plugin_runOnce( pdev )
-    
+
     -- Initialize and start the plugin timer and master tick
     runStamp = 1
     scheduleDelay( { id=tostring(pdev), func=waitSystemReady, owner=pdev }, 5 )
@@ -1849,17 +1856,33 @@ end
 -- are forced (if you don't want ReactorScenes, call the HomeAutomationGateway1 action).
 function actionRunScene( scene, options, dev )
     L("RunScene action request, scene %1", scene)
+    if luup.devices[dev].device_type == RSTYPE then dev = luup.devices[dev].device_num_parent end
+    if type(scene) == "string" then
+        local ln = scene:lower()
+        for k,v in pairs( luup.scenes ) do
+            if v.name:lower() == ln then
+                scene = k
+                break
+            end
+        end
+    end
     scene = tonumber( scene or "-1" ) or -1
+    if scene <= 0 then
+        L({level=1,msg="RunScene action failed, scene %1 not found."}, scene)
+        return false
+    end
     options = options or {}
     options.forceReactorScenes = true
     if options.stopPriorScenes == nil then options.stopPriorScenes = false end
     runScene( scene, options, dev ) -- force Reactor scene execution on our action
+    return true
 end
 
 -- Stop running scene. If scene is not provided or 0, all scenes are stopped.
 function actionStopScene( scene, dev )
     L("StopScene action, scene %1", scene)
-    local taskid = nil 
+    local taskid = nil
+    if luup.devices[dev].device_type == RSTYPE then dev = luup.devices[dev].device_num_parent end
     if scene ~= nil and scene ~= 0 then
         taskid = string.format("runscene-%d-%s", dev, tostring(scene))
     end

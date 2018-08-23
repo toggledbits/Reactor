@@ -28,6 +28,18 @@
             <dataType>ui4</dataType>
             <defaultValue>1</defaultValue>
         </stateVariable>
+        <stateVariable sendEvents="yes">
+            <name>SystemPowerSource</name>
+            <dataType>string</dataType>
+        </stateVariable>
+        <stateVariable sendEvents="yes">
+            <name>SystemBatteryLevel</name>
+            <dataType>ui4</dataType>
+        </stateVariable>
+        <stateVariable sendEvents="yes">
+            <name>misc_arg</name>
+            <dataType>ui4</dataType>
+        </stateVariable>
     </serviceStateTable>
     <actionList>
         <action>
@@ -41,6 +53,7 @@
             <argument>
               <name>SceneNum</name>
               <direction>in</direction>
+              <relatedStateVariable>misc_arg</relatedStateVariable>
             </argument>
           </argumentList>
         </action>
@@ -50,6 +63,7 @@
             <argument>
               <name>SceneNum</name>
               <direction>in</direction>
+              <relatedStateVariable>misc_arg</relatedStateVariable>
             </argument>
           </argumentList>
         </action>
