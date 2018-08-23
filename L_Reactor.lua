@@ -729,8 +729,8 @@ local function resumeScenes()
     sceneState = d or {}
     -- Push through getKeys and iterate over result because runSceneGroups may
     -- remove elements of sceneState while running.
-    for _,taskid in ipairs( getKeys( sceneState ) ) do
-        runSceneGroups( taskid )
+    for _,data in pairs( sceneState ) do
+        runSceneGroups( data.owner, data.taskid )
     end
 end
 
