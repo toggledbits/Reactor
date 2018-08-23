@@ -2,7 +2,8 @@
 
 ## Version 1.5 (develop branch) ##
 
-* Master device now checks power source and battery level for Vera Secure, and stores the values for access via expressions. Reacting to power loss (Vera on battery power) and battery level should now be possible, on VeraSecure only. These values will be blank on all other platforms.
+* Reactor now has the ability to trigger scenes itself, rather than requiring the user to implement a native scene device trigger.
+* Reactor now can run scenes internally, and tracks the progress of a scene, so that Luup reload or Vera restart does not interrupt the completion of the scene (the scene resumes execution upon restart of the plugin). An "RunScene" action in the Reactor service also allows Lua users to use Reactor's scene runner rather than the Vera native one (and thus also be protected from restarts/reloads).* Master device now checks power source and battery level for Vera Secure, and stores the values for access via expressions. Reacting to power loss (Vera on battery power) and battery level should now be possible, on VeraSecure only. These values will be blank on all other platforms.
 * The deprecated form of time test (from 1.1) has been removed; if a user config still contains a reference to this condition type, it will throw an error.
 * Considerable optimization of time handling, to further reduce CPU load when time-related conditions (including weekday and sun) are used.
 * Incorporate my scene runner from SceneSlayer (another plugin of mine, as yet unpublished). This improves on Vera's native scenes by (a) making delayed scene groups resilient against Luup restarts and reboots, and (b) providing the ability to stop a running scene (i.e. delayed groups that have not yet executed can be abandoned at any time).
