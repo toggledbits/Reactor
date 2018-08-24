@@ -54,8 +54,6 @@ local function dump(t, seen)
                 seen[v] = true
                 val = dump(v, seen)
             end
-        elseif type(v) == "function" then
-            val = "(function)"
         elseif type(v) == "string" then
             val = string.format("%q", v)
         elseif type(v) == "number" and (math.abs(v-os.time()) <= 86400) then
@@ -98,7 +96,7 @@ end
 
 local function D(msg, ...)
     if debugMode then
-        L( { msg=msg,prefix=(_PLUGIN_NAME .. "(debug)::") }, ... )
+        L( { msg=msg,prefix=(_PLUGIN_NAME .. "(debug)") }, ... )
     end
 end
 
@@ -175,13 +173,13 @@ local function checkSystemBattery( pdev )
     local f = io.popen("battery get powersource") -- powersource=DC mode/Battery mode
     if f then
         local s = f:read("*a") or ""
+        f:close()
         D("checkSystemBattery() source query returned %1", s)
         if s ~= "" then
             source = string.match(s, "powersource=(.*)") or ""
             if string.find( source:lower(), "battery" ) then source = "battery"
             elseif string.find( source:lower(), "dc mode" ) then source = "utility"
             end
-            f:close()
             f = io.popen("battery get level") -- level=%%%
             if f then
                 s = f:read("*a") or ""
@@ -745,7 +743,6 @@ end
 local function trip( state, tdev )
     L("%2 (#%1) tripped state now %3", tdev, luup.devices[tdev].description, state)
     luup.variable_set( SENSOR_SID, "Tripped", state and "1" or "0", tdev )
-    luup.variable_set( RSSID, "TripCount", getVarNumeric( "TripCount", 0, tdev, RSSID ) + 1, tdev )
     addEvent{dev=tdev,event='sensorstate',state=state}
     local sc = split( luup.variable_get( RSSID, "Scenes", tdev ) or "" )
     D("trip() scenes are %1", sc)
@@ -758,6 +755,8 @@ local function trip( state, tdev )
             runScene( tonumber(sc[2]) or -1, tdev, { stopPriorScenes=true } )
         end
     else
+        -- Count a trip.
+        luup.variable_set( RSSID, "TripCount", getVarNumeric( "TripCount", 0, tdev, RSSID ) + 1, tdev )
         -- Run the trip scene, if we have one.
         if #sc > 0 and sc[1] ~= "" then
             stopScene( tdev ) -- stop any other running scene for this sensor -- ??? user config
@@ -1439,11 +1438,10 @@ local function updateSensor( tdev )
 
         -- Update runtime based on last status
         local now = os.time()
-        local lastUpdate = getVarNumeric( "lastacc", now, tdev, RSSID )
         if currTrip then
             -- Update accumulated trip time
-            local delta = now - lastUpdate
-            luup.variable_set( RSSID, "Runtime", getVarNumeric( "Runtime", 0, tdev, RSSID  ) + delta, tdev )
+            local delta = now - getVarNumeric( "lastacc", now, tdev, RSSID )
+            luup.variable_set( RSSID, "Runtime", getVarNumeric( "Runtime", 0, tdev, RSSID ) + delta, tdev )
         end
         luup.variable_set( RSSID, "lastacc", now, tdev )
 
