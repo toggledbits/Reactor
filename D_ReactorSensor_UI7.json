@@ -1,4 +1,5 @@
 {
+    "__comment": "D_ReactorSensor_UI7.json",
     "default_icon": "https://www.toggledbits.com/assets/reactor/reactorsensor-default.png",
     "state_icons": [{
         "img": "https://www.toggledbits.com/assets/reactor/reactorsensor-disabled.png",

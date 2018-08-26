@@ -170,6 +170,7 @@ end
 -- Check system battery (VeraSecure)
 local function checkSystemBattery( pdev )
     local level, source = "", ""
+    if isOpenLuup then return end
     local f = io.popen("battery get powersource") -- powersource=DC mode/Battery mode
     if f then
         local s = f:read("*a") or ""
