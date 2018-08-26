@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- I_Reactor.xml -->
 <implementation>
     <functions>
         -- --------------------------------------------------------------------
@@ -22,7 +23,7 @@
             <serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
             <name>SetEnabled</name>
             <run>
-                Reactor.setEnabled( lul_settings.newEnabledValue, lul_device )
+                Reactor.actionSetEnabled( lul_settings.newEnabledValue, lul_device )
                 return true
             </run>
         </action>
@@ -54,8 +55,9 @@
             <serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
             <name>ResetRuntime</name>
             <run>
-                luup.variable_set( "urn:toggledbits-com:serviceId:ReactorSensor", "Runtime", "0", lul_device )
                 luup.variable_set( "urn:toggledbits-com:serviceId:ReactorSensor", "TripCount", "0", lul_device )
+                luup.variable_set( "urn:toggledbits-com:serviceId:ReactorSensor", "Runtime", "0", lul_device )
+                luup.variable_set( "urn:toggledbits-com:serviceId:ReactorSensor", "RuntimeSince", os.time(), lul_device )
                 return true
             </run>
         </action>
@@ -71,15 +73,30 @@
             <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
             <name>AddSensor</name>
             <job>
-                Reactor.addSensor( lul_device )
+                Reactor.actionAddSensor( lul_device )
                 return 4,0
             </job>
         </action>
         <action>
             <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
+            <name>RunScene</name>
+            <job>
+                Reactor.actionRunScene( lul_settings.SceneNum, lul_settings.Options or {}, lul_device )
+                return 4,0
+            </job>
+        </action>
+        <action>
+            <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
+            <name>StopScene</name>
+            <run>
+                Reactor.actionStopScene( lul_settings.SceneNum, lul_device )
+            </run>
+        </action>
+        <action>
+            <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
             <name>MasterClear</name>
             <job>
-                Reactor.masterClear( lul_device )
+                Reactor.actionMasterClear( lul_device )
                 return 4,0
             </job>
         </action>
@@ -99,8 +116,8 @@
             <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
             <name>SetDebug</name>
             <run>
-                local newDebugValue = tonumber(lul_settings.debug or "0", 10)
-                Reactor.setDebug( debug ~= 0, lul_device )
+                local newDebugValue = tonumber(lul_settings.debug or "0") or 0
+                Reactor.actionSetDebug( debug ~= 0, lul_device )
                 return true
             </run>
         </action>

@@ -1,4 +1,5 @@
 <?xml version="1.0"?>
+<!-- S_ReactorSensor.xml -->
 <scpd xmlns="urn:schemas-upnp-org:service-1-0">
     <specVersion>
         <major>1</major>
@@ -29,11 +30,23 @@
             <defaultValue>0</defaultValue>
             <shortCode>retrig</shortCode>
         </stateVariable>
-        <stateVariable sendEvents="yes">
+        <stateVariable sendEvents="no">
             <name>Runtime</name>
             <dataType>ui4</dataType>
             <defaultValue>0</defaultValue>
             <shortCode>runtime</shortCode>
+        </stateVariable>
+        <stateVariable sendEvents="no">
+            <name>TripCount</name>
+            <dataType>ui4</dataType>
+            <defaultValue>0</defaultValue>
+            <shortCode>tripcount</shortCode>
+        </stateVariable>
+        <stateVariable sendEvents="no">
+            <name>RuntimeSince</name>
+            <dataType>ui4</dataType>
+            <defaultValue>0</defaultValue>
+            <shortCode>since</shortCode>
         </stateVariable>
     </serviceStateTable>
     <actionList>
