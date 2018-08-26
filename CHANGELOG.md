@@ -1,6 +1,6 @@
 # Change Log #
 
-## Version 1.5 (develop branch) ##
+## Version 1.5 (released) ##
 
 * Reactor now has the ability to trigger scenes itself, rather than requiring the user to implement a native scene device trigger.
 * Reactor now can run scenes internally, and tracks the progress of a scene, so that Luup reload or Vera restart does not interrupt the completion of the scene (the scene resumes execution upon restart of the plugin). An "RunScene" action in the Reactor service also allows Lua users to use Reactor's scene runner rather than the Vera native one (and thus also be protected from restarts/reloads). A "StopScene" action allows any or all scenes to be stopped.
