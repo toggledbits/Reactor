@@ -864,7 +864,6 @@ local function updateVariables( cdata, tdev )
     -- quick test in case there are no variables, bypassing a bit of work.
     local vars = {}
     for n,_ in pairs(cdata.variables or {}) do table.insert( vars, n ) end
-    if #vars == 0 then return end
     D("updateVariables() updating vars=%1", vars)
     local ctx = { __functions={}, __lvars={} }
     -- Create evaluation context
@@ -907,6 +906,8 @@ local function updateVariables( cdata, tdev )
         c2x.__resolving[name] = nil
         return val
     end
+    -- Save context on cdata
+    cdata.ctx = ctx
     -- Perform evaluations.
     for _,n in ipairs( vars ) do
         if not ctx[n] then -- not yet evaluated this run?
@@ -929,6 +930,24 @@ local function doNextCondCheck( taskinfo, nowMSM, startMSM, endMSM )
     local tt = math.floor( ( os.time() + delay ) / 60 ) * 60
     D("doNextCondCheck() scheduling next check for %1 (delay %2secs)", tt, delay)
     scheduleTick( taskinfo, tt )
+end
+
+-- Get a value; use the passed value, unless it refers to a variable, in which case, get its value.
+-- ??? Should these just be expression evaluations? Someday?
+local function getValue( val, ctx, tdev )
+    val = val or ""
+    local mp = val:match( "^=(.*)$" )
+    if mp ~= nil then
+        local luaxp = require("L_LuaXP_Reactor")
+        local result,err = luaxp.evaluate( mp, ctx )
+        if err then
+            L({level=2,msg="Error evaluating %1: %2"}, mp, err)
+            val = ""
+        else
+            val = result
+        end
+    end
+    return val, tonumber(val)
 end
 
 local function evaluateCondition( cond, grp, cdata, tdev )
@@ -954,8 +973,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         cond.lastvalue = { value=vv, timestamp=now }
 
         -- Get condition value
-        local cv = cond.value or ""
-        local cn = tonumber( cv )
+        local cv,cn = getValue( cond.value, cdata.ctx, tdev )
 
         -- If case-insensitive, canonify to lowercase.
         if cond.nocase then
@@ -1385,6 +1403,7 @@ local function evaluateConditions( cdata, tdev )
         hasTimer = t or hasTimer
         D("evaluateConditions() group %1 eval %2, timer %3, overall state %4 timer %5, continuing",
             grp.groupid, match, t, passed, hasTimer)
+        -- can't shortcut until we've gotten rid of hasTimer -- if pass then break end
     end
 
     D("evaluateConditions() sensor %1 overall state now %1, hasTimer %2", passed, hasTimer)

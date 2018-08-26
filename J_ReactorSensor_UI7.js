@@ -1783,7 +1783,7 @@ var ReactorSensor = (function(api) {
             /* Convert to regular row */
             var f = jQuery( ev.currentTarget );
             var vname = f.val();
-            if ( vname === "" || jQuery( 'div.row.var#' + vname ).length > 0 ) {
+            if ( vname === "" || jQuery( 'div.row.var#' + vname ).length > 0 || !vname.match( /^[A-Z][A-Z0-9_]*$/i ) ) {
                 f.addClass('tberror');
                 f.focus();
             } else {
