@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "1.5stable-180824"
+local _PLUGIN_VERSION = "1.5"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _CONFIGVERSION = 00108
 
@@ -170,6 +170,7 @@ end
 -- Check system battery (VeraSecure)
 local function checkSystemBattery( pdev )
     local level, source = "", ""
+    if isOpenLuup then return end
     local f = io.popen("battery get powersource") -- powersource=DC mode/Battery mode
     if f then
         local s = f:read("*a") or ""
