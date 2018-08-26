@@ -1,5 +1,7 @@
 # Change Log #
 
+## Version 1.6 (development) ##
+
 ## Version 1.5 (released) ##
 
 * Reactor now has the ability to trigger scenes itself, rather than requiring the user to implement a native scene device trigger.
