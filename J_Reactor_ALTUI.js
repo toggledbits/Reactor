@@ -14,7 +14,9 @@ var Reactor_ALTUI = ( function( window, undefined ) {
 
     function _getStyle() {
         var style = "";
+
 	debugger;
+
         return style;
     }
     
