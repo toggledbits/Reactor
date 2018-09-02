@@ -313,7 +313,7 @@ local function scheduleTick( tinfo, timeTick, flags )
         assert(tinfo.func ~= nil)
         tickTasks[tkey] = { id=tostring(tinfo.id), owner=tinfo.owner, when=timeTick, func=tinfo.func or nulltick, args=tinfo.args or {},
             info=tinfo.info or "" } -- new task
-        D("scheduleTick() new task %1 at %2", tinfo, timeTick, tdev)
+        D("scheduleTick() new task %1 at %2", tinfo, timeTick)
     end
     -- If new tick is earlier than next plugin tick, reschedule
     tickTasks._plugin = tickTasks._plugin or {}
@@ -1994,6 +1994,7 @@ end
 local function sensorWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
     D("sensorWatch(%1,%2,%3,%4,%5,%6,%7)", dev, sid, var, oldVal, newVal, tdev, pdev)
     -- Watched variable has changed. Re-evaluate conditons.
+    addEvent{ dev=tdev, event='devicewatch', device=dev, var=sid .. "/" .. var, old=oldVal, new=newVal }
     updateSensor( tdev )
 end
 
@@ -2060,6 +2061,24 @@ local function getDevice( dev, pdev, v )
     return devinfo
 end
 
+local function getEvents( deviceNum ) 
+    if deviceNum == nil or luup.devices[deviceNum] == nil or luup.devices[deviceNum].device_type ~= RSTYPE then
+        return "no events: device does not exist or is not ReactorSensor"
+    end
+    local resp = "    Events\r\n"
+    for i,e in ipairs( ( sensorState[tostring(deviceNum)] or {}).eventList or {} ) do
+        resp = resp .. string.format("        %15s ", e.time or os.date("%x.%X", e.when or 0) )
+        resp = resp .. ( e.event or "event?" ) .. ":"
+        for k,v in pairs(e) do 
+            if not ( k == "time" or k == "when" or k == "event" or ( k == "dev" and tostring(v)==tostring(deviceNum) ) ) then
+                resp = resp .. string.format(" %s=%s,", tostring(k), tostring(v))
+            end
+        end
+        resp = resp .. "\r\n"
+    end
+    return resp
+end
+
 local function alt_json_encode( st )
     str = "{"
     local comma = false
@@ -2114,7 +2133,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
     elseif action == "summary" then
         local r, EOL = "", "\r\n"
         for n,d in pairs( luup.devices ) do
-            if d.device_type == RSTYPE then
+            if d.device_type == RSTYPE and ( deviceNum==nil or n==deviceNum ) then
                 local s = luup.variable_get( RSSID, "cdata", n ) or ""
                 local cdata,_,err = json.decode( s )
                 if err then
@@ -2165,6 +2184,8 @@ function request( lul_request, lul_parameters, lul_outputformat )
                         r = r .. EOL
                     end
                 end
+                r = r .. getEvents( n )
+                r = r .. string.rep( "=", 72 ) .. EOL
             end
         end
         return r, "text/plain"
