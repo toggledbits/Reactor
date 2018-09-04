@@ -32,6 +32,7 @@ local devicesByName = {}
 local sceneData = {}
 local sceneWaiting = {}
 local sceneState = {}
+local hasBattery = true
 
 local runStamp = 0
 local pluginDevice = 0
@@ -185,10 +186,14 @@ local function checkSystemBattery( pdev )
             if f then
                 s = f:read("*a") or ""
                 D("checkSystemBattery() level query returned %1", s)
-                level = string.match( s, "level=(\d+)" ) or ""
+                level = string.match( s, "level=(%d+)" ) or ""
                 f:close()
             end
+        else
+            hasBattery = false
         end
+    else
+        hasBattery = false
     end
     setVar( MYSID, "SystemPowerSource", source, pdev )
     setVar( MYSID, "SystemBatteryLevel", level, pdev )
@@ -578,7 +583,7 @@ local function getSceneData( sceneId, tdev )
     return data
 end
 
--- Stop running scenes ???
+-- Stop running scenes
 local function stopScene( tdev, taskid )
     D("stopScene(%1,%2)", tdev, taskid)
     for tid,d in pairs(sceneState) do
@@ -1591,7 +1596,9 @@ local function masterTick(pdev)
     setVar( MYSID, "HouseMode", luup.attr_get( "Mode", 0 ) or "1", pdev )
 
     -- Vera Secure has battery, check it.
-    pcall( checkSystemBattery, pdev )
+    if hasBattery then
+        pcall( checkSystemBattery, pdev )
+    end
 
     -- Check DST change. Re-eval all conditions if changed, just to be safe.
     local dot = os.date("*t").isdst and "1" or "0"
@@ -2061,7 +2068,7 @@ local function getDevice( dev, pdev, v )
     return devinfo
 end
 
-local function getEvents( deviceNum ) 
+local function getEvents( deviceNum )
     if deviceNum == nil or luup.devices[deviceNum] == nil or luup.devices[deviceNum].device_type ~= RSTYPE then
         return "no events: device does not exist or is not ReactorSensor"
     end
@@ -2069,7 +2076,7 @@ local function getEvents( deviceNum )
     for i,e in ipairs( ( sensorState[tostring(deviceNum)] or {}).eventList or {} ) do
         resp = resp .. string.format("        %15s ", e.time or os.date("%x.%X", e.when or 0) )
         resp = resp .. ( e.event or "event?" ) .. ":"
-        for k,v in pairs(e) do 
+        for k,v in pairs(e) do
             if not ( k == "time" or k == "when" or k == "event" or ( k == "dev" and tostring(v)==tostring(deviceNum) ) ) then
                 resp = resp .. string.format(" %s=%s,", tostring(k), tostring(v))
             end
