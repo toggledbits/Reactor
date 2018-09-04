@@ -1697,7 +1697,6 @@ var ReactorSensor = (function(api) {
         }
     }
 
-
     function doStatusPanel()
     {
         /* Make sure changes are saved. */
