@@ -185,7 +185,7 @@ local function checkSystemBattery( pdev )
             if f then
                 s = f:read("*a") or ""
                 D("checkSystemBattery() level query returned %1", s)
-                level = string.match( s, "level=(\d+)" ) or ""
+                level = string.match( s, "level=(%d+)" ) or ""
                 f:close()
             end
         end
