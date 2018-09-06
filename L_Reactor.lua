@@ -1890,9 +1890,9 @@ function actionRunScene( scene, options, dev )
         return false
     end
     options = options or {}
-    options.forceReactorScenes = true
+    options.forceReactorScenes = true -- If we use this action, this is how we do it
     if options.stopPriorScenes == nil then options.stopPriorScenes = false end
-    runScene( scene, options, dev ) -- force Reactor scene execution on our action
+    runScene( scene, dev, options )
     return true
 end
 
