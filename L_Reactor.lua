@@ -584,10 +584,11 @@ local function getSceneData( sceneId, tdev )
 end
 
 -- Stop running scenes
-local function stopScene( tdev, taskid )
-    D("stopScene(%1,%2)", tdev, taskid)
+local function stopScene( ctx, taskid, tdev )
+    D("stopScene(%1,%2,%3)", ctx, taskid, tdev)
+    assert(luup.devices[tdev].device_type == MYTYPE or luup.devices[tdev].device_type == RSTYPE)
     for tid,d in pairs(sceneState) do
-        if ( tdev == nil or tdev == d.owner ) and ( taskid == nil or taskid == tid ) then
+        if ( ctx == nil or ctx == d.context ) and ( taskid == nil or taskid == tid ) then
             scheduleTick( tid, 0 )
             sceneState[tid] = nil
         end
@@ -600,6 +601,7 @@ end
 -- groups that are now past-due (native Luup scenes don't do this).
 local function runSceneGroups( tdev, taskid )
     D("runSceneGroups(%1,%2)", tdev, taskid )
+    assert(luup.devices[tdev].device_type == MYTYPE or luup.devices[tdev].device_type == RSTYPE)
 
     -- Get sceneState, make sure it's consistent with request.
     local sst = sceneState[taskid]
@@ -609,7 +611,7 @@ local function runSceneGroups( tdev, taskid )
     local scd = getSceneData(sst.scene, tdev)
     if scd == nil then
         L({level=1,msg="Previously running scene %1 now not found/loaded. Aborting run."}, sst.scene)
-        return stopScene( nil, taskid )
+        return stopScene( nil, taskid, tdev )
     end
 
     -- Run next scene group (and keep running groups until no more or delay needed)
@@ -652,7 +654,7 @@ local function runSceneGroups( tdev, taskid )
 
     -- We've run out of groups!
     D("runSceneGroups(%3) reached end of scene %1 (%2)", scd.id, scd.name, taskid)
-    stopScene( tdev, taskid )
+    stopScene( nil, taskid, tdev )
     return nil
 end
 
@@ -679,11 +681,12 @@ local function runScene( scene, tdev, options )
     end
 
     -- Check if scene running. If so, stop it.
-    local taskid = string.format("runscene-%d-%d", tdev, scd.id)
+    local ctx = tonumber( options.contextDevice ) or 0
+    local taskid = string.format("ctx%dscene%d", ctx, scd.id)
     local sst = sceneState[taskid]
     D("runScene() state is %1", sst)
     if sst ~= nil and options.stopPriorScenes then
-        stopScene( tdev, nil )
+        stopScene( ctx, nil, tdev )
     end
 
     -- If there's scene lua, try to run it.
@@ -694,7 +697,7 @@ local function runScene( scene, tdev, options )
             local mime = require('mime')
             luafragment = mime.unb64( scd.lua )
             if luafragment == nil then
-                L({level=1,msg="Aborting scene %1 (%2) run, unable to decode scene Lua: %3"}, scd.id, scd.name, err)
+                L({level=1,msg="Aborting scene %1 (%2) run, unable to decode scene Lua"}, scd.id, scd.name)
                 return
             end
         else
@@ -726,7 +729,14 @@ local function runScene( scene, tdev, options )
 
     -- We are going to run groups. Set up for it.
     D("runScene() setting up to run groups for scene")
-    sceneState[taskid] = { scene=scd.id, starttime=now, lastgroup=0, taskid=taskid, owner=tdev }
+    sceneState[taskid] = { 
+        scene=scd.id,   -- scene ID
+        starttime=now,  -- original start time for scene
+        lastgroup=0,    -- last group to finish
+        taskid=taskid,  -- timer task ID
+        context=ctx,    -- context device (device requesting scene run)
+        owner=tdev      -- parent device (always Reactor or ReactorSensor)
+    }
     luup.variable_set( MYSID, "runscene", json.encode(sceneState), pluginDevice )
 
     return runSceneGroups( tdev, taskid )
@@ -737,6 +747,11 @@ local function resumeScenes()
     D("resumeScenes()")
     local s = luup.variable_get( MYSID, "runscene", pluginDevice ) or "{}"
     local d,pos,err = json.decode(s)
+    if err then
+        L({level=1,msg="Can't resume scenes, failed to parse JSON for saved scene state: %1 at %2 in %3"},
+            err, pos, s)
+        luup.variable_set( MYSID, "runscene", "{}", pluginDevice )
+    end
     sceneState = d or {}
     -- Push through getKeys and iterate over result because runSceneGroups may
     -- remove elements of sceneState while running.
@@ -754,19 +769,19 @@ local function trip( state, tdev )
     D("trip() scenes are %1", sc)
     if not state then
         -- Luup keeps (SecuritySensor1/)LastTrip, but we also keep LastReset
-        luup.variable_set( RSSID, "LastReset", now, tdev )
+        luup.variable_set( RSSID, "LastReset", os.time(), tdev )
         -- Run the reset scene, if we have one.
         if #sc > 1 and sc[2] ~= "" then
-            stopScene( tdev ) -- stop any other running scene for this sensor -- ??? user config
-            runScene( tonumber(sc[2]) or -1, tdev, { stopPriorScenes=true } )
+            stopScene( tdev, nil, tdev ) -- stop any other running scene for this sensor -- ??? user config
+            runScene( tonumber(sc[2]) or -1, tdev, { contextDevice=tdev, stopPriorScenes=true } )
         end
     else
         -- Count a trip.
         luup.variable_set( RSSID, "TripCount", getVarNumeric( "TripCount", 0, tdev, RSSID ) + 1, tdev )
         -- Run the trip scene, if we have one.
         if #sc > 0 and sc[1] ~= "" then
-            stopScene( tdev ) -- stop any other running scene for this sensor -- ??? user config
-            runScene( tonumber(sc[1]) or -1, tdev, { stopPriorScenes=true } )
+            stopScene( tdev, nil, tdev ) -- stop any other running scene for this sensor -- ??? user config
+            runScene( tonumber(sc[1]) or -1, tdev, { contextDevice=tdev, stopPriorScenes=true } )
         end
     end
 end
@@ -820,22 +835,8 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
         return
     end
     if luaxp == nil then
+        -- Don't load luaxp unless/until needed.
         luaxp = require("L_LuaXP_Reactor")
-        if type(luaxp) == "string" then
-            L({level=2,msg="Can't load L_LuaXP_Reactor (%1); falling back to L_LuaXP if I can..."},
-                luaxp)
-            luaxp = require("L_LuaXP")
-        end
-        if type(luaxp) ~= "table" then
-            L{level=1,msg="Failed to load LuaXP module. Expression evaluation not possible."}
-            return
-        end
-        if luaxp._VNUMBER == nil or luaxp._VNUMBER < 000906 then
-            L({level=2,msg="Warning! The LuaXP module found by Reactor is out of date. Some expression evaluation features may not be available (%1/%2)"},
-                luaxp._VERSION, luaxp._VNUMBER)
-        else
-            D("evaluateVariable() loaded LuaXP %1/%2", luaxp._VERSION, luaxp._VNUMBER)
-        end
     end
     -- if debugMode then luaxp._DEBUG = D end
     ctx.NULL = luaxp.NULL
@@ -937,13 +938,20 @@ local function doNextCondCheck( taskinfo, nowMSM, startMSM, endMSM )
     scheduleTick( taskinfo, tt )
 end
 
--- Get a value; use the passed value, unless it refers to a variable, in which case, get its value.
--- ??? Should these just be expression evaluations? Someday?
+-- Get a value (works as constant or expression (including simple variable ref).
+-- Returns result as string and number
 local function getValue( val, ctx, tdev )
     val = val or ""
-    local mp = val:match( "^=(.*)$" )
-    if mp ~= nil then
-        local luaxp = require("L_LuaXP_Reactor")
+    if #val >=2 and val:byte(1) == 34 and val:byte(-1) == 34 then
+        -- Dequote quoted string and return
+        return val:sub( 2, -2 ), nil
+    end
+    if #val >= 2 and val:byte(1) == 123 and val:byte(-1) == 125 then
+        -- Expression wrapped in {}
+        local mp = val:sub( 2, -2 )
+        if luaxp == nil then
+            luaxp = require("L_LuaXP_Reactor")
+        end
         local result,err = luaxp.evaluate( mp, ctx )
         if err then
             L({level=2,msg="Error evaluating %1: %2"}, mp, err)
@@ -952,7 +960,7 @@ local function getValue( val, ctx, tdev )
             val = result
         end
     end
-    return val, tonumber(val)
+    return tostring(val), tonumber(val)
 end
 
 local function evaluateCondition( cond, grp, cdata, tdev )
@@ -1899,19 +1907,22 @@ function actionRunScene( scene, options, dev )
     options = options or {}
     options.forceReactorScenes = true -- If we use this action, this is how we do it
     if options.stopPriorScenes == nil then options.stopPriorScenes = false end
+    if options.contextDevice == nil then options.contextDevice = 0 end
     runScene( scene, dev, options )
     return true
 end
 
 -- Stop running scene. If scene is not provided or 0, all scenes are stopped.
-function actionStopScene( scene, dev )
+-- ctx is the context device, or 0 (global context) if not specified.
+function actionStopScene( ctx, scene, dev )
     L("StopScene action, scene %1", scene)
     local taskid = nil
     if luup.devices[dev].device_type == RSTYPE then dev = luup.devices[dev].device_num_parent end
-    if scene ~= nil and scene ~= 0 then
-        taskid = string.format("runscene-%d-%s", dev, tostring(scene))
+    ctx = tonumber( ctx ) or 0
+    if scene ~= nil and tostring(scene) ~= "0" then
+        taskid = string.format("ctx%dscene%s", ctx, tostring(scene))
     end
-    stopScene( dev, taskid )
+    stopScene( ctx, taskid, dev )
 end
 
 function actionMasterClear( dev )
@@ -2073,7 +2084,7 @@ local function getEvents( deviceNum )
         return "no events: device does not exist or is not ReactorSensor"
     end
     local resp = "    Events\r\n"
-    for i,e in ipairs( ( sensorState[tostring(deviceNum)] or {}).eventList or {} ) do
+    for _,e in ipairs( ( sensorState[tostring(deviceNum)] or {}).eventList or {} ) do
         resp = resp .. string.format("        %15s ", e.time or os.date("%x.%X", e.when or 0) )
         resp = resp .. ( e.event or "event?" ) .. ":"
         for k,v in pairs(e) do
@@ -2202,7 +2213,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
             if v.device_type == RSTYPE then
                 st.sensors[tostring(k)] = { name=v.description }
                 local x = luup.variable_get( RSSID, "cdata", k ) or "{}"
-                local c,pos,err = json.decode( x )
+                local c = json.decode( x )
                 if not c then
                     st.sensors[tostring(k)]._comment = "Unable to parse configuration"
                 else
