@@ -1644,7 +1644,7 @@ local function startSensor( tdev, pdev )
         end
     end
 
-    luup.set_failure( 0, tdev )
+    luup.set_failure( false, tdev )
     return true
 end
 
@@ -1681,8 +1681,8 @@ local function waitSystemReady( pdev )
         if v.device_type == RSTYPE and v.device_num_parent == pdev then
             count = count + 1
             L("Starting sensor %1 (%2)", k, luup.devices[k].description)
-            local _, err = pcall( startSensor, k, pdev )
-            if err then
+            local status, err = pcall( startSensor, k, pdev )
+            if not status then
                 L({level=2,msg="Failed to start %1 (%2): %3"}, k, luup.devices[k].description, err)
                 setMessage( "Failed (see log)", k )
                 luup.set_failure( 1, k ) -- error on timer device
@@ -1711,7 +1711,7 @@ function startPlugin( pdev )
             os.execute("curl -s https://raw.githubusercontent.com/toggledbits/Reactor/master/{T_Reactor_i18n-"..uilang..".json} -o '#1'");
         else f:close() end
         local success, err = pcall( i18n.loadFile, "T_Reactor_i18n-" .. uilang .. ".json" )
-        if not err then
+        if success then
             i18n.setLocale( uilang )
         end
     end
