@@ -650,7 +650,7 @@ local function runSceneGroups( tdev, taskid )
 
         -- Finished this group. Save position.
         sceneState[taskid].lastgroup = nextGroup
-        luup.variable_set( RSSID, "runscene", json.encode(sceneState), pluginDevice )
+        luup.variable_set( MYSID, "runscene", json.encode(sceneState), pluginDevice )
         nextGroup = nextGroup + 1 -- ...and we're moving on...
     end
 
