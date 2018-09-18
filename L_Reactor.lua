@@ -2202,18 +2202,19 @@ function request( lul_request, lul_parameters, lul_outputformat )
                 isOpenLuup=isOpenLuup,
                 isALTUI=isALTUI
             },
-            devices={},
-            watchData=watchData,
-            tickTasks=tickTasks,
-            sceneData=sceneData,
-            sceneState=sceneState,
-            sceneWaiting=sceneWaiting
+            devices={}
         }
         for k,v in pairs( luup.devices ) do
             if v.device_type == MYTYPE or v.device_type == RSTYPE then
                 local devinfo = getDevice( k, pluginDevice, v ) or {}
                 if v.device_type == RSTYPE then
                     devinfo.sensorState = sensorState[tostring(k)]
+                elseif k == pluginDevice then
+                    devinfo.watchData = watchData
+                    devinfo.tickTasks = tickTasks
+                    devinfo.sceneData = sceneData
+                    devinfo.sceneState = sceneState
+                    devinfo.sceneWaiting = sceneWaiting
                 end
                 table.insert( st.devices, devinfo )
             end
