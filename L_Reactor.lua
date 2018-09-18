@@ -517,6 +517,7 @@ local function loadScene( sceneId, pdev )
     if data.groups then
         table.sort( data.groups, function( a, b ) return (a.delay or 0) < (b.delay or 0) end )
     end
+    D("loadScene() loaded scene %1: %2", sceneId, data)
     sceneData[tostring(data.id)] = data
     luup.variable_set( MYSID, "scenedata", json.encode(sceneData), pdev )
     return data
@@ -568,6 +569,7 @@ local function getSceneData( sceneId, tdev )
             sceneWaiting[skey] = sceneId
             scheduleDelay( { id="sceneLoader", func=loadWaitingScenes, owner=pluginDevice }, 5 )
         end
+        D("getSceneData() returning cached: %1", scd)
         return scd -- return cached
     end
 
@@ -577,7 +579,7 @@ local function getSceneData( sceneId, tdev )
         D("getSceneData() queueing later scene load for scene %1", sceneId)
         sceneWaiting[skey] = sceneId
         scheduleDelay( { id="sceneLoader", func=loadWaitingScenes, owner=pluginDevice }, 5 )
-        return
+        return nil
     end
     sceneWaiting[skey] = nil -- remove any fetch queue entry
     return data
@@ -616,7 +618,7 @@ local function runSceneGroups( tdev, taskid )
 
     -- Run next scene group (and keep running groups until no more or delay needed)
     local nextGroup = sst.lastgroup + 1
-    while nextGroup <= #scd.groups do
+    while nextGroup <= #(scd.groups or {}) do
         D("runSceneGroups() now at group %1 of scene %2 (%3)", nextGroup, scd.id, scd.name)
         -- If scene group has a delay, see if we're there yet.
         local now = os.time() -- update time, as scene groups can take a long time to execute
@@ -753,10 +755,8 @@ local function resumeScenes()
         luup.variable_set( MYSID, "runscene", "{}", pluginDevice )
     end
     sceneState = d or {}
-    -- Push through getKeys and iterate over result because runSceneGroups may
-    -- remove elements of sceneState while running.
     for _,data in pairs( sceneState ) do
-        runSceneGroups( data.owner, data.taskid )
+        scheduleDelay( { id=data.taskid, owner=data.owner, func=runSceneGroups }, 1 )
     end
 end
 
@@ -1661,6 +1661,7 @@ local function startSensor( tdev, pdev )
     end
 
     luup.set_failure( 0, tdev )
+    return true
 end
 
 local function waitSystemReady( pdev )
@@ -1680,14 +1681,14 @@ local function waitSystemReady( pdev )
     end
 
     -- System is now ready. Finish initialization and start timers.
-    luup.variable_set( MYSID, "Message", "Starting...", pdev )
+    luup.variable_set( MYSID, "Message", "Starting ReactorSensors...", pdev )
 
     -- Start the master tick
     local tt = math.floor( os.time() / 60 + 1 ) * 60 -- next minute
     scheduleTick( { id=tostring(pdev), func=masterTick, owner=pdev }, tt, { replace=true } )
 
     -- Resume any scenes that were running prior to restart
-    resumeScenes()
+    resumeScenes( pdev )
 
     -- Ready to go. Start our children.
     local count = 0
@@ -1696,8 +1697,8 @@ local function waitSystemReady( pdev )
         if v.device_type == RSTYPE and v.device_num_parent == pdev then
             count = count + 1
             L("Starting sensor %1 (%2)", k, luup.devices[k].description)
-            local success, err = pcall( startSensor, k, pdev )
-            if not success then
+            local _, err = pcall( startSensor, k, pdev )
+            if err then
                 L({level=2,msg="Failed to start %1 (%2): %3"}, k, luup.devices[k].description, err)
                 setMessage( "Failed (see log)", k )
                 luup.set_failure( 1, k ) -- error on timer device
@@ -1709,7 +1710,7 @@ local function waitSystemReady( pdev )
     if count == 0 then
         luup.variable_set( MYSID, "Message", "Open control panel!", pdev )
     else
-        luup.variable_set( MYSID, "Message", string.format("Started %d/%d at %s", started, count, os.date("%x %X")), pdev )
+        luup.variable_set( MYSID, "Message", string.format("Started %d of %d at %s", started, count, os.date("%x %X")), pdev )
     end
 end
 
@@ -1734,7 +1735,7 @@ function startPlugin( pdev )
 
     L("Plugin version %2, device %1 (%3)", pdev, _PLUGIN_VERSION, luup.devices[pdev].description)
 
-    luup.variable_set( MYSID, "Message", "Starting...", pdev )
+    luup.variable_set( MYSID, "Message", "Initializing...", pdev )
 
     -- Early inits
     pluginDevice = pdev
@@ -2238,15 +2239,19 @@ function request( lul_request, lul_parameters, lul_outputformat )
                 isOpenLuup=isOpenLuup,
                 isALTUI=isALTUI
             },
-            devices={},
-            watchData=watchData,
-            tickTasks=tickTasks
+            devices={}
         }
         for k,v in pairs( luup.devices ) do
             if v.device_type == MYTYPE or v.device_type == RSTYPE then
                 local devinfo = getDevice( k, pluginDevice, v ) or {}
                 if v.device_type == RSTYPE then
                     devinfo.sensorState = sensorState[tostring(k)]
+                elseif k == pluginDevice then
+                    devinfo.watchData = watchData
+                    devinfo.tickTasks = tickTasks
+                    devinfo.sceneData = sceneData
+                    devinfo.sceneState = sceneState
+                    devinfo.sceneWaiting = sceneWaiting
                 end
                 table.insert( st.devices, devinfo )
             end

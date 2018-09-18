@@ -2,6 +2,8 @@
 
 ## Version 1.6 (development) ##
 
+* Fix issue #8: crash on startup when attempting to resume scene with no actions (scene.groups is non-existent/nil)
+
 ## Version 1.5 (released) ##
 
 * Reactor now has the ability to trigger scenes itself, rather than requiring the user to implement a native scene device trigger.
