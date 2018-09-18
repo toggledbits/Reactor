@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "1.5"
+local _PLUGIN_VERSION = "1.6stable-180918"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _CONFIGVERSION = 00108
 
@@ -313,7 +313,7 @@ local function scheduleTick( tinfo, timeTick, flags )
         assert(tinfo.func ~= nil)
         tickTasks[tkey] = { id=tostring(tinfo.id), owner=tinfo.owner, when=timeTick, func=tinfo.func or nulltick, args=tinfo.args or {},
             info=tinfo.info or "" } -- new task
-        D("scheduleTick() new task %1 at %2", tinfo, timeTick, tdev)
+        D("scheduleTick() new task %1 at %2", tinfo, timeTick)
     end
     -- If new tick is earlier than next plugin tick, reschedule
     tickTasks._plugin = tickTasks._plugin or {}
@@ -512,6 +512,7 @@ local function loadScene( sceneId, pdev )
     if data.groups then
         table.sort( data.groups, function( a, b ) return (a.delay or 0) < (b.delay or 0) end )
     end
+    D("loadScene() loaded scene %1: %2", sceneId, data)
     sceneData[tostring(data.id)] = data
     luup.variable_set( MYSID, "scenedata", json.encode(sceneData), pdev )
     return data
@@ -563,6 +564,7 @@ local function getSceneData( sceneId, tdev )
             sceneWaiting[skey] = sceneId
             scheduleDelay( { id="sceneLoader", func=loadWaitingScenes, owner=pluginDevice }, 5 )
         end
+        D("getSceneData() returning cached: %1", scd)
         return scd -- return cached
     end
 
@@ -572,7 +574,7 @@ local function getSceneData( sceneId, tdev )
         D("getSceneData() queueing later scene load for scene %1", sceneId)
         sceneWaiting[skey] = sceneId
         scheduleDelay( { id="sceneLoader", func=loadWaitingScenes, owner=pluginDevice }, 5 )
-        return
+        return nil
     end
     sceneWaiting[skey] = nil -- remove any fetch queue entry
     return data
@@ -609,7 +611,7 @@ local function runSceneGroups( tdev, taskid )
 
     -- Run next scene group (and keep running groups until no more or delay needed)
     local nextGroup = sst.lastgroup + 1
-    while nextGroup <= #scd.groups do
+    while nextGroup <= #(scd.groups or {}) do
         D("runSceneGroups() now at group %1 of scene %2 (%3)", nextGroup, scd.id, scd.name)
         -- If scene group has a delay, see if we're there yet.
         local now = os.time() -- update time, as scene groups can take a long time to execute
@@ -689,7 +691,7 @@ local function runScene( scene, tdev, options )
             local mime = require('mime')
             luafragment = mime.unb64( scd.lua )
             if luafragment == nil then
-                L({level=1,msg="Aborting scene %1 (%2) run, unable to decode scene Lua: %3"}, scd.id, scd.name, err)
+                L({level=1,msg="Aborting scene %1 (%2) run, unable to decode scene Lua"}, scd.id, scd.name)
                 return
             end
         else
@@ -728,10 +730,10 @@ local function runScene( scene, tdev, options )
 end
 
 -- Continue running scenes on restart.
-local function resumeScenes()
-    D("resumeScenes()")
-    local s = luup.variable_get( MYSID, "runscene", pluginDevice ) or "{}"
-    local d,pos,err = json.decode(s)
+local function resumeScenes( pdev )
+    D("resumeScenes(%1)", pdev)
+    local s = luup.variable_get( MYSID, "runscene", pdev ) or "{}"
+    local d = json.decode(s)
     sceneState = d or {}
     -- Push through getKeys and iterate over result because runSceneGroups may
     -- remove elements of sceneState while running.
@@ -749,7 +751,7 @@ local function trip( state, tdev )
     D("trip() scenes are %1", sc)
     if not state then
         -- Luup keeps (SecuritySensor1/)LastTrip, but we also keep LastReset
-        luup.variable_set( RSSID, "LastReset", now, tdev )
+        luup.variable_set( RSSID, "LastReset", os.time(), tdev )
         -- Run the reset scene, if we have one.
         if #sc > 1 and sc[2] ~= "" then
             stopScene( tdev ) -- stop any other running scene for this sensor -- ??? user config
@@ -938,7 +940,7 @@ local function getValue( val, ctx, tdev )
     val = val or ""
     local mp = val:match( "^=(.*)$" )
     if mp ~= nil then
-        local luaxp = require("L_LuaXP_Reactor")
+        luaxp = require("L_LuaXP_Reactor")
         local result,err = luaxp.evaluate( mp, ctx )
         if err then
             L({level=2,msg="Error evaluating %1: %2"}, mp, err)
@@ -1646,6 +1648,7 @@ local function startSensor( tdev, pdev )
     end
 
     luup.set_failure( 0, tdev )
+    return true
 end
 
 local function waitSystemReady( pdev )
@@ -1665,14 +1668,14 @@ local function waitSystemReady( pdev )
     end
 
     -- System is now ready. Finish initialization and start timers.
-    luup.variable_set( MYSID, "Message", "Starting...", pdev )
+    luup.variable_set( MYSID, "Message", "Starting ReactorSensors...", pdev )
 
     -- Start the master tick
     local tt = math.floor( os.time() / 60 + 1 ) * 60 -- next minute
     scheduleTick( { id=tostring(pdev), func=masterTick, owner=pdev }, tt, { replace=true } )
 
     -- Resume any scenes that were running prior to restart
-    resumeScenes()
+    resumeScenes( pdev )
 
     -- Ready to go. Start our children.
     local count = 0
@@ -1681,8 +1684,8 @@ local function waitSystemReady( pdev )
         if v.device_type == RSTYPE and v.device_num_parent == pdev then
             count = count + 1
             L("Starting sensor %1 (%2)", k, luup.devices[k].description)
-            local success, err = pcall( startSensor, k, pdev )
-            if not success then
+            local _, err = pcall( startSensor, k, pdev )
+            if err then
                 L({level=2,msg="Failed to start %1 (%2): %3"}, k, luup.devices[k].description, err)
                 setMessage( "Failed (see log)", k )
                 luup.set_failure( 1, k ) -- error on timer device
@@ -1694,7 +1697,7 @@ local function waitSystemReady( pdev )
     if count == 0 then
         luup.variable_set( MYSID, "Message", "Open control panel!", pdev )
     else
-        luup.variable_set( MYSID, "Message", string.format("Started %d/%d at %s", started, count, os.date("%x %X")), pdev )
+        luup.variable_set( MYSID, "Message", string.format("Started %d of %d at %s", started, count, os.date("%x %X")), pdev )
     end
 end
 
@@ -1719,7 +1722,7 @@ function startPlugin( pdev )
 
     L("Plugin version %2, device %1 (%3)", pdev, _PLUGIN_VERSION, luup.devices[pdev].description)
 
-    luup.variable_set( MYSID, "Message", "Starting...", pdev )
+    luup.variable_set( MYSID, "Message", "Initializing...", pdev )
 
     -- Early inits
     pluginDevice = pdev
@@ -2174,8 +2177,8 @@ function request( lul_request, lul_parameters, lul_outputformat )
             if v.device_type == RSTYPE then
                 st.sensors[tostring(k)] = { name=v.description }
                 local x = luup.variable_get( RSSID, "cdata", k ) or "{}"
-                local c,pos,err = json.decode( x )
-                if not c then
+                local c,_,err = json.decode( x )
+                if err then
                     st.sensors[tostring(k)]._comment = "Unable to parse configuration"
                 else
                     st.sensors[tostring(k)].config = c
@@ -2201,7 +2204,10 @@ function request( lul_request, lul_parameters, lul_outputformat )
             },
             devices={},
             watchData=watchData,
-            tickTasks=tickTasks
+            tickTasks=tickTasks,
+            sceneData=sceneData,
+            sceneState=sceneState,
+            sceneWaiting=sceneWaiting
         }
         for k,v in pairs( luup.devices ) do
             if v.device_type == MYTYPE or v.device_type == RSTYPE then
