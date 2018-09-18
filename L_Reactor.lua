@@ -733,12 +733,9 @@ end
 local function resumeScenes( pdev )
     D("resumeScenes(%1)", pdev)
     local s = luup.variable_get( MYSID, "runscene", pdev ) or "{}"
-    local d = json.decode(s)
-    sceneState = d or {}
-    -- Push through getKeys and iterate over result because runSceneGroups may
-    -- remove elements of sceneState while running.
+    sceneState = json.decode(s) or {}
     for _,data in pairs( sceneState ) do
-        runSceneGroups( data.owner, data.taskid )
+        scheduleDelay( { id=data.taskid, owner=data.owner, func=runSceneGroups }, 1 )
     end
 end
 
