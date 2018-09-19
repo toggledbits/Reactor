@@ -6,7 +6,7 @@
  * Copyright 2018 Patrick H. Rigney, All Rights Reserved.
  * This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
  */
-/* globals api,jsonp,jQuery */
+/* globals api,jQuery */
 
 //"use strict"; // fails on UI7, works fine with ALTUI
 
@@ -2016,11 +2016,15 @@ var ReactorSensor = (function(api) {
             api.setCpanelContent(html);
 
             /* Build the scene menus */
-            var scenes = api.cloneObject( jsonp.ud.scenes ); /* There is no api.getListOfScenes(). Really? */
+            var ud = api.getUserData();
+            var scenes = api.cloneObject( ud.scenes );
             scenes.sort( function(a, b) { return a.name < b.name ? -1 : 1; } );
             var menu = jQuery('<select class="rsceneselect form-control-sm form-control">');
             menu.append("<option value=''>--none--</option>");
             for (var i=0; i<scenes.length; ++i) {
+                if ( scenes[i].notification_only || scenes[i].hidden ) {
+                    continue;
+                }
                 var opt = jQuery('<option value="' + scenes[i].id + '"></option>');
                 opt.text( scenes[i].name || ( "#" + scenes[i].id ) );
                 menu.append( opt );
