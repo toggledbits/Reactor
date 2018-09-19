@@ -2,6 +2,8 @@
 
 ## Version 1.6 (development) ##
 
+* Hidden and "system" scenes are no longer shown on the Activities tab scene menus.
+* Backup and restore of configuration now has a UI on the master device.
 * Fix issue #8: crash on startup when attempting to resume scene with no actions (scene.groups is non-existent/nil)
 
 ## Version 1.5 (released) ##
