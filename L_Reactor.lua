@@ -13,7 +13,7 @@ local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
 local _PLUGIN_VERSION = "1.6develop"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
-local _CONFIGVERSION = 00108
+local _CONFIGVERSION = 00109
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -107,13 +107,18 @@ local function checkVersion(dev)
     if (luup.version_branch == 1 and luup.version_major >= 7) then
         if ui7Check == "" then
             -- One-time init for UI7 or better
-            luup.variable_set(MYSID, "UI7Check", "true", dev)
+            luup.variable_set( MYSID, "UI7Check", "true", dev )
         end
         return true
     end
     L({level=1,msg="firmware %1 (%2.%3.%4) not compatible"}, luup.version,
         luup.version_branch, luup.version_major, luup.version_minor)
     return false
+end
+
+local function urlencode( str ) 
+    str = tostring(str):gsub( "([^A-Za-z0-9_ -])", function( ch ) return string.format("%%%02x", string.byte( ch ) ) end )
+    return str:gsub( " ", "+" )
 end
 
 local function split( str, sep )
@@ -257,6 +262,17 @@ local function rateLimit( rh, rateMax, bump)
     end
     local r60 = ( nb < 1 ) and 0 or ( ( t / ( rh.divid * nb ) ) * 60.0 ) -- 60-sec average
     return t > rateMax, t, r60
+end
+
+-- Find device by name
+local function findDeviceByName( n )
+    n = tostring(n):lower()
+    for k,v in pairs( luup.devices ) do
+        if tostring(v.description):lower() == n then
+            return k,v
+        end
+    end
+    return nil
 end
 
 -- Add, if not already set, a watch on a device and service
@@ -440,6 +456,10 @@ local function sensor_runOnce( tdev )
         -- Add marktime for Runtime and TripCount, for date those vars where introduced.
         initVar( "RuntimeSince", 1533528000, tdev, RSSID ) -- 2018-08-16.00:00:00-0400
     end
+    
+    if s < 00109 then
+        luup.variable_set( RSSID, "sundata", nil, tdev ) -- moved to master
+    end
 
     -- Update version last.
     if (s ~= _CONFIGVERSION) then
@@ -464,7 +484,7 @@ local function plugin_runOnce( pdev )
 
         luup.attr_set('category_num', 1, pdev)
 
-        luup.variable_set(MYSID, "Version", _CONFIGVERSION, pdev)
+        luup.variable_set( MYSID, "Version", _CONFIGVERSION, pdev )
         return
     end
 
@@ -477,10 +497,14 @@ local function plugin_runOnce( pdev )
         luup.attr_set('category_num', 1, pdev)
         luup.attr_set('subcategory_num', "", pdev)
     end
+    
+    if s < 00109 then
+        luup.variable_set( RSSID, "runscene", nil, pdev ) -- correct SID/device mismatch
+    end
 
     -- Update version last.
     if s ~= _CONFIGVERSION then
-        luup.variable_set(MYSID, "Version", _CONFIGVERSION, pdev)
+        luup.variable_set( MYSID, "Version", _CONFIGVERSION, pdev )
     end
 end
 
@@ -1086,12 +1110,12 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         -- we need stable with a day.
         local nowMSM = ndt.hour * 60 + ndt.min
         local stamp = (ndt.year % 100) * 10000 + ndt.month * 100 + ndt.day
-        local sun = split( luup.variable_get( RSSID, "sundata", tdev ) or "" )
+        local sun = split( luup.variable_get( MYSID, "sundata", pluginDevice ) or "" )
         local op = cond.operator or cond.condition -- legacy ???
         if #sun ~= 3 or sun[1] ~= tostring(stamp) then
             D("evaluateCondition() didn't like what I got for sun: %1; expected stamp is %2; storing new.", sun, stamp)
             sun = { stamp, luup.sunrise(), luup.sunset() }
-            luup.variable_set( RSSID, "sundata", table.concat( sun, "," ) , tdev )
+            luup.variable_set( MYSID, "sundata", table.concat( sun, "," ) , pluginDevice )
         end
         local tparam = split( cond.value or "sunrise+0,sunset+0" )
         local cp,offset = string.match( tparam[1], "^([^%+%-]+)(.*)" )
@@ -1707,6 +1731,8 @@ local function waitSystemReady( pdev )
             end
         end
     end
+    luup.variable_set( MYSID, "NumChildren", count, pdev )
+    luup.variable_set( MYSID, "NumRunning", started, pdev )
     if count == 0 then
         luup.variable_set( MYSID, "Message", "Open control panel!", pdev )
     else
@@ -1736,6 +1762,7 @@ function startPlugin( pdev )
     L("Plugin version %2, device %1 (%3)", pdev, _PLUGIN_VERSION, luup.devices[pdev].description)
 
     luup.variable_set( MYSID, "Message", "Initializing...", pdev )
+    luup.variable_set( MYSID, "NumRunning", "0", pdev )
 
     -- Early inits
     pluginDevice = pdev
@@ -2208,11 +2235,11 @@ function request( lul_request, lul_parameters, lul_outputformat )
             end
         end
         return r, "text/plain"
-    elseif action == "config" then
+    elseif action == "config" or action == "backup" then
         local st = { _comment="Reactor configuration " .. os.date("%x %X"), timestamp=os.time(), version=_PLUGIN_VERSION, sensors={} }
         for k,v in pairs( luup.devices ) do
             if v.device_type == RSTYPE then
-                st.sensors[tostring(k)] = { name=v.description }
+                st.sensors[tostring(k)] = { name=v.description, devnum=k }
                 local x = luup.variable_get( RSSID, "cdata", k ) or "{}"
                 local c = json.decode( x )
                 if not c then
@@ -2222,7 +2249,64 @@ function request( lul_request, lul_parameters, lul_outputformat )
                 end
             end
         end
-        return json.encode( st ), "application/json"
+        local bdata = json.encode( st )
+        if action == "backup" then
+            local bfile = lul_parameters.path or ( ( isOpenLuup and "." or "/etc/cmh-ludl" ) .. "/reactor-config-backup.json" )
+            local f = io.open( bfile, "w" )
+            if f then 
+                f:write( bdata )
+                f:close()
+            else
+                return "ERROR can't write " .. bfile, "text/plain"
+            end
+        end
+        return bdata, "application/json"
+    elseif action == "restore" then
+        local bfile =  lul_parameters.path or ( ( isOpenLuup and "." or "/etc/cmh-ludl" ) .. "/reactor-config-backup.json" )
+        return "<h1>WARNING</h1>Restoring will WIPE OUT the configuration of any existing ReactorSensor with a name matching that in the configuration backup! Close this tab/window to abort the restore, or <a href=\"/port_3480/data_request?id=lr_Reactor&action=restoreconfirmed&path="
+            .. urlencode( bfile ) .. "\">Click here to restore configuration over the existing</a>.", "text/html"
+    elseif action == "restoreconfirmed" then
+        -- Default file path or user-provided override
+        local bfile = lul_parameters.path
+        if (bfile or "") == "" then return "ERROR missing path", "text/plain" end
+        local f = io.open( bfile, "r" )
+        if not f then return "ERROR can't open restore file " .. bfile, "text/plain" end
+        local bdata = f:read("*a")
+        f:close()
+        local data = json.decode( bdata )
+        if not data then return "ERROR can't decode restore file " .. bfile, "text/plain" end
+        local html = "<h1>Restoring</h1>Backup data from " .. os.date("%x %X", data.timestamp or 0)
+        local good = 0
+        local found = 0
+        for _,c in pairs( data.sensors or {} ) do
+            found = found + 1
+            local k,v = findDeviceByName( c.name )
+            if k ~= nil then
+                if v.device_type ~= RSTYPE then
+                    html = html .. "<br>" .. c.name .. " SKIPPED; current device with that name is not a ReactorSensor"
+                elseif c.config ~= nil then
+                    luup.variable_set( RSSID, "cdata", json.encode( c.config ), k )
+                    luup.variable_set( RSSID, "cstate", "{}", k )
+                    html = html .. "<br>" .. c.name .. " restored!"
+                    good = good + 1
+                end
+            else
+                html = html .. "<br>" .. c.name .. " SKIPPED; device not found"
+            end
+        end
+        if good > 0 then
+            luup.variable_set( MYSID, "scenedata", "{}", pluginDevice )
+            luup.variable_set( MYSID, "runscene", "{}", pluginDevice )
+            html = html .. "<br>&nbsp;<br><b>DONE!</b> Restored " .. good .. " of " .. found .. " in backup. You must <a href=\"/port_3480/data_request?id=reload\">reload Luup</a> now."
+        else
+            html = html .. "<br>&nbsp;<br><b>DONE!</b> Restored NONE of " .. found .. " in backup."
+        end
+        return html, "text/html"
+    elseif action == "purge" then
+        luup.variable_set( MYSID, "scenedata", "{}", pluginDevice )
+        luup.variable_set( MYSID, "runscene", "{}", pluginDevice )
+        scheduleDelay( { id="reload", func=luup.reload, owner=pluginDevice }, 2 )
+        return  "Purged; reloading Luup.", "text/plain"
     elseif action == "status" then
         local st = {
             name=_PLUGIN_NAME,
