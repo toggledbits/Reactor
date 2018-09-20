@@ -40,7 +40,7 @@ var ReactorSensor = (function(api) {
         var html = '';
         html += '<div class="clearfix">';
         html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
-        html += '<div id="tbcopyright">Reactor ver 1.6stable-180918 &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
+        html += '<div id="tbcopyright">Reactor ver 1.6stable-180920 &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
             ' All Rights Reserved. Please check out the <a href="https://www.toggledbits.com/reactor" target="_blank">online documentation</a>' +
             ' and <a href="http://forum.micasaverde.com/index.php/topic,87484.0.html" target="_blank">forum thread</a> for support.</div>';
         html += '<div id="supportlinks">Support links: ' +
@@ -2022,6 +2022,9 @@ var ReactorSensor = (function(api) {
             var menu = jQuery('<select class="rsceneselect form-control-sm form-control">');
             menu.append("<option value=''>--none--</option>");
             for (var i=0; i<scenes.length; ++i) {
+                if ( scenes[i].notification_only || scenes[i].hidden ) {
+                    continue;
+                }
                 var opt = jQuery('<option value="' + scenes[i].id + '"></option>');
                 opt.text( scenes[i].name || ( "#" + scenes[i].id ) );
                 menu.append( opt );
