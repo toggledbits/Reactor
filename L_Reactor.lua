@@ -1290,12 +1290,15 @@ end
 
 -- Evaluate conditions within group. Return overall group state (all conditions met).
 local function evaluateGroup( grp, cdata, tdev )
-    D("evaluateGroup(%1,%2)", grp.groupid, tdev)
+    D("evaluateGroup(%1,cdata,%2)", grp.groupid, tdev)
     if grp.groupconditions == nil or #grp.groupconditions == 0 then return false end -- empty group always false
     local hasTimer = false;
     local passed = true; -- innocent until proven guilty
     local now = cdata.timebase
     local skey = tostring(tdev)
+    sensorState[skey].condState[grp.groupid] = sensorState[skey].condState[grp.groupid] or { evalstate=false, evalstamp=0 }
+    local gs = sensorState[skey].condState[grp.groupid]
+    local latched = {}
     for _,cond in ipairs( grp.groupconditions ) do
         if cond.type ~= "comment" then
             local state, condTimer = evaluateCondition( cond, grp, cdata, tdev )
@@ -1309,7 +1312,8 @@ local function evaluateGroup( grp, cdata, tdev )
             local cs = sensorState[skey].condState[cond.id]
             if cs == nil then
                 D("evaluateGroup() new condition state for %1=%2", cond.id, state)
-                cs = { id=cond.id, laststate=state, statestamp=now }
+                cs = { id=cond.id, laststate=state, statestamp=now, stateedge={} }
+                cs.stateedge[state and 1 or 0] = now
                 sensorState[skey].condState[cond.id] = cs
                 if state and ( cond.repeatcount or 0 ) > 1 then
                     -- If true, store the first timestamp for repeat counter
@@ -1317,13 +1321,15 @@ local function evaluateGroup( grp, cdata, tdev )
                 end
                 addEvent{dev=tdev,event='condchange',cond=cond.id,newState=state}
             elseif state ~= cs.laststate then
-                D("evaluateGroup() condition %1 value state changed from %1 to %2", sensorState[skey].condState[cond.id].laststate, state)
+                D("evaluateGroup() condition %1 value state changed from %1 to %2", cs.laststate, state)
                 -- ??? At certain times, Vera gets a time that is in the future, or so it appears. It looks like the TZ offset isn't applied, randomly.
                 -- Maybe if call is during ntp update, don't know. Investigating... This log message helps detection and analysis.
-                if now < sensorState[skey].condState[cond.id].statestamp then L({level=1,msg="Time moved backwards! Sensor %4 cond %1 last change at %2, but time now %3"}, cond.id, sensorState[skey].condState[cond.id].statestamp, now, tdev) end
+                if now < cs.statestamp then L({level=1,msg="Time moved backwards! Sensor %4 cond %1 last change at %2, but time now %3"}, cond.id, cs.statestamp, now, tdev) end
                 addEvent{dev=tdev,event='condchange',cond=cond.id,oldState=cs.laststate,newState=state}
                 cs.laststate = state
                 cs.statestamp = now
+                cs.stateedge = cs.stateedge or {}
+                cs.stateedge[state and 1 or 0] = now
                 if state and ( cond.repeatcount or 0 ) > 1 then
                     -- If condition now true and counting repeats, append time to list and prune
                     cs.repeats = cs.repeats or {}
@@ -1332,7 +1338,7 @@ local function evaluateGroup( grp, cdata, tdev )
                 end
             end
 
-            -- Save actual value if changed (for status display)
+            -- Save actual current value if changed (for status display), and when it changed.
             if cond.lastvalue ~= nil then
                 cond.lastvalue.value = cond.lastvalue.value or ""
                 if cond.lastvalue.value ~= cs.lastvalue then
@@ -1358,12 +1364,19 @@ local function evaluateGroup( grp, cdata, tdev )
                 else
                     local predState = sensorState[skey].condState[ predCond.id ]
                     D("evaluateCondition() testing predecessor %1 state %2", predCond, predState)
-                    if predState == nil -- can't find predecessor
-                        or ( not predState.evalstate ) -- not true laststate
-                        or predState.statestamp >= sensorState[skey].condState[cond.id].statestamp -- explicit for re-evals/restarts
-                    then
-                        D("evaluateCondition() didn't meet sequence requirement %1 after %2", cond.id, cond.after)
+                    if predState == nil then
                         state = false
+                        L({level=2,msg="Condition %1 can't meet sequence requirement, condition %2 missing!"}, cond.id, cond.after);
+                    else
+                        local age = cs.statestamp - predState.statestamp
+                        local window = cond.aftertime or 0
+                        -- To clear, pred must be true, pred's true precedes our true, and if window, age within window
+                        D("evaluateCondition() pred %1, window %2, age %3", predCond.id, window, age)
+                        if not ( predState.evalstate and age >= 0 and ( window==0 or age <= window ) ) then
+                            D("evaluateCondition() didn't meet sequence requirement %1 after %2(=%3) within %4 (%5 ago)", 
+                                cond.id, predCond.id, predState.evalstate, cond.aftertime or "any", age)
+                            state = false
+                        end
                     end
                 end
             end
@@ -1388,22 +1401,53 @@ local function evaluateGroup( grp, cdata, tdev )
                     D("evaluateGroup() cond %1 repeated %2x in %3s (seeking %4 within %5, good!)",
                         cond.id, #cs.repeats, now-cs.repeats[1], cond.repeatcount, cond.repeatwithin)
                 end
-            elseif state and ( cond.duration or 0 ) > 0 then
+            elseif ( cond.duration or 0 ) > 0 then
                 -- Duration restriction?
-                hasTimer = true
                 -- Age is seconds since last state change.
-                local age = now - sensorState[skey].condState[cond.id].statestamp
-                if age < cond.duration then
-                    D("evaluateGroup() cond %1 suppressed, age %2 has not met duration requirement %3",
-                        cond.id, age, cond.duration)
-                    state = false
-                    local rem = math.max( 2, cond.duration - age )
-                    scheduleDelay( tostring(tdev), rem )
-                else
-                    D("evaluateGroup() cond %1 age %2 (>=%3) success", cond.id, age, cond.duration)
+                local op = cond.duration_op or "ge"
+                if op == "lt" then
+                    -- If duration < X, then eval is true only if last true interval
+                    -- lasted less than X seconds, meaning, we act when the condition goes
+                    -- false, checking the "back interval".
+                    if not state then
+                        local age = (cs.stateedge[0] or now) - (cs.stateedge[1] or 0)
+                        state = age < cond.duration
+                        D("evaluateGroup() cond %1 was true for %2, limit is %3, state now %4", cond.id,
+                            age, cond.duration, state)
+                    else
+                        -- Not ready yet.
+                        D("evaluateGroup() cond %1 duration < %2, not ready yet", cond.id, cond.duration)
+                        state = false
+                    end
+                elseif state then
+                    -- Handle "at least" duration. Eval true only when sustained for period
+                    local age = now - cs.statestamp
+                    if age < cond.duration then
+                        D("evaluateGroup() cond %1 suppressed, age %2, has not yet met duration %3",
+                            cond.id, age, cond.duration)
+                        state = false
+                        local rem = math.max( 1, cond.duration - age )
+                        scheduleDelay( tostring(tdev), rem )
+                    else
+                        D("evaluateGroup() cond %1 age %2 (>=%3) success", cond.id, age, cond.duration)
+                    end
                 end
             end
 
+            -- Latching option. When latched, a condition that goes true remains true until the
+            -- ReactorSensor untrips (another non-latched condition goes false), even if its
+            -- other test conditions are no longer met.
+            if ( cond.latch or 0 ) ~= 0 and cs.evalstate and not state then
+                -- Attempting to transition from true to false with latch option set. Check ReactorSensor.
+                if ( gs.evalstate or false ) then
+                    -- Group is tripped, so this condition is forced to remain true.
+                    D("evaluateGroup() cond %1 state %2 overriding to true, latched condition!",
+                        cond.id, state)
+                    state = true
+                    table.insert( latched, cond.id )
+                end
+            end
+            
             -- Save the final determination of state for this condition.
             passed = state and passed
             if state ~= cs.evalstate then
@@ -1417,12 +1461,18 @@ local function evaluateGroup( grp, cdata, tdev )
     end
 
     -- Save group state (create or change only).
-    sensorState[skey].condState[grp.groupid] = sensorState[skey].condState[grp.groupid] or {}
-    local gs = sensorState[skey].condState[grp.groupid]
     if gs.evalstate == nil or gs.evalstate ~= passed then
         addEvent{dev=tdev,event='groupchange',cond=grp.groupid,oldState=gs.evalstate,newState=passed}
         gs.evalstate = passed
         gs.evalstamp = now
+        if not gs.evalstate then
+            -- Reset latched conditions when group resets
+            for _,l in ipairs(latched) do
+                local cs = sensorState[skey].condState[l]
+                cs.evalstate = cs.laststate
+                cs.evalstamp = now
+            end
+        end
     end
     gs.hastimer = hasTimer
 
@@ -1466,13 +1516,7 @@ local function updateSensor( tdev )
         sensorState[tostring(tdev)].updateThrottled = false
 
         -- Fetch the condition data.
-        local s = luup.variable_get( RSSID, "cdata", tdev ) or ""
-        if s == "" then return false end
-        local cdata, pos, err = json.decode( s )
-        if err then
-            L("Unable to parse JSON data at %2, %1 in %3", pos, err, s)
-            return nil, nil
-        end
+        local cdata = sensorState[tostring(tdev)].configData
 
         -- Mark a stable base of time
         cdata.timebase = getVarNumeric( "TestTime", 0, tdev, RSSID )
@@ -1550,6 +1594,17 @@ local function updateSensor( tdev )
     end
 end
 
+-- Load sensor config
+local function loadSensorConfig( tdev )
+    local s = luup.variable_get( RSSID, "cdata", tdev ) or "{}"
+    local cdata, pos, err = json.decode( s )
+    if err then
+        L("Unable to parse JSON data at %2, %1 in %3", pos, err, s)
+        return error("Unable to load configuration")
+    end
+    sensorState[tostring(tdev)].configData = cdata
+end
+
 -- Clean cstate
 local function loadCleanState( tdev )
     D("loadCleanState(%1)", tdev)
@@ -1565,15 +1620,8 @@ local function loadCleanState( tdev )
             cstate = {}
         end
 
-        -- Fetch cdata
-        s = luup.variable_get( RSSID, "cdata", tdev ) or ""
-        if s == "" then
-            luup.variable_set( RSSID, "cstate", "{}", tdev )
-            return {}
-        end
-        local cdata
-        cdata,_,err = json.decode( s )
-        if err then
+        local cdata = sensorState[tostring(tdev)].configData
+        if not cdata then
             L({level=1,msg="ReactorSensor %1 (%2) has corrupt configuration data!"}, tdev, luup.devices[tdev].description)
             error("ReactorSensor " .. tdev .. " has invalid configuration data")
             -- no return
@@ -1657,11 +1705,14 @@ local function startSensor( tdev, pdev )
     sensor_runOnce( tdev )
 
     -- Initialize instance data
-    sensorState[tostring(tdev)] = { eventList={}, condState={} }
+    sensorState[tostring(tdev)] = { eventList={}, condState={}, configData={} }
     sensorState[tostring(tdev)].updateRate = initRate( 60, 15 )
     sensorState[tostring(tdev)].updateThrottled = false
     sensorState[tostring(tdev)].changeRate = initRate( 60, 15 )
     sensorState[tostring(tdev)].changeThrottled = false
+
+    -- Load the config data.
+    loadSensorConfig( tdev )
 
     -- Clean and restore our condition state.
     sensorState[tostring(tdev)].condState = loadCleanState( tdev )
@@ -2051,8 +2102,9 @@ function watch( dev, sid, var, oldVal, newVal )
 
     if sid == RSSID and var == "cdata" then
         -- Sensor configuration change. Immediate update.
-        L("Child %1 (%2) config change, re-evaluating!", dev, luup.devices[dev].description)
-        updateSensor( dev )
+        L("Child %1 (%2) configuration change, updating!", dev, luup.devices[dev].description)
+        loadSensorConfig( tdev )
+        updateSensor( tdev )
     else
         local key = string.format("%d:%s/%s", dev, sid, var)
         if watchData[key] then

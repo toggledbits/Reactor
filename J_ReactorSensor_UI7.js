@@ -686,11 +686,18 @@ var ReactorSensor = (function(api) {
         if ( "" === pred.val() ) {
             if ( undefined !== cond.after ) {
                 delete cond.after;
+                delete cond.aftertime;
                 configModified = true;
             }
         } else {
-            if ( cond.after !== pred.val() ) {
+            var pt = parseInt( jQuery('input.predtime', row).val() );
+            if ( isNaN( pt ) || pt < 0 ) {
+                pt = 0;
+                jQuery('input.predtime', row).val(pt);
+            }
+            if ( cond.after !== pred.val() || cond.aftertime !== pt ) {
                 cond.after = pred.val();
+                cond.aftertime = pt;
                 configModified = true;
             }
         }
@@ -698,6 +705,7 @@ var ReactorSensor = (function(api) {
         var rc = jQuery('input.rcount', row);
         if ( "" === rc.val() || rc.prop('disabled') ) {
             jQuery('input.duration', row).prop('disabled', false);
+            jQuery('select.durop', row).prop('disabled', false);
             jQuery('input.rspan', row).val("").prop('disabled', true);
             if ( undefined !== cond.repeatcount ) {
                 delete cond.repeatcount;
@@ -713,9 +721,11 @@ var ReactorSensor = (function(api) {
                 if ( n != cond.repeatcount ) {
                     cond.repeatcount = n;
                     delete cond.duration;
+                    delete cond.duration_op;
                     configModified = true;
                 }
                 jQuery('input.duration', row).val("").prop('disabled', true);
+                jQuery('select.durop', row).val("ge").prop('disabled', true);
                 jQuery('input.rspan', row).prop('disabled', false);
                 if ( jQuery('input.rspan', row).val() === "" ) {
                     jQuery('input.rspan', row).val("60");
@@ -724,6 +734,12 @@ var ReactorSensor = (function(api) {
                 }
             }
         }
+        
+        var latchval = jQuery('input.latchcond', row).prop('checked') ? 1 : 0;
+        if ( latchval != ( cond.latch || 0 ) ) {
+            cond.latch = latchval;
+            configModified = true;
+        }        
 
         var rs = jQuery('input.rspan', row);
         if ( ! rs.prop('disabled') ) {
@@ -745,6 +761,7 @@ var ReactorSensor = (function(api) {
             // jQuery('input.rspan', row).prop('disabled', false);
             if ( undefined !== cond.duration ) {
                 delete cond.duration;
+                delete cond.duration_op;
                 configModified = true;
             }
         } else {
@@ -761,10 +778,12 @@ var ReactorSensor = (function(api) {
                     /* Changed */
                     if ( n === 0 ) {
                         delete cond.duration;
+                        delete cond.duration_op;
                         jQuery('input.rcount', row).prop('disabled', false);
                         // jQuery('input.rspan', row).prop('disabled', false);
                     } else {
                         cond.duration = n;
+                        cond.duration_op = jQuery('select.durop', row).val();
                     }
                     configModified = true;
                 }
@@ -804,29 +823,39 @@ var ReactorSensor = (function(api) {
             if ( cond.id !== gc.id && ( gc.after === undefined || gc.after !== cond.id ) ) {
                 var opt = jQuery('<option></option>');
                 opt.val( gc.id );
-                opt.text( makeConditionDescription( gc ) );
+                var t = makeConditionDescription( gc );
+                if ( t.length > 40 ) {
+                    t = t.substr(0,36) + "...";
+                }
+                opt.text( t );
                 preds.append( opt );
             }
         }
-        container.append('<div class="predopt form-inline"><label>Only after: </label></div>');
+        container.append('<div class="predopt form-inline"><label>Only after&nbsp;</label></div>');
         jQuery('div.predopt label', container).append(preds);
-        jQuery('select.pred', container).on( 'change.reactor', handleOptionChange ).val( cond.after );
+        jQuery('div.predopt', container).append('&nbsp;<label>within <input type="text" class="predtime form-control form-control-sm narrow">&nbsp;seconds (0=no time limit)</label>');
+        jQuery('select.pred', container).val( cond.after );
+        jQuery('input.predtime', container).val( cond.aftertime || 0 );
         /* Duration */
-        container.append('<div class="duropt form-inline"><label>State is sustained for <input type="text" class="duration form-control form-control-sm narrow"> seconds</label></div>');
+        container.append('<div class="duropt form-inline"><label>State is sustained for&nbsp;<select class="durop form-control form-control-sm"><option value="ge">at least</option><option value="lt">less than</option></select>&nbsp;<input type="text" class="duration form-control form-control-sm narrow"> seconds</label></div>');
         /* Repeat */
         container.append('<div class="duropt form-inline"><label>State repeats <input type="text" class="rcount form-control form-control-sm narrow"> times within <input type="text" class="rspan form-control form-control-sm narrow"> seconds</label></div>');
+        container.append('<div class="latchopt form-inline"><label><input type="checkbox" class="latchcond form-control form-control-sm">&nbsp;Latch (once met, condition remains true until group resets)<label></div>');
         container.append('<i class="material-icons closeopts" title="Close Options">expand_less</i>');
-        jQuery('input', container).on( 'change.reactor', handleOptionChange );
+        jQuery('input,select', container).on( 'change.reactor', handleOptionChange );
         jQuery('i.closeopts', container).on( 'click.reactor', handleCloseOptionsClick );
         if ( ( cond.duration || 0 ) > 0 ) {
             jQuery('input.rcount,input.rspan', container).prop('disabled', true);
             jQuery('input.duration', container).val( cond.duration );
+            jQuery('select.durop', container).val( cond.duration_op || "ge" );
         } else {
             var rc = cond.repeatcount || "";
             jQuery('input.duration', container).prop('disabled', rc != "");
+            jQuery('select.durop', container).prop('disabled', rc != "");
             jQuery('input.rcount', container).val( rc );
             jQuery('input.rspan', container).val( rc == "" ? "" : ( cond.repeatwithin || "60" ) );
         }
+        jQuery('input.latchcond', container).prop('checked', ( cond.latch || 0 ) != 0 );
 
         /* Add it to the params */
         jQuery('div.params', row).append( container );
@@ -1611,7 +1640,12 @@ var ReactorSensor = (function(api) {
                         if ( ( cond.repeatcount || 0 ) > 1 ) {
                             condDesc += " repeats " + cond.repeatcount + " times within " + cond.repeatwithin + " secs";
                         } else if ( ( cond.duration || 0 ) > 0 ) {
-                            condDesc += " for " + cond.duration + " secs";
+                            condDesc += " for " + 
+                                ( cond.duration_op === "lt" ? "less than " : "at least " ) +
+                                cond.duration + " secs";
+                        }
+                        if ( ( cond.latch || 0 ) != 0 ) {
+                            condDesc += " (latching)";
                         }
                         break;
 
@@ -1638,7 +1672,10 @@ var ReactorSensor = (function(api) {
                         /* Nada */
                 }
                 if ( cond.after !== undefined ) {
-                    condDesc += ' (after ' + makeConditionDescription( ixCond[cond.after] ) + ')';
+                    condDesc += ' (' +
+                        ( (cond.aftertime||0) > 0 ? 'within ' + cond.aftertime + ' secs ' : '' ) +
+                        'after ' + makeConditionDescription( ixCond[cond.after] ) + 
+                        ')';
                 }
                 el.append( jQuery('<div class="col-sm-6 col-md-6"></div>').text( condDesc ) );
 
@@ -1649,6 +1686,7 @@ var ReactorSensor = (function(api) {
                         el.append('<div class="currentvalue col-sm-6 col-md-4">(' + currentValue + ') ' +
                             ( cs.laststate ? "true" : "false" ) +
                             ' as of ' + relativeTime( cs.statestamp ) +
+                            ( ( cond.latch || false ) && cs.evalstate && !cs.laststate ? " (latched true)" : "" ) +
                             '</div>' );
                         if ( "service" === cond.type && ( cond.repeatcount || 0 ) > 1 ) {
                             if ( cs.repeats !== undefined && cs.repeats.length > 1 ) {
@@ -1952,10 +1990,10 @@ var ReactorSensor = (function(api) {
         var t1 = jQuery('select#tripscene').val();
         var t2 = jQuery('select#untripscene').val();
         if ( t1 === "" && t2 === "" ) {
-            api.setDeviceStatePersistent( api.getCpanelDeviceId(), serviceId, "Scenes", "")
+            api.setDeviceStatePersistent( api.getCpanelDeviceId(), serviceId, "Scenes", "");
         } else {
             var ll = t1 + "," + t2;
-            api.setDeviceStatePersistent( api.getCpanelDeviceId(), serviceId, "Scenes", ll)
+            api.setDeviceStatePersistent( api.getCpanelDeviceId(), serviceId, "Scenes", ll);
         }
         var uri = api.getDataRequestURL() + "?id=lr_Reactor&device=" + api.getCpanelDeviceId() + "&action=loadscenes";
         jQuery.ajax({
@@ -2057,7 +2095,7 @@ var ReactorSensor = (function(api) {
                 }
             }
             
-            jQuery("select.rsceneselect").on( 'change.reactor', changeSelectedScene )
+            jQuery("select.rsceneselect").on( 'change.reactor', changeSelectedScene );
 
             api.registerEventHandler('on_ui_cpanel_before_close', ReactorSensor, 'onBeforeCpanelClose');
         }
