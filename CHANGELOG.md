@@ -1,6 +1,6 @@
 # Change Log #
 
-## Version 1.6 (development) ##
+## Version 1.6 (released) ##
 
 * "After" sequencing condition now allows an interval in which sequence must be met (e.g. A must follow B within X seconds).
 * Add service/variable condition option to "latch" a condition: if the condition is met, it is true and remains true until its parent group goes false (i.e. another non-latched condition in the same group goes false), even if the tested condition becomes false first.
