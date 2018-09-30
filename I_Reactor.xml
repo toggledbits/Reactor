@@ -81,6 +81,7 @@
             <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
             <name>RunScene</name>
             <job>
+                -- See https://www.toggledbits.com/reactor for explanation of Options
                 Reactor.actionRunScene( lul_settings.SceneNum, lul_settings.Options or {}, lul_device )
                 return 4,0
             </job>
@@ -89,7 +90,10 @@
             <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
             <name>StopScene</name>
             <run>
-                Reactor.actionStopScene( lul_settings.SceneNum, lul_device )
+                -- contextDevice is normally the device that originally called for the scene run
+                -- in the Options table. If SceneNum is nil or 0, all scenes for the context device
+                -- will be stopped.
+                Reactor.actionStopScene( lul_settings.contextDevice, lul_settings.SceneNum, lul_device )
             </run>
         </action>
         <action>
