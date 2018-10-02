@@ -2258,13 +2258,19 @@ function request( lul_request, lul_parameters, lul_outputformat )
                             r = r .. string.format("%s/%s %s %s", cond.service or "?", cond.variable or "?", cond.operator or cond.condition or "?",
                                 cond.value or "")
                             if cond.duration then
-                                r = r .. " for " .. cond.duration .. " secs"
+                                r = r .. " for " .. cond.duration .. "s"
                             end
                             if cond.after then
+                                if ( cond.aftertime or 0 ) > 0 then
+                                    r = r .. " within " .. tostring(cond.aftertime) .. "s"
+                                end
                                 r = r .. " after " .. cond.after
                             end
                             if cond.repeatcount then
-                                r = r .. " repeat " .. cond.repeatcount .. " within " .. cond.repeatwithin .. " secs"
+                                r = r .. " repeat " .. cond.repeatcount .. " within " .. cond.repeatwithin .. "s"
+                            end
+                            if (cond.latch or 0) ~= 0 then
+                                r = r .. " (latching)"
                             end
                         elseif cond.type == "comment" then
                             r = r .. string.format("%q", cond.comment)
