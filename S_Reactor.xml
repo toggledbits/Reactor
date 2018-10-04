@@ -37,9 +37,13 @@
             <name>SystemBatteryLevel</name>
             <dataType>ui4</dataType>
         </stateVariable>
-        <stateVariable sendEvents="yes">
+        <stateVariable sendEvents="no">
             <name>misc_arg</name>
             <dataType>ui4</dataType>
+        </stateVariable>
+        <stateVariable sendEvents="no">
+            <name>bool_arg</name>
+            <dataType>boolean</dataType>
         </stateVariable>
     </serviceStateTable>
     <actionList>
@@ -89,6 +93,7 @@
                 <argument>
                     <name>debug</name>
                     <direction>in</direction>
+                    <relatedStateVariable>bool_arg</relatedStateVariable>
                 </argument>
             </argumentList>
         </action>
