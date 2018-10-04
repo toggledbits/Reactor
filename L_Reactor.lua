@@ -1584,7 +1584,6 @@ local function updateSensor( tdev )
         -- Save the condition state.
         luup.variable_set( RSSID, "cstate", json.encode(sensorState[tostring(tdev)].condState), tdev )
     else
-
         if not sensorState[tostring(tdev)].updateThrottled then
             L({level=2,msg="%2 (#%1) updating too fast (%4 > %3/min)! Throttling..."},
                 tdev, luup.devices[tdev].description, maxUpdate, rate60)
@@ -1593,11 +1592,11 @@ local function updateSensor( tdev )
             addEvent{dev=tdev,event='throttle',['type']='update',rate=rate60,limit=maxUpdate}
         end
         hasTimer = true -- force, so sensor gets checked later.
-
     end
 
-    -- No need to reschedule timer if no demand. Demand is created by condition
-    -- type (hasTimer), polling enabled, or ContinuousTimer set.
+    -- No need to reschedule timer if no demand. Condition may have rescheduled
+    -- itself (no need to set hasTimer), so at the moment, hasTimer is only used
+    -- for throttle recovery.
     if hasTimer or getVarNumeric( "ContinuousTimer", 0, tdev, RSSID ) ~= 0 then
         D("updateSensor() hasTimer or ContinuousTimer, scheduling update")
         local v = ( 60 - ( os.time() % 60 ) ) + TICKOFFS
@@ -2103,13 +2102,14 @@ end
 local function sensorWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
     D("sensorWatch(%1,%2,%3,%4,%5,%6,%7)", dev, sid, var, oldVal, newVal, tdev, pdev)
     -- Watched variable has changed. Re-evaluate conditons.
-    addEvent{ dev=tdev, event='devicewatch', device=dev, var=sid .. "/" .. var, old=oldVal, new=newVal }
+    addEvent{ dev=tdev, event='devicewatch', device=dev, name=(luup.devices[dev] or {}).descriptions,
+        var=sid .. "/" .. var, old=oldVal, new=newVal }
     updateSensor( tdev )
 end
 
 -- Watch callback. Dispatches to sensor-specific handling.
 function watch( dev, sid, var, oldVal, newVal )
-    D("watch(%1,%2,%3,%4,%5) luup.device(tdev)=%6", dev, sid, var, oldVal, newVal, luup.device)
+    D("watch(%1,%2,%3,%4,%5)", dev, sid, var, oldVal, newVal)
     assert(var ~= nil) -- nil if service or device watch (can happen on openLuup)
 
     if sid == RSSID and var == "cdata" then
