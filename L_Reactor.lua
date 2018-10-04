@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "1.7develop"
+local _PLUGIN_VERSION = "2.0develop"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _CONFIGVERSION = 00109
 
@@ -38,6 +38,8 @@ local runStamp = 0
 local pluginDevice = 0
 local isALTUI = false
 local isOpenLuup = false
+
+local TICKOFFS = 5 -- cond tasks try to run TICKOFFS seconds after top of minute
 
 local json = require("dkjson")
 local luaxp -- will only be loaded if needed
@@ -1169,7 +1171,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         tpart[8] = ( tparam[8] == "" ) and tpart[3] or tparam[8]
         tpart[9] = ( tparam[9] == "" ) and tpart[4] or tparam[9]
         tpart[10] = ( tparam[10] == "" ) and tpart[5] or tparam[10]
-
+        D("evaluationCondition() clean tpart=%1", tpart)
         if tparam[2] == "" then
             -- No date specified, only time components. Magnitude comparison.
             D("evaluateCondition() time-only comparison, now is %1, ndt is %2", now, ndt)
@@ -1203,21 +1205,29 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         elseif tparam[1] == "" then
             -- No-year given, just M/D H:M. We can do comparison by magnitude,
             -- which works better for year-spanning ranges.
-            -- ??? needs next check scheduling so we can hasTimer=false
-            hasTimer = true
+            local function nextMD( tmagwhen, tmagnow, taskinfo )
+                local delay = ( tmagwhen % 1440 ) - ( tmagnow % 1440 )
+                if delay <= 0 then delay = delay + 1440 end
+                D("evaluateCondition() trangeMD delay is %1s (%2m, %3h:%4m)", delay*60, delay, math.floor(delay/60), delay%60)
+                -- Compute an absolute time and round it to the minute (plus offset)
+                delay = math.floor( ( os.time() + delay * 60 ) / 60 ) * 60 + TICKOFFS
+                scheduleTick( taskinfo, delay )
+            end
             local nowz = tonumber( ndt.month ) * 100 + tonumber( ndt.day )
             local stz = tonumber( tpart[2] ) * 100 + tonumber( tpart[3] )
-            nowz = nowz * 3600 + ndt.hour * 60 + ndt.min
-            stz = stz * 3600 + tpart[4] * 60 + tpart[5]
+            nowz = nowz * 1440 + ndt.hour * 60 + ndt.min
+            stz = stz * 1440 + tpart[4] * 60 + tpart[5]
             if op == "before" then
                 D("evaluateCondition() M/D H:M test %1 %2 %3", nowz, op, stz)
-                if nowz >= stz then return false,true end
+                nextMD( stz, nowz, { id=tdev,info="trangeMD "..cond.id } )
+                if nowz >= stz then return false,false end
             elseif op == "after" then
                 D("evaluateCondition() M/D H:M test %1 %2 %3", nowz, op, stz)
-                if nowz < stz then return false,true end
+                nextMD( stz, nowz, { id=tdev,info="trangeMD "..cond.id } )
+                if nowz < stz then return false,false end
             else
                 local enz = tonumber( tpart[7] ) * 100 + tonumber( tpart[8] )
-                enz = enz * 3600 + tpart[9] * 60 + tpart[10]
+                enz = enz * 1440 + tpart[9] * 60 + tpart[10]
                 D("evaluateCondition() M/D H:M test %1 %2 %3 and %4", nowz, op, stz, enz)
                 local between
                 if stz < enz then -- check for year-spanning
@@ -1225,9 +1235,10 @@ local function evaluateCondition( cond, grp, cdata, tdev )
                 else
                     between = nowz >= stz or nowz < enz
                 end
+                nextMD( between and enz or stz, nowz, { id=tdev,info="trangeMD "..cond.id } )
                 if ( op == "bet" and not between ) or
                     ( op == "nob" and between ) then
-                    return false,true
+                    return false,false
                 end
             end
         else
@@ -1589,7 +1600,7 @@ local function updateSensor( tdev )
     -- type (hasTimer), polling enabled, or ContinuousTimer set.
     if hasTimer or getVarNumeric( "ContinuousTimer", 0, tdev, RSSID ) ~= 0 then
         D("updateSensor() hasTimer or ContinuousTimer, scheduling update")
-        local v = 10 + ( 60 - ( os.time() % 60 ) ) -- 10 seconds after minute
+        local v = ( 60 - ( os.time() % 60 ) ) + TICKOFFS
         scheduleDelay( {id=tostring(tdev),info="hasTimer"}, v )
     end
 end
@@ -2075,6 +2086,7 @@ function tick(p)
 
     -- Figure out next master tick, or don't resched if no tasks waiting.
     if nextTick ~= nil then
+        D("tick() next eligible task scheduled for %1", os.date("%x %X", nextTick))
         now = os.time() -- Get the actual time now; above tasks can take a while.
         local delay = nextTick - now
         if delay < 1 then delay = 1 end
@@ -2103,8 +2115,8 @@ function watch( dev, sid, var, oldVal, newVal )
     if sid == RSSID and var == "cdata" then
         -- Sensor configuration change. Immediate update.
         L("Child %1 (%2) configuration change, updating!", dev, luup.devices[dev].description)
-        loadSensorConfig( tdev )
-        updateSensor( tdev )
+        loadSensorConfig( dev )
+        updateSensor( dev )
     else
         local key = string.format("%d:%s/%s", dev, sid, var)
         if watchData[key] then
@@ -2399,7 +2411,9 @@ function request( lul_request, lul_parameters, lul_outputformat )
             end
         end
         return alt_json_encode( st ), "application/json"
+    elseif action == "serviceinfo" then
+        error("not yet implemented")
     else
-        return "Not implemented: " .. action, "text/plain"
+        error("Not implemented: " .. action)
     end
 end
