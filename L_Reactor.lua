@@ -952,17 +952,14 @@ local function doNextCondCheck( taskinfo, nowMSM, startMSM, endMSM )
     local edge = 1440
     if nowMSM < startMSM then
         edge = startMSM
-    elseif endMSM ~= nil then
-        -- If end is before start, push across midnight
-        if endMSM <= startMSM then endMSM = endMSM + 1440 end
-        if nowMSM < endMSM then
-            edge = math.min( 1440, endMSM )
-        end
+    end
+    if endMSM ~= nil and nowMSM < endMSM then
+        edge = math.min( edge, endMSM )
     end
     local delay = (edge - nowMSM) * 60
     -- Round the time to the start of a minute (more definitive)
     local tt = math.floor( ( os.time() + delay ) / 60 ) * 60
-    D("doNextCondCheck() scheduling next check for %1 (delay %2secs)", tt, delay)
+    D("doNextCondCheck() edge %3, scheduling next check for %1 (delay %2secs)", tt, delay, edge)
     scheduleTick( taskinfo, tt )
 end
 
