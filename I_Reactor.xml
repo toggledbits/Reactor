@@ -87,6 +87,33 @@
             </job>
         </action>
         <action>
+            <serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
+            <name>RunScene</name>
+            <job>
+                -- See https://www.toggledbits.com/reactor for explanation of Options
+                -- The ReactorSensor version of RunScene forces the context device to be the
+                -- ReactorSensor on which the call was made.
+                var opt = lul_settings.Options or {}
+                opt.contextDevice = opt.contextDevice or lul_device
+                Reactor.actionRunScene( lul_settings.SceneNum, opt, lul_device )
+                return 4,0
+            </job>
+        </action>
+        <action>
+            <serviceId>urn:micasaverde-com:serviceId:HomeAutomationGateway1</serviceId>
+            <name>RunScene</name>
+            <job>
+                -- See https://www.toggledbits.com/reactor for explanation of Options
+                -- This is a convenience/shortcut version of RunScene that allows
+                -- users to use ReactorScenes with only a change to the device number in
+                -- their action calls.
+                var opt = lul_settings.Options or {}
+                opt.contextDevice = opt.contextDevice or lul_device
+                Reactor.actionRunScene( lul_settings.SceneNum, opt, lul_device )
+                return 4,0
+            </job>
+        </action>
+        <action>
             <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
             <name>StopScene</name>
             <run>

@@ -1,5 +1,10 @@
 # Change Log #
 
+## Version 2.0 (development) ##
+
+* Expire cached state for conditions; use is only upon update, and between updates, which may be a large span of time, the memory used is held by the reference; expiring the entry after a short period balances memory use with performance. The expiry is tunable via the master device's StateCacheExpiry parameter (0 disables expiry).
+* Implement smarter scheduling for trangeMD date/time subconditions, an optimization further reducing CPU usage. This is the last of the currently implemented set of conditions awaiting such tuning. This change will also be incorporated into the 1.x release path, in the event there is another 1.x release prior to this 2.0 release.
+
 ## Version 1.6 (released) ##
 
 * "After" sequencing condition now allows an interval in which sequence must be met (e.g. A must follow B within X seconds).

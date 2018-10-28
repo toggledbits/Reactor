@@ -13,12 +13,12 @@ local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
 local _PLUGIN_VERSION = "2.0develop"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
-local _CONFIGVERSION = 00109
+local _CONFIGVERSION = 00200
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
 
-local VARSID = "urn:toggledbits-com:serviceId:ReactorValues"
+local VARSID = "urn:toggledbits-com:servi00ceId:ReactorValues"
 
 local RSSID = "urn:toggledbits-com:serviceId:ReactorSensor"
 local RSTYPE = "urn:schemas-toggledbits-com:device:ReactorSensor:1"
@@ -462,7 +462,7 @@ local function sensor_runOnce( tdev )
     if s < 00109 then
         luup.variable_set( RSSID, "sundata", nil, tdev ) -- moved to master
     end
-
+    
     -- Update version last.
     if (s ~= _CONFIGVERSION) then
         luup.variable_set(RSSID, "Version", _CONFIGVERSION, tdev)
@@ -502,6 +502,10 @@ local function plugin_runOnce( pdev )
     
     if s < 00109 then
         luup.variable_set( RSSID, "runscene", nil, pdev ) -- correct SID/device mismatch
+    end
+
+    if s < 00200 then
+        initVar( "StateCacheExpiry", 600, pdev, MYSID )
     end
 
     -- Update version last.
@@ -852,6 +856,67 @@ local function finddevice( dev )
     return vn
 end
 
+-- Load sensor config
+local function loadSensorConfig( tdev )
+    local s = luup.variable_get( RSSID, "cdata", tdev ) or "{}"
+    local cdata, pos, err = json.decode( s )
+    if err then
+        L("Unable to parse JSON data at %2, %1 in %3", pos, err, s)
+        return error("Unable to load configuration")
+    end
+    sensorState[tostring(tdev)].configData = cdata
+end
+
+-- Clean cstate
+local function loadCleanState( tdev )
+    D("loadCleanState(%1)", tdev)
+
+    -- Fetch cstate. If it's empty, there's nothing to do here.
+    local cstate = {} -- guilty until proven innocent
+    local s = luup.variable_get( RSSID, "cstate", tdev ) or ""
+    if s ~= "" then
+        local err
+        cstate,_,err = json.decode( s )
+        if err then
+            L({level=2,msg="ReactorSensor %1 (%2) corrupted cstate, clearing!"}, tdev, luup.devices[tdev].description)
+            cstate = {}
+        end
+
+        local cdata = sensorState[tostring(tdev)].configData
+        if not cdata then
+            L({level=1,msg="ReactorSensor %1 (%2) has corrupt configuration data!"}, tdev, luup.devices[tdev].description)
+            error("ReactorSensor " .. tdev .. " has invalid configuration data")
+            -- no return
+        end
+
+        -- Find all conditions in cdata
+        local conds = {}
+        for _,grp in ipairs( cdata.conditions or {} ) do
+            table.insert( conds, grp.groupid )
+            for _,cond in ipairs( grp.groupconditions or {} ) do
+                table.insert( conds, cond.id )
+            end
+        end
+        D("loadCleanState() cdata has %1 conditions: %2", #conds, conds)
+
+        -- Get all conditions in cstate. Remove from that list all cdata conditions.
+        local states = getKeys( cstate )
+        D("loadCleanState() cstate has %1 states: %2", #states, states)
+        local dels = {} -- map
+        for _,k in ipairs( states ) do dels[k] = true end
+        for _,k in ipairs( conds ) do dels[k] = nil end
+
+        -- Delete whatever is left
+        D("loadCleanState() deleting %1", dels)
+        for k,_ in pairs( dels ) do cstate[ k ] = nil end
+    end
+
+    -- Save updated state
+    D("loadCleanState() saving state %1", cstate)
+    luup.variable_set( RSSID, "cstate", json.encode( cstate ), tdev )
+    return cstate
+end
+
 local function evaluateVariable( vname, ctx, cdata, tdev )
     D("evaluateVariable(%1,cdata,%2)", vname, tdev)
     local vdef = cdata.variables[vname]
@@ -954,13 +1019,17 @@ local function doNextCondCheck( taskinfo, nowMSM, startMSM, endMSM )
     local edge = 1440
     if nowMSM < startMSM then
         edge = startMSM
-    elseif endMSM ~= nil and nowMSM < endMSM then
-        edge = endMSM
+    elseif endMSM ~= nil then
+        -- If end is before start, push across midnight
+        if endMSM <= startMSM then endMSM = endMSM + 1440 end
+        if nowMSM < endMSM then
+            edge = math.min( 1440, endMSM )
+        end
     end
     local delay = (edge - nowMSM) * 60
     -- Round the time to the start of a minute (more definitive)
     local tt = math.floor( ( os.time() + delay ) / 60 ) * 60
-    D("doNextCondCheck() scheduling next check for %1 (delay %2secs)", tt, delay)
+    D("doNextCondCheck() edge %3, scheduling next check for %1 (delay %2secs)", tt, delay, edge)
     scheduleTick( taskinfo, tt )
 end
 
@@ -1122,14 +1191,14 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         local tparam = split( cond.value or "sunrise+0,sunset+0" )
         local cp,offset = string.match( tparam[1], "^([^%+%-]+)(.*)" )
         offset = tonumber( offset or "0" ) or 0
-        local stt = ( cp == "sunrise" ) and sun[2] or sun[3]
-        local sdt = os.date("*t", stt + offset*60)
+        local stt = ( ( cp == "sunrise" ) and sun[2] or sun[3] ) + offset*60
+        local sdt = os.date("*t", stt)
         local startMSM = sdt.hour * 60 + sdt.min
         if op == "bet" or op == "nob" then
             local ep,eoffs = string.match( tparam[2] or "sunset+0", "^([^%+%-]+)(.*)" )
             eoffs = tonumber( eoffs or 0 ) or 0
-            local ett = ( ep == "sunrise" ) and sun[2] or sun[3]
-            sdt = os.date("*t", ett + eoffs*60)
+            local ett = ( ( ep == "sunrise" ) and sun[2] or sun[3] ) + eoffs*60
+            sdt = os.date("*t", ett)
             local endMSM = sdt.hour * 60 + sdt.min
             D("evaluateCondition() cond %1 check %2 %3 %4 and %5", cond.id, nowMSM, op, startMSM, endMSM)
             doNextCondCheck( { id=tdev,info="sun "..cond.id }, nowMSM, startMSM, endMSM )
@@ -1517,6 +1586,12 @@ local function updateSensor( tdev )
         D("updateSensor() disabled; no action")
         return
     end
+    
+    -- Reload sensor state if cache purged
+    if sensorState[tostring(tdev)].condState == nil then
+        sensorState[tostring(tdev)].condState = loadCleanState( tdev )
+        sensorState[tostring(tdev)].condState.lastSaved = nil -- flag no expiry during use
+    end
 
     -- Check throttling for update rate
     local hasTimer = false
@@ -1582,6 +1657,7 @@ local function updateSensor( tdev )
         end
 
         -- Save the condition state.
+        sensorState[tostring(tdev)].condState.lastSaved = os.time()
         luup.variable_set( RSSID, "cstate", json.encode(sensorState[tostring(tdev)].condState), tdev )
     else
         if not sensorState[tostring(tdev)].updateThrottled then
@@ -1602,67 +1678,6 @@ local function updateSensor( tdev )
         local v = ( 60 - ( os.time() % 60 ) ) + TICKOFFS
         scheduleDelay( {id=tostring(tdev),info="hasTimer"}, v )
     end
-end
-
--- Load sensor config
-local function loadSensorConfig( tdev )
-    local s = luup.variable_get( RSSID, "cdata", tdev ) or "{}"
-    local cdata, pos, err = json.decode( s )
-    if err then
-        L("Unable to parse JSON data at %2, %1 in %3", pos, err, s)
-        return error("Unable to load configuration")
-    end
-    sensorState[tostring(tdev)].configData = cdata
-end
-
--- Clean cstate
-local function loadCleanState( tdev )
-    D("loadCleanState(%1)", tdev)
-
-    -- Fetch cstate. If it's empty, there's nothing to do here.
-    local cstate = {} -- guilty until proven innocent
-    local s = luup.variable_get( RSSID, "cstate", tdev ) or ""
-    if s ~= "" then
-        local err
-        cstate,_,err = json.decode( s )
-        if err then
-            L({level=2,msg="ReactorSensor %1 (%2) corrupted cstate, clearing!"}, tdev, luup.devices[tdev].description)
-            cstate = {}
-        end
-
-        local cdata = sensorState[tostring(tdev)].configData
-        if not cdata then
-            L({level=1,msg="ReactorSensor %1 (%2) has corrupt configuration data!"}, tdev, luup.devices[tdev].description)
-            error("ReactorSensor " .. tdev .. " has invalid configuration data")
-            -- no return
-        end
-
-        -- Find all conditions in cdata
-        local conds = {}
-        for _,grp in ipairs( cdata.conditions or {} ) do
-            table.insert( conds, grp.groupid )
-            for _,cond in ipairs( grp.groupconditions or {} ) do
-                table.insert( conds, cond.id )
-            end
-        end
-        D("loadCleanState() cdata has %1 conditions: %2", #conds, conds)
-
-        -- Get all conditions in cstate. Remove from that list all cdata conditions.
-        local states = getKeys( cstate )
-        D("loadCleanState() cstate has %1 states: %2", #states, states)
-        local dels = {} -- map
-        for _,k in ipairs( states ) do dels[k] = true end
-        for _,k in ipairs( conds ) do dels[k] = nil end
-
-        -- Delete whatever is left
-        D("loadCleanState() deleting %1", dels)
-        for k,_ in pairs( dels ) do cstate[ k ] = nil end
-    end
-
-    -- Save updated state
-    D("loadCleanState() saving state %1", cstate)
-    luup.variable_set( RSSID, "cstate", json.encode( cstate ), tdev )
-    return cstate
 end
 
 local function sensorTick(tdev)
@@ -1703,7 +1718,20 @@ local function masterTick(pdev)
             end
         end
     end
-
+    
+    -- See if any cached state has expired
+    local expiry = getVarNumeric( "StateCacheExpiry", 600, pdev, MYSID )
+    if expiry > 0 then
+        local now = os.time()
+        for td,cx in pairs( sensorState or {} ) do
+            -- If save time not there, the cache entry never expires.
+            if ( ( cx.condState or {} ).lastSaved or now ) + expiry <= now then
+                D("masterTick() expiring state cache for %1", td)
+                cx.condState = nil
+            end
+        end
+    end
+    
     scheduleTick( tostring(pdev), nextTick )
 end
 
@@ -1975,7 +2003,8 @@ end
 
 -- Run a scene. By default, it's assumed this action is being called from outside
 -- Reactor, so starting a scene does not stop prior started scenes, and ReactorScenes
--- are forced (if you don't want ReactorScenes, call the HomeAutomationGateway1 action).
+-- are forced (if you don't want ReactorScenes, call the HomeAutomationGateway1 
+-- service action on device 0).
 function actionRunScene( scene, options, dev )
     L("RunScene action request, scene %1", scene)
     if luup.devices[dev].device_type == RSTYPE then dev = luup.devices[dev].device_num_parent end

@@ -22,9 +22,9 @@ var ReactorSensor = (function(api) {
 
     var deviceByNumber;
     var udByDevNum;
-    var cdata;
-    var ixCond, ixGroup;
+    var iData = [];
     var roomsByName = [];
+    var actions = {};
     var configModified = false;
     var inStatusPanel = false;
     var lastx = 0;
@@ -40,14 +40,14 @@ var ReactorSensor = (function(api) {
         var html = '';
         html += '<div class="clearfix">';
         html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
-        html += '<div id="tbcopyright">Reactor ver 1.7develop &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
+        html += '<div id="tbcopyright">Reactor ver 2.0develop &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
             ' All Rights Reserved. Please check out the <a href="https://www.toggledbits.com/reactor" target="_blank">online documentation</a>' +
             ' and <a href="http://forum.micasaverde.com/index.php/board,93.0.html" target="_blank">forum board</a> for support.</div>';
         html += '<div id="supportlinks">Support links: ' +
             ' <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=debug" target="_blank">Toggle&nbsp;Debug</a>' +
             ' &bull; <a href="/cgi-bin/cmh/log.sh?Device=LuaUPnP" target="_blank">Log&nbsp;File</a>' +
-            ' &bull; <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=status" target="_blank">Plugin&nbsp;Status</a>' + 
-            ' &bull; <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=summary" target="_blank">Logic&nbsp;Summary</a>' + 
+            ' &bull; <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=status" target="_blank">Plugin&nbsp;Status</a>' +
+            ' &bull; <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=summary" target="_blank">Logic&nbsp;Summary</a>' +
             '</div>';
         return html;
     }
@@ -74,6 +74,7 @@ var ReactorSensor = (function(api) {
     /* Load configuration data. */
     function loadConfigData( myid ) {
         var s = api.getDeviceState( myid, serviceId, "cdata" ) || "";
+        var cdata;
         if ( s.length !== 0 ) {
             try {
                 cdata = JSON.parse( s );
@@ -97,7 +98,8 @@ var ReactorSensor = (function(api) {
             upgraded = true;
         }
         /* Set up our indices. */
-        ixGroup = {}; ixCond = {};
+        var ixGroup = {};
+        var ixCond = {};
         for ( var ig=0; ig<(cdata.conditions || {}).length; ig++ ) {
             var grp = cdata.conditions[ig];
             ixGroup[ grp.groupid ] = grp;
@@ -111,13 +113,15 @@ var ReactorSensor = (function(api) {
                 ixCond[ grp.groupconditions[ic].id ] = grp.groupconditions[ic];
             }
         }
-        
+
         cdata.version = 2;
         cdata.device = myid;
         if ( upgraded ) {
             /* Write updated config. We don't care if it fails, as nothing we can't redo would be lost. */
             api.setDeviceStatePersistent( myid, serviceId, "cdata", JSON.stringify( cdata ) );
         }
+
+        iData[ myid ] = { cdata: cdata, ixCond: ixCond, ixGroup: ixGroup };
 
         configModified = false;
         return cdata;
@@ -126,7 +130,13 @@ var ReactorSensor = (function(api) {
     /* Initialize the module */
     function initModule() {
         var myid = api.getCpanelDeviceId();
-        
+        console.log("initModule() for device " + myid);
+
+        actions = {};
+
+        /* Instance data */
+        iData[myid] = { cdata: {}, ixCond: {}, ixGroup: {} };
+
         /* Force this false every time, and make the status panel change it. */
         inStatusPanel = false;
 
@@ -138,7 +148,7 @@ var ReactorSensor = (function(api) {
         }
 
         /* Get the config and parse it */
-        cdata = loadConfigData( myid );
+        loadConfigData( myid );
 
         /* Make our own list of devices, sorted by room. */
         var devices = api.cloneObject( api.getListOfDevices() );
@@ -187,6 +197,7 @@ var ReactorSensor = (function(api) {
      * Find cdata group
      */
     function findCdataGroupIndex( grpid ) {
+        var cdata = iData[ api.getCpanelDeviceId() ];
         for ( var ix=0; ix<cdata.conditions.length; ++ix ) {
             if ( cdata.conditions[ix].groupid === grpid ) {
                 return ix;
@@ -199,7 +210,7 @@ var ReactorSensor = (function(api) {
      * Find cdata condition in group.
      */
     function findCdataConditionIndex( condid, grpid ) {
-        var grp = ixGroup[ grpid ];
+        var grp = iData[api.getCpanelDeviceId()].ixGroup[ grpid ];
         if ( undefined !== grp ) {
             for ( var ix=0; ix<grp.groupconditions.length; ++ix ) {
                 if ( grp.groupconditions[ix].id === condid ) {
@@ -337,7 +348,7 @@ var ReactorSensor = (function(api) {
                     str += ' and ' + textDateTime( t[5], t[6], t[7], t[8], t[9], true );
                 }
                 break;
-                
+
             case 'reload':
                 break; /* no additional information */
 
@@ -519,7 +530,7 @@ var ReactorSensor = (function(api) {
      */
     function updateConditionRow( row, target ) {
         var condId = row.attr("id");
-        var cond = ixCond[ condId ];
+        var cond = iData[api.getCpanelDeviceId()].ixCond[ condId ];
         var typ = jQuery("div.condtype select", row).val();
         cond.type = typ;
         jQuery('.tberror', row).removeClass('tberror');
@@ -634,7 +645,7 @@ var ReactorSensor = (function(api) {
                 }
                 cond.value = res.join(',');
                 break;
-            
+
             case 'reload':
                 /* No parameters */
                 break;
@@ -664,7 +675,7 @@ var ReactorSensor = (function(api) {
         var newDev = jQuery(el).val();
         var row = jQuery( el ).closest('div.conditionrow');
         var condId = row.attr('id');
-        var cond = ixCond[condId];
+        var cond = iData[api.getCpanelDeviceId()].ixCond[condId];
         if ( undefined !== cond.device ) {
             cond.device = parseInt(newDev);
             cond.devicename = udByDevNum[cond.device].name;
@@ -680,7 +691,7 @@ var ReactorSensor = (function(api) {
     function handleOptionChange( ev ) {
         var el = ev.currentTarget;
         var row = jQuery( el ).closest('div.conditionrow');
-        var cond = ixCond[ row.attr("id") ];
+        var cond = iData[api.getCpanelDeviceId()].ixCond[ row.attr("id") ];
 
         var pred = jQuery('select.pred', row);
         if ( "" === pred.val() ) {
@@ -734,12 +745,12 @@ var ReactorSensor = (function(api) {
                 }
             }
         }
-        
+
         var latchval = jQuery('input.latchcond', row).prop('checked') ? 1 : 0;
         if ( latchval != ( cond.latch || 0 ) ) {
             cond.latch = latchval;
             configModified = true;
-        }        
+        }
 
         var rs = jQuery('input.rspan', row);
         if ( ! rs.prop('disabled') ) {
@@ -807,8 +818,9 @@ var ReactorSensor = (function(api) {
     function handleExpandOptionsClick( ev ) {
         var el = ev.currentTarget;
         var row = jQuery( el ).closest('div.conditionrow');
-        var cond = ixCond[ row.attr("id") ];
-        var grp = ixGroup[ row.closest('div.conditiongroup').attr('id') ];
+        var myid = api.getCpanelDeviceId();
+        var cond = iData[myid].ixCond[ row.attr("id") ];
+        var grp = iData[myid].ixGroup[ row.closest('div.conditiongroup').attr('id') ];
 
         /* Remove the open tool */
         jQuery( el ).hide();
@@ -1047,7 +1059,7 @@ var ReactorSensor = (function(api) {
                 jQuery("input", container).on( 'change.reactor', handleRowChange );
                 break;
 
-            case 'reload': 
+            case 'reload':
                 /* falls through */
             default:
                 /* nada */
@@ -1065,13 +1077,14 @@ var ReactorSensor = (function(api) {
         var newType = jQuery(el).val();
         var row = jQuery( el ).closest('div.conditionrow');
         var condId = row.attr('id');
-        if ( ixCond[condId] === undefined ) {
-            ixCond[condId] = { id: condId, type: newType };
+        var myid = api.getCpanelDeviceId();
+        if ( iData[myid].ixCond[condId] === undefined ) {
+            iData[myid].ixCond[condId] = { id: condId, type: newType };
         } else {
-            ixCond[condId].type = newType;
+            iData[myid].ixCond[condId].type = newType;
         }
         configModified = true;
-        setConditionForType( ixCond[condId], row );
+        setConditionForType( iData[myid].ixCond[condId], row );
         updateConditionRow( row );
     }
 
@@ -1093,9 +1106,10 @@ var ReactorSensor = (function(api) {
         condel.insertBefore(row);
 
         /* Add condition to cond store and index */
+        var myid = api.getCpanelDeviceId();
         var grpId = grp.attr("id");
-        ixCond[ newId ] = { id: newId }; /* nearly empty */
-        ixGroup[grpId].groupconditions.push( ixCond[newId] );
+        iData[myid].ixCond[ newId ] = { id: newId }; /* nearly empty */
+        iData[myid].ixGroup[grpId].groupconditions.push( iData[myid].ixCond[newId] );
 
         configModified = true;
         updateConditionRow( condel );
@@ -1135,9 +1149,10 @@ var ReactorSensor = (function(api) {
 
         /* Add to group store and index */
         var newcond = { id: condId };
-        ixCond[condId] = newcond;
-        ixGroup[newId] = { groupid: newId, groupconditions: [ newcond ] };
-        cdata.conditions.push( ixGroup[newId] );
+        var myid = api.getCpanelDeviceId();
+        iData[myid].ixCond[condId] = newcond;
+        iData[myid].ixGroup[newId] = { groupid: newId, groupconditions: [ newcond ] };
+        iData[myid].cdata.conditions.push( iData[myid].ixGroup[newId] );
 
         configModified = true;
         updateConditionRow( cel );
@@ -1154,7 +1169,7 @@ var ReactorSensor = (function(api) {
         var row = jQuery(el).closest('div.row');
         var up = jQuery(el).hasClass('action-up');
         var grpId = row.closest('div.conditiongroup').attr('id');
-        var grp = ixGroup[grpId];
+        var grp = iData[api.getCpanelDeviceId()].ixGroup[grpId];
         var condix = findCdataConditionIndex( row.attr('id'), grpId );
         if ( up ) {
             /* Move up. */
@@ -1199,9 +1214,11 @@ var ReactorSensor = (function(api) {
         var row = jQuery( el ).closest( 'div.row' );
         var condId = row.attr('id');
         var grpId = jQuery( el ).closest( 'div.conditiongroup' ).attr("id");
+        var myid = api.getCpanelDeviceId();
 
         /* See if the condition is referenced in a sequence */
         var okDelete = false;
+        var ixCond = iData[myid].ixCond;
         for ( var ci in ixCond ) {
             if ( ixCond.hasOwnProperty(ci) && ixCond[ci].after == condId ) {
                 if ( !okDelete ) {
@@ -1214,7 +1231,7 @@ var ReactorSensor = (function(api) {
         }
 
         /* Find the index of the condition in its groupconditions */
-        var grp = ixGroup[ grpId ];
+        var grp = iData[myid].ixGroup[ grpId ];
         if ( undefined !== grp ) {
             for ( var ix=0; ix<grp.groupconditions.length; ++ix ) {
                 if ( grp.groupconditions[ix].id == condId ) {
@@ -1227,8 +1244,8 @@ var ReactorSensor = (function(api) {
                            because the last condition in the first group is restricted
                            from deletion. */
                         var grpix = findCdataGroupIndex( grpId );
-                        delete ixGroup[ grpId ];
-                        cdata.conditions.splice( grpix, 1 );
+                        delete iData[myid].ixGroup[ grpId ];
+                        iData[myid].cdata.conditions.splice( grpix, 1 );
                         /* Remove the entire conditiongroup from display. */
                         var grpEl = jQuery( el ).closest( 'div.conditiongroup' );
                         grpEl.prev().remove(); /* remove the OR divider above the group */
@@ -1274,16 +1291,17 @@ var ReactorSensor = (function(api) {
     function redrawConditions() {
         jQuery('div#conditions').empty();
 
-        for (var ng=0; ng<cdata.conditions.length; ++ng) {
+        var myid = api.getCpanelDeviceId();
+        for (var ng=0; ng<iData[myid].cdata.conditions.length; ++ng) {
             if ( ng > 0 ) {
                 /* Insert divider */
                 jQuery("div#conditions").append('<div class="row divider"><div class="col-sm-5"><hr></div><div class="col-sm-2"><h5 style="text-align: center">OR</h5></div><div class="col-sm-5"><hr></div></div>');
             }
 
-            var grp = cdata.conditions[ng];
+            var grp = iData[myid].cdata.conditions[ng];
             if ( grp.groupid === undefined )
                 grp.groupid = getUID("group");
-            ixGroup[grp.groupid] = grp;
+            iData[myid].ixGroup[grp.groupid] = grp;
 
             /* Create div.conditiongroup and add conditions */
             var gel = jQuery('<div class="conditiongroup"></div>').attr("id", grp.groupid);
@@ -1293,7 +1311,7 @@ var ReactorSensor = (function(api) {
                 if ( cond.id === undefined )
                     cond.id = getUID("cond");
                 row.attr("id", cond.id);
-                ixCond[cond.id] = cond;
+                iData[myid].ixCond[cond.id] = cond;
                 var sel = jQuery('div.condtype select', row);
                 if ( jQuery('option[value="' + cond.type + '"]', sel).length === 0 ) {
                     /* Condition type not on menu, probably a deprecated form. Insert it. */
@@ -1368,6 +1386,7 @@ var ReactorSensor = (function(api) {
      */
     function handleSaveClick( ev ) {
         /* Rip through conditions and clean up before saving */
+        var ixCond = iData[api.getCpanelDeviceId()].ixCond;
         for ( var condid in ixCond ) {
             if ( ixCond.hasOwnProperty( condid ) ) {
                 var cond = ixCond[condid];
@@ -1403,8 +1422,9 @@ var ReactorSensor = (function(api) {
             }
         }
         /* Save to persistent state */
-        cdata.timestamp = Math.floor( Date.now() / 1000 );
-        api.setDeviceStatePersistent( cdata.device, serviceId, "cdata", JSON.stringify( cdata ),
+        var myid = api.getCpanelDeviceId();
+        iData[myid].cdata.timestamp = Math.floor( Date.now() / 1000 );
+        api.setDeviceStatePersistent( myid, serviceId, "cdata", JSON.stringify( iData[myid].cdata ),
         {
             'onSuccess' : function() {
                 configModified = false;
@@ -1565,6 +1585,32 @@ var ReactorSensor = (function(api) {
             }
         }
         jQuery('input#testhousemode,select#mode', container).on( 'change.reactor', handleTestChange );
+
+        jQuery.ajax({
+            url: api.getDataRequestURL(),
+            data: {
+                id: "lu_device",
+                output_format: "xml"
+            },
+            dataType: "xml",
+            timeout: 15000
+        }).done( function( data, statusText, jqXHR ) {
+            var seen = {};
+            var services = $( data ).find( "service" );
+            services.each( function( ix, obj ) {
+                var tb = $( obj );
+                var svc = $("serviceId", tb).text() || "";
+                var url = $("SCPDURL", tb).text() || "";
+                if ( undefined === seen[ svc ] ) {
+                    console.log( svc + " => " + url );
+                }
+                seen[ svc ] = url;
+            });
+        }).fail( function( jqXHR, textStatus, errorThrown ) {
+            // Bummer.
+            console.log("Failed to load lu_device data: " + textStatus + " " + String(errorThrown));
+            console.log(jqXHR.responseText);
+        });
     }
 
     function updateStatus( pdev ) {
@@ -1575,7 +1621,8 @@ var ReactorSensor = (function(api) {
         }
         stel.empty();
 
-        if ( undefined === ( cdata = loadConfigData( pdev ) ) ) {
+        var cdata = loadConfigData( pdev );
+        if ( undefined === cdata ) {
             console.log("cdata unavailable");
             return;
         }
@@ -1640,7 +1687,7 @@ var ReactorSensor = (function(api) {
                         if ( ( cond.repeatcount || 0 ) > 1 ) {
                             condDesc += " repeats " + cond.repeatcount + " times within " + cond.repeatwithin + " secs";
                         } else if ( ( cond.duration || 0 ) > 0 ) {
-                            condDesc += " for " + 
+                            condDesc += " for " +
                                 ( cond.duration_op === "lt" ? "less than " : "at least " ) +
                                 cond.duration + " secs";
                         }
@@ -1674,7 +1721,7 @@ var ReactorSensor = (function(api) {
                 if ( cond.after !== undefined ) {
                     condDesc += ' (' +
                         ( (cond.aftertime||0) > 0 ? 'within ' + cond.aftertime + ' secs ' : '' ) +
-                        'after ' + makeConditionDescription( ixCond[cond.after] ) + 
+                        'after ' + makeConditionDescription( iData[pdev].ixCond[cond.after] ) +
                         ')';
                 }
                 el.append( jQuery('<div class="col-sm-6 col-md-6"></div>').text( condDesc ) );
@@ -1773,6 +1820,7 @@ var ReactorSensor = (function(api) {
 
     function handleVariableChange() {
         var container = jQuery('div#variables');
+        var myid = api.getCpanelDeviceId();
 
         jQuery('.tberror', container).removeClass( 'tberror' );
         jQuery('div.row.var', container).each( function( ix, obj ) {
@@ -1782,11 +1830,11 @@ var ReactorSensor = (function(api) {
             if ( expr === "" ) {
                 jQuery('input.expr', row).addClass('tberror');
             }
-            if ( cdata.variables[vname] === undefined ) {
-                cdata.variables[vname] = { name: vname, expression: expr };
+            if ( iData[myid].cdata.variables[vname] === undefined ) {
+                iData[myid].cdata.variables[vname] = { name: vname, expression: expr };
                 configModified = true;
-            } else if ( cdata.variables[vname].expression !== expr ) {
-                cdata.variables[vname].expression = expr;
+            } else if ( iData[myid].cdata.variables[vname].expression !== expr ) {
+                iData[myid].cdata.variables[vname].expression = expr;
                 configModified = true;
             }
         });
@@ -1798,7 +1846,7 @@ var ReactorSensor = (function(api) {
         var row = jQuery( ev.currentTarget ).closest( 'div.row.var' );
         var vname = row.attr('id');
         if ( confirm( 'Deleting "' + vname + '" will break any conditions that refer to it.' ) ) {
-            delete cdata.variables[vname];
+            delete iData[api.getCpanelDeviceId()].cdata.variables[vname];
             row.remove();
             configModified = true;
             updateVariableControls();
@@ -1847,6 +1895,7 @@ var ReactorSensor = (function(api) {
         var container = jQuery('div#variables');
         container.empty();
         var gel = jQuery('<div class="reactorgroup"></div>');
+        var cdata = iData[api.getCpanelDeviceId()].cdata;
         for ( var vn in cdata.variables ) {
             if ( cdata.variables.hasOwnProperty( vn ) ) {
                 var vd = cdata.variables[vn];
@@ -1960,12 +2009,12 @@ var ReactorSensor = (function(api) {
             html = '';
             html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>Conditions</h3></div></div>';
             html += '<div class="row"><div class="col-xs-12 col-sm-12">Conditions within a group are "AND", and groups are "OR". That is, the sensor will trip when any group succeeds, and for a group to succeed, all conditions in the group must be met.</div></div>';
-            
+
             var rr = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "Retrigger" ) || "0";
             if ( rr !== "0" ) {
                 html += '<div class="row"><div class="warning col-cs-12 col-sm-12">WARNING! Retrigger is on! You should avoid using time-related conditions in this ReactorSensor, as they may cause retriggers frequent retriggers!</div></div>';
             }
-            
+
             html += '<div id="conditions"></div>';
 
             html += footer();
@@ -2010,6 +2059,104 @@ var ReactorSensor = (function(api) {
         });
     }
 
+    function changeActionAction( ev ) {
+        var el = jQuery( ev.currentTarget );
+        var newVal = el.val() || "";
+        var row = el.closest( 'div.actionrow' );
+        jQuery( '.argument', row ).remove();
+        if ( ( newVal || "" ) === "" ) {
+            return;
+        }
+        var action = actions[newVal];
+        if ( action === undefined || action.arguments === undefined ) { return; }
+        for ( var k=0; k<action.arguments.length; ++k ) {
+            var inp;
+            if ( action.arguments[k].dataType == "boolean" ) {
+                inp = jQuery( '<select class="argument form-control form-control-sm"><option value="0">0</option><option value="1">1</option></select>' );
+            } else {
+                inp = jQuery( '<input class="argument narrow form-control form-control-sm">' );
+                inp.attr( 'placeholder', action.arguments[k].name );
+            }
+            inp.attr( 'id', action.arguments[k].name );
+            var span = jQuery( '<span class="argument"></span>' );
+            span.text( ( k>0 ? ", " : "" ) + action.arguments[k].name + '=' );
+            span.append( inp );
+            row.append( span );
+        }
+        // jQuery( '.argument', row ).on( 'change.reactor', doActionChange );
+        return;
+    }
+
+    function changeActionDevice( ev ) {
+        var el = jQuery( ev.currentTarget );
+        var newVal = el.val() || "";
+        var row = el.closest( 'div.actionrow' );
+        var actionMenu = jQuery( 'select.actionmenu', row );
+
+        // Clear the action menu and remove all arguments.
+        actionMenu.empty().attr( 'disabled', true );
+        jQuery('.argument', row).remove();
+        if ( newVal == "" ) { return; }
+
+        /* Use lu_actions to get list of services/actions for this device. We could
+           also use lu_device and fetch/parse /luvd/S_...xml to get even more data,
+           but let's see how this goes for now. */
+        jQuery.ajax({
+            url: api.getDataRequestURL(),
+            data: {
+                id: "lu_actions",
+                DeviceNum: newVal,
+                output_format: "json"
+            },
+            dataType: "json",
+            timeout: 5000
+        }).done( function( data, statusText, jqXHR ) {
+            var mm = {}, ms = [];
+            for ( var i=0; i<data.serviceList.length; i++ ) {
+                var service = data.serviceList[i];
+                var opt = jQuery("<option></option>");
+                opt.val("");
+                opt.text( "---Service " + service.serviceId.replace(/^([^:]+:)+/, "") + "---" );
+                opt.attr( 'disabled', true );
+                actionMenu.append( opt );
+                for ( var j=0; j<service.actionList.length; j++ ) {
+                    var actname = service.actionList[j].name;
+                    var key = service.serviceId + "/" + actname;
+                    if ( actions[key] === undefined ) {
+                        // Save action data as we use it.
+                        actions[key] = service.actionList[j];
+                    }
+                    opt = jQuery('<option></option>');
+                    opt.val( key );
+                    opt.text( actname );
+                    actionMenu.append( opt );
+                }
+            }
+            actionMenu.attr( 'disabled', false );
+        }).fail( function( jqXHR, textStatus, errorThrown ) {
+            // Bummer.
+            console.log("Failed to load service data: " + textStatus + " " + String(errorThrown));
+            console.log(jqXHR.responseText);
+            alert("Can't load service data for device. Luup may be reloading. Try again in a moment.");
+        });
+    }
+
+    function getActionRow() {
+        var row = jQuery('<div class="row actionrow form-inline"></div>');
+        row.append( makeDeviceMenu( "", "" ) );
+        row.append('<select class="actionmenu form-control form-control-sm"></select>');
+        jQuery( 'select.devicemenu', row ).on( 'change.reactor', changeActionDevice );
+        jQuery( 'select.actionmenu', row ).on( 'change.reactor', changeActionAction );
+        return row;
+    }
+
+    function addAction( ev ) {
+        var btn = jQuery( ev.currentTarget );
+        var container = btn.closest( 'div.actionlist' );
+        var newRow = getActionRow();
+        container.append( newRow );
+    }
+
     function doActivities()
     {
         try {
@@ -2049,7 +2196,18 @@ var ReactorSensor = (function(api) {
             html += '<div class="row"><div class="col-xs col-sm-12"><label for="tripscene">Trip Scene: <select id="tripscene" class="rsceneselect"></select></label></div></div>';
             html += '<div class="row"><div class="col-xs col-sm-12"><label for="untripscene">Un-trip Scene: <select id="untripscene" class="rsceneselect"></select></label></div></div>';
             html += '</div>';
-            
+
+            html += '<div class="reactoractions">';
+
+            html += '<div id="tripactions" class="actionlist">';
+            html += '<button id="addtripaction" class="btn btn-default addaction">Add Action</button>';
+            html += '</div>'; // tripactions
+            html += '<div id="untripactions" class="actionlist">';
+            html += '<button id="addtripaction" class="btn btn-default addaction">Add Action</button>';
+            html += '</div>'; // untripactions
+
+            html += '</div>'; // reactoractions
+
             html += footer();
             api.setCpanelContent(html);
 
@@ -2094,8 +2252,10 @@ var ReactorSensor = (function(api) {
                     }
                 }
             }
-            
+
             jQuery("select.rsceneselect").on( 'change.reactor', changeSelectedScene );
+
+            jQuery("button.addaction").on( 'click.reactor', addAction );
 
             api.registerEventHandler('on_ui_cpanel_before_close', ReactorSensor, 'onBeforeCpanelClose');
         }
