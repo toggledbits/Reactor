@@ -1,5 +1,9 @@
 # Change Log #
 
+## Version 1.6+stable180128 ##
+
+* Address issue with rescheduling condition check when span and crossing midnight (cond doing right thing, rescheduler not following).
+
 ## Version 1.6 (released) ##
 
 * "After" sequencing condition now allows an interval in which sequence must be met (e.g. A must follow B within X seconds).
