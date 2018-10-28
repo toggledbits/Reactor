@@ -952,8 +952,9 @@ local function doNextCondCheck( taskinfo, nowMSM, startMSM, endMSM )
     local edge = 1440
     if nowMSM < startMSM then
         edge = startMSM
-    elseif endMSM ~= nil and nowMSM < endMSM then
-        edge = endMSM
+    end
+    if endMSM ~= nil and nowMSM < endMSM then
+        edge = math.min( edge, endMSM )
     end
     local delay = (edge - nowMSM) * 60
     -- Round the time to the start of a minute (more definitive)
