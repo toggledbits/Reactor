@@ -952,8 +952,12 @@ local function doNextCondCheck( taskinfo, nowMSM, startMSM, endMSM )
     local edge = 1440
     if nowMSM < startMSM then
         edge = startMSM
-    elseif endMSM ~= nil and nowMSM < endMSM then
-        edge = endMSM
+    elseif endMSM ~= nil then
+        -- If end is before start, push across midnight
+        if endMSM <= startMSM then endMSM = endMSM + 1440 end
+        if nowMSM < endMSM then
+            edge = math.min( 1440, endMSM )
+        end
     end
     local delay = (edge - nowMSM) * 60
     -- Round the time to the start of a minute (more definitive)
@@ -1120,14 +1124,14 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         local tparam = split( cond.value or "sunrise+0,sunset+0" )
         local cp,offset = string.match( tparam[1], "^([^%+%-]+)(.*)" )
         offset = tonumber( offset or "0" ) or 0
-        local stt = ( cp == "sunrise" ) and sun[2] or sun[3]
-        local sdt = os.date("*t", stt + offset*60)
+        local stt = ( ( cp == "sunrise" ) and sun[2] or sun[3] ) + offset*60
+        local sdt = os.date("*t", stt)
         local startMSM = sdt.hour * 60 + sdt.min
         if op == "bet" or op == "nob" then
             local ep,eoffs = string.match( tparam[2] or "sunset+0", "^([^%+%-]+)(.*)" )
             eoffs = tonumber( eoffs or 0 ) or 0
-            local ett = ( ep == "sunrise" ) and sun[2] or sun[3]
-            sdt = os.date("*t", ett + eoffs*60)
+            local ett = ( ( ep == "sunrise" ) and sun[2] or sun[3] ) + eoffs*60
+            sdt = os.date("*t", ett)
             local endMSM = sdt.hour * 60 + sdt.min
             D("evaluateCondition() cond %1 check %2 %3 %4 and %5", cond.id, nowMSM, op, startMSM, endMSM)
             doNextCondCheck( { id=tdev,info="sun "..cond.id }, nowMSM, startMSM, endMSM )
