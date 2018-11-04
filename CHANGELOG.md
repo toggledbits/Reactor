@@ -1,6 +1,6 @@
 # Change Log #
 
-## Version 1.8dev (development) ##
+## Version 1.8develop (development) ##
 
 ## Version 1.7 (released) ##
 
