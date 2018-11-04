@@ -1,8 +1,9 @@
 # Change Log #
 
-## Version 1.6+stable180128 ##
+## Version 1.7 (released) ##
 
 * Address issue with rescheduling condition check when span and crossing midnight (cond doing right thing, rescheduler not following).
+* Provide additional information in "Summary" request for more comprehensive diagnostics.
 
 ## Version 1.6 (released) ##
 

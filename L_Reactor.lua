@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "1.6+stable181028"
+local _PLUGIN_VERSION = "1.7"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _CONFIGVERSION = 00109
 
@@ -116,7 +116,7 @@ local function checkVersion(dev)
     return false
 end
 
-local function urlencode( str ) 
+local function urlencode( str )
     str = tostring(str):gsub( "([^A-Za-z0-9_ -])", function( ch ) return string.format("%%%02x", string.byte( ch ) ) end )
     return str:gsub( " ", "+" )
 end
@@ -456,7 +456,7 @@ local function sensor_runOnce( tdev )
         -- Add marktime for Runtime and TripCount, for date those vars where introduced.
         initVar( "RuntimeSince", 1533528000, tdev, RSSID ) -- 2018-08-16.00:00:00-0400
     end
-    
+
     if s < 00109 then
         luup.variable_set( RSSID, "sundata", nil, tdev ) -- moved to master
     end
@@ -497,7 +497,7 @@ local function plugin_runOnce( pdev )
         luup.attr_set('category_num', 1, pdev)
         luup.attr_set('subcategory_num', "", pdev)
     end
-    
+
     if s < 00109 then
         luup.variable_set( RSSID, "runscene", nil, pdev ) -- correct SID/device mismatch
     end
@@ -755,7 +755,7 @@ local function runScene( scene, tdev, options )
 
     -- We are going to run groups. Set up for it.
     D("runScene() setting up to run groups for scene")
-    sceneState[taskid] = { 
+    sceneState[taskid] = {
         scene=scd.id,   -- scene ID
         starttime=now,  -- original start time for scene
         lastgroup=0,    -- last group to finish
@@ -1374,7 +1374,7 @@ local function evaluateGroup( grp, cdata, tdev )
                         -- To clear, pred must be true, pred's true precedes our true, and if window, age within window
                         D("evaluateCondition() pred %1, window %2, age %3", predCond.id, window, age)
                         if not ( predState.evalstate and age >= 0 and ( window==0 or age <= window ) ) then
-                            D("evaluateCondition() didn't meet sequence requirement %1 after %2(=%3) within %4 (%5 ago)", 
+                            D("evaluateCondition() didn't meet sequence requirement %1 after %2(=%3) within %4 (%5 ago)",
                                 cond.id, predCond.id, predState.evalstate, cond.aftertime or "any", age)
                             state = false
                         end
@@ -1448,7 +1448,7 @@ local function evaluateGroup( grp, cdata, tdev )
                     table.insert( latched, cond.id )
                 end
             end
-            
+
             -- Save the final determination of state for this condition.
             passed = state and passed
             if state ~= cs.evalstate then
@@ -2231,27 +2231,47 @@ function request( lul_request, lul_parameters, lul_outputformat )
         return json.encode( res ), "application/json"
     elseif action == "summary" then
         local r, EOL = "", "\r\n"
+        r = r .. "LOGIC SUMMARY REPORT" .. EOL
+        r = r .. "   Version: " .. tostring(_PLUGIN_VERSION) .. " config " .. tostring(_CONFIGVERSION) .. EOL
+        r = r .. "Local time: " .. os.date("%Y-%m-%d %H:%M:%S") .. ", DST=" .. tostring(luup.variable_get( MYSID, "LastDST", pluginDevice )) .. EOL
+        r = r .. "House mode: " .. tostring(luup.variable_get( MYSID, "HouseMode", pluginDevice )) .. EOL
+        r = r .. "  Sun data: " .. tostring(luup.variable_get( MYSID, "sundata", pluginDevice )) .. EOL
         for n,d in pairs( luup.devices ) do
             if d.device_type == RSTYPE and ( deviceNum==nil or n==deviceNum ) then
+                r = r .. string.rep( "=", 132 ) .. EOL
+                r = r .. string.format("%s (#%d)", tostring(d.description), n) .. EOL
+                r = r .. string.format("    Message/status: %s", luup.variable_get( RSSID, "Message", n ) or "" ) .. EOL
                 local s = luup.variable_get( RSSID, "cdata", n ) or ""
                 local cdata,_,err = json.decode( s )
                 if err then
-                    r = r .. err .. EOL .. " in " .. s
+                    r = r .. "**** UNPARSEABLE CONFIGURATION: " .. err .. EOL .. " in " .. s
                     cdata = {}
                 end
-                if r ~= "" then r = r .. EOL end
-                r = r .. string.format("%s (#%d)", tostring(d.description), n) .. EOL
+                s = getVarNumeric( "TestTime", 0, n, RSSID )
+                if s ~= 0 then
+                    r = r .. string.format("    Test time set: %s", os.date("%Y-%m-%d %H:%M", s)) .. EOL
+                end
+                s = getVarNumeric( "TestHouseMode", 0, n, RSSID )
+                if s ~= 0 then
+                    r = r .. string.format("    Test house mode set: %d", s) .. EOL
+                end
+                local first = true
                 for _,vv in pairs( cdata.variables or {} ) do
+                    if first then
+                        r = r .. "    Variable/expressions" .. EOL
+                        first = false
+                    end
                     local lv = luup.variable_get( VARSID, vv.name, n ) or "(no value)"
                     local le = luup.variable_get( VARSID, vv.name .. "_Error", n ) or ""
-                    r = r .. string.format("    Variable %s=%s (last %q)", vv.name or "?", vv.expression or "?", lv) .. EOL
-                    if le ~= "" then r = r .. "    ******** Error: " .. le .. EOL end
+                    r = r .. string.format("        %s=%s (last %q)", vv.name or "?", vv.expression or "?", lv) .. EOL
+                    if le ~= "" then r = r .. "        ******** Error: " .. le .. EOL end
                 end
                 local ng=0
                 for _,gc in ipairs( cdata.conditions or {} ) do
                     ng = ng + 1
-                    r = r .. "    Group #" .. ng .. " (" .. gc.groupid .. ")" .. EOL
+                    r = r .. "    Group #" .. ng .. " <" .. gc.groupid .. ">" .. EOL
                     for _,cond in ipairs( gc.groupconditions or {} ) do
+                        -- ??? TO DO: Add cstate
                         r = r .. "        (" .. ( cond.type or "?type?" ) .. ") "
                         if cond.type == "service" then
                             r = r .. string.format("%s (%d) ", ( luup.devices[cond.device]==nil ) and ( "*** missing " .. ( cond.devicename or "unknown" ) ) or
@@ -2259,13 +2279,19 @@ function request( lul_request, lul_parameters, lul_outputformat )
                             r = r .. string.format("%s/%s %s %s", cond.service or "?", cond.variable or "?", cond.operator or cond.condition or "?",
                                 cond.value or "")
                             if cond.duration then
-                                r = r .. " for " .. cond.duration .. " secs"
+                                r = r .. " for " .. cond.duration .. "s"
                             end
                             if cond.after then
+                                if ( cond.aftertime or 0 ) > 0 then
+                                    r = r .. " within " .. tostring(cond.aftertime) .. "s"
+                                end
                                 r = r .. " after " .. cond.after
                             end
                             if cond.repeatcount then
-                                r = r .. " repeat " .. cond.repeatcount .. " within " .. cond.repeatwithin .. " secs"
+                                r = r .. " repeat " .. cond.repeatcount .. " within " .. cond.repeatwithin .. "s"
+                            end
+                            if (cond.latch or 0) ~= 0 then
+                                r = r .. " (latching)"
                             end
                         elseif cond.type == "comment" then
                             r = r .. string.format("%q", cond.comment)
@@ -2284,7 +2310,6 @@ function request( lul_request, lul_parameters, lul_outputformat )
                     end
                 end
                 r = r .. getEvents( n )
-                r = r .. string.rep( "=", 72 ) .. EOL
             end
         end
         return r, "text/plain"
@@ -2306,7 +2331,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
         if action == "backup" then
             local bfile = lul_parameters.path or ( ( isOpenLuup and "." or "/etc/cmh-ludl" ) .. "/reactor-config-backup.json" )
             local f = io.open( bfile, "w" )
-            if f then 
+            if f then
                 f:write( bdata )
                 f:close()
             else
