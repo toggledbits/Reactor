@@ -1204,22 +1204,23 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         elseif tparam[1] == "" then
             -- No-year given, just M/D H:M. We can do comparison by magnitude,
             -- which works better for year-spanning ranges.
-            -- ??? needs next check scheduling so we can hasTimer=false
-            hasTimer = true
             local nowz = tonumber( ndt.month ) * 100 + tonumber( ndt.day )
             local stz = tonumber( tpart[2] ) * 100 + tonumber( tpart[3] )
-            nowz = nowz * 3600 + ndt.hour * 60 + ndt.min
-            stz = stz * 3600 + tpart[4] * 60 + tpart[5]
+            nowz = nowz * 1440 + ndt.hour * 60 + ndt.min
+            stz = stz * 1440 + tpart[4] * 60 + tpart[5]
             if op == "before" then
                 D("evaluateCondition() M/D H:M test %1 %2 %3", nowz, op, stz)
-                if nowz >= stz then return false,true end
+                doNextCondCheck( { id=tdev,info="trangeMDHM " .. cond.id }, nowz % 1440, stz % 1440 )
+                if nowz >= stz then return false,false end
             elseif op == "after" then
                 D("evaluateCondition() M/D H:M test %1 %2 %3", nowz, op, stz)
-                if nowz < stz then return false,true end
+                doNextCondCheck( { id=tdev,info="trangeMDHM " .. cond.id }, nowz % 1440, stz % 1440 )
+                if nowz < stz then return false,false end
             else
                 local enz = tonumber( tpart[7] ) * 100 + tonumber( tpart[8] )
-                enz = enz * 3600 + tpart[9] * 60 + tpart[10]
+                enz = enz * 1440 + tpart[9] * 60 + tpart[10]
                 D("evaluateCondition() M/D H:M test %1 %2 %3 and %4", nowz, op, stz, enz)
+                doNextCondCheck( { id=tdev,info="trangeMDHM " .. cond.id }, nowz % 1440, stz % 1440, enz % 1440 )
                 local between
                 if stz < enz then -- check for year-spanning
                     between = nowz >= stz and nowz < enz
@@ -1228,7 +1229,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
                 end
                 if ( op == "bet" and not between ) or
                     ( op == "nob" and between ) then
-                    return false,true
+                    return false,false
                 end
             end
         else
