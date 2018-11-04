@@ -1,5 +1,11 @@
 # Change Log #
 
+## Version 1.7 (released) ##
+
+* Address issue with rescheduling condition check when span and crossing midnight (cond doing right thing, rescheduler not following).
+* Provide additional information in "Summary" request for more comprehensive diagnostics.
+* Improve rescheduling of M/D H:M format time conditions.
+
 ## Version 1.6 (released) ##
 
 * "After" sequencing condition now allows an interval in which sequence must be met (e.g. A must follow B within X seconds).
