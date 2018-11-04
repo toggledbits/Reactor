@@ -1,8 +1,13 @@
 # Change Log #
 
+## Version 1.7dev (development) ##
+
+* Address issue with rescheduling condition check when span and crossing midnight (cond doing right thing, rescheduler not following).
+* Provide additional information in "Summary" request for more comprehensive diagnostics.
+* Improve rescheduling of M/D H:M format time conditions.* "After" sequencing condition now allows an interval in which sequence must be met (e.g. A must follow B within X seconds).
+
 ## Version 1.6 (released) ##
 
-* "After" sequencing condition now allows an interval in which sequence must be met (e.g. A must follow B within X seconds).
 * Add service/variable condition option to "latch" a condition: if the condition is met, it is true and remains true until its parent group goes false (i.e. another non-latched condition in the same group goes false), even if the tested condition becomes false first.
 * "Sustained for" option on service/variable conditions now allows testing for "less than" a specified duration, so one can write a condition that detects, for example, when a switch is on for less than 5 seconds. The default op is "at least" (i.e. the prior behavior is the default behavior).
 * Hidden and "system" scenes are no longer shown on the Activities tab scene menus.
