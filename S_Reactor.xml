@@ -30,6 +30,12 @@
             <defaultValue>1</defaultValue>
         </stateVariable>
         <stateVariable sendEvents="yes">
+            <name>LastDST</name>
+            <dataType>boolean</dataType>
+            <defaultValue></defaultValue>
+            <shortCode>lastdst</shortCode>
+        </stateVariable>
+        <stateVariable sendEvents="yes">
             <name>SystemPowerSource</name>
             <dataType>string</dataType>
         </stateVariable>
