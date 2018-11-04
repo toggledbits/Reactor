@@ -4,6 +4,7 @@
 
 * Address issue with rescheduling condition check when span and crossing midnight (cond doing right thing, rescheduler not following).
 * Provide additional information in "Summary" request for more comprehensive diagnostics.
+* Improve rescheduling of M/D H:M format time conditions.
 
 ## Version 1.6 (released) ##
 
