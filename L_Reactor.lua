@@ -1148,7 +1148,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         -- Figure out sunrise/sunset. Keep cached to reduce load.
         local stamp = ndt.year * 10000 + ndt.month * 100 + ndt.day
         local sundata = json.decode( luup.variable_get( MYSID, "sundata", pluginDevice ) or "{}" ) or {}
-        if debugMode or ( sundata.stamp or 0 ) ~= stamp then -- ??? debugMode temporary
+        if ( sundata.stamp or 0 ) ~= stamp or getVarNumeric( "TestTime", 0, tdev, RSSID ) ~= 0 then
             if getVarNumeric( "UseLuupSunrise", 0, pluginDevice, MYSID ) ~= 0 then
                 L({level=2,msg="Reactor is configured to use Luup's sunrise/sunset calculations; twilight times cannot be correctly evaluated and will evaluate as dawn=sunrise, dusk=sunset"})
                 sundata = { sunrise=luup.sunrise(), sunset=luup.sunset() }
