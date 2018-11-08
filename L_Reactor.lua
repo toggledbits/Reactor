@@ -295,7 +295,7 @@ function sun( lon, lat, elev, t )
                 math.sin( rlat ) * math.sin( decl ) ) / 
         ( math.cos( rlat ) * math.cos( decl ) ) )
     local tw = 0.104719755 -- 6 deg in rad; each twilight step is 6 deg
-    local function JE(j) return ( j - 2440587.5 ) * 86400 end
+    local function JE(j) return math.floor( ( j - 2440587.5 ) * 86400 ) end
     return { sunrise=JE(Jt-omeg0/tau), sunset=JE(Jt+omeg0/tau),
         civdawn=JE(Jt-(omeg0+tw)/tau), civdusk=JE(Jt+(omeg0+tw)/tau),
         nautdawn=JE(Jt-(omeg0+2*tw)/tau), nautdusk=JE(Jt+(omeg0+2*tw)/tau),
