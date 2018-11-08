@@ -1,6 +1,6 @@
 # Change Log #
 
-## Version 1.8develop (development) ##
+## Version 1.8-stable (stable branch) ##
 
 * Add civil, nautical, and astronomical dawn/dusk timing to sunrise/sunset conditions. This is by request from several users at relatively extreme latitudes, for whom the offsets to sunrise/sunset are insufficient to accurately represent light/dark conditions throughout the year with continuous tweaking.
 
