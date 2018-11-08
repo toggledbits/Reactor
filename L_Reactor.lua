@@ -2153,8 +2153,8 @@ function watch( dev, sid, var, oldVal, newVal )
     if sid == RSSID and var == "cdata" then
         -- Sensor configuration change. Immediate update.
         L("Child %1 (%2) configuration change, updating!", dev, luup.devices[dev].description)
-        loadSensorConfig( tdev )
-        updateSensor( tdev )
+        loadSensorConfig( dev )
+        updateSensor( dev )
     else
         local key = string.format("%d:%s/%s", dev, sid, var)
         if watchData[key] then
