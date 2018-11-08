@@ -1,13 +1,22 @@
 # Change Log #
 
-## Version 2.0 (development) ##
+## Version 2.0develop (development) ##
 
 * Expire cached state for conditions; use is only upon update, and between updates, which may be a large span of time, the memory used is held by the reference; expiring the entry after a short period balances memory use with performance. The expiry is tunable via the master device's StateCacheExpiry parameter (0 disables expiry).
-* Implement smarter scheduling for trangeMD date/time subconditions, an optimization further reducing CPU usage. This is the last of the currently implemented set of conditions awaiting such tuning. This change will also be incorporated into the 1.x release path, in the event there is another 1.x release prior to this 2.0 release.
+
+## Version 1.8develop (development) ##
+
+* Add civil, nautical, and astronomical dawn/dusk timing to sunrise/sunset conditions. This is by request from several users at relatively extreme latitudes, for whom the offsets to sunrise/sunset are insufficient to accurately represent light/dark conditions throughout the year with continuous tweaking.
+
+## Version 1.7 (released) ##
+
+* Address issue with rescheduling condition check when span and crossing midnight (cond doing right thing, rescheduler not following).
+* Provide additional information in "Summary" request for more comprehensive diagnostics.
+* Improve rescheduling of M/D H:M format time conditions.
+* "After" sequencing condition now allows an interval in which sequence must be met (e.g. A must follow B within X seconds).
 
 ## Version 1.6 (released) ##
 
-* "After" sequencing condition now allows an interval in which sequence must be met (e.g. A must follow B within X seconds).
 * Add service/variable condition option to "latch" a condition: if the condition is met, it is true and remains true until its parent group goes false (i.e. another non-latched condition in the same group goes false), even if the tested condition becomes false first.
 * "Sustained for" option on service/variable conditions now allows testing for "less than" a specified duration, so one can write a condition that detects, for example, when a switch is on for less than 5 seconds. The default op is "at least" (i.e. the prior behavior is the default behavior).
 * Hidden and "system" scenes are no longer shown on the Activities tab scene menus.

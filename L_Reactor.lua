@@ -118,7 +118,7 @@ local function checkVersion(dev)
     return false
 end
 
-local function urlencode( str ) 
+local function urlencode( str )
     str = tostring(str):gsub( "([^A-Za-z0-9_ -])", function( ch ) return string.format("%%%02x", string.byte( ch ) ) end )
     return str:gsub( " ", "+" )
 end
@@ -264,6 +264,47 @@ local function rateLimit( rh, rateMax, bump)
     end
     local r60 = ( nb < 1 ) and 0 or ( ( t / ( rh.divid * nb ) ) * 60.0 ) -- 60-sec average
     return t > rateMax, t, r60
+end
+
+--[[
+    Compute sunrise/set for given date (t, a timestamp), lat/lon (degrees), 
+    elevation (elev in meters). Apply optional twilight adjustment (degrees, 
+    civil=6.0, nautical=12.0, astronomical=18.0). Returns four values: times
+    (as *nix timestamps) of sunrise, sunset, and solar noon; and the length of
+    the period in hours (length of day).
+    Ref: https://en.wikipedia.org/wiki/Sunrise_equation
+    Ref: https://www.aa.quae.nl/en/reken/zonpositie.html
+--]]    
+function sun( lon, lat, elev, t )
+    if t == nil then t = os.time() end -- t defaults to now
+    if elev == nil then elev = 0.0 end -- elev defaults to 0
+    local tau = 6.283185307179586 -- tau > pi
+    local pi = tau / 2.0
+    local rlat = lat * pi / 180.0
+    local rlon = lon * pi / 180.0
+    -- Apply TZ offset for JD in local TZ not UTC; truncate time and force noon.
+    local locale_offset = os.difftime( t, os.time( os.date("!*t", t) ) )
+    local n = math.floor( ( t + locale_offset ) / 86400 + 0.5 + 2440587.5 ) - 2451545.0 + 0.0008
+    local N = n - rlon / tau
+    local M = ( 6.24006 + 0.017202 * N ) % tau
+    local C = 0.0334196 * math.sin( M ) + 0.000349066 * 
+        math.sin( 2 * M ) + 0.00000523599 * math.sin( 3 * M )
+    local lam = ( M + C + pi + 1.79659 ) % tau
+    local Jt = 2451545.0 + N + 0.0053 * math.sin( M ) - 
+        0.0069 * math.sin( 2 * lam )
+    local decl = math.asin( math.sin( lam ) * math.sin( 0.409105 ) )
+    local omeg0 = math.acos( 
+        ( math.sin( -0.0144862 + 
+            ( -0.0362330 * math.sqrt( elev ) ) / 1.0472 ) - 
+                math.sin( rlat ) * math.sin( decl ) ) / 
+        ( math.cos( rlat ) * math.cos( decl ) ) )
+    local tw = 0.104719755 -- 6 deg in rad; each twilight step is 6 deg
+    local function JE(j) return math.floor( ( j - 2440587.5 ) * 86400 ) end
+    return { sunrise=JE(Jt-omeg0/tau), sunset=JE(Jt+omeg0/tau),
+        civdawn=JE(Jt-(omeg0+tw)/tau), civdusk=JE(Jt+(omeg0+tw)/tau),
+        nautdawn=JE(Jt-(omeg0+2*tw)/tau), nautdusk=JE(Jt+(omeg0+2*tw)/tau),
+        astrodawn=JE(Jt-(omeg0+3*tw)/tau), astrodusk=JE(Jt+(omeg0+3*tw)/tau) },
+        JE(Jt), 24*omeg0/pi
 end
 
 -- Find device by name
@@ -458,7 +499,7 @@ local function sensor_runOnce( tdev )
         -- Add marktime for Runtime and TripCount, for date those vars where introduced.
         initVar( "RuntimeSince", 1533528000, tdev, RSSID ) -- 2018-08-16.00:00:00-0400
     end
-    
+
     if s < 00109 then
         luup.variable_set( RSSID, "sundata", nil, tdev ) -- moved to master
     end
@@ -499,7 +540,7 @@ local function plugin_runOnce( pdev )
         luup.attr_set('category_num', 1, pdev)
         luup.attr_set('subcategory_num', "", pdev)
     end
-    
+
     if s < 00109 then
         luup.variable_set( RSSID, "runscene", nil, pdev ) -- correct SID/device mismatch
     end
@@ -510,6 +551,7 @@ local function plugin_runOnce( pdev )
 
     -- Update version last.
     if s ~= _CONFIGVERSION then
+        luup.variable_set( MYSID, "sundata", "{}", pdev ) -- wipe for recalc
         luup.variable_set( MYSID, "Version", _CONFIGVERSION, pdev )
     end
 end
@@ -761,7 +803,7 @@ local function runScene( scene, tdev, options )
 
     -- We are going to run groups. Set up for it.
     D("runScene() setting up to run groups for scene")
-    sceneState[taskid] = { 
+    sceneState[taskid] = {
         scene=scd.id,   -- scene ID
         starttime=now,  -- original start time for scene
         lastgroup=0,    -- last group to finish
@@ -1019,12 +1061,9 @@ local function doNextCondCheck( taskinfo, nowMSM, startMSM, endMSM )
     local edge = 1440
     if nowMSM < startMSM then
         edge = startMSM
-    elseif endMSM ~= nil then
-        -- If end is before start, push across midnight
-        if endMSM <= startMSM then endMSM = endMSM + 1440 end
-        if nowMSM < endMSM then
-            edge = math.min( 1440, endMSM )
-        end
+    end
+    if endMSM ~= nil and nowMSM < endMSM then
+        edge = math.min( edge, endMSM )
     end
     local delay = (edge - nowMSM) * 60
     -- Round the time to the start of a minute (more definitive)
@@ -1176,28 +1215,34 @@ local function evaluateCondition( cond, grp, cdata, tdev )
     elseif cond.type == "sun" then
         -- Sun condition (sunrise/set)
         cond.lastvalue = { value=now, timestamp=now }
-        -- Figure out sunrise/sunset. We keep a daily cache, because Vera's times
-        -- recalculate to that of the following day once the time has passwed, and
-        -- we need stable with a day.
-        local nowMSM = ndt.hour * 60 + ndt.min
-        local stamp = (ndt.year % 100) * 10000 + ndt.month * 100 + ndt.day
-        local sun = split( luup.variable_get( MYSID, "sundata", pluginDevice ) or "" )
-        local op = cond.operator or cond.condition -- legacy ???
-        if #sun ~= 3 or sun[1] ~= tostring(stamp) then
-            D("evaluateCondition() didn't like what I got for sun: %1; expected stamp is %2; storing new.", sun, stamp)
-            sun = { stamp, luup.sunrise(), luup.sunset() }
-            luup.variable_set( MYSID, "sundata", table.concat( sun, "," ) , pluginDevice )
+        -- Figure out sunrise/sunset. Keep cached to reduce load.
+        local stamp = ndt.year * 10000 + ndt.month * 100 + ndt.day
+        local sundata = json.decode( luup.variable_get( MYSID, "sundata", pluginDevice ) or "{}" ) or {}
+        if ( sundata.stamp or 0 ) ~= stamp or getVarNumeric( "TestTime", 0, tdev, RSSID ) ~= 0 then
+            if getVarNumeric( "UseLuupSunrise", 0, pluginDevice, MYSID ) ~= 0 then
+                L({level=2,msg="Reactor is configured to use Luup's sunrise/sunset calculations; twilight times cannot be correctly evaluated and will evaluate as dawn=sunrise, dusk=sunset"})
+                sundata = { sunrise=luup.sunrise(), sunset=luup.sunset() }
+            else
+                -- Compute sun data
+                sundata = sun( luup.longitude, luup.latitude, 
+                    getVarNumeric( "Elevation", 0.0, pluginDevice, MYSID ), now )
+                D("evaluationCondition() location (%1,%2) computed %3", luup.longitude, luup.latitude, sundata)
+            end
+            sundata.stamp = stamp
+            luup.variable_set( MYSID, "sundata", json.encode(sundata), pluginDevice )
         end
+        local nowMSM = ndt.hour * 60 + ndt.min
+        local op = cond.operator or cond.condition or "bet" -- legacy ???
         local tparam = split( cond.value or "sunrise+0,sunset+0" )
-        local cp,offset = string.match( tparam[1], "^([^%+%-]+)(.*)" )
-        offset = tonumber( offset or "0" ) or 0
-        local stt = ( ( cp == "sunrise" ) and sun[2] or sun[3] ) + offset*60
+        local cp,boffs = string.match( tparam[1], "^([^%+%-]+)(.*)" )
+        boffs = tonumber( boffs or "0" ) or 0
+        local stt = ( sundata[cp or "sunrise"] or sundata.sunrise ) + boffs*60
         local sdt = os.date("*t", stt)
         local startMSM = sdt.hour * 60 + sdt.min
         if op == "bet" or op == "nob" then
             local ep,eoffs = string.match( tparam[2] or "sunset+0", "^([^%+%-]+)(.*)" )
             eoffs = tonumber( eoffs or 0 ) or 0
-            local ett = ( ( ep == "sunrise" ) and sun[2] or sun[3] ) + eoffs*60
+            local ett = ( sundata[ep or "sunset"] or sundata.sunset ) + eoffs*60
             sdt = os.date("*t", ett)
             local endMSM = sdt.hour * 60 + sdt.min
             D("evaluateCondition() cond %1 check %2 %3 %4 and %5", cond.id, nowMSM, op, startMSM, endMSM)
@@ -1274,30 +1319,23 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         elseif tparam[1] == "" then
             -- No-year given, just M/D H:M. We can do comparison by magnitude,
             -- which works better for year-spanning ranges.
-            local function nextMD( tmagwhen, tmagnow, taskinfo )
-                local delay = ( tmagwhen % 1440 ) - ( tmagnow % 1440 )
-                if delay <= 0 then delay = delay + 1440 end
-                D("evaluateCondition() trangeMD delay is %1s (%2m, %3h:%4m)", delay*60, delay, math.floor(delay/60), delay%60)
-                -- Compute an absolute time and round it to the minute (plus offset)
-                delay = math.floor( ( os.time() + delay * 60 ) / 60 ) * 60 + TICKOFFS
-                scheduleTick( taskinfo, delay )
-            end
             local nowz = tonumber( ndt.month ) * 100 + tonumber( ndt.day )
             local stz = tonumber( tpart[2] ) * 100 + tonumber( tpart[3] )
             nowz = nowz * 1440 + ndt.hour * 60 + ndt.min
             stz = stz * 1440 + tpart[4] * 60 + tpart[5]
             if op == "before" then
                 D("evaluateCondition() M/D H:M test %1 %2 %3", nowz, op, stz)
-                nextMD( stz, nowz, { id=tdev,info="trangeMD "..cond.id } )
+                doNextCondCheck( { id=tdev,info="trangeMDHM " .. cond.id }, nowz % 1440, stz % 1440 )
                 if nowz >= stz then return false,false end
             elseif op == "after" then
                 D("evaluateCondition() M/D H:M test %1 %2 %3", nowz, op, stz)
-                nextMD( stz, nowz, { id=tdev,info="trangeMD "..cond.id } )
+                doNextCondCheck( { id=tdev,info="trangeMDHM " .. cond.id }, nowz % 1440, stz % 1440 )
                 if nowz < stz then return false,false end
             else
                 local enz = tonumber( tpart[7] ) * 100 + tonumber( tpart[8] )
                 enz = enz * 1440 + tpart[9] * 60 + tpart[10]
                 D("evaluateCondition() M/D H:M test %1 %2 %3 and %4", nowz, op, stz, enz)
+                doNextCondCheck( { id=tdev,info="trangeMDHM " .. cond.id }, nowz % 1440, stz % 1440, enz % 1440 )
                 local between
                 if stz < enz then -- check for year-spanning
                     between = nowz >= stz and nowz < enz
@@ -1453,7 +1491,7 @@ local function evaluateGroup( grp, cdata, tdev )
                         -- To clear, pred must be true, pred's true precedes our true, and if window, age within window
                         D("evaluateCondition() pred %1, window %2, age %3", predCond.id, window, age)
                         if not ( predState.evalstate and age >= 0 and ( window==0 or age <= window ) ) then
-                            D("evaluateCondition() didn't meet sequence requirement %1 after %2(=%3) within %4 (%5 ago)", 
+                            D("evaluateCondition() didn't meet sequence requirement %1 after %2(=%3) within %4 (%5 ago)",
                                 cond.id, predCond.id, predState.evalstate, cond.aftertime or "any", age)
                             state = false
                         end
@@ -1527,7 +1565,7 @@ local function evaluateGroup( grp, cdata, tdev )
                     table.insert( latched, cond.id )
                 end
             end
-            
+
             -- Save the final determination of state for this condition.
             passed = state and passed
             if state ~= cs.evalstate then
@@ -2271,27 +2309,47 @@ function request( lul_request, lul_parameters, lul_outputformat )
         return json.encode( res ), "application/json"
     elseif action == "summary" then
         local r, EOL = "", "\r\n"
+        r = r .. "LOGIC SUMMARY REPORT" .. EOL
+        r = r .. "   Version: " .. tostring(_PLUGIN_VERSION) .. " config " .. tostring(_CONFIGVERSION) .. EOL
+        r = r .. "Local time: " .. os.date("%Y-%m-%d %H:%M:%S") .. ", DST=" .. tostring(luup.variable_get( MYSID, "LastDST", pluginDevice )) .. EOL
+        r = r .. "House mode: " .. tostring(luup.variable_get( MYSID, "HouseMode", pluginDevice )) .. EOL
+        r = r .. "  Sun data: " .. tostring(luup.variable_get( MYSID, "sundata", pluginDevice )) .. EOL
         for n,d in pairs( luup.devices ) do
             if d.device_type == RSTYPE and ( deviceNum==nil or n==deviceNum ) then
+                r = r .. string.rep( "=", 132 ) .. EOL
+                r = r .. string.format("%s (#%d)", tostring(d.description), n) .. EOL
+                r = r .. string.format("    Message/status: %s", luup.variable_get( RSSID, "Message", n ) or "" ) .. EOL
                 local s = luup.variable_get( RSSID, "cdata", n ) or ""
                 local cdata,_,err = json.decode( s )
                 if err then
-                    r = r .. err .. EOL .. " in " .. s
+                    r = r .. "**** UNPARSEABLE CONFIGURATION: " .. err .. EOL .. " in " .. s
                     cdata = {}
                 end
-                if r ~= "" then r = r .. EOL end
-                r = r .. string.format("%s (#%d)", tostring(d.description), n) .. EOL
+                s = getVarNumeric( "TestTime", 0, n, RSSID )
+                if s ~= 0 then
+                    r = r .. string.format("    Test time set: %s", os.date("%Y-%m-%d %H:%M", s)) .. EOL
+                end
+                s = getVarNumeric( "TestHouseMode", 0, n, RSSID )
+                if s ~= 0 then
+                    r = r .. string.format("    Test house mode set: %d", s) .. EOL
+                end
+                local first = true
                 for _,vv in pairs( cdata.variables or {} ) do
+                    if first then
+                        r = r .. "    Variable/expressions" .. EOL
+                        first = false
+                    end
                     local lv = luup.variable_get( VARSID, vv.name, n ) or "(no value)"
                     local le = luup.variable_get( VARSID, vv.name .. "_Error", n ) or ""
-                    r = r .. string.format("    Variable %s=%s (last %q)", vv.name or "?", vv.expression or "?", lv) .. EOL
-                    if le ~= "" then r = r .. "    ******** Error: " .. le .. EOL end
+                    r = r .. string.format("        %s=%s (last %q)", vv.name or "?", vv.expression or "?", lv) .. EOL
+                    if le ~= "" then r = r .. "        ******** Error: " .. le .. EOL end
                 end
                 local ng=0
                 for _,gc in ipairs( cdata.conditions or {} ) do
                     ng = ng + 1
-                    r = r .. "    Group #" .. ng .. " (" .. gc.groupid .. ")" .. EOL
+                    r = r .. "    Group #" .. ng .. " <" .. gc.groupid .. ">" .. EOL
                     for _,cond in ipairs( gc.groupconditions or {} ) do
+                        -- ??? TO DO: Add cstate
                         r = r .. "        (" .. ( cond.type or "?type?" ) .. ") "
                         if cond.type == "service" then
                             r = r .. string.format("%s (%d) ", ( luup.devices[cond.device]==nil ) and ( "*** missing " .. ( cond.devicename or "unknown" ) ) or
@@ -2330,7 +2388,6 @@ function request( lul_request, lul_parameters, lul_outputformat )
                     end
                 end
                 r = r .. getEvents( n )
-                r = r .. string.rep( "=", 72 ) .. EOL
             end
         end
         return r, "text/plain"
@@ -2352,7 +2409,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
         if action == "backup" then
             local bfile = lul_parameters.path or ( ( isOpenLuup and "." or "/etc/cmh-ludl" ) .. "/reactor-config-backup.json" )
             local f = io.open( bfile, "w" )
-            if f then 
+            if f then
                 f:write( bdata )
                 f:close()
             else
