@@ -11,9 +11,9 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "1.7+stable181106"
+local _PLUGIN_VERSION = "1.8develop"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
-local _CONFIGVERSION = 00109
+local _CONFIGVERSION = 00110
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -280,7 +280,9 @@ function sun( lon, lat, elev, t )
     local pi = tau / 2.0
     local rlat = lat * pi / 180.0
     local rlon = lon * pi / 180.0
-    local n = math.floor( t / 86400 + 2440587.5 ) - 2451545.0 + 0.0008
+    -- Apply TZ offset for JD in local TZ not UTC; truncate time and force noon.
+    local locale_offset = os.difftime( t, os.time( os.date("!*t", t) ) )
+    local n = math.floor( ( t + locale_offset ) / 86400 + 0.5 + 2440587.5 ) - 2451545.0 + 0.0008
     local N = n - rlon / tau
     local M = ( 6.24006 + 0.017202 * N ) % tau
     local C = 0.0334196 * math.sin( M ) + 0.000349066 * 
@@ -295,7 +297,7 @@ function sun( lon, lat, elev, t )
                 math.sin( rlat ) * math.sin( decl ) ) / 
         ( math.cos( rlat ) * math.cos( decl ) ) )
     local tw = 0.104719755 -- 6 deg in rad; each twilight step is 6 deg
-    local function JE(j) return ( j - 2440587.5 ) * 86400 end
+    local function JE(j) return math.floor( ( j - 2440587.5 ) * 86400 ) end
     return { sunrise=JE(Jt-omeg0/tau), sunset=JE(Jt+omeg0/tau),
         civdawn=JE(Jt-(omeg0+tw)/tau), civdusk=JE(Jt+(omeg0+tw)/tau),
         nautdawn=JE(Jt-(omeg0+2*tw)/tau), nautdusk=JE(Jt+(omeg0+2*tw)/tau),
@@ -543,6 +545,7 @@ local function plugin_runOnce( pdev )
 
     -- Update version last.
     if s ~= _CONFIGVERSION then
+        luup.variable_set( MYSID, "sundata", "{}", pdev ) -- wipe for recalc
         luup.variable_set( MYSID, "Version", _CONFIGVERSION, pdev )
     end
 end
@@ -1148,7 +1151,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         -- Figure out sunrise/sunset. Keep cached to reduce load.
         local stamp = ndt.year * 10000 + ndt.month * 100 + ndt.day
         local sundata = json.decode( luup.variable_get( MYSID, "sundata", pluginDevice ) or "{}" ) or {}
-        if debugMode or ( sundata.stamp or 0 ) ~= stamp then -- ??? debugMode temporary
+        if ( sundata.stamp or 0 ) ~= stamp or getVarNumeric( "TestTime", 0, tdev, RSSID ) ~= 0 then
             if getVarNumeric( "UseLuupSunrise", 0, pluginDevice, MYSID ) ~= 0 then
                 L({level=2,msg="Reactor is configured to use Luup's sunrise/sunset calculations; twilight times cannot be correctly evaluated and will evaluate as dawn=sunrise, dusk=sunset"})
                 sundata = { sunrise=luup.sunrise(), sunset=luup.sunset() }
