@@ -25,6 +25,7 @@ var ReactorSensor = (function(api) {
     var iData = [];
     var roomsByName = [];
     var actions = {};
+    var deviceInfo = {};
     var configModified = false;
     var inStatusPanel = false;
     var lastx = 0;
@@ -196,7 +197,7 @@ var ReactorSensor = (function(api) {
     /* Get parent state */
     function getParentState( varName ) {
         var me = udByDevNum[ api.getCpanelDeviceId() ];
-        return api.getDeviceState( me.id_parent || me.id, "urn:toggledbits-com:serviceId:Reactor", varName )
+        return api.getDeviceState( me.id_parent || me.id, "urn:toggledbits-com:serviceId:Reactor", varName );
     }
 
     /**
@@ -1624,6 +1625,7 @@ var ReactorSensor = (function(api) {
         }
         jQuery('input#testhousemode,select#mode', container).on( 'change.reactor', handleTestChange );
 
+if (false) {
         jQuery.ajax({
             url: api.getDataRequestURL(),
             data: {
@@ -1634,11 +1636,11 @@ var ReactorSensor = (function(api) {
             timeout: 15000
         }).done( function( data, statusText, jqXHR ) {
             var seen = {};
-            var services = $( data ).find( "service" );
+            var services = jQuery( data ).find( "service" );
             services.each( function( ix, obj ) {
-                var tb = $( obj );
-                var svc = $("serviceId", tb).text() || "";
-                var url = $("SCPDURL", tb).text() || "";
+                var tb = jQuery( obj );
+                var svc = jQuery("serviceId", tb).text() || "";
+                var url = jQuery("SCPDURL", tb).text() || "";
                 if ( undefined === seen[ svc ] ) {
                     console.log( svc + " => " + url );
                 }
@@ -1649,6 +1651,7 @@ var ReactorSensor = (function(api) {
             console.log("Failed to load lu_device data: " + textStatus + " " + String(errorThrown));
             console.log(jqXHR.responseText);
         });
+}
     }
 
     function updateStatus( pdev ) {
@@ -2106,25 +2109,149 @@ var ReactorSensor = (function(api) {
             return;
         }
         var action = actions[newVal];
-        if ( action === undefined || action.arguments === undefined ) { return; }
-        for ( var k=0; k<action.arguments.length; ++k ) {
-            var inp;
-            if ( action.arguments[k].dataType == "boolean" ) {
-                inp = jQuery( '<select class="argument form-control form-control-sm"><option value="0">0</option><option value="1">1</option></select>' );
-            } else {
-                inp = jQuery( '<input class="argument narrow form-control form-control-sm">' );
-                inp.attr( 'placeholder', action.arguments[k].name );
+        if ( undefined !== action.info ) {
+            /* Info assist from our enhancement data */
+            for ( var k=0; k<( action.info.parameters || [] ).length; ++k ) {
+                var parm = action.info.parameters[k];
+                var inp;
+                if ( undefined !== parm.values ) {
+                    /* Menu, can be array or object (key/value map) */
+                    inp = jQuery('<select class="argument form-control form-control-sm"/>');
+                    if ( Array.isArray( parm.values ) ) {
+                        for ( var j = 0; j<parm.values.length; j++ ) {
+                            var opt = jQuery("<option/>");
+                            opt.val( parm.values[j] );
+                            opt.text( parm.values[j] );
+                            inp.append( opt );
+                        }
+                    } else {
+                        for ( var key in parm.values ) {
+                            if ( parm.values.hasOwnProperty( key ) ) {
+                                var opt = jQuery("<option/>");
+                                opt.val( key );
+                                opt.text( parm.values[key] );
+                                inp.append( opt );
+                            }
+                        }
+                    }
+                } else if ( parm.type == "scene" ) {
+                    var inp = jQuery('<select class="argument form-control form-control-sm"/>');
+                    var ud = api.getUserData();
+                    var scenes = api.cloneObject( ud.scenes );
+                    scenes.sort( function(a, b) { return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1; } );
+                    for (var i=0; i<scenes.length; ++i) {
+                        if ( scenes[i].notification_only || scenes[i].hidden ) {
+                            continue;
+                        }
+                        var opt = jQuery('<option value="' + scenes[i].id + '"></option>');
+                        opt.text( scenes[i].name || ( "#" + scenes[i].id ) );
+                        inp.append( opt );
+                    }
+                    for ( var key in ( parm.extraValues || {} ) ) {
+                        if ( parm.extraValues.hasOwnProperty(key) ) {
+                            var opt = jQuery('<option/>');
+                            opt.val( key );
+                            opt.text( parm.extraValues[key] );
+                            inp.prepend( opt );
+                        }
+                    }
+                    inp.prepend('<option disabled>--choose--</option>');
+                } else if ( parm.type == "boolean" ) {
+                    /* Menu */
+                    inp = jQuery('<select class="argument form-control form-control-sm"/>');
+                    inp.append('<option value="0">0/off/false</option>');
+                    inp.append('<option value="1">1/on/true</option>');
+                } else if ( parm.type == "ui1" && parm.min !== undefined && parm.max !== undefined ) {
+                    inp = jQuery('<div class="argument tbslider"/>');
+                    inp.slider({
+                        min: parm.min, max: parm.max, step: parm.step || 1,
+                        range: "min",
+                        stop: function ( ev, ui ) {
+                            // DeusExMachinaII.changeDimmerSlider( jQuery(this), ui.value );
+                        },
+                        slide: function( ev, ui ) {
+                            jQuery( 'a.ui-slider-handle', jQuery( this ) ).text( ui.value );
+                        },
+                        change: function( ev, ui ) {
+                            jQuery( 'a.ui-slider-handle', jQuery( this ) ).text( ui.value );
+                        }
+                    });
+                    inp.slider("option", "disabled", false);
+                    inp.slider("option", "value", parm.default || parm.min);
+                } else {
+                    inp = jQuery( '<input class="argument narrow form-control form-control-sm">' );
+                    inp.attr( 'placeholder', action.arguments[k].name );
+                }
+                inp.attr('id', parm.name );
+                /* If there are more than one parameters, wrap each in a label. */
+                if ( action.info.parameters.length > 1 ) {
+                    var label = jQuery("<label class='argument'/>");
+                    label.attr("for", parm.name );
+                    label.text( ( parm.label || parm.name ) + ": " );
+                    label.append( inp );
+                    row.append(" ");
+                    row.append( label );
+                } else {
+                    /* No label */
+                    row.append( inp );
+                }
             }
-            inp.attr( 'id', action.arguments[k].name );
-            var span = jQuery( '<span class="argument"></span>' );
-            span.text( ( k>0 ? ", " : "" ) + action.arguments[k].name + '=' );
-            span.append( inp );
-            row.append( span );
+        } else if ( undefined !== action.arguments ) {
+            for ( var k=0; k<action.arguments.length; ++k ) {
+                var inp;
+                if ( action.arguments[k].dataType == "boolean" ) {
+                    inp = jQuery( '<select class="argument form-control form-control-sm"><option value="0">0</option><option value="1">1</option></select>' );
+                } else {
+                    inp = jQuery( '<input class="argument narrow form-control form-control-sm">' );
+                    inp.attr( 'placeholder', action.arguments[k].name );
+                }
+                inp.attr( 'id', action.arguments[k].name );
+                var span = jQuery( '<span class="argument"></span>' );
+                span.text( ( k>0 ? ", " : "" ) + action.arguments[k].name + '=' );
+                span.append( inp );
+                row.append( span );
+            }
         }
         // jQuery( '.argument', row ).on( 'change.reactor', doActionChange );
         return;
     }
+    
+    function deepcopy(obj) {
+        if ( null == obj || typeof(obj) != "object" ) return obj;
+        var ret = obj.constructor();
+        for (var k in obj) {
+            if (obj.hasOwnProperty(k)) ret[k]=deepcopy(obj[k]);
+        }
+        return ret;
+    }
+    
+    function merge( dest, src ) {
+        if ( typeof(dest) != typeof(src) || typeof(src) != "object") {
+            return src;
+        }
+        for ( var m in src ) {
+            if ( src.hasOwnProperty(m) ) {
+                if ( dest.hasOwnProperty(m) ) {
+                    dest[m] = merge( dest[m], src[m] );
+                } else {
+                    dest[m] = src[m];
+                }
+            }
+        }
+        return dest;
+    }
 
+    function getServiceInfo( svc ) {
+        if ( typeof( deviceInfo ) !== "undefined" ) {
+            if ( typeof( deviceInfo.services ) !== "undefined" ) {
+                if ( typeof( deviceInfo.services[svc] ) !== "undefined" ) {
+                    return deviceInfo.services[svc];
+                }
+            }
+        }
+        return false;
+    }
+    
     function changeActionDevice( ev ) {
         var el = jQuery( ev.currentTarget );
         var newVal = el.val() || "";
@@ -2150,25 +2277,63 @@ var ReactorSensor = (function(api) {
             timeout: 5000
         }).done( function( data, statusText, jqXHR ) {
             var mm = {}, ms = [];
+            var mytype = (deviceByNumber[newVal] || {}).device_type || "";
             for ( var i=0; i<data.serviceList.length; i++ ) {
+                var section = jQuery( "<select/>" );
                 var service = data.serviceList[i];
-                var opt = jQuery("<option></option>");
-                opt.val("");
-                opt.text( "---Service " + service.serviceId.replace(/^([^:]+:)+/, "") + "---" );
-                opt.attr( 'disabled', true );
-                actionMenu.append( opt );
+                var serviceInfo = getServiceInfo( service.serviceId );
                 for ( var j=0; j<service.actionList.length; j++ ) {
                     var actname = service.actionList[j].name;
+                    var ai = false;
+                    if ( serviceInfo && serviceInfo.actions && serviceInfo.actions[actname] ) {
+                        ai = serviceInfo.actions[actname];
+                    }
+                    if ( ai &&  ai.hidden ) {
+                        continue;
+                    }
+                    
                     var key = service.serviceId + "/" + actname;
-                    if ( actions[key] === undefined ) {
+                    if ( actions[key] === undefined ) { //??? global?
                         // Save action data as we use it.
                         actions[key] = service.actionList[j];
+                        actions[key].info = ai;
                     }
-                    opt = jQuery('<option></option>');
+                    
+                    var opt = jQuery('<option></option>');
                     opt.val( key );
                     opt.text( actname );
-                    actionMenu.append( opt );
+                    section.append( opt.clone() );
                 }
+                if ( jQuery("option", section).length > 0 ) {
+                    var opt = jQuery("<option/>");
+                    opt.val("");
+                    opt.text( "---Service " + service.serviceId.replace(/^([^:]+:)+/, "") + "---" );
+                    opt.attr( 'disabled', true );
+                    opt.addClass("optheading");
+                    section.prepend( opt );
+                    actionMenu.append( section.children() );
+                }
+            }
+            if ( deviceInfo.devices && deviceInfo.devices['type:'+mytype] ) {
+                var known = jQuery("<select/>");
+                known.append( "<option class='optheading' value='' disabled><b>---Common Actions---</b></option>" );
+                for ( var j=0; j<deviceInfo.devices['type:'+mytype].length; j++ ) {
+                    var devact = deviceInfo.devices['type:'+mytype][j];
+                    var act = deepcopy( deviceInfo.services[devact.service].actions[devact.action] );
+                    for ( var k in devact ) {
+                        if ( devact.hasOwnProperty(k) ) {
+                            act[k] = devact[k];
+                        }
+                    }
+                    var opt = jQuery('<option/>');
+                    var key = devact.service + "/" + devact.action;
+                    opt.val( key );
+                    opt.text( act.description || devact.action );
+                    known.append( opt );
+                    actions[key].info = act;
+                }
+                known.append("<option disabled/>");
+                actionMenu.prepend( known.children() );
             }
             actionMenu.attr( 'disabled', false );
         }).fail( function( jqXHR, textStatus, errorThrown ) {
@@ -2223,31 +2388,12 @@ var ReactorSensor = (function(api) {
             html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
             html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
             html += 'div.warning { color: red; }';
+            html += 'option.optheading { font-weight: bold; }';
+            html += '.tbslider { display: inline-block; width: 200px; height: 1em; border-radius: 8px; }';
+            html += '.tbslider .ui-slider-handle { background: url("/cmh/skins/default/img/other/slider_horizontal_cursor_24.png?") no-repeat scroll left center rgba(0,0,0,0); cursor: pointer !important; height: 24px !important; width: 24px !important; margin-top: 6px; font-size: 12px; text-align: center; padding-top: 4px; text-decoration: none; }';
+            html += '.tbslider .ui-slider-range-min { background-color: #12805b !important; }';
             html += "</style>";
             jQuery("head").append( html );
-
-            /* Body content */
-            html = '';
-            html += '<div class="reactorscenes">';
-            html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>ReactorScenes</h3></div></div>';
-            html += '<div class="row"><div class="col-xs-12 col-sm-12">ReactorScenes is a feature that enhances existing Vera scenes by making delayed activity groups work across Vera reboots and reloads. When using Reactor to run your scenes, make sure you do not have a device trigger in the scene definition that refers to this ReactorSensor, or your scene will run twice on every execution. Naming the scene below is sufficient to trigger it from this ReactorSensor.</div></div>';
-            html += '<div class="row"><div class="col-xs col-sm-12"><label for="tripscene">Trip Scene: <select id="tripscene" class="rsceneselect"></select></label></div></div>';
-            html += '<div class="row"><div class="col-xs col-sm-12"><label for="untripscene">Un-trip Scene: <select id="untripscene" class="rsceneselect"></select></label></div></div>';
-            html += '</div>';
-
-            html += '<div class="reactoractions">';
-
-            html += '<div id="tripactions" class="actionlist">';
-            html += '<button id="addtripaction" class="btn btn-default addaction">Add Action</button>';
-            html += '</div>'; // tripactions
-            html += '<div id="untripactions" class="actionlist">';
-            html += '<button id="addtripaction" class="btn btn-default addaction">Add Action</button>';
-            html += '</div>'; // untripactions
-
-            html += '</div>'; // reactoractions
-
-            html += footer();
-            api.setCpanelContent(html);
 
             /* Build the scene menus */
             var ud = api.getUserData();
@@ -2303,6 +2449,70 @@ var ReactorSensor = (function(api) {
             alert( e.stack );
         }
     }
+    
+    function preloadActivities() {
+        initModule();
+        
+        api.setCpanelContent( '<div id="loading">Please wait... loading device and activity data, which may take a few seconds.</div>' );
+
+        /* Load the device data */
+        var start = Date.now();
+        console.log("Loading D_ReactorDeviceInfo.json");
+        jQuery.ajax({
+            url: api.getSendCommandURL() + "/D_ReactorDeviceInfo.json",
+            dataType: "json",
+            timeout: 15000
+        }).done( function( data, statusText, jqXHR ) {
+            console.log("D_ReactorDeviceInfo loaded, " + String(Date.now()-start) + "ms");
+            
+            deviceInfo = data;
+            
+            /* Body content */
+            var html = '';
+            html += '<div class="reactorscenes">';
+            html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>ReactorScenes</h3></div></div>';
+            html += '<div class="row"><div class="col-xs-12 col-sm-12">ReactorScenes is a feature that enhances existing Vera scenes by making delayed activity groups work across Vera reboots and reloads. When using Reactor to run your scenes, make sure you do not have a device trigger in the scene definition that refers to this ReactorSensor, or your scene will run twice on every execution. Naming the scene below is sufficient to trigger it from this ReactorSensor.</div></div>';
+            html += '<div class="row"><div class="col-xs col-sm-12"><label for="tripscene">Trip Scene: <select id="tripscene" class="rsceneselect"></select></label></div></div>';
+            html += '<div class="row"><div class="col-xs col-sm-12"><label for="untripscene">Un-trip Scene: <select id="untripscene" class="rsceneselect"></select></label></div></div>';
+            html += '</div>';
+
+            html += '<div class="reactoractions">';
+
+            html += '<div id="tripactions" class="actionlist">';
+            html += '<button id="addtripaction" class="btn btn-default addaction">Add Action</button>';
+            html += '</div>'; // tripactions
+            html += '<div id="untripactions" class="actionlist">';
+            html += '<button id="addtripaction" class="btn btn-default addaction">Add Action</button>';
+            html += '</div>'; // untripactions
+
+            html += '</div>'; // reactoractions
+            
+            html += "<p>Test buttons? Each action? Each set?</p>";
+
+            html += footer();
+            
+            jQuery('div#loading').replaceWith( jQuery( html ) );
+
+            doActivities();
+        }).fail( function( jqXHR, textStatus, errorThrown ) {
+            // Bummer.
+            console.log("Failed to load D_ReactorDeviceInfo.json: " + textStatus + " " + String(errorThrown));
+            console.log(jqXHR.responseText);
+            deviceInfo = { services: {}, devices: {} };
+            if ( jqXHR.status == 500 ) {
+                jQuery('div#loading').html("<b>Sorry, not able to load data at this moment!</b> Vera may be busy or reloading. Don't panic! Wait a moment, switch back to the Control tab, and then back here to try again.");
+            } else {
+                jQuery('div#loading').html('<h1>Hmmm...</h1>Well, that didn\'t go well. Try waiting a few moments, and then switching back to the Control tab and then back to this tab. If that doesn\'t work, please <a href="mailto:reactor@toggledbits.com?subject=Reactor+Activities+Load+Problem">send email to reactor@toggledbits.com</a> with the following text: <pre id="diag"></pre>');
+                var str = String(errorThrown) + "\n" + String(textStatus);
+                for ( var k in jqXHR ) {
+                    if ( jqXHR.hasOwnProperty(k) && typeof(jqXHR[k]) != "function" ) {
+                        str += "\n" + k + '=' + String(jqXHR[k]);
+                    }
+                }
+                jQuery('#diag').text( str );
+            }
+        });
+    }
 
     myModule = {
         uuid: uuid,
@@ -2311,7 +2521,7 @@ var ReactorSensor = (function(api) {
         onUIDeviceStatusChanged: onUIDeviceStatusChanged,
         doTest: doTest,
         doSettings: doSettings,
-        doActivities: doActivities,
+        doActivities: preloadActivities,
         doConditions: doConditions,
         doVariables: doVariables,
         doStatusPanel: doStatusPanel
