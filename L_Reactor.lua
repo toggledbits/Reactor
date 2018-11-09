@@ -18,7 +18,7 @@ local _CONFIGVERSION = 00200
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
 
-local VARSID = "urn:toggledbits-com:servi00ceId:ReactorValues"
+local VARSID = "urn:toggledbits-com:serviceId:ReactorValues"
 
 local RSSID = "urn:toggledbits-com:serviceId:ReactorSensor"
 local RSTYPE = "urn:schemas-toggledbits-com:device:ReactorSensor:1"
