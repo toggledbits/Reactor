@@ -11,9 +11,9 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "1.8develop"
+local _PLUGIN_VERSION = "1.8-stable181108"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
-local _CONFIGVERSION = 00110
+local _CONFIGVERSION = 00111
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -282,27 +282,28 @@ function sun( lon, lat, elev, t )
     local rlon = lon * pi / 180.0
     -- Apply TZ offset for JD in local TZ not UTC; truncate time and force noon.
     local locale_offset = os.difftime( t, os.time( os.date("!*t", t) ) )
-    local n = math.floor( ( t + locale_offset ) / 86400 + 0.5 + 2440587.5 ) - 2451545.0 + 0.0008
+    local n = math.floor( ( t + locale_offset ) / 86400 + 0.5 + 2440587.5 ) - 2451545.0 
     local N = n - rlon / tau
     local M = ( 6.24006 + 0.017202 * N ) % tau
     local C = 0.0334196 * math.sin( M ) + 0.000349066 * 
         math.sin( 2 * M ) + 0.00000523599 * math.sin( 3 * M )
-    local lam = ( M + C + pi + 1.79659 ) % tau
+    local lam = ( M + C + pi + 1.796593 ) % tau
     local Jt = 2451545.0 + N + 0.0053 * math.sin( M ) - 
         0.0069 * math.sin( 2 * lam )
     local decl = math.asin( math.sin( lam ) * math.sin( 0.409105 ) )
-    local omeg0 = math.acos( 
-        ( math.sin( -0.0144862 + 
-            ( -0.0362330 * math.sqrt( elev ) ) / 1.0472 ) - 
+    function w0( rlat, elev, decl, wid )
+        if not wid then wid = 0.0144862 end
+        return math.acos( ( math.sin( (-wid) + 
+            ( -0.0362330 * math.sqrt( elev ) / 1.0472 ) ) - 
                 math.sin( rlat ) * math.sin( decl ) ) / 
-        ( math.cos( rlat ) * math.cos( decl ) ) )
+        ( math.cos( rlat ) * math.cos( decl ) ) ) end
     local tw = 0.104719755 -- 6 deg in rad; each twilight step is 6 deg
     local function JE(j) return math.floor( ( j - 2440587.5 ) * 86400 ) end
-    return { sunrise=JE(Jt-omeg0/tau), sunset=JE(Jt+omeg0/tau),
-        civdawn=JE(Jt-(omeg0+tw)/tau), civdusk=JE(Jt+(omeg0+tw)/tau),
-        nautdawn=JE(Jt-(omeg0+2*tw)/tau), nautdusk=JE(Jt+(omeg0+2*tw)/tau),
-        astrodawn=JE(Jt-(omeg0+3*tw)/tau), astrodusk=JE(Jt+(omeg0+3*tw)/tau) },
-        JE(Jt), 24*omeg0/pi
+    return { sunrise=JE(Jt-w0(rlat,elev,decl)/tau), sunset=JE(Jt+w0(rlat,elev,decl)/tau),
+        civdawn=JE(Jt-w0(rlat,elev,decl,tw)/tau), civdusk=JE(Jt+w0(rlat,elev,decl,tw)/tau),
+        nautdawn=JE(Jt-w0(rlat,elev,decl,2*tw)/tau), nautdusk=JE(Jt+w0(rlat,elev,decl,2*tw)/tau),
+        astrodawn=JE(Jt-w0(rlat,elev,decl,3*tw)/tau), astrodusk=JE(Jt+w0(rlat,elev,decl,3*tw)/tau) },
+        JE(Jt), 24*w0(rlat,elev,decl)/pi
 end
 
 -- Find device by name
