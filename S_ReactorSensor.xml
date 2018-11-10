@@ -48,8 +48,31 @@
             <defaultValue>0</defaultValue>
             <shortCode>since</shortCode>
         </stateVariable>
+        <stateVariable sendEvents="no">
+            <name>misc_arg</name>
+            <dataType>ui4</dataType>
+        </stateVariable>
+        <stateVariable sendEvents="no">
+            <name>str_arg</name>
+            <dataType>string</dataType>
+        </stateVariable>
     </serviceStateTable>
     <actionList>
+        <action>
+            <name>SetVariable</name>
+            <argumentList>
+                <argument>
+                    <name>VariableName</name>
+                    <direction>in</direction>
+                    <relatedStateVariable>str_arg</relatedStateVariable>
+                </argument>
+                <argument>
+                    <name>NewValue</name>
+                    <direction>in</direction>
+                    <relatedStateVariable>str_arg</relatedStateVariable>
+                </argument>
+            </argumentList>
+        </action>
         <action>
             <name>SetEnabled</name>
             <argumentList>
@@ -79,6 +102,26 @@
             <name>ResetRuntime</name>
             <argumentList>
             </argumentList>
+        </action>
+        <action>
+          <name>RunScene</name>
+          <argumentList>
+            <argument>
+              <name>SceneNum</name>
+              <direction>in</direction>
+              <relatedStateVariable>misc_arg</relatedStateVariable>
+            </argument>
+          </argumentList>
+        </action>
+        <action>
+          <name>StopScene</name>
+          <argumentList>
+            <argument>
+              <name>SceneNum</name>
+              <direction>in</direction>
+              <relatedStateVariable>misc_arg</relatedStateVariable>
+            </argument>
+          </argumentList>
         </action>
     </actionList>
 </scpd>

@@ -1342,7 +1342,6 @@ local function evaluateCondition( cond, grp, cdata, tdev )
                 else
                     between = nowz >= stz or nowz < enz
                 end
-                nextMD( between and enz or stz, nowz, { id=tdev,info="trangeMD "..cond.id } )
                 if ( op == "bet" and not between ) or
                     ( op == "nob" and between ) then
                     return false,false

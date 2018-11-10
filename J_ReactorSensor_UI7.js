@@ -2113,7 +2113,11 @@ if (false) {
             /* Info assist from our enhancement data */
             for ( var k=0; k<( action.info.parameters || [] ).length; ++k ) {
                 var parm = action.info.parameters[k];
+                if ( ( parm.direction || "in" ) == "out" ) continue; /* Don't display output params */
                 var inp;
+                if ( parm.valueSet && deviceInfo.valuesets[parm.valueSet] ) {
+                    parm.values = deviceInfo.valuesets[parm.valueSet];
+                }
                 if ( undefined !== parm.values ) {
                     /* Menu, can be array or object (key/value map) */
                     inp = jQuery('<select class="argument form-control form-control-sm"/>');
@@ -2178,8 +2182,12 @@ if (false) {
                     });
                     inp.slider("option", "disabled", false);
                     inp.slider("option", "value", parm.default || parm.min);
-                } else {
+                } else if ( parm.type.match(/^(r|u?i)[124]$/i ) ) {
                     inp = jQuery( '<input class="argument narrow form-control form-control-sm">' );
+                    inp.attr( 'placeholder', action.arguments[k].name );
+                } else {
+                    console.log("J_ReactorSensor_UI7.js: using default field presentation for type " + String(parm.type));
+                    inp = jQuery( '<input class="argument form-control form-control-sm">' );
                     inp.attr( 'placeholder', action.arguments[k].name );
                 }
                 inp.attr('id', parm.name );
