@@ -8,7 +8,7 @@
 
 ??? FUTURE: The SetDeviceState action is now implemented on the Reactor master device. This action is a pass-through to luup.variable_set() and allows Reactor activities to set any service state variable on any device.
 
-## Version 1.8develop (development) ##
+## Version 1.8 (released) ##
 
 * Add civil, nautical, and astronomical dawn/dusk timing to sunrise/sunset conditions. This is by request from several users at relatively extreme latitudes, for whom the offsets to sunrise/sunset are insufficient to accurately represent light/dark conditions throughout the year with continuous tweaking.
 
