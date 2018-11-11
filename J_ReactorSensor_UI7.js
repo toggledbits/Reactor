@@ -40,7 +40,7 @@ var ReactorSensor = (function(api) {
         var html = '';
         html += '<div class="clearfix">';
         html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
-        html += '<div id="tbcopyright">Reactor ver 1.7 &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
+        html += '<div id="tbcopyright">Reactor ver 1.8 &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
             ' All Rights Reserved. Please check out the <a href="https://www.toggledbits.com/reactor" target="_blank">online documentation</a>' +
             ' and <a href="http://forum.micasaverde.com/index.php/board,93.0.html" target="_blank">forum board</a> for support.</div>';
         html += '<div id="supportlinks">Support links: ' +
@@ -51,7 +51,7 @@ var ReactorSensor = (function(api) {
             '</div>';
         return html;
     }
-
+    
     /* Create an ID that's functionally unique for our purposes. */
     function getUID( prefix ) {
         /* Not good, but enough. */
@@ -183,6 +183,12 @@ var ReactorSensor = (function(api) {
         );
     }
 
+    /* Get parent state */
+    function getParentState( varName ) {
+        var me = udByDevNum[ api.getCpanelDeviceId() ];
+        return api.getDeviceState( me.id_parent || me.id, "urn:toggledbits-com:serviceId:Reactor", varName )
+    }
+
     /**
      * Find cdata group
      */
@@ -305,23 +311,32 @@ var ReactorSensor = (function(api) {
                 } else {
                     str += cond.operator + '???';
                 }
-                var vals = ( cond.value || "sunrise+0,sunset+0" ).split(/,/);
-                var k = vals[0].match( /^([^+-]+)(.*)/ );
-                if ( k === null || k.length !== 3 ) {
-                    str += cond.value + '???';
-                } else {
-                    str += ' ' + k[1];
-                    str += ' ' + k[2] + " minutes";
+                function sunrange( spec ) {
+                    var names = { 'sunrise': 'sunrise', 'sunset': 'sunset',
+                            'civdawn': 'civil dawn', 'civdusk': 'civil dusk',
+                            'nautdawn': 'nautical dawn', 'nautdusk': 'nautical dusk',
+                            'astrodawn': 'astronomical dawn', 'astrodusk': 'astronomical dusk' 
+                        };
+                    var k = spec.match( /^([^+-]+)(.*)/ );
+                    if ( k === null || k.length !== 3 ) {
+                        return spec + '???';
+                    } else {
+                        var n = parseInt( k[2] );
+                        var str = ' ';
+                        if ( n < 0 ) {
+                            str = str + String(-n) + " mins before ";
+                        } else if ( n > 0 ) {
+                            str = str + String(n) + " mins after ";
+                        }
+                        str = str + ( names[k[1]] || k[1] );
+                        return str;
+                    }
                 }
+                var vals = ( cond.value || "sunrise+0,sunset+0" ).split(/,/);
+                str += sunrange( vals[0] || "sunrise+0" );
                 if ( cond.operator == "bet" || cond.operator == "nob" ) {
                     str += " and ";
-                    k = ( vals[1] || "sunset+0" ).match( /^([^+-]+)(.*)/ );
-                    if ( k === null || k.length !== 3 ) {
-                        str += cond.value + '???';
-                    } else {
-                        str += ' ' + k[1];
-                        str += ' ' + k[2] + " minutes";
-                    }
+                    str += sunrange( vals[1] || "sunset+0" );
                 }
                 break;
 
@@ -941,15 +956,23 @@ var ReactorSensor = (function(api) {
                 jQuery("select.opmenu", container).append('<option value="before">before</option>');
                 jQuery("select.opmenu", container).append('<option value="after">after</option>');
                 container.append('<div class="start form-inline">' +
-                    '<select id="sunstart" class="form-control form-control-sm"><option value="sunrise">sunrise</option><option value="sunset">sunset</option></select> '+
+                    '<select id="sunstart"></select> '+
                     ' offset&nbsp;<input type="text" id="startoffset" value="" class="narrow form-control form-control-sm">&nbsp;minutes' +
                     '</div>'
                 );
                 container.append('<div class="end form-inline"> and ' +
-                    '<select id="sunend" class="form-control form-control-sm" id="value"><option value="sunrise">sunrise</option><option value="sunset">sunset</option></select> '+
+                    '<select id="sunend"></select> '+
                     ' offset&nbsp;<input type="text" id="endoffset" value="" class="narrow form-control form-control-sm">&nbsp;minutes' +
                     '</div>'
                 );
+                var mm = jQuery('<select class="form-control form-control-sm">' +
+                    '<option value="sunrise">Sunrise</option><option value="sunset">Sunset</option>' +
+                    '<option value="civdawn">Civil dawn</option><option value="civdusk">Civil dusk</option>' +
+                    '<option value="nautdawn">Nautical dawn</option><option value="nautdusk">Nautical dusk</option>' +
+                    '<option value="astrodawn">Astronomical dawn</option><option value="astrodusk">Astronomical dusk</option></select>'
+                    );
+                jQuery('select#sunend', container).replaceWith( mm.clone().attr( 'id', 'sunend' ) );
+                jQuery('select#sunstart', container).replaceWith( mm.attr( 'id', 'sunstart' ) );
                 /* Restore. Condition first... */
                 var cp = cond.operator || "after";
                 jQuery("select.opmenu", container).on( 'change.reactor', handleRowChange ).val( cp );
@@ -1504,13 +1527,28 @@ var ReactorSensor = (function(api) {
         html += '<div class="col-sm-10 col-md-10 form-inline"><select class="form-control form-control-sm" id="mode"><option value="1">Home</option><option value="2">Away</option><option value="3">Night</option><option value="4">Vacation</option></select></div>';
         html += '</div>'; /* row */
         html += '<div class="row"><div class="col-sm-12 col-md-12">';
-        html += 'These setting do not change system configuration.' +
+        html += 'These settings do not change system configuration.' +
             ' They override the system values when your ReactorSensor requests them, allowing you to more easily test your conditions.' +
             ' For example, turn on the "Test Date" checkbox above' +
             ' and use the controls to set a date, then go back to the "Control" tab and press the "Restart" button to force a re-evaluation of the sensor state' +
             ' using your selected date/time. <b>Remember to turn these settings off when you have finished testing!</b>';
         html += '</div></div>';
         html += '</div>'; /* .testfields */
+        
+        try {
+            html += '<div id="sundata">';
+            html += "Today's sun timing is: ";
+            var sd = getParentState( "sundata" );
+            var sundata = JSON.parse( sd );
+            html += " sunrise/sunset=" + ( new Date(sundata.sunrise*1000) ).toLocaleTimeString() + "/" + ( new Date(sundata.sunset*1000) ).toLocaleTimeString();
+            html += ", civil dawn/dusk=" + ( new Date(sundata.civdawn*1000) ).toLocaleTimeString() + "/" + ( new Date(sundata.civdusk*1000) ).toLocaleTimeString();
+            html += ", nautical dawn/dusk=" + ( new Date(sundata.nautdawn*1000) ).toLocaleTimeString() + "/" + ( new Date(sundata.nautdusk*1000) ).toLocaleTimeString();
+            html += ", astronomical dawn/dusk=" + ( new Date(sundata.astrodawn*1000) ).toLocaleTimeString() + "/" + ( new Date(sundata.astrodusk*1000) ).toLocaleTimeString();
+            html += '.';
+            html += '</div>';
+        } catch (exc) {
+            html += "<div>Can't display sun data: " + exc.toString() + "</div>";
+        }
 
         html += footer();
 
