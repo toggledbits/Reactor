@@ -11,9 +11,9 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "1.8-stable181108"
+local _PLUGIN_VERSION = "1.8"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
-local _CONFIGVERSION = 00111
+local _CONFIGVERSION = 00112
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -2154,8 +2154,8 @@ function watch( dev, sid, var, oldVal, newVal )
     if sid == RSSID and var == "cdata" then
         -- Sensor configuration change. Immediate update.
         L("Child %1 (%2) configuration change, updating!", dev, luup.devices[dev].description)
-        loadSensorConfig( tdev )
-        updateSensor( tdev )
+        loadSensorConfig( dev )
+        updateSensor( dev )
     else
         local key = string.format("%d:%s/%s", dev, sid, var)
         if watchData[key] then
