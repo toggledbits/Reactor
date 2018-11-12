@@ -503,12 +503,14 @@
 						"type": "r4",
 						"direction": "in",
 						"name": "NewHeatSetpoint",
-						"related": "A_ARG_TYPE_r4"
+						"related": "A_ARG_TYPE_r4",
+                        "optional": 1
 					}, {
 						"type": "r4",
 						"direction": "in",
 						"name": "NewCoolSetpoint",
-						"related": "A_ARG_TYPE_r4"
+						"related": "A_ARG_TYPE_r4",
+                        "optional": 1
 					}]
 				}
 			}
@@ -606,6 +608,20 @@
 		},
 		"urn:toggledbits-com:serviceId:AutoVirtualThermostat1": {
 			"actions": {
+				"SetCurrentSetpoint": {
+					"description": "Set current setpoint",
+					"parameters": [{
+                        "name": "Application",
+                        "type": "string",
+                        "values": [ "Heating", "Cooling" ]
+                    },{
+						"name": "NewCurrentSetpoint",
+						"type": "r4",
+						"min": 0,
+						"max": 100,
+						"step": 0.5
+					}]
+				},
 				"SetHeatingSetpoint": {
 					"description": "Set heating setpoint",
 					"parameters": [{
@@ -735,7 +751,8 @@
 						"direction": "in",
 						"name": "VariableName",
 						"related": "str_arg",
-						"type": "reactor:vars"
+						"type": "string",
+                        "list": "reactor:vars"
 					}, {
 						"direction": "in",
 						"name": "NewValue",
@@ -1054,7 +1071,7 @@
 					"name": "Scene"
 				},
 				"Remote": {
-					"type": "int",
+					"type": "i4",
 					"name": "Remote"
 				},
 				"Codesets": {
@@ -1071,12 +1088,12 @@
 						"name": "Codeset",
 						"related": "Codeset"
 					}, {
-						"type": "int",
+						"type": "i4",
 						"direction": "in",
 						"name": "Button",
 						"related": "Remote"
 					}, {
-						"type": "int",
+						"type": "i4",
 						"direction": "in",
 						"name": "Repeat",
 						"related": "Remote"
@@ -3924,7 +3941,7 @@
 					"name": "Target"
 				},
 				"sl_CodeChanged": {
-					"type": "int",
+					"type": "ui4",
 					"name": "sl_CodeChanged"
 				},
 				"sl_PinProgramSuccess": {
@@ -5136,7 +5153,7 @@
 					"name": "sl_LowBattery"
 				},
 				"sl_CodeChanged": {
-					"type": "int",
+					"type": "ui4",
 					"name": "sl_CodeChanged"
 				},
 				"sl_UserCode": {
@@ -5569,10 +5586,7 @@
 			},
 			"actions": {
 				"ScanResults": {
-					"name": "ScanResults",
-					"parameters": [{
-						"type": "string"
-					}]
+					"name": "ScanResults"
 				},
 				"Add": {
 					"name": "Add",

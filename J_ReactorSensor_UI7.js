@@ -380,7 +380,7 @@ var ReactorSensor = (function(api) {
      * names sorted alpha.
      */
     function makeDeviceMenu( val, name ) {
-        var el = jQuery('<select class="devicemenu form-control form-control-sm pull-left"></select>');
+        var el = jQuery('<select class="devicemenu form-control form-control-sm"></select>');
         roomsByName.forEach( function( roomObj ) {
             if ( roomObj.devices && roomObj.devices.length ) {
                 var first = true; /* per-room first */
@@ -412,7 +412,7 @@ var ReactorSensor = (function(api) {
      * serviceId is added parenthetically to draw the distinction.
      */
     function makeVariableMenu( device, service, variable ) {
-        var el = jQuery('<select class="varmenu form-control form-control-sm pull-left"></select>');
+        var el = jQuery('<select class="varmenu form-control form-control-sm"></select>');
         var myid = api.getCpanelDeviceId();
         var devobj = udByDevNum[parseInt(device)];
         if ( undefined !== devobj ) {
@@ -466,7 +466,7 @@ var ReactorSensor = (function(api) {
     }
 
     function makeServiceOpMenu( cond ) {
-        var el = jQuery('<select class="opmenu form-control form-control-sm pull-left"></select>');
+        var el = jQuery('<select class="opmenu form-control form-control-sm"></select>');
         el.append('<option value="=">equals</option>');
         el.append( '<option value="&lt;&gt;">not equals</option>' );
         el.append( '<option value="&lt;">&lt;</option>' );
@@ -486,7 +486,7 @@ var ReactorSensor = (function(api) {
     }
 
     function makeDateTimeOpMenu( cond ) {
-        var el = jQuery('<select class="opmenu form-control form-control-sm pull-left"></select>');
+        var el = jQuery('<select class="opmenu form-control form-control-sm"></select>');
         el.append( '<option value="bet">between</option>' );
         el.append( '<option value="nob">not between</option>' );
 
@@ -2109,10 +2109,10 @@ if (false) {
             return;
         }
         var action = actions[newVal];
-        if ( undefined !== action.info ) {
+        if ( undefined !== action ) {
             /* Info assist from our enhancement data */
-            for ( var k=0; k<( action.info.parameters || [] ).length; ++k ) {
-                var parm = action.info.parameters[k];
+            for ( var k=0; k<( action.parameters || [] ).length; ++k ) {
+                var parm = action.parameters[k];
                 if ( ( parm.direction || "in" ) == "out" ) continue; /* Don't display output params */
                 var inp;
                 if ( parm.valueSet && deviceInfo.valuesets[parm.valueSet] ) {
@@ -2184,15 +2184,15 @@ if (false) {
                     inp.slider("option", "value", parm.default || parm.min);
                 } else if ( parm.type.match(/^(r|u?i)[124]$/i ) ) {
                     inp = jQuery( '<input class="argument narrow form-control form-control-sm">' );
-                    inp.attr( 'placeholder', action.arguments[k].name );
+                    inp.attr( 'placeholder', action.parameters[k].name );
                 } else {
                     console.log("J_ReactorSensor_UI7.js: using default field presentation for type " + String(parm.type));
                     inp = jQuery( '<input class="argument form-control form-control-sm">' );
-                    inp.attr( 'placeholder', action.arguments[k].name );
+                    inp.attr( 'placeholder', action.parameters[k].name );
                 }
                 inp.attr('id', parm.name );
                 /* If there are more than one parameters, wrap each in a label. */
-                if ( action.info.parameters.length > 1 ) {
+                if ( action.parameters.length > 1 ) {
                     var label = jQuery("<label class='argument'/>");
                     label.attr("for", parm.name );
                     label.text( ( parm.label || parm.name ) + ": " );
@@ -2204,23 +2204,7 @@ if (false) {
                     row.append( inp );
                 }
             }
-        } else if ( undefined !== action.arguments ) {
-            for ( var k=0; k<action.arguments.length; ++k ) {
-                var inp;
-                if ( action.arguments[k].dataType == "boolean" ) {
-                    inp = jQuery( '<select class="argument form-control form-control-sm"><option value="0">0</option><option value="1">1</option></select>' );
-                } else {
-                    inp = jQuery( '<input class="argument narrow form-control form-control-sm">' );
-                    inp.attr( 'placeholder', action.arguments[k].name );
-                }
-                inp.attr( 'id', action.arguments[k].name );
-                var span = jQuery( '<span class="argument"></span>' );
-                span.text( ( k>0 ? ", " : "" ) + action.arguments[k].name + '=' );
-                span.append( inp );
-                row.append( span );
-            }
         }
-        // jQuery( '.argument', row ).on( 'change.reactor', doActionChange );
         return;
     }
     
@@ -2292,19 +2276,25 @@ if (false) {
                 var serviceInfo = getServiceInfo( service.serviceId );
                 for ( var j=0; j<service.actionList.length; j++ ) {
                     var actname = service.actionList[j].name;
-                    var ai = false;
+                    var ai;
                     if ( serviceInfo && serviceInfo.actions && serviceInfo.actions[actname] ) {
+                        /* Have extended data */
                         ai = serviceInfo.actions[actname];
+                    } else {
+                        /* No extended data; copy what we have */
+                        ai = { service: service.serviceId, action: actname, parameters: [] };
+                        for ( var ip=0; ip < (service.actionList[j].arguments || []).length; ++ip ) {
+                            var p = service.actionList[j].arguments[ip];
+                            ai.parameters.push( { name: p.name, type: p.dataType } );
+                        }
                     }
-                    if ( ai &&  ai.hidden ) {
-                        continue;
-                    }
-                    
                     var key = service.serviceId + "/" + actname;
                     if ( actions[key] === undefined ) { //??? global?
                         // Save action data as we use it.
-                        actions[key] = service.actionList[j];
-                        actions[key].info = ai;
+                        actions[key] = ai;
+                    }
+                    if ( ai.hidden ) {
+                        continue;
                     }
                     
                     var opt = jQuery('<option></option>');
