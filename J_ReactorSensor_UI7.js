@@ -10,7 +10,7 @@
 
 //"use strict"; // fails on UI7, works fine with ALTUI
 
-var ReactorSensor = (function(api) {
+var ReactorSensor = (function(api, $) {
 
     /* unique identifier for this plugin... */
     var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
@@ -2099,11 +2099,95 @@ if (false) {
             console.log(jqXHR.responseText);
         });
     }
+    
+    function buildActionList( root ) {
+        var list = [];
+        if ( jQuery('.error', root ).length > 0 ) {
+            return false;
+        }
+        jQuery( 'div.actionrow', root ).each( function( ix ) {
+            var row = $( this );
+            var actionType = jQuery( 'select.actiontype', row ).val();
+            var action = { type: actionType, index: ix+1 };
+            if ( actionType == "comment" ) {
+                action.comment = jQuery( 'input.argument', row ).val() || "";
+            } else if ( actionType == "delay" ) {
+                action.delay = parseInt( jQuery( 'input.delay', row ).val() );
+            } else if ( actionType == "device" ) {
+                action.device = parseInt( jQuery( 'select.devicemenu', row ).val() );
+                var s = jQuery( 'select.actionmenu', row ).val() || "";
+                var p = s.split( /\//, 2 );
+                action.service = p[0]; action.action = p[1];
+                var ai = actions[ s ];
+                if ( ! ai ) {
+                    console.log( "Can't find actioninfo for " + s );
+                    return false;
+                }
+                action.parameters = [];
+                for ( var k=0; k < (ai.parameters || [] ).length; k++ ) {
+                    var p = { name: ai.parameters[k].name };
+                    if ( undefined !== ai.parameters[k].value ) {
+                        // Fixed value
+                        p.value = ai.parameters[k].value;
+                    } else {
+                        var v = jQuery( '#' + p.name + '.argument', row ).val() || "";
+                        if ( "" === v ) {
+                            if ( ai.parameters[k].optional ) {
+                                continue; /* skip it, not even on the list */
+                            }
+                            console.log("buildActionList: " + s + " required parameter " + p.name + " has no value");
+                            return false;
+                        } else {
+                            p.value = v;
+                        }
+                    }
+                    action.parameters.push( p );
+                }
+            }
+            list.push( action );
+        });
+        return list;
+    }
 
-    function changeActionAction( ev ) {
-        var el = jQuery( ev.currentTarget );
-        var newVal = el.val() || "";
-        var row = el.closest( 'div.actionrow' );
+    function validateActionRow( row ) {
+        var actionType = jQuery('select.actiontype', row).val();
+        jQuery('.error', row).remove();
+        if ( actionType == "comment" ) {
+            // nada
+        } else if ( actionType == "delay" ) {
+            var delay = jQuery( 'input.delaytime', row ).val();
+            if ( delay.match( /{[^}]+}/i ) ) {
+                // Variable reference. ??? check it?
+            } else {
+                var n = parseInt( delay );
+                if ( isNaN( n ) || n < 1 ) {
+                    jQuery( 'input.delaytime', row ).addClass( "error" );
+                    row.addClass( "error" );
+                }
+            }
+        } else if ( actionType == "device" ) {
+        } else {
+            row.addClass( "error" );
+        }
+    }
+    
+    function changeActionRow( row ) {
+        console.log("changeActionRow!");
+        var section = jQuery( row ).closest( 'div.actionlist' );
+        var l = buildActionList( section );
+        if ( l ) {
+            console.log( section.attr('id') + " = " + JSON.stringify( l ) );
+        } else {
+            console.log( "failed to build action list for " + section.attr('id') );
+        }
+    }
+    
+    function handleActionValueChange( ev ) {
+        var row = jQuery( ev.currentTarget ).closest( 'div.actionrow' );
+        changeActionRow( row );
+    }
+    
+    function changeActionAction( row, newVal ) {
         jQuery( '.argument', row ).remove();
         if ( ( newVal || "" ) === "" ) {
             return;
@@ -2191,11 +2275,13 @@ if (false) {
                     inp.attr( 'placeholder', action.parameters[k].name );
                 }
                 inp.attr('id', parm.name );
+                inp.on( 'change.reactor', handleActionValueChange );
                 /* If there are more than one parameters, wrap each in a label. */
                 if ( action.parameters.length > 1 ) {
                     var label = jQuery("<label class='argument'/>");
                     label.attr("for", parm.name );
                     label.text( ( parm.label || parm.name ) + ": " );
+                    if ( parm.optional ) label.addClass("optarg");
                     label.append( inp );
                     row.append(" ");
                     row.append( label );
@@ -2206,6 +2292,13 @@ if (false) {
             }
         }
         return;
+    }
+    
+    function handleActionActionChange( ev ) {
+        var el = jQuery( ev.currentTarget );
+        var newVal = el.val() || "";
+        var row = el.closest( 'div.actionrow' );
+        changeActionAction( row, newVal );
     }
     
     function deepcopy(obj) {
@@ -2244,10 +2337,7 @@ if (false) {
         return false;
     }
     
-    function changeActionDevice( ev ) {
-        var el = jQuery( ev.currentTarget );
-        var newVal = el.val() || "";
-        var row = el.closest( 'div.actionrow' );
+    function changeActionDevice( row, newVal ) {
         var actionMenu = jQuery( 'select.actionmenu', row );
 
         // Clear the action menu and remove all arguments.
@@ -2341,13 +2431,42 @@ if (false) {
             alert("Can't load service data for device. Luup may be reloading. Try again in a moment.");
         });
     }
+    
+    function handleActionDeviceChange( ev ) {
+        var el = jQuery( ev.currentTarget );
+        var newVal = el.val() || "";
+        var row = el.closest( 'div.actionrow' );
+        changeActionDevice( row, newVal );
+    }
+    
+    function changeActionType( row, newVal ) {
+        row.children().not('.actiontype').remove();
+        if ( newVal == 'device' ) {
+            row.append( makeDeviceMenu( "", "" ) );
+            row.append('<select class="actionmenu form-control form-control-sm"></select>');
+            jQuery( 'select.devicemenu', row ).on( 'change.reactor', handleActionDeviceChange );
+            jQuery( 'select.actionmenu', row ).on( 'change.reactor', handleActionActionChange );
+        } else if ( newVal == 'comment' ) {
+            row.append('<input type="text" class="argument form-control form-control-sm" placeholder="Enter comment text">');
+            jQuery( 'input', row ).on( 'change.reactor', handleActionValueChange );
+        } else if ( newVal == "delay" ) {
+            row.append('<input type="text" class="argument narrow form-control form-control-sm" placeholder="SS or MM:SS or HH:MM:SS">');
+            jQuery( 'input', row ).on( 'change.reactor', handleActionValueChange );
+        } else {
+            row.append('<div class="error">Type ' + newVal + '???</div>');
+        }
+    }
+    
+    function handleActionChange( ev ) {
+        var row = jQuery( ev.currentTarget ).closest( '.actionrow' );
+        var newVal = jQuery( 'select.actiontype', row ).val();
+        changeActionType( row, newVal );
+    }
 
     function getActionRow() {
         var row = jQuery('<div class="row actionrow form-inline"></div>');
-        row.append( makeDeviceMenu( "", "" ) );
-        row.append('<select class="actionmenu form-control form-control-sm"></select>');
-        jQuery( 'select.devicemenu', row ).on( 'change.reactor', changeActionDevice );
-        jQuery( 'select.actionmenu', row ).on( 'change.reactor', changeActionAction );
+        row.append('<select class="actiontype form-control form-control-sm"><option value="comment">Comment</option><option value="device">Device Action</option><option value="delay">Delay</option></select>');
+        jQuery( 'select.actiontype', row ).on( 'change.reactor', handleActionChange );
         return row;
     }
 
@@ -2525,4 +2644,4 @@ if (false) {
         doStatusPanel: doStatusPanel
     };
     return myModule;
-})(api);
+})(api, $ || jQuery);
