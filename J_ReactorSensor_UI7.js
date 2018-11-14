@@ -6,7 +6,7 @@
  * Copyright 2018 Patrick H. Rigney, All Rights Reserved.
  * This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
  */
-/* globals api,jQuery */
+/* globals api,jQuery,$ */
 
 //"use strict"; // fails on UI7, works fine with ALTUI
 
@@ -2075,6 +2075,52 @@ if (false) {
 
     function doSettings() {}
 
+    function makeSceneMenu() {
+        var ud = api.getUserData();
+        var scenes = api.cloneObject( ud.scenes );
+        var menu = jQuery( '<select class="form-control form-control-sm" />' );
+        /* If lots of scenes, sort by room; otherwise, use straight as-is */ // ???
+        if ( true || scenes.length > 10 ) {
+            var rooms = api.cloneObject( ud.rooms );
+            var rid = {};
+            for ( var i=0; i<rooms.length; ++i ) {
+                rid[rooms[i].id] = rooms[i];
+            }
+            rid[0] = { id: 0, name: "(no room)" };
+            scenes.sort( function( a, b ) {
+                if ( rid[a.room].name == rid[b.room].name ) {
+                    /* Same room */
+                    return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1;
+                }
+                return rid[a.room].name.toLowerCase() < rid[b.room].name.toLowerCase() ? -1 : 1;
+            });
+            var lastRoom = -1;
+            var el;
+            for ( var i=0; i<scenes.length; i++ ) {
+                if ( scenes[i].room != lastRoom ) {
+                    menu.append('<option value="" class="optheading" disabled>' + "--" + rid[scenes[i].room].name + "--</option>");
+                    lastRoom = scenes[i].room;
+                }
+                el = jQuery( '<option/>' );
+                el.val( scenes[i].id );
+                el.text( scenes[i].name + ' (#' + scenes[i].id + ')' );
+                menu.append( el );
+            }
+        } else {
+            /* Simple alpha list */
+            scenes.sort( function(a, b) { return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1; } );
+            for (var i=0; i<scenes.length; ++i) {
+                if ( scenes[i].notification_only || scenes[i].hidden ) {
+                    continue;
+                }
+                var opt = jQuery('<option value="' + scenes[i].id + '"></option>');
+                opt.text( scenes[i].name || ( "#" + scenes[i].id ) );
+                menu.append( opt );
+            }
+        }
+        return menu;
+    }
+    
     function changeSelectedScene( ev )
     {
         var t1 = jQuery('select#tripscene').val();
@@ -2100,11 +2146,54 @@ if (false) {
         });
     }
     
+    function validateActionRow( row ) {
+        var actionType = jQuery('select.actiontype', row).val();
+        jQuery('.tberror', row).removeClass( 'tberror' );
+        row.removeClass( 'tberror' );
+        if ( actionType == "comment" ) {
+            // nada
+        } else if ( actionType == "delay" ) {
+            var delay = jQuery( 'input#delay', row ).val() || "";
+            if ( delay.match( /{[^}]+}/i ) ) {
+                // Variable reference. ??? check it?
+            } else if ( delay.match( /^([0-9][0-9]?)(:[0-9][0-9]?){1,2}$/ ) ) {
+                // MM:SS or HH:MM:SS
+            } else {
+                var n = parseInt( delay );
+                if ( isNaN( n ) || n < 1 ) {
+                    jQuery( 'input#delay', row ).addClass( "tberror" );
+                    row.addClass( "tberror" );
+                }
+            }
+        } else if ( actionType == "device" ) {
+            var act = jQuery('select.actionmenu').val() || "";
+            if ( "" === act ) {
+                jQuery( 'select.actionmenu', row ).addClass( "tberror" );
+                row.addClass( "tberror" );
+            }
+            // check parameters, with value/type check when available?
+            // type, valueSet/value list, min/max
+        } else if ( actionType == "runscene" ) {
+            var sc = jQuery( 'select#scene' ).val() || "";
+            if ( "" === sc ) {
+                jQuery( 'select#scene' ).addClass( "tberror" );
+                row.addClass( "tberror" );
+            }
+        } else {
+            row.addClass( "tberror" );
+        }
+    }
+    
     function buildActionList( root ) {
-        var list = [];
-        if ( jQuery('.error', root ).length > 0 ) {
+        configModified = true;
+        root.addClass( "tbmodified" );
+        if ( jQuery('.tberror', root ).length > 0 ) {
             return false;
         }
+        /* Set up scene framework and first group with no delay */
+        var scene = { isReactorScene: true, name: root.attr('id'), groups: [] };
+        var group = { actions: [] };
+        scene.groups.push( group );
         jQuery( 'div.actionrow', root ).each( function( ix ) {
             var row = $( this );
             var actionType = jQuery( 'select.actiontype', row ).val();
@@ -2112,15 +2201,40 @@ if (false) {
             if ( actionType == "comment" ) {
                 action.comment = jQuery( 'input.argument', row ).val() || "";
             } else if ( actionType == "delay" ) {
-                action.delay = parseInt( jQuery( 'input.delay', row ).val() );
+                var t = jQuery( 'input#delay', row ).val() || "0";
+                if ( t.indexOf( ':' ) >= 0 ) {
+                    var pt = t.split( /:/ );
+                    t = 0;
+                    for ( var i=0; i<pt.length; i++ ) {
+                        t = t * 60 + parseInt( pt[i] );
+                    }
+                } else {
+                    t = parseInt( t );
+                }
+                if ( isNaN( t ) ) {
+                    scene = false;
+                    return false;
+                }
+                /* Create a new group, marked with the delay, for all subsequent actions */
+                if ( group.actions.length > 0 ) {
+                    group = { actions: [], delay: t, delaytype: jQuery( 'select#delaytype', row ).val() || "inline" };
+                    scene.groups.push( group );
+                } else {
+                    /* There are no actions in the current group; just modify the delay in this group. */
+                    group.delay = t;
+                    group.delaytype = jQuery( 'select#delaytype', row ).val() || "inline";
+                }
+                return true;
             } else if ( actionType == "device" ) {
                 action.device = parseInt( jQuery( 'select.devicemenu', row ).val() );
+                action.deviceName = deviceByNumber[ action.device ].name;
                 var s = jQuery( 'select.actionmenu', row ).val() || "";
                 var p = s.split( /\//, 2 );
                 action.service = p[0]; action.action = p[1];
                 var ai = actions[ s ];
                 if ( ! ai ) {
                     console.log( "Can't find actioninfo for " + s );
+                    scene = false;
                     return false;
                 }
                 action.parameters = [];
@@ -2136,6 +2250,7 @@ if (false) {
                                 continue; /* skip it, not even on the list */
                             }
                             console.log("buildActionList: " + s + " required parameter " + p.name + " has no value");
+                            scene = false;
                             return false;
                         } else {
                             p.value = v;
@@ -2143,36 +2258,31 @@ if (false) {
                     }
                     action.parameters.push( p );
                 }
+            } else if ( actionType == "runscene" ) {
+                action.scene = parseInt( jQuery( "select#scene", row ).val() || "0" );
+                if ( isNaN( action.scene ) || 0 === action.scene ) {
+                    console.log("buildActionList: invalid scene selected");
+                    scene = false;
+                    return false;
+                }
+                // action.sceneName = sceneByNumber[ action.scene ].name
+            } else {
+                console.log("buildActionList: " + actionType + " action unknown");
+                scene = false;
+                return false;
             }
-            list.push( action );
+            /* Append action to current group */
+            group.actions.push( action );
         });
-        return list;
+        
+        jQuery( "button#saveconfig" ).attr( "disabled", false );
+        jQuery( "button#revertconfig" ).attr( "disabled", false );
+        return scene;
     }
 
-    function validateActionRow( row ) {
-        var actionType = jQuery('select.actiontype', row).val();
-        jQuery('.error', row).remove();
-        if ( actionType == "comment" ) {
-            // nada
-        } else if ( actionType == "delay" ) {
-            var delay = jQuery( 'input.delaytime', row ).val();
-            if ( delay.match( /{[^}]+}/i ) ) {
-                // Variable reference. ??? check it?
-            } else {
-                var n = parseInt( delay );
-                if ( isNaN( n ) || n < 1 ) {
-                    jQuery( 'input.delaytime', row ).addClass( "error" );
-                    row.addClass( "error" );
-                }
-            }
-        } else if ( actionType == "device" ) {
-        } else {
-            row.addClass( "error" );
-        }
-    }
-    
     function changeActionRow( row ) {
         console.log("changeActionRow!");
+        validateActionRow( row );
         var section = jQuery( row ).closest( 'div.actionlist' );
         var l = buildActionList( section );
         if ( l ) {
@@ -2184,15 +2294,23 @@ if (false) {
     
     function handleActionValueChange( ev ) {
         var row = jQuery( ev.currentTarget ).closest( 'div.actionrow' );
+        row.addClass( "tbmodified" );
         changeActionRow( row );
     }
     
     function changeActionAction( row, newVal ) {
-        jQuery( '.argument', row ).remove();
+        var ct = jQuery( 'div.actiondata', row );
+        jQuery( '.argument', ct ).remove();
         if ( ( newVal || "" ) === "" ) {
             return;
         }
         var action = actions[newVal];
+        /* Check for device override to service/action */
+        var devNum = parseInt( jQuery( 'select.devicemenu', ct ).val() );
+        if ( !isNaN(devNum) && action.deviceOverride && action.deviceOverride[devNum] ) {
+            console.log("changeActionAction: using device override for " + String(devNum));
+            action = action.deviceOverride[devNum];
+        }
         if ( undefined !== action ) {
             /* Info assist from our enhancement data */
             for ( var k=0; k<( action.parameters || [] ).length; ++k ) {
@@ -2223,27 +2341,9 @@ if (false) {
                         }
                     }
                 } else if ( parm.type == "scene" ) {
-                    var inp = jQuery('<select class="argument form-control form-control-sm"/>');
-                    var ud = api.getUserData();
-                    var scenes = api.cloneObject( ud.scenes );
-                    scenes.sort( function(a, b) { return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1; } );
-                    for (var i=0; i<scenes.length; ++i) {
-                        if ( scenes[i].notification_only || scenes[i].hidden ) {
-                            continue;
-                        }
-                        var opt = jQuery('<option value="' + scenes[i].id + '"></option>');
-                        opt.text( scenes[i].name || ( "#" + scenes[i].id ) );
-                        inp.append( opt );
-                    }
-                    for ( var key in ( parm.extraValues || {} ) ) {
-                        if ( parm.extraValues.hasOwnProperty(key) ) {
-                            var opt = jQuery('<option/>');
-                            opt.val( key );
-                            opt.text( parm.extraValues[key] );
-                            inp.prepend( opt );
-                        }
-                    }
-                    inp.prepend('<option disabled>--choose--</option>');
+                    inp = makeSceneMenu();
+                    inp.prepend('<option value="" disabled>--choose--</option>');
+                    inp.val("");
                 } else if ( parm.type == "boolean" ) {
                     /* Menu */
                     inp = jQuery('<select class="argument form-control form-control-sm"/>');
@@ -2283,11 +2383,11 @@ if (false) {
                     label.text( ( parm.label || parm.name ) + ": " );
                     if ( parm.optional ) label.addClass("optarg");
                     label.append( inp );
-                    row.append(" ");
-                    row.append( label );
+                    ct.append(" ");
+                    ct.append( label );
                 } else {
                     /* No label */
-                    row.append( inp );
+                    ct.append( inp );
                 }
             }
         }
@@ -2338,11 +2438,12 @@ if (false) {
     }
     
     function changeActionDevice( row, newVal ) {
-        var actionMenu = jQuery( 'select.actionmenu', row );
+        var ct = jQuery( 'div.actiondata', row );
+        var actionMenu = jQuery( 'select.actionmenu', ct );
 
         // Clear the action menu and remove all arguments.
         actionMenu.empty().attr( 'disabled', true );
-        jQuery('.argument', row).remove();
+        jQuery('.argument', ct).remove();
         if ( newVal == "" ) { return; }
 
         /* Use lu_actions to get list of services/actions for this device. We could
@@ -2371,7 +2472,7 @@ if (false) {
                         /* Have extended data */
                         ai = serviceInfo.actions[actname];
                     } else {
-                        /* No extended data; copy what we have */
+                        /* No extended data; copy what we got from lu_action */
                         ai = { service: service.serviceId, action: actname, parameters: [] };
                         for ( var ip=0; ip < (service.actionList[j].arguments || []).length; ++ip ) {
                             var p = service.actionList[j].arguments[ip];
@@ -2379,8 +2480,9 @@ if (false) {
                         }
                     }
                     var key = service.serviceId + "/" + actname;
-                    if ( actions[key] === undefined ) { //??? global?
+                    if ( actions[key] === undefined ) {
                         // Save action data as we use it.
+                        ai.deviceOverride = {};
                         actions[key] = ai;
                     }
                     if ( ai.hidden ) {
@@ -2418,11 +2520,19 @@ if (false) {
                     opt.val( key );
                     opt.text( act.description || devact.action );
                     known.append( opt );
-                    actions[key].info = act;
+                    if ( undefined === actions[key] ) {
+                        act.deviceOverride = {};
+                        act.deviceOverride[newVal] = act;
+                        actions[key] = act;
+                    } else {
+                        actions[key].deviceOverride[newVal] = act;
+                    }
                 }
                 known.append("<option disabled/>");
                 actionMenu.prepend( known.children() );
             }
+            actionMenu.prepend( '<option value="">--choose--</option>' );
+            actionMenu.val("");
             actionMenu.attr( 'disabled', false );
         }).fail( function( jqXHR, textStatus, errorThrown ) {
             // Bummer.
@@ -2440,20 +2550,30 @@ if (false) {
     }
     
     function changeActionType( row, newVal ) {
-        row.children().not('.actiontype').remove();
+        var ct = jQuery('div.actiondata', row);
+        ct.empty();
         if ( newVal == 'device' ) {
-            row.append( makeDeviceMenu( "", "" ) );
-            row.append('<select class="actionmenu form-control form-control-sm"></select>');
-            jQuery( 'select.devicemenu', row ).on( 'change.reactor', handleActionDeviceChange );
-            jQuery( 'select.actionmenu', row ).on( 'change.reactor', handleActionActionChange );
+            ct.append( makeDeviceMenu( "", "" ) );
+            ct.append('<select class="actionmenu form-control form-control-sm"></select>');
+            jQuery( 'select.devicemenu', ct ).on( 'change.reactor', handleActionDeviceChange );
+            jQuery( 'select.actionmenu', ct ).on( 'change.reactor', handleActionActionChange );
         } else if ( newVal == 'comment' ) {
-            row.append('<input type="text" class="argument form-control form-control-sm" placeholder="Enter comment text">');
-            jQuery( 'input', row ).on( 'change.reactor', handleActionValueChange );
+            ct.append('<input type="text" class="argument form-control form-control-sm" placeholder="Enter comment text">');
+            jQuery( 'input', ct ).on( 'change.reactor', handleActionValueChange );
         } else if ( newVal == "delay" ) {
-            row.append('<input type="text" class="argument narrow form-control form-control-sm" placeholder="SS or MM:SS or HH:MM:SS">');
-            jQuery( 'input', row ).on( 'change.reactor', handleActionValueChange );
+            ct.append('<label for="delay">for <input id="delay" type="text" class="argument form-control form-control-sm" placeholder="SS or MM:SS or HH:MM:SS"></label>');
+            ct.append('<select id="delaytype" class="form-control form-control-sm"><option value="inline">from this point</option><option value="start">from start of actions</option></select>');
+            jQuery( 'input', ct ).on( 'change.reactor', handleActionValueChange );
+            jQuery( 'select', ct ).on( 'change.reactor', handleActionValueChange );
+        } else if ( newVal == "runscene" ) {
+            var m = makeSceneMenu();
+            m.prepend('<option value="" disabled>--choose--</option>');
+            m.val("");
+            m.attr('id', 'scene');
+            m.on( 'change.reactor', handleActionValueChange );
+            ct.append( m );
         } else {
-            row.append('<div class="error">Type ' + newVal + '???</div>');
+            ct.append('<div class="tberror">Type ' + newVal + '???</div>');
         }
     }
     
@@ -2465,7 +2585,14 @@ if (false) {
 
     function getActionRow() {
         var row = jQuery('<div class="row actionrow form-inline"></div>');
-        row.append('<select class="actiontype form-control form-control-sm"><option value="comment">Comment</option><option value="device">Device Action</option><option value="delay">Delay</option></select>');
+        row.append('<div class="col-xs-12 col-sm-12 col-md-4 col-lg-2"><select class="actiontype form-control form-control-sm"><option value="comment">Comment</option><option value="runscene">Run Scene</option><option value="device">Device Action</option><option value="delay">Delay</option></select></div>');
+        row.append('<div class="actiondata col-xs-12 col-sm-12 col-md-6 col-lg-8"></div>');
+        var controls = jQuery('<div class="controls col-xs-12 col-sm-12 col-md-2 col-lg-2"></div>');
+        controls.append( '<i class="material-icons md-btn action-try" title="Try this action">directions_run</i>' );
+        controls.append( '<i class="material-icons md-btn action-up" title="Move up">arrow_upward</i>' );
+        controls.append( '<i class="material-icons md-btn action-down" title="Move down">arrow_downward</i>' );
+        controls.append( '<i class="material-icons md-btn action-delete" title="Remove action">clear</i>' );
+        row.append( controls );
         jQuery( 'select.actiontype', row ).on( 'change.reactor', handleActionChange );
         return row;
     }
@@ -2474,7 +2601,7 @@ if (false) {
         var btn = jQuery( ev.currentTarget );
         var container = btn.closest( 'div.actionlist' );
         var newRow = getActionRow();
-        container.append( newRow );
+        newRow.insertBefore( '.buttonrow', container );
     }
 
     function doActivities()
@@ -2484,48 +2611,11 @@ if (false) {
                 handleSaveClick( undefined );
             }
 
-            initModule();
-
-            /* Load material design icons */
-            jQuery("head").append('<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">');
-
-            /* Our styles. */
-            var html = "<style>";
-            html += ".tb-about { margin-top: 24px; }";
-            html += ".color-green { color: #006040; }";
-            html += '.tberror { border: 1px solid red; }';
-            html += '.tbwarn { border: 1px solid yellow; background-color: yellow; }';
-            html += 'i.md-btn:disabled { color: #cccccc; cursor: auto; }';
-            html += 'i.md-btn[disabled] { color: #cccccc; cursor: auto; }';
-            html += 'i.md-btn { color: #006040; font-size: 12pt; cursor: pointer; }';
-            html += 'input.tbinvert { min-width: 16px; min-height: 16px; }';
-            html += 'div.conditions { width: 100%; }';
-            html += 'input.narrow { max-width: 6em; }';
-            html += 'div.conditiongroup { border-radius: 8px; border: 2px solid #006040; padding: 8px; }';
-            html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
-            html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
-            html += 'div.warning { color: red; }';
-            html += 'option.optheading { font-weight: bold; }';
-            html += '.tbslider { display: inline-block; width: 200px; height: 1em; border-radius: 8px; }';
-            html += '.tbslider .ui-slider-handle { background: url("/cmh/skins/default/img/other/slider_horizontal_cursor_24.png?") no-repeat scroll left center rgba(0,0,0,0); cursor: pointer !important; height: 24px !important; width: 24px !important; margin-top: 6px; font-size: 12px; text-align: center; padding-top: 4px; text-decoration: none; }';
-            html += '.tbslider .ui-slider-range-min { background-color: #12805b !important; }';
-            html += "</style>";
-            jQuery("head").append( html );
-
             /* Build the scene menus */
-            var ud = api.getUserData();
-            var scenes = api.cloneObject( ud.scenes );
-            scenes.sort( function(a, b) { return a.name < b.name ? -1 : 1; } );
-            var menu = jQuery('<select class="rsceneselect form-control-sm form-control">');
-            menu.append("<option value=''>--none--</option>");
-            for (var i=0; i<scenes.length; ++i) {
-                if ( scenes[i].notification_only || scenes[i].hidden ) {
-                    continue;
-                }
-                var opt = jQuery('<option value="' + scenes[i].id + '"></option>');
-                opt.text( scenes[i].name || ( "#" + scenes[i].id ) );
-                menu.append( opt );
-            }
+            var menu = makeSceneMenu();
+            menu.prepend( '<option value="">(none)</option>' );
+            menu.addClass( "rsceneselect" );
+            menu.val("");
             menu.attr("id", "tripscene");
             jQuery("select#tripscene").replaceWith( menu.clone() );
             menu.attr("id", "untripscene");
@@ -2557,6 +2647,8 @@ if (false) {
             jQuery("select.rsceneselect").on( 'change.reactor', changeSelectedScene );
 
             jQuery("button.addaction").on( 'click.reactor', addAction );
+            jQuery("button#saveconfig").on( 'click.reactor', saveActions ).attr( "disabled", true );
+            jQuery("button#revertconfig").on( 'click.reactor', revertActions ).attr( "disabled", true );
 
             api.registerEventHandler('on_ui_cpanel_before_close', ReactorSensor, 'onBeforeCpanelClose');
         }
@@ -2569,6 +2661,40 @@ if (false) {
     
     function preloadActivities() {
         initModule();
+
+        /* Load material design icons */
+        jQuery("head").append('<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">');
+
+        /* Our styles. */
+        var html = "<style>";
+        html += ".tb-about { margin-top: 24px; }";
+        html += ".color-green { color: #428BCA; }";
+        html += '.tberror { border: 1px solid red; }';
+        html += '.tbwarn { border: 1px solid yellow; background-color: yellow; }';
+        html += 'i.md-btn:disabled { color: #cccccc; cursor: auto; }';
+        html += 'i.md-btn[disabled] { color: #cccccc; cursor: auto; }';
+        html += 'i.md-btn { color: #428BCA; font-size: 12pt; cursor: pointer; }';
+        html += 'input.tbinvert { min-width: 16px; min-height: 16px; }';
+        html += 'div.fullwidth { width: 100%; }';
+        html += 'input.narrow { max-width: 6em; }';
+        html += 'div.actionlist { border-radius: 8px; border: 2px solid #428BCA; margin-bottom: 16px; }';
+        html += 'div.actionlist .row { margin-right: 0px; margin-left: 0px; }';
+        html += 'div.tblisttitle { background-color: #428BCA; color: #fff; font-size: 16px; font-weight: bold; padding: 8px; }';
+        html += 'div.actionlist label:not(.required) { font-weight: normal; }';
+        html += 'div.actionlist label.required { font-weight: bold; }';
+        html += 'div.actionlist.tbmodified div.tblisttitle span.titletext:after { content: " (modified)" }';
+        html += 'div.actionrow,div.buttonrow { padding: 8px; }';
+        html += 'div.actionlist div.actionrow:nth-child(odd) { background-color: #EFF6FF; }';
+        html += 'div.actionrow.tbmodified { background: #fff6ef; }';
+        html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
+        html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
+        html += 'div.warning { color: red; }';
+        html += 'option.optheading { font-weight: bold; }';
+        html += '.tbslider { display: inline-block; width: 200px; height: 1em; border-radius: 8px; }';
+        html += '.tbslider .ui-slider-handle { background: url("/cmh/skins/default/img/other/slider_horizontal_cursor_24.png?") no-repeat scroll left center rgba(0,0,0,0); cursor: pointer !important; height: 24px !important; width: 24px !important; margin-top: 6px; font-size: 12px; text-align: center; padding-top: 4px; text-decoration: none; }';
+        html += '.tbslider .ui-slider-range-min { background-color: #12805b !important; }';
+        html += "</style>";
+        jQuery("head").append( html );
         
         api.setCpanelContent( '<div id="loading">Please wait... loading device and activity data, which may take a few seconds.</div>' );
 
@@ -2593,13 +2719,15 @@ if (false) {
             html += '<div class="row"><div class="col-xs col-sm-12"><label for="untripscene">Un-trip Scene: <select id="untripscene" class="rsceneselect"></select></label></div></div>';
             html += '</div>';
 
-            html += '<div class="reactoractions">';
+            html += '<div class="reactoractions fullwidth">';
 
             html += '<div id="tripactions" class="actionlist">';
-            html += '<button id="addtripaction" class="btn btn-default addaction">Add Action</button>';
-            html += '</div>'; // tripactions
+            html += '<div class="row"><div class="tblisttitle col-xs-12 col-sm-12"><span id="titletext">Trip Actions</span> <button id="saveconfig" class="btn btn-xs btn-success">Save</button> <button id="revertconfig" class="btn btn-xs btn-danger">Revert</button></div></div>';
+            html += '<div class="row buttonrow"><div class="col-sm-1"><button id="addtripaction" class="addaction btn btn-sm btn-primary">Add Trip Action</button></div></div>';            
+            html += '</div>'; // #tripactions
             html += '<div id="untripactions" class="actionlist">';
-            html += '<button id="addtripaction" class="btn btn-default addaction">Add Action</button>';
+            html += '<div class="row"><div class="tblisttitle col-xs-12 col-sm-12"><span id="titletext">Untrip Actions</span> <button id="saveconfig" class="btn btn-xs btn-success">Save</button> <button id="revertconfig" class="btn btn-xs btn-danger">Revert</button></div></div>';
+            html += '<div class="row buttonrow"><div class="col-sm-1"><button id="adduntripaction" class="addaction btn btn-sm btn-primary">Add Untrip Action</button></div></div>';            
             html += '</div>'; // untripactions
 
             html += '</div>'; // reactoractions
