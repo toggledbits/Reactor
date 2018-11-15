@@ -2147,7 +2147,7 @@ if (false) {
     }
     
     function validateActionRow( row ) {
-        var actionType = jQuery('select.actiontype', row).val();
+        var actionType = jQuery('select#actiontype', row).val();
         jQuery('.tberror', row).removeClass( 'tberror' );
         row.removeClass( 'tberror' );
         if ( actionType == "comment" ) {
@@ -2166,15 +2166,15 @@ if (false) {
                 }
             }
         } else if ( actionType == "device" ) {
-            var act = jQuery('select.actionmenu').val() || "";
+            var act = jQuery('select#actionmenu', row).val() || "";
             if ( "" === act ) {
-                jQuery( 'select.actionmenu', row ).addClass( "tberror" );
+                jQuery( 'select#actionmenu', row ).addClass( "tberror" );
                 row.addClass( "tberror" );
             }
             // check parameters, with value/type check when available?
             // type, valueSet/value list, min/max
         } else if ( actionType == "runscene" ) {
-            var sc = jQuery( 'select#scene' ).val() || "";
+            var sc = jQuery( 'select#scene', row ).val() || "";
             if ( "" === sc ) {
                 jQuery( 'select#scene' ).addClass( "tberror" );
                 row.addClass( "tberror" );
@@ -2185,8 +2185,6 @@ if (false) {
     }
     
     function buildActionList( root ) {
-        configModified = true;
-        root.addClass( "tbmodified" );
         if ( jQuery('.tberror', root ).length > 0 ) {
             return false;
         }
@@ -2196,7 +2194,7 @@ if (false) {
         scene.groups.push( group );
         jQuery( 'div.actionrow', root ).each( function( ix ) {
             var row = $( this );
-            var actionType = jQuery( 'select.actiontype', row ).val();
+            var actionType = jQuery( 'select#actiontype', row ).val();
             var action = { type: actionType, index: ix+1 };
             if ( actionType == "comment" ) {
                 action.comment = jQuery( 'input.argument', row ).val() || "";
@@ -2228,7 +2226,7 @@ if (false) {
             } else if ( actionType == "device" ) {
                 action.device = parseInt( jQuery( 'select.devicemenu', row ).val() );
                 action.deviceName = deviceByNumber[ action.device ].name;
-                var s = jQuery( 'select.actionmenu', row ).val() || "";
+                var s = jQuery( 'select#actionmenu', row ).val() || "";
                 var p = s.split( /\//, 2 );
                 action.service = p[0]; action.action = p[1];
                 var ai = actions[ s ];
@@ -2274,30 +2272,60 @@ if (false) {
             /* Append action to current group */
             group.actions.push( action );
         });
-        
-        jQuery( "button#saveconfig" ).attr( "disabled", false );
-        jQuery( "button#revertconfig" ).attr( "disabled", false );
         return scene;
+    }
+    
+    function handleActionsSaveClick( ev ) {
+        var tcf = buildActionList( jQuery( 'div#tripactions') );
+        var ucf = buildActionList( jQuery( 'div#untripactions') );
+        if ( tcf && ucf ) {
+            var myid = api.getCpanelDeviceId();
+            iData[myid].cdata.tripactions = tcf;
+            iData[myid].cdata.untripactions = ucf;
+            handleSaveClick( ev ); /* pass up */
+            updateSaveControls();
+            return;
+        }
+        alert( "Configuration not saved. Please correct the indicated errors, then try again." );
     }
 
     function changeActionRow( row ) {
-        console.log("changeActionRow!");
+        console.log("changeActionRow: updating cached config");
+        configModified = true;
         validateActionRow( row );
-        var section = jQuery( row ).closest( 'div.actionlist' );
-        var l = buildActionList( section );
-        if ( l ) {
-            console.log( section.attr('id') + " = " + JSON.stringify( l ) );
-        } else {
-            console.log( "failed to build action list for " + section.attr('id') );
+        var section = row.closest( 'div.actionlist' );
+        var scene = buildActionList( section );
+        if ( scene ) {
+            var sn = section.attr('id');
+            var myid = api.getCpanelDeviceId();
+            iData[myid].cdata[sn] = scene;
         }
+        
+        /* Update row controls */
+        jQuery('div.controls i.action-up', section).attr('disabled', false);
+        jQuery('div.actionrow:first div.controls i.action-up', section).attr('disabled', true);
+        /* Down is more complicated because the "Add" button row is
+           the last child in each group. Select only the conditionrows in each
+           group, then apply to the last in each of those. */
+        jQuery('div.controls i.action-down', section).attr('disabled', false);
+        jQuery('div.actionrow:last div.controls i.action-down', section).attr('disabled', true);
+        /*
+        jQuery('div.conditiongroup').each( function( ix, grpEl ) {
+            jQuery( 'div.conditionrow:last div.controls i.action-down', grpEl )
+                .attr('disabled', true);
+        });
+        */
+        /* Save and revert buttons */
+        updateSaveControls();
     }
     
     function handleActionValueChange( ev ) {
+        configModified = true;
         var row = jQuery( ev.currentTarget ).closest( 'div.actionrow' );
         row.addClass( "tbmodified" );
         changeActionRow( row );
     }
-    
+
     function changeActionAction( row, newVal ) {
         var ct = jQuery( 'div.actiondata', row );
         jQuery( '.argument', ct ).remove();
@@ -2307,7 +2335,7 @@ if (false) {
         var action = actions[newVal];
         /* Check for device override to service/action */
         var devNum = parseInt( jQuery( 'select.devicemenu', ct ).val() );
-        if ( !isNaN(devNum) && action.deviceOverride && action.deviceOverride[devNum] ) {
+        if ( !isNaN(devNum) && action && action.deviceOverride && action.deviceOverride[devNum] ) {
             console.log("changeActionAction: using device override for " + String(devNum));
             action = action.deviceOverride[devNum];
         }
@@ -2395,10 +2423,12 @@ if (false) {
     }
     
     function handleActionActionChange( ev ) {
+        configModified = true;
         var el = jQuery( ev.currentTarget );
         var newVal = el.val() || "";
         var row = el.closest( 'div.actionrow' );
         changeActionAction( row, newVal );
+        changeActionRow( row );
     }
     
     function deepcopy(obj) {
@@ -2437,9 +2467,9 @@ if (false) {
         return false;
     }
     
-    function changeActionDevice( row, newVal ) {
+    function changeActionDevice( row, newVal, fnext, fargs ) {
         var ct = jQuery( 'div.actiondata', row );
-        var actionMenu = jQuery( 'select.actionmenu', ct );
+        var actionMenu = jQuery( 'select#actionmenu', ct );
 
         // Clear the action menu and remove all arguments.
         actionMenu.empty().attr( 'disabled', true );
@@ -2534,19 +2564,32 @@ if (false) {
             actionMenu.prepend( '<option value="">--choose--</option>' );
             actionMenu.val("");
             actionMenu.attr( 'disabled', false );
+            if ( undefined !== fnext ) {
+                fnext.apply( null, fargs );
+            }
         }).fail( function( jqXHR, textStatus, errorThrown ) {
             // Bummer.
-            console.log("Failed to load service data: " + textStatus + " " + String(errorThrown));
-            console.log(jqXHR.responseText);
-            alert("Can't load service data for device. Luup may be reloading. Try again in a moment.");
+            if ( 500 === jqXHR.status ) {
+                alert("Can't load service data for device. Luup may be reloading. Try again in a moment.");
+            } else {
+                console.log("changeActionDevice: failed to load service data: " + textStatus + "; " + String(errorThrown));
+                console.log(jqXHR.responseText);
+            }
+            actionMenu.prepend( '<option value="">--choose--</option>' );
+            actionMenu.val("");
+            actionMenu.attr( 'disabled', false );
+            if ( undefined !== fnext ) {
+                fnext.apply( null, fargs );
+            }
         });
     }
     
     function handleActionDeviceChange( ev ) {
+        configModified = true;
         var el = jQuery( ev.currentTarget );
         var newVal = el.val() || "";
         var row = el.closest( 'div.actionrow' );
-        changeActionDevice( row, newVal );
+        changeActionDevice( row, newVal, changeActionRow, [ row ] );
     }
     
     function changeActionType( row, newVal ) {
@@ -2554,9 +2597,9 @@ if (false) {
         ct.empty();
         if ( newVal == 'device' ) {
             ct.append( makeDeviceMenu( "", "" ) );
-            ct.append('<select class="actionmenu form-control form-control-sm"></select>');
+            ct.append('<select id="actionmenu" class="form-control form-control-sm"></select>');
             jQuery( 'select.devicemenu', ct ).on( 'change.reactor', handleActionDeviceChange );
-            jQuery( 'select.actionmenu', ct ).on( 'change.reactor', handleActionActionChange );
+            jQuery( 'select#actionmenu', ct ).on( 'change.reactor', handleActionActionChange );
         } else if ( newVal == 'comment' ) {
             ct.append('<input type="text" class="argument form-control form-control-sm" placeholder="Enter comment text">');
             jQuery( 'input', ct ).on( 'change.reactor', handleActionValueChange );
@@ -2575,37 +2618,148 @@ if (false) {
         } else {
             ct.append('<div class="tberror">Type ' + newVal + '???</div>');
         }
+        jQuery( 'div.controls i.action-try', row ).attr( 'disabled', "device" !== newVal );
     }
     
     function handleActionChange( ev ) {
+        configModified = true;
         var row = jQuery( ev.currentTarget ).closest( '.actionrow' );
-        var newVal = jQuery( 'select.actiontype', row ).val();
+        var newVal = jQuery( 'select#actiontype', row ).val();
         changeActionType( row, newVal );
+        changeActionRow( row );
+    }
+
+    function handleControlClick( ev ) {
+        var el = ev.currentTarget;
+        if ( jQuery( el ).attr('disabled') ) {
+            return;
+        }
+        var row = jQuery(el).closest('div.actionrow');
+        var op = jQuery( el ).attr('id');
+        if ( "action-up" === op ) {
+            /* Move up. */
+
+            /* Move up in display */
+            var prior = row.prev(); /* find prior row */
+            row.detach();
+            row.insertBefore( prior );
+
+            configModified = true;
+
+            changeActionRow( row ); /* pass it on */
+        } else if ( "action-down" === op ) {
+            /* Move down */
+
+            /* Move down in display */
+            var next = row.next();
+            row.detach();
+            row.insertAfter( next );
+
+            configModified = true;
+
+            changeActionRow( row );
+        } else if ( "action-delete" === op ) {
+            row.remove();
+            
+            configModified = true;
+            
+            changeActionRow( row ); // ???
+        } else if ( "action-try" === op ) {
+            alert( "yes... some day" );
+        }
     }
 
     function getActionRow() {
         var row = jQuery('<div class="row actionrow form-inline"></div>');
-        row.append('<div class="col-xs-12 col-sm-12 col-md-4 col-lg-2"><select class="actiontype form-control form-control-sm"><option value="comment">Comment</option><option value="runscene">Run Scene</option><option value="device">Device Action</option><option value="delay">Delay</option></select></div>');
+        row.append('<div class="col-xs-12 col-sm-12 col-md-4 col-lg-2"><select id="actiontype" class="form-control form-control-sm"><option value="comment">Comment</option><option value="runscene">Run Scene</option><option value="device">Device Action</option><option value="delay">Delay</option></select></div>');
         row.append('<div class="actiondata col-xs-12 col-sm-12 col-md-6 col-lg-8"></div>');
         var controls = jQuery('<div class="controls col-xs-12 col-sm-12 col-md-2 col-lg-2"></div>');
-        controls.append( '<i class="material-icons md-btn action-try" title="Try this action">directions_run</i>' );
-        controls.append( '<i class="material-icons md-btn action-up" title="Move up">arrow_upward</i>' );
-        controls.append( '<i class="material-icons md-btn action-down" title="Move down">arrow_downward</i>' );
-        controls.append( '<i class="material-icons md-btn action-delete" title="Remove action">clear</i>' );
+        controls.append( '<i id="action-try" class="material-icons md-btn" title="Try this action">directions_run</i>' );
+        controls.append( '<i id="action-up" class="material-icons md-btn" title="Move up">arrow_upward</i>' );
+        controls.append( '<i id="action-down" class="material-icons md-btn" title="Move down">arrow_downward</i>' );
+        controls.append( '<i id="action-delete" class="material-icons md-btn" title="Remove action">clear</i>' );
+        jQuery( 'i.md-btn', controls ).on( 'click.reactor', handleControlClick );
         row.append( controls );
-        jQuery( 'select.actiontype', row ).on( 'change.reactor', handleActionChange );
+        jQuery( 'select#actiontype', row ).on( 'change.reactor', handleActionChange );
         return row;
     }
 
-    function addAction( ev ) {
+    function handleAddActionClick( ev ) {
         var btn = jQuery( ev.currentTarget );
         var container = btn.closest( 'div.actionlist' );
         var newRow = getActionRow();
         newRow.insertBefore( '.buttonrow', container );
     }
+    
+    function loadActions( setName, scene ) {
+        var section = jQuery( 'div#' + setName );
+        var newRow;
+        for ( var i=0; i < (scene.groups || []).length; i++ ) {
+            var gr = scene.groups[i];
+            if ( 0 !== (gr.delay || 0) ) {
+                newRow = getActionRow();
+                changeActionType( newRow, "delay" );
+                jQuery( "input#delay", newRow ).val( gr.delay );
+                jQuery( "select#delaytype", newRow ).val( gr.delayType || "inline" );
+                section.append( newRow );
+            }
+            for ( var k=0; k < (gr.actions || []).length; k++ ) {
+                var act = gr.actions[k];
+                newRow = getActionRow();
+                jQuery( 'select#actiontype', newRow).val( act.type || "" );
+                changeActionType( newRow, act.type || "" );
+                if ( "comment" === act.type ) {
+                    jQuery( 'input', newRow ).val( act.comment || "" );
+                } else if ( "runscene" === act.type ) {
+                    if ( 0 === jQuery( 'select#scene option[value="' + act.scene + '"]' ).length ) {
+                        /* Insert missing value (ref to non-existent scene) */
+                        var el = jQuery( '<option/>' ).val( act.scene ).text( ( act.sceneName || "name?" ) + ' (#' + act.scene + ') (missing)' );
+                        jQuery( 'select#scene', newRow ).prepend( el ).addClass( "tberror" );
+                    }
+                    jQuery( 'select#scene', newRow).val( act.scene );
+                } else if ( "device" === act.type ) {
+                    if ( 0 == jQuery( 'select.devicemenu option[value="' + act.device + '"]', newRow ).length ) {
+                        var opt = jQuery( '<option/>' ).val( act.device ).text( '#' + act.device + ' ' + ( act.deviceName || 'name?' ) + ' (missing)' );
+                        // opt.insertAfter( 'select.devicemenu option[value=""]:first-child', newRow );
+                        jQuery( 'select.devicemenu', newRow ).prepend( opt ).addClass( "tberror" );
+                    }
+                    jQuery( 'select.devicemenu', newRow ).val( act.device );
+                    changeActionDevice( newRow, act.device || "", function( row, action ) { 
+                        var key = action.service + "/" + action.action;
+                        if ( 0 == jQuery( 'select#actionmenu option[value="' + key + '"]', row ).length ) {
+                            var opt = jQuery( '<option/>' ).val( key ).text( key );
+                            jQuery( 'select#actionmenu', row ).prepend( opt );
+                        }
+                        jQuery( 'select#actionmenu', row ).val( key );
+                        changeActionAction( row, key );
+                        for ( var j=0; j<(action.parameters || []).length; j++ ) {
+                            if ( 0 === jQuery( '#' + action.parameters[j].name, row ).length ) {
+                                var inp = jQuery( '<input class="form-control form-control-sm">' ).attr('id', action.parameters[j].name);
+                                var lbl = jQuery( '<label/>' ).attr('for', action.parameters[j].name).text(action.parameters[j].name).addClass('tbrequired').addClass("argument").append(inp);
+                                jQuery( 'div.actiondata', row ).append( lbl );
+                            }
+                            jQuery( '#' + action.parameters[j].name, row ).val( action.parameters[j].value || "" );
+                        }
+                    }, [ newRow, act ]);
+                } else {
+                    console.log("loadActions: what's a " + act.type + "? Skipping it!");
+                    alert( "BUG: type " + act.type + " unknown, skipping." );
+                    continue;
+                }
+
+                newRow.insertBefore( jQuery( '.buttonrow', section ) );
+            }
+        }
+    }
+    
+    function handleActionsRevertClick( ev ) {
+        alert("not yet implemented");
+    }
 
     function doActivities()
     {
+        var myid = api.getCpanelDeviceId();
+
         try {
             if ( configModified && confirm( "You have unsaved changes. Press OK to save them, or Cancel to discard them." ) ) {
                 handleSaveClick( undefined );
@@ -2643,12 +2797,14 @@ if (false) {
                     }
                 }
             }
-
             jQuery("select.rsceneselect").on( 'change.reactor', changeSelectedScene );
-
-            jQuery("button.addaction").on( 'click.reactor', addAction );
-            jQuery("button#saveconfig").on( 'click.reactor', saveActions ).attr( "disabled", true );
-            jQuery("button#revertconfig").on( 'click.reactor', revertActions ).attr( "disabled", true );
+            
+            loadActions( 'tripactions', iData[myid].cdata.tripactions || {} );
+            loadActions( 'untripactions', iData[myid].cdata.untripactions || {} );
+            
+            jQuery("button.addaction").on( 'click.reactor', handleAddActionClick );
+            jQuery("button#saveconf").on( 'click.reactor', handleActionsSaveClick ).attr( "disabled", true );
+            jQuery("button#revertconf").on( 'click.reactor', handleActionsRevertClick ).attr( "disabled", true );
 
             api.registerEventHandler('on_ui_cpanel_before_close', ReactorSensor, 'onBeforeCpanelClose');
         }
@@ -2673,7 +2829,7 @@ if (false) {
         html += '.tbwarn { border: 1px solid yellow; background-color: yellow; }';
         html += 'i.md-btn:disabled { color: #cccccc; cursor: auto; }';
         html += 'i.md-btn[disabled] { color: #cccccc; cursor: auto; }';
-        html += 'i.md-btn { color: #428BCA; font-size: 12pt; cursor: pointer; }';
+        html += 'i.md-btn { color: #428BCA; font-size: 14pt; cursor: pointer; }';
         html += 'input.tbinvert { min-width: 16px; min-height: 16px; }';
         html += 'div.fullwidth { width: 100%; }';
         html += 'input.narrow { max-width: 6em; }';
@@ -2722,11 +2878,11 @@ if (false) {
             html += '<div class="reactoractions fullwidth">';
 
             html += '<div id="tripactions" class="actionlist">';
-            html += '<div class="row"><div class="tblisttitle col-xs-12 col-sm-12"><span id="titletext">Trip Actions</span> <button id="saveconfig" class="btn btn-xs btn-success">Save</button> <button id="revertconfig" class="btn btn-xs btn-danger">Revert</button></div></div>';
+            html += '<div class="row"><div class="tblisttitle col-xs-12 col-sm-12"><span id="titletext">Trip Actions</span> <button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>';
             html += '<div class="row buttonrow"><div class="col-sm-1"><button id="addtripaction" class="addaction btn btn-sm btn-primary">Add Trip Action</button></div></div>';            
             html += '</div>'; // #tripactions
             html += '<div id="untripactions" class="actionlist">';
-            html += '<div class="row"><div class="tblisttitle col-xs-12 col-sm-12"><span id="titletext">Untrip Actions</span> <button id="saveconfig" class="btn btn-xs btn-success">Save</button> <button id="revertconfig" class="btn btn-xs btn-danger">Revert</button></div></div>';
+            html += '<div class="row"><div class="tblisttitle col-xs-12 col-sm-12"><span id="titletext">Untrip Actions</span> <button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>';
             html += '<div class="row buttonrow"><div class="col-sm-1"><button id="adduntripaction" class="addaction btn btn-sm btn-primary">Add Untrip Action</button></div></div>';            
             html += '</div>'; // untripactions
 
