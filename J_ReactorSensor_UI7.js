@@ -501,8 +501,8 @@ var ReactorSensor = (function(api, $) {
      */
     function updateSaveControls() {
         var errors = jQuery('.tberror');
-        jQuery('button#saveconf').attr('disabled', ! ( configModified && errors.length === 0 ) );
-        jQuery('button#revertconf').attr('disabled', !configModified);
+        jQuery('button#saveconf').prop('disabled', ! ( configModified && errors.length === 0 ) );
+        jQuery('button#revertconf').prop('disabled', !configModified);
     }
 
     /**
@@ -512,30 +512,30 @@ var ReactorSensor = (function(api, $) {
         /* Disable all "Add Condition" buttons if any condition type menu
            has no selection. */
         var nset = jQuery('div.condtype select option[value=""]:selected').length !== 0;
-        jQuery('button.addcond').attr('disabled', nset );
+        jQuery('button.addcond').prop('disabled', nset );
 
         /* Disable "Add Group" button with same conditions. */
-        jQuery('button#addgroup').attr('disabled', nset );
+        jQuery('button#addgroup').prop('disabled', nset );
 
         /* Up/down tools for conditions enabled except up for first and down
            for last. */
-        jQuery('div.controls i.action-up').attr('disabled', false);
-        jQuery('div.conditionrow:first-child div.controls i.action-up').attr('disabled', true);
+        jQuery('div.controls i.action-up').prop('disabled', false);
+        jQuery('div.conditionrow:first-child div.controls i.action-up').prop('disabled', true);
         /* Down is more complicated because the "Add Condition" button row is
            the last child in each group. Select only the conditionrows in each
            group, then apply to the last in each of those. */
-        jQuery('div.controls i.action-down').attr('disabled', false);
+        jQuery('div.controls i.action-down').prop('disabled', false);
         jQuery('div.conditiongroup').each( function( ix, grpEl ) {
             jQuery( 'div.conditionrow:last div.controls i.action-down', grpEl )
-                .attr('disabled', true);
+                .prop('disabled', true);
         });
 
         /* Delete button of single condition in first condition group is
            disabled/hidden. Must keep one condition, hopefully set. */
-        jQuery('div.conditionrow div.controls i.action-delete').attr('disabled', false).show();
+        jQuery('div.conditionrow div.controls i.action-delete').prop('disabled', false).show();
         var lastMo = jQuery('div.conditiongroup:first-child div.conditionrow div.controls');
         if ( lastMo.length == 1 ) {
-            jQuery('i.action-delete', lastMo).attr('disabled', true ).hide();
+            jQuery('i.action-delete', lastMo).prop('disabled', true ).hide();
         }
 
         updateSaveControls();
@@ -1121,7 +1121,7 @@ var ReactorSensor = (function(api, $) {
         var grp = jQuery( el ).closest('div.conditiongroup');
 
         /* Disable the add button for now. */
-        jQuery(el).attr('disabled', true);
+        jQuery(el).prop('disabled', true);
 
         /* Create a new condition row, assign an ID, and insert it before the button */
         var newId = getUID("cond");
@@ -1145,7 +1145,7 @@ var ReactorSensor = (function(api, $) {
     function handleAddGroupClick( ev ) {
         var el = ev.currentTarget;
         var row = jQuery( el ).closest('div.row'); /* add group button row */
-        jQuery(el).attr('disabled', true); /* disable the (only) add group button for now */
+        jQuery(el).prop('disabled', true); /* disable the (only) add group button for now */
 
         /* Create a new condition group div, assign a group ID */
         var newId = getUID("grp");
@@ -1164,7 +1164,7 @@ var ReactorSensor = (function(api, $) {
 
         /* Add an "Add Condition" button for the new group */
         cel = jQuery('<div class="row"><div class="col-sm-1"><button class="addcond btn btn-sm btn-primary">Add Condition</button></div></div>');
-        jQuery("button.addcond", cel).attr('disabled',true); /* Add Cond is disabled to start */
+        jQuery("button.addcond", cel).prop('disabled',true); /* Add Cond is disabled to start */
         jQuery("button.addcond", cel).on( 'click.reactor', handleAddConditionClick );
 
         condgroup.append(cel); /* Add it to the conditiongroup */
@@ -1187,7 +1187,7 @@ var ReactorSensor = (function(api, $) {
      */
     function handleConditionSort( ev ) {
         var el = ev.currentTarget;
-        if ( jQuery( el ).attr('disabled') ) {
+        if ( jQuery( el ).prop('disabled') ) {
             return;
         }
         var row = jQuery(el).closest('div.row');
@@ -2127,31 +2127,6 @@ if (false) {
         return menu;
     }
     
-    function changeSelectedScene( ev )
-    {
-        var t1 = jQuery('select#tripscene').val();
-        var t2 = jQuery('select#untripscene').val();
-        if ( t1 === "" && t2 === "" ) {
-            api.setDeviceStatePersistent( api.getCpanelDeviceId(), serviceId, "Scenes", "");
-        } else {
-            var ll = t1 + "," + t2;
-            api.setDeviceStatePersistent( api.getCpanelDeviceId(), serviceId, "Scenes", ll);
-        }
-        var uri = api.getDataRequestURL() + "?id=lr_Reactor&device=" + api.getCpanelDeviceId() + "&action=loadscenes";
-        jQuery.ajax({
-            url: uri,
-            dataType: "json",
-            timeout: 5000,
-        }).done( function( data, statusText, jqXHR ) {
-            // Excellent.
-            console.log(jqXHR.responseText);
-        }).fail( function( jqXHR, textStatus, errorThrown ) {
-            // Bummer.
-            console.log("Failed to load scenes: " + textStatus + " " + String(errorThrown));
-            console.log(jqXHR.responseText);
-        });
-    }
-    
     function validateActionRow( row ) {
         var actionType = jQuery('select#actiontype', row).val();
         jQuery('.tberror', row).removeClass( 'tberror' );
@@ -2293,6 +2268,8 @@ if (false) {
                 if ( !configModified ) { /* successful save? */
                     jQuery( 'div.actionlist.tbmodified' ).removeClass( "tbmodified" );
                     jQuery( 'div.actionlist .tbmodified' ).removeClass( "tbmodified" );
+                    /* Scene refs are upgraded to actions, so delete old on save */
+                    api.setDeviceStatePersistent( api.getCpanelDeviceId(), serviceId, "Scenes", "" );
                 }
             }, [] ); /* pass up */
             return;
@@ -2315,17 +2292,17 @@ if (false) {
         }
         
         /* Update row controls */
-        jQuery('div.controls i.action-up', section).attr('disabled', false);
-        jQuery('div.actionrow:first div.controls i.action-up', section).attr('disabled', true);
+        jQuery('div.controls i.action-up', section).prop('disabled', false);
+        jQuery('div.actionrow:first-child div.controls i.action-up', section).prop('disabled', true);
         /* Down is more complicated because the "Add" button row is
            the last child in each group. Select only the conditionrows in each
            group, then apply to the last in each of those. */
-        jQuery('div.controls i.action-down', section).attr('disabled', false);
-        jQuery('div.actionrow:last div.controls i.action-down', section).attr('disabled', true);
+        jQuery('div.controls i.action-down', section).prop('disabled', false);
+        jQuery('div.actionrow:last-child div.controls i.action-down', section).prop('disabled', true);
         /*
         jQuery('div.conditiongroup').each( function( ix, grpEl ) {
             jQuery( 'div.conditionrow:last div.controls i.action-down', grpEl )
-                .attr('disabled', true);
+                .prop('disabled', true);
         });
         */
         /* Save and revert buttons */
@@ -2517,7 +2494,6 @@ if (false) {
             dataType: "json",
             timeout: 5000
         }).done( function( data, statusText, jqXHR ) {
-            var mm = {}, ms = [];
             var mytype = (deviceByNumber[newVal] || {}).device_type || "";
             for ( var i=0; i<data.serviceList.length; i++ ) {
                 var section = jQuery( "<select/>" );
@@ -2623,11 +2599,13 @@ if (false) {
     function changeActionType( row, newVal ) {
         var ct = jQuery('div.actiondata', row);
         ct.empty();
+        jQuery( 'i#action-try,i#action-import', row ).hide();
         if ( newVal == 'device' ) {
             ct.append( makeDeviceMenu( "", "" ) );
             ct.append('<select id="actionmenu" class="form-control form-control-sm"></select>');
             jQuery( 'select.devicemenu', ct ).on( 'change.reactor', handleActionDeviceChange );
             jQuery( 'select#actionmenu', ct ).on( 'change.reactor', handleActionActionChange );
+            jQuery( 'i#action-try', row ).show();
         } else if ( newVal == 'comment' ) {
             ct.append('<input type="text" class="argument form-control form-control-sm" placeholder="Enter comment text">');
             jQuery( 'input', ct ).on( 'change.reactor', handleActionValueChange );
@@ -2643,10 +2621,10 @@ if (false) {
             m.attr('id', 'scene');
             m.on( 'change.reactor', handleActionValueChange );
             ct.append( m );
+            jQuery( 'i#action-import', row ).show();
         } else {
             ct.append('<div class="tberror">Type ' + newVal + '???</div>');
         }
-        jQuery( 'div.controls i.action-try', row ).attr( 'disabled', "device" !== newVal );
     }
     
     function handleActionChange( ev ) {
@@ -2659,7 +2637,7 @@ if (false) {
 
     function handleControlClick( ev ) {
         var el = ev.currentTarget;
-        if ( jQuery( el ).attr('disabled') ) {
+        if ( jQuery( el ).prop('disabled') ) {
             return;
         }
         var row = jQuery(el).closest('div.actionrow');
@@ -2669,28 +2647,26 @@ if (false) {
 
             /* Move up in display */
             var prior = row.prev(); /* find prior row */
-            row.detach();
-            row.insertBefore( prior );
-
-            configModified = true;
-
-            changeActionRow( row ); /* pass it on */
+            if ( prior.length > 0 ) {
+                row.detach();
+                row.insertBefore( prior );
+                configModified = true;
+                changeActionRow( row ); /* pass it on */
+            }
         } else if ( "action-down" === op ) {
             /* Move down */
 
             /* Move down in display */
             var next = row.next();
-            row.detach();
-            row.insertAfter( next );
-
-            configModified = true;
-
-            changeActionRow( row );
+            if ( next.length > 0 ) {
+                row.detach();
+                row.insertAfter( next );
+                configModified = true;
+                changeActionRow( row );
+            }
         } else if ( "action-delete" === op ) {
             row.remove();
-            
             configModified = true;
-            
             changeActionRow( row ); // ???
         } else if ( "action-try" === op ) {
             if ( jQuery( '.tberror', row ).length > 0 ) {
@@ -2720,6 +2696,82 @@ if (false) {
             } else {
                 alert( "Can't perform selected action. You should not be seeing this message." );
             }
+        } else if ( "action-import" == op ) {
+            if ( "runscene" !== jQuery( 'select#actiontype', row ).val() ) {
+                return;
+            }
+            if ( jQuery( '.tberror', row ).length > 0 ) {
+                return;
+            }
+            var scene = parseInt( jQuery( 'select#scene', row ).val() );
+            if ( !isNaN( scene ) ) {
+                jQuery.ajax({
+                    url: api.getDataRequestURL(),
+                    data: {
+                        id: "scene",
+                        action: "list",
+                        scene: scene,
+                        output_format: "json"
+                    },
+                    dataType: "json",
+                    timeout: 5000
+                }).done( function( data, statusText, jqXHR ) {
+                    var pred = row;
+                    for ( var ig=0; ig<(data.groups || []).length; ig++ ) {
+                        var newRow;
+                        var gr = data.groups[ig];
+                        if ( 0 !== (gr.delay || 0) ) {
+                            newRow = getActionRow();
+                            jQuery( "select#actiontype", newRow).val( "delay" );
+                            changeActionType( newRow, "delay" );
+                            jQuery( "input#delay", newRow ).val( gr.delay );
+                            jQuery( "select#delaytype", newRow ).val( "inline" );
+                            pred = newRow.addClass( "tbmodified" ).insertAfter( pred );
+                        }
+                        for ( var k=0; k < (gr.actions || []).length; k++ ) {
+                            var act = gr.actions[k];
+                            newRow = getActionRow();
+                            jQuery( 'select#actiontype', newRow).val( "device" );
+                            changeActionType( newRow, "device" );
+                            if ( 0 == jQuery( 'select.devicemenu option[value="' + act.device + '"]', newRow ).length ) {
+                                var opt = jQuery( '<option/>' ).val( act.device ).text( '#' + act.device + ' ' + ( act.deviceName || 'name?' ) + ' (missing)' );
+                                // opt.insertAfter( jQuery( 'select.devicemenu option[value=""]:first-child', newRow ) );
+                                jQuery( 'select.devicemenu', newRow ).prepend( opt ).addClass( "tberror" );
+                            }
+                            jQuery( 'select.devicemenu', newRow ).val( act.device );
+                            pred = newRow.addClass( "tbmodified" ).insertAfter( pred );
+                            changeActionDevice( newRow, act.device || "", function( row, action ) { 
+                                var key = action.service + "/" + action.action;
+                                if ( 0 == jQuery( 'select#actionmenu option[value="' + key + '"]', row ).length ) {
+                                    var opt = jQuery( '<option/>' ).val( key ).text( key );
+                                    jQuery( 'select#actionmenu', row ).prepend( opt );
+                                }
+                                jQuery( 'select#actionmenu', row ).val( key );
+                                changeActionAction( row, key );
+                                for ( var j=0; j<(action.arguments || []).length; j++ ) {
+                                    var a = action.arguments[j];
+                                    if ( 0 === jQuery( '#' + a.name, row ).length ) {
+                                        var inp = jQuery( '<input class="argument form-control form-control-sm">' ).attr('id', a.name);
+                                        var lbl = jQuery( '<label/>' ).attr('for', a.name).text(a.name).addClass('tbrequired').append(inp);
+                                        jQuery( 'div.actiondata', row ).append( lbl );
+                                    }
+                                    jQuery( '#' + a.name, row ).val( a.value || "" );
+                                }
+                            }, [ newRow, act ]);
+                        }
+                        
+                        /* All actions inserted. Remove original row. */
+                        row.remove();
+                        configModified = true;
+                        changeActionRow( row );
+                    }
+                }).fail( function( jqXHR, textStatus, errorThrown ) {
+                    // Bummer.
+                    console.log("Failed to load scene data: " + textStatus + " " + String(errorThrown));
+                    console.log(jqXHR.responseText);
+                    alert( "Unable to load scene data. Luup may be reloading; try again in a moment." );
+                });
+            }
         }
     }
 
@@ -2727,12 +2779,14 @@ if (false) {
         var row = jQuery('<div class="row actionrow form-inline"></div>');
         row.append('<div class="col-xs-12 col-sm-12 col-md-4 col-lg-2"><select id="actiontype" class="form-control form-control-sm"><option value="comment">Comment</option><option value="runscene">Run Scene</option><option value="device">Device Action</option><option value="delay">Delay</option></select></div>');
         row.append('<div class="actiondata col-xs-12 col-sm-12 col-md-6 col-lg-8"></div>');
-        var controls = jQuery('<div class="controls col-xs-12 col-sm-12 col-md-2 col-lg-2"></div>');
+        var controls = jQuery('<div class="controls col-xs-12 col-sm-12 col-md-2 col-lg-2 text-right"></div>');
         controls.append( '<i id="action-try" class="material-icons md-btn" title="Try this action">directions_run</i>' );
+        controls.append( '<i id="action-import" class="material-icons md-btn" title="Import scene to actions">save_alt</i>' );
         controls.append( '<i id="action-up" class="material-icons md-btn" title="Move up">arrow_upward</i>' );
         controls.append( '<i id="action-down" class="material-icons md-btn" title="Move down">arrow_downward</i>' );
         controls.append( '<i id="action-delete" class="material-icons md-btn" title="Remove action">clear</i>' );
         jQuery( 'i.md-btn', controls ).on( 'click.reactor', handleControlClick );
+        jQuery( 'i#action-try,i#action-import', controls ).hide();
         row.append( controls );
         jQuery( 'select#actiontype', row ).val( 'comment' ).on( 'change.reactor', handleActionChange );
         changeActionType( row, "comment" );
@@ -2753,10 +2807,11 @@ if (false) {
             var gr = scene.groups[i];
             if ( 0 !== (gr.delay || 0) ) {
                 newRow = getActionRow();
+                jQuery( "input#actiontype", newRow ).val( "delay" );
                 changeActionType( newRow, "delay" );
                 jQuery( "input#delay", newRow ).val( gr.delay );
                 jQuery( "select#delaytype", newRow ).val( gr.delayType || "inline" );
-                section.append( newRow );
+                newRow.insertBefore( jQuery( '.buttonrow', section ) );
             }
             for ( var k=0; k < (gr.actions || []).length; k++ ) {
                 var act = gr.actions[k];
@@ -2766,7 +2821,7 @@ if (false) {
                 if ( "comment" === act.type ) {
                     jQuery( 'input', newRow ).val( act.comment || "" );
                 } else if ( "runscene" === act.type ) {
-                    if ( 0 === jQuery( 'select#scene option[value="' + act.scene + '"]' ).length ) {
+                    if ( 0 === jQuery( 'select#scene option[value="' + act.scene + '"]', newRow ).length ) {
                         /* Insert missing value (ref to non-existent scene) */
                         var el = jQuery( '<option/>' ).val( act.scene ).text( ( act.sceneName || "name?" ) + ' (#' + act.scene + ') (missing)' );
                         jQuery( 'select#scene', newRow ).prepend( el ).addClass( "tberror" );
@@ -2789,8 +2844,8 @@ if (false) {
                         changeActionAction( row, key );
                         for ( var j=0; j<(action.parameters || []).length; j++ ) {
                             if ( 0 === jQuery( '#' + action.parameters[j].name, row ).length ) {
-                                var inp = jQuery( '<input class="form-control form-control-sm">' ).attr('id', action.parameters[j].name);
-                                var lbl = jQuery( '<label/>' ).attr('for', action.parameters[j].name).text(action.parameters[j].name).addClass('tbrequired').addClass("argument").append(inp);
+                                var inp = jQuery( '<input class="argument form-control form-control-sm">' ).attr('id', action.parameters[j].name);
+                                var lbl = jQuery( '<label/>' ).attr('for', action.parameters[j].name).text(action.parameters[j].name).addClass('tbrequired').append(inp);
                                 jQuery( 'div.actiondata', row ).append( lbl );
                             }
                             jQuery( '#' + action.parameters[j].name, row ).val( action.parameters[j].value || "" );
@@ -2820,42 +2875,37 @@ if (false) {
                 handleSaveClick( undefined );
             }
 
-            /* Build the scene menus */
-            var menu = makeSceneMenu();
-            menu.prepend( '<option value="">(none)</option>' );
-            menu.addClass( "rsceneselect" );
-            menu.val("");
-            menu.attr("id", "tripscene");
-            jQuery("select#tripscene").replaceWith( menu.clone() );
-            menu.attr("id", "untripscene");
-            jQuery("select#untripscene").replaceWith( menu );
+            var cd = iData[myid].cdata;
 
-            /* Restore selected scenes */
+            /* Restore old-style selected scenes */
             var rr = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "Scenes" ) || "";
             if ( rr !== "" ) {
-                var selected = rr.split( ',' );
-                var selopt;
-                if ( selected.length > 0 && selected[0] !== "" ) {
-                    selopt = jQuery('select#tripscene option[value="' + selected[0] + '"]');
-                    if ( selopt.length ) {
-                        jQuery("select#tripscene").val( selected[0] );
-                    } else {
-                        jQuery('select#tripscene').append('<option value="' + selected[0] + '" selected>#' + selected[0] + '*</option>');
-                    }
+                var selected = rr.split( /,/ );
+                var ts = parseInt( selected.shift() );
+                var us = selected.length > 0 ? parseInt( selected.shift() ) : NaN;
+                if ( !isNaN(ts) ) {
+                    if ( undefined === cd.tripactions ) 
+                        cd.tripactions = { isReactorScene: true, groups: [ { actions:[] } ] };
+                    if ( 0 === cd.tripactions.groups.length ) 
+                        cd.tripactions.groups = [ { actions: [] } ];
+                    cd.tripactions.groups[0].actions.unshift( { type: "runscene", scene: ts } );
                 }
-                if ( selected.length > 1 && selected[1] !== "" ) {
-                    selopt = jQuery('select#tripscene option[value="' + selected[1] + '"]');
-                    if ( selopt.length ) {
-                        jQuery("select#untripscene").val( selected[1] );
-                    } else {
-                        jQuery('select#untripscene').append('<option value="' + selected[1] + '" selected>#' + selected[1] + '*</option>');
-                    }
+                if ( !isNaN(us) ) {
+                    if ( undefined === cd.untripactions ) 
+                        cd.untripactions = { isReactorScene: true, groups: [ { actions:[] } ] };
+                    if ( 0 === cd.untripactions.groups.length ) 
+                        cd.untripactions.groups = [ { actions: [] } ];
+                    cd.untripactions.groups[0].actions.unshift( { type: "runscene", scene: us } );
+                }
+                if ( "" !== ( ts + us ) ) {
+                    alert( "Your specified trip and untrip scenes have been moved to new-style actions. Please save. " );
+                    configModified = true;
                 }
             }
-            jQuery("select.rsceneselect").on( 'change.reactor', changeSelectedScene );
-            
-            loadActions( 'tripactions', iData[myid].cdata.tripactions || {} );
-            loadActions( 'untripactions', iData[myid].cdata.untripactions || {} );
+
+            /* Load existing configuration (if any) */
+            loadActions( 'tripactions', cd.tripactions || {} );
+            loadActions( 'untripactions', cd.untripactions || {} );
             
             jQuery("button.addaction").on( 'click.reactor', handleAddActionClick );
             jQuery("button#saveconf").on( 'click.reactor', handleActionsSaveClick ).attr( "disabled", true );
@@ -2923,14 +2973,6 @@ if (false) {
             deviceInfo = data;
             
             /* Body content */
-            var html = '';
-            html += '<div class="reactorscenes">';
-            html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>ReactorScenes</h3></div></div>';
-            html += '<div class="row"><div class="col-xs-12 col-sm-12">ReactorScenes is a feature that enhances existing Vera scenes by making delayed activity groups work across Vera reboots and reloads. When using Reactor to run your scenes, make sure you do not have a device trigger in the scene definition that refers to this ReactorSensor, or your scene will run twice on every execution. Naming the scene below is sufficient to trigger it from this ReactorSensor.</div></div>';
-            html += '<div class="row"><div class="col-xs col-sm-12"><label for="tripscene">Trip Scene: <select id="tripscene" class="rsceneselect"></select></label></div></div>';
-            html += '<div class="row"><div class="col-xs col-sm-12"><label for="untripscene">Un-trip Scene: <select id="untripscene" class="rsceneselect"></select></label></div></div>';
-            html += '</div>';
-
             html += '<div class="reactoractions fullwidth">';
 
             html += '<div id="tripactions" class="actionlist">';
