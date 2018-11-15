@@ -486,7 +486,7 @@ var ReactorSensor = (function(api, $) {
     }
 
     function makeDateTimeOpMenu( cond ) {
-        var el = jQuery('<select class="opmenu form-control form-control-sm"></select>');
+        var el = jQuery('<select class="opmenu form-control form-control-sm pull-left"></select>');
         el.append( '<option value="bet">between</option>' );
         el.append( '<option value="nob">not between</option>' );
 
@@ -968,12 +968,12 @@ var ReactorSensor = (function(api, $) {
                 container.append(pp);
                 jQuery("select.opmenu", container).append('<option value="before">before</option>');
                 jQuery("select.opmenu", container).append('<option value="after">after</option>');
-                container.append('<div class="start form-inline">' +
+                container.append('<div class="start form-inline pull-left">' +
                     '<select id="sunstart"></select> '+
                     ' offset&nbsp;<input type="text" id="startoffset" value="" class="narrow form-control form-control-sm">&nbsp;minutes' +
                     '</div>'
                 );
-                container.append('<div class="end form-inline"> and ' +
+                container.append('<div class="end form-inline pull-left"> and ' +
                     '<select id="sunend"></select> '+
                     ' offset&nbsp;<input type="text" id="endoffset" value="" class="narrow form-control form-control-sm">&nbsp;minutes' +
                     '</div>'
@@ -2807,7 +2807,7 @@ if (false) {
             var gr = scene.groups[i];
             if ( 0 !== (gr.delay || 0) ) {
                 newRow = getActionRow();
-                jQuery( "input#actiontype", newRow ).val( "delay" );
+                jQuery( "select#actiontype", newRow ).val( "delay" );
                 changeActionType( newRow, "delay" );
                 jQuery( "input#delay", newRow ).val( gr.delay );
                 jQuery( "select#delaytype", newRow ).val( gr.delayType || "inline" );
