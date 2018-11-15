@@ -1408,7 +1408,7 @@ var ReactorSensor = (function(api, $) {
     /**
      * Handle save click: save the current configuration.
      */
-    function handleSaveClick( ev ) {
+    function handleSaveClick( ev, fnext, fargs ) {
         /* Rip through conditions and clean up before saving */
         var ixCond = iData[api.getCpanelDeviceId()].ixCond;
         for ( var condid in ixCond ) {
@@ -1452,11 +1452,17 @@ var ReactorSensor = (function(api, $) {
         {
             'onSuccess' : function() {
                 configModified = false;
+                if ( undefined !== fnext ) {
+                    fnext.apply( null, fargs );
+                }
                 updateSaveControls();
             },
             'onFailure' : function() {
                 alert('There was a problem saving the configuration. Vera/Luup may have been restarting. Please try hitting the "Save" button again.');
                 configModified = true;
+                if ( undefined !== fnext ) {
+                    fnext.apply( null, fargs );
+                }
                 updateSaveControls();
             }
         });
@@ -2282,8 +2288,13 @@ if (false) {
             var myid = api.getCpanelDeviceId();
             iData[myid].cdata.tripactions = tcf;
             iData[myid].cdata.untripactions = ucf;
-            handleSaveClick( ev ); /* pass up */
-            updateSaveControls();
+            /* Save has async action, so use callback to complete. */
+            handleSaveClick( ev, function() {
+                if ( !configModified ) { /* successful save? */
+                    jQuery( 'div.actionlist.tbmodified' ).removeClass( "tbmodified" );
+                    jQuery( 'div.actionlist .tbmodified' ).removeClass( "tbmodified" );
+                }
+            }, [] ); /* pass up */
             return;
         }
         alert( "Configuration not saved. Please correct the indicated errors, then try again." );
@@ -2292,6 +2303,8 @@ if (false) {
     function changeActionRow( row ) {
         console.log("changeActionRow: updating cached config");
         configModified = true;
+        row.addClass( "tbmodified" );
+        jQuery( 'div.actionlist' ).addClass( "tbmodified" ); // all lists, because save saves all.
         validateActionRow( row );
         var section = row.closest( 'div.actionlist' );
         var scene = buildActionList( section );
@@ -2320,9 +2333,7 @@ if (false) {
     }
     
     function handleActionValueChange( ev ) {
-        configModified = true;
         var row = jQuery( ev.currentTarget ).closest( 'div.actionrow' );
-        row.addClass( "tbmodified" );
         changeActionRow( row );
     }
 
@@ -2370,8 +2381,25 @@ if (false) {
                     }
                 } else if ( parm.type == "scene" ) {
                     inp = makeSceneMenu();
-                    inp.prepend('<option value="" disabled>--choose--</option>');
-                    inp.val("");
+                    inp.prepend( '<option value="">--choose--</option>' );
+                    if ( undefined !== parm.extraValues ) {
+                        if ( Array.isArray( parm.extraValues ) ) {
+                            for ( var j=0; j<parm.extraValues.length; j++ ) {
+                                var opt = jQuery( '<option/>' ).val( parm.extraValues[j] ).text( parm.extraValues[j] );
+                                //inp.append( opt );
+                                opt.insertAfter( jQuery( 'option[value=""]:first-child', inp ) );
+                            }
+                        } else {
+                            for ( var key in parm.extraValues ) {
+                                if ( parm.extraValues.hasOwnProperty( key ) ) {
+                                    var opt = jQuery( '<option/>' ).val( key ).text( parm.extraValues[key] );
+                                    opt.insertAfter( jQuery( 'option[value=""]:first-child', inp ) );
+                                    //inp.append( opt );
+                                }
+                            }
+                        }
+                    }
+                    inp.addClass( "argument" ).val("");
                 } else if ( parm.type == "boolean" ) {
                     /* Menu */
                     inp = jQuery('<select class="argument form-control form-control-sm"/>');
@@ -2610,7 +2638,7 @@ if (false) {
             jQuery( 'select', ct ).on( 'change.reactor', handleActionValueChange );
         } else if ( newVal == "runscene" ) {
             var m = makeSceneMenu();
-            m.prepend('<option value="" disabled>--choose--</option>');
+            m.prepend('<option value="">--choose--</option>');
             m.val("");
             m.attr('id', 'scene');
             m.on( 'change.reactor', handleActionValueChange );
@@ -2665,7 +2693,33 @@ if (false) {
             
             changeActionRow( row ); // ???
         } else if ( "action-try" === op ) {
-            alert( "yes... some day" );
+            if ( jQuery( '.tberror', row ).length > 0 ) {
+                alert( 'Please fix errors before attempting to run this action.' );
+                return;
+            }
+            var typ = jQuery( 'select#actiontype', row ).val() || "comment";
+            if ( "device" === typ ) {
+                var d = parseInt( jQuery( 'select.devicemenu', row ).val() );
+                var s = jQuery( 'select#actionmenu', row ).val() || "";
+                var pt = s.split( /\//, 2 );
+                var param = {};
+                $( '.argument', row ).each( function( ix ) {
+                    var f = jQuery( this );
+                    param[ f.attr('id') || "" ] = f.val();
+                });
+                api.performActionOnDevice( d, pt[0], pt[1], {
+                    actionArguments: param,
+                    onSuccess: function() {
+                        alert( "The action completed successfully!" );
+                    },
+                    onFailure: function() {
+                        //??? are there undocumented parameters here?
+                        alert( "The action caused an error. It's a shame Vera doesn't expose any detail information in its API. You're going to have to go look at the log to see what went wrong." );
+                    } 
+                } );
+            } else {
+                alert( "Can't perform selected action. You should not be seeing this message." );
+            }
         }
     }
 
@@ -2680,7 +2734,8 @@ if (false) {
         controls.append( '<i id="action-delete" class="material-icons md-btn" title="Remove action">clear</i>' );
         jQuery( 'i.md-btn', controls ).on( 'click.reactor', handleControlClick );
         row.append( controls );
-        jQuery( 'select#actiontype', row ).on( 'change.reactor', handleActionChange );
+        jQuery( 'select#actiontype', row ).val( 'comment' ).on( 'change.reactor', handleActionChange );
+        changeActionType( row, "comment" );
         return row;
     }
 
@@ -2688,7 +2743,7 @@ if (false) {
         var btn = jQuery( ev.currentTarget );
         var container = btn.closest( 'div.actionlist' );
         var newRow = getActionRow();
-        newRow.insertBefore( '.buttonrow', container );
+        newRow.insertBefore( jQuery( '.buttonrow', container ) );
     }
     
     function loadActions( setName, scene ) {
@@ -2706,8 +2761,8 @@ if (false) {
             for ( var k=0; k < (gr.actions || []).length; k++ ) {
                 var act = gr.actions[k];
                 newRow = getActionRow();
-                jQuery( 'select#actiontype', newRow).val( act.type || "" );
-                changeActionType( newRow, act.type || "" );
+                jQuery( 'select#actiontype', newRow).val( act.type || "comment" );
+                changeActionType( newRow, act.type || "comment" );
                 if ( "comment" === act.type ) {
                     jQuery( 'input', newRow ).val( act.comment || "" );
                 } else if ( "runscene" === act.type ) {
@@ -2720,7 +2775,7 @@ if (false) {
                 } else if ( "device" === act.type ) {
                     if ( 0 == jQuery( 'select.devicemenu option[value="' + act.device + '"]', newRow ).length ) {
                         var opt = jQuery( '<option/>' ).val( act.device ).text( '#' + act.device + ' ' + ( act.deviceName || 'name?' ) + ' (missing)' );
-                        // opt.insertAfter( 'select.devicemenu option[value=""]:first-child', newRow );
+                        // opt.insertAfter( jQuery( 'select.devicemenu option[value=""]:first-child', newRow ) );
                         jQuery( 'select.devicemenu', newRow ).prepend( opt ).addClass( "tberror" );
                     }
                     jQuery( 'select.devicemenu', newRow ).val( act.device );
@@ -2835,13 +2890,14 @@ if (false) {
         html += 'input.narrow { max-width: 6em; }';
         html += 'div.actionlist { border-radius: 8px; border: 2px solid #428BCA; margin-bottom: 16px; }';
         html += 'div.actionlist .row { margin-right: 0px; margin-left: 0px; }';
-        html += 'div.tblisttitle { background-color: #428BCA; color: #fff; font-size: 16px; font-weight: bold; padding: 8px; }';
+        html += 'div.tblisttitle { background-color: #428BCA; color: #fff; font-size: 16px; font-weight: bold; padding: 8px; min-height: 42px; }';
         html += 'div.actionlist label:not(.required) { font-weight: normal; }';
         html += 'div.actionlist label.required { font-weight: bold; }';
-        html += 'div.actionlist.tbmodified div.tblisttitle span.titletext:after { content: " (modified)" }';
+        html += 'div.actionlist.tbmodified div.tblisttitle span#titletext:after { content: " (unsaved)" }';
         html += 'div.actionrow,div.buttonrow { padding: 8px; }';
         html += 'div.actionlist div.actionrow:nth-child(odd) { background-color: #EFF6FF; }';
-        html += 'div.actionrow.tbmodified { background: #fff6ef; }';
+        html += 'div.actionrow.tbmodified:not(.tberror) { border-left: 4px solid green; }';
+        html += 'div.actionrow.tberror { border-left: 4px solid red; }';
         html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
         html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
         html += 'div.warning { color: red; }';
@@ -2878,11 +2934,11 @@ if (false) {
             html += '<div class="reactoractions fullwidth">';
 
             html += '<div id="tripactions" class="actionlist">';
-            html += '<div class="row"><div class="tblisttitle col-xs-12 col-sm-12"><span id="titletext">Trip Actions</span> <button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>';
+            html += '<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span id="titletext">Trip Actions</span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>';
             html += '<div class="row buttonrow"><div class="col-sm-1"><button id="addtripaction" class="addaction btn btn-sm btn-primary">Add Trip Action</button></div></div>';            
             html += '</div>'; // #tripactions
             html += '<div id="untripactions" class="actionlist">';
-            html += '<div class="row"><div class="tblisttitle col-xs-12 col-sm-12"><span id="titletext">Untrip Actions</span> <button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>';
+            html += '<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span id="titletext">Untrip Actions</span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>';
             html += '<div class="row buttonrow"><div class="col-sm-1"><button id="adduntripaction" class="addaction btn btn-sm btn-primary">Add Untrip Action</button></div></div>';            
             html += '</div>'; // untripactions
 

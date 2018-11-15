@@ -728,7 +728,7 @@
 						"name": "SceneNum",
 						"related": "misc_arg",
 						"extraValues": {
-							"0": "(all scenes)"
+							"0": "(all running scenes)"
 						}
 					}]
 				},
