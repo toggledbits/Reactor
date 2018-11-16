@@ -962,7 +962,7 @@ end
 
 local function evaluateVariable( vname, ctx, cdata, tdev )
     D("evaluateVariable(%1,cdata,%2)", vname, tdev)
-    local vdef = cdata.variables[vname]
+    local vdef = (cdata.variables or {})[vname]
     if vdef == nil then
         L({level=1,msg="%2 (%1) Invalid variable reference to %3, not configured"},
             tdev, luup.devices[tdev].description, vname)
@@ -1036,7 +1036,7 @@ local function updateVariables( cdata, tdev )
             luaxp.evalerror("Circular reference detected (" .. name .. ")")
             return luaxp.NULL
         end
-        if cdata.variables[ name ] == nil then
+        if (cdata.variables or {})[ name ] == nil then
             -- If we don't recognize it, we can't resolve it.
             return nil
         end

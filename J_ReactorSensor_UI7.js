@@ -6,7 +6,7 @@
  * Copyright 2018 Patrick H. Rigney, All Rights Reserved.
  * This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
  */
-/* globals api,jQuery,$ */
+/* globals api,jQuery,$,unescape */
 
 //"use strict"; // fails on UI7, works fine with ALTUI
 
@@ -52,7 +52,7 @@ var ReactorSensor = (function(api, $) {
             '</div>';
         return html;
     }
-    
+
     /* Create an ID that's functionally unique for our purposes. */
     function getUID( prefix ) {
         /* Not good, but enough. */
@@ -327,7 +327,7 @@ var ReactorSensor = (function(api, $) {
                     var names = { 'sunrise': 'sunrise', 'sunset': 'sunset',
                             'civdawn': 'civil dawn', 'civdusk': 'civil dusk',
                             'nautdawn': 'nautical dawn', 'nautdusk': 'nautical dusk',
-                            'astrodawn': 'astronomical dawn', 'astrodusk': 'astronomical dusk' 
+                            'astrodawn': 'astronomical dawn', 'astrodusk': 'astronomical dusk'
                         };
                     var k = spec.match( /^([^+-]+)(.*)/ );
                     if ( k === null || k.length !== 3 ) {
@@ -519,21 +519,21 @@ var ReactorSensor = (function(api, $) {
 
         /* Up/down tools for conditions enabled except up for first and down
            for last. */
-        jQuery('div.controls i.action-up').prop('disabled', false);
-        jQuery('div.conditionrow:first-child div.controls i.action-up').prop('disabled', true);
+        jQuery('div.controls i.action-up').attr('disabled', false);
+        jQuery('div.conditionrow:first div.controls i.action-up').attr('disabled', true);
         /* Down is more complicated because the "Add Condition" button row is
            the last child in each group. Select only the conditionrows in each
            group, then apply to the last in each of those. */
-        jQuery('div.controls i.action-down').prop('disabled', false);
+        jQuery('div.controls i.action-down').attr('disabled', false);
         jQuery('div.conditiongroup').each( function( ix, grpEl ) {
             jQuery( 'div.conditionrow:last div.controls i.action-down', grpEl )
-                .prop('disabled', true);
+                .attr('disabled', true);
         });
 
         /* Delete button of single condition in first condition group is
            disabled/hidden. Must keep one condition, hopefully set. */
         jQuery('div.conditionrow div.controls i.action-delete').prop('disabled', false).show();
-        var lastMo = jQuery('div.conditiongroup:first-child div.conditionrow div.controls');
+        var lastMo = jQuery('div.conditiongroup:first div.conditionrow div.controls');
         if ( lastMo.length == 1 ) {
             jQuery('i.action-delete', lastMo).prop('disabled', true ).hide();
         }
@@ -1561,7 +1561,7 @@ var ReactorSensor = (function(api, $) {
             ' using your selected date/time. <b>Remember to turn these settings off when you have finished testing!</b>';
         html += '</div></div>';
         html += '</div>'; /* .testfields */
-        
+
         try {
             html += '<div id="sundata">';
             html += "Today's sun timing is: ";
@@ -1868,6 +1868,11 @@ if (false) {
     function handleVariableChange() {
         var container = jQuery('div#variables');
         var myid = api.getCpanelDeviceId();
+        var cd = iData[myid].cdata;
+        /* JSON may save and restore an empty object as an array; fix type. */
+        if ( Array.isArray( cd.variables ) ) {
+            cd.variables = {};
+        }
 
         jQuery('.tberror', container).removeClass( 'tberror' );
         jQuery('div.row.var', container).each( function( ix, obj ) {
@@ -1877,11 +1882,11 @@ if (false) {
             if ( expr === "" ) {
                 jQuery('input.expr', row).addClass('tberror');
             }
-            if ( iData[myid].cdata.variables[vname] === undefined ) {
-                iData[myid].cdata.variables[vname] = { name: vname, expression: expr };
+            if ( cd.variables[vname] === undefined ) {
+                cd.variables[vname] = { name: vname, expression: expr };
                 configModified = true;
-            } else if ( iData[myid].cdata.variables[vname].expression !== expr ) {
-                iData[myid].cdata.variables[vname].expression = expr;
+            } else if ( cd.variables[vname].expression !== expr ) {
+                cd.variables[vname].expression = expr;
                 configModified = true;
             }
         });
@@ -1892,7 +1897,7 @@ if (false) {
     function handleDeleteVariableClick( ev ) {
         var row = jQuery( ev.currentTarget ).closest( 'div.row.var' );
         var vname = row.attr('id');
-        if ( confirm( 'Deleting "' + vname + '" will break any conditions that refer to it.' ) ) {
+        if ( confirm( 'Deleting "' + vname + '" will break conditions, actions, or other expressions that use it.' ) ) {
             delete iData[api.getCpanelDeviceId()].cdata.variables[vname];
             row.remove();
             configModified = true;
@@ -2041,7 +2046,7 @@ if (false) {
             html += '.tbwarn { border: 1px solid yellow; background-color: yellow; }';
             html += 'i.md-btn:disabled { color: #cccccc; cursor: auto; }';
             html += 'i.md-btn[disabled] { color: #cccccc; cursor: auto; }';
-            html += 'i.md-btn { color: #006040; font-size: 12pt; cursor: pointer; }';
+            html += 'i.md-btn { color: #004020; font-size: 12pt; cursor: pointer; }';
             html += 'input.tbinvert { min-width: 16px; min-height: 16px; }';
             html += 'div.conditions { width: 100%; }';
             html += 'input.narrow { max-width: 6em; }';
@@ -2126,7 +2131,7 @@ if (false) {
         }
         return menu;
     }
-    
+
     function validateActionRow( row ) {
         var actionType = jQuery('select#actiontype', row).val();
         jQuery('.tberror', row).removeClass( 'tberror' );
@@ -2135,7 +2140,7 @@ if (false) {
             // nada
         } else if ( actionType == "delay" ) {
             var delay = jQuery( 'input#delay', row ).val() || "";
-            if ( delay.match( /{[^}]+}/i ) ) {
+            if ( delay.match( /\{[^}]+\}/i ) ) {
                 // Variable reference. ??? check it?
             } else if ( delay.match( /^([0-9][0-9]?)(:[0-9][0-9]?){1,2}$/ ) ) {
                 // MM:SS or HH:MM:SS
@@ -2160,11 +2165,18 @@ if (false) {
                 jQuery( 'select#scene' ).addClass( "tberror" );
                 row.addClass( "tberror" );
             }
+        } else if ( "runlua" === actionType ) {
+            var lua = jQuery( 'textarea', row ).val() || "";
+            // check Lua?
+            if ( lua.match( /^[\r\n\s]*$/ ) ) {
+                jQuery( 'textarea' ).addClass( "tberror" );
+                row.addClass( "tberror" );
+            }
         } else {
             row.addClass( "tberror" );
         }
     }
-    
+
     function buildActionList( root ) {
         if ( jQuery('.tberror', root ).length > 0 ) {
             return false;
@@ -2181,18 +2193,22 @@ if (false) {
                 action.comment = jQuery( 'input.argument', row ).val() || "";
             } else if ( actionType == "delay" ) {
                 var t = jQuery( 'input#delay', row ).val() || "0";
-                if ( t.indexOf( ':' ) >= 0 ) {
-                    var pt = t.split( /:/ );
-                    t = 0;
-                    for ( var i=0; i<pt.length; i++ ) {
-                        t = t * 60 + parseInt( pt[i] );
-                    }
+                if ( t.match( /^\{[^}]+\}$/ ) ) {
+                    /* Variable reference is OK as is. */
                 } else {
-                    t = parseInt( t );
-                }
-                if ( isNaN( t ) ) {
-                    scene = false;
-                    return false;
+                    if ( t.indexOf( ':' ) >= 0 ) {
+                        var pt = t.split( /:/ );
+                        t = 0;
+                        for ( var i=0; i<pt.length; i++ ) {
+                            t = t * 60 + parseInt( pt[i] );
+                        }
+                    } else {
+                        t = parseInt( t );
+                    }
+                    if ( isNaN( t ) ) {
+                        scene = false;
+                        return false;
+                    }
                 }
                 /* Create a new group, marked with the delay, for all subsequent actions */
                 if ( group.actions.length > 0 ) {
@@ -2245,6 +2261,20 @@ if (false) {
                     return false;
                 }
                 // action.sceneName = sceneByNumber[ action.scene ].name
+            } else if ( "runlua" === actionType ) {
+                var lua = jQuery( 'textarea', row ).val() || "";
+                lua = lua.replace( /\r\n/g, "\n" );
+                lua = lua.replace( /\r/, "\n" );
+                lua = lua.replace( /\s+\n/g, "\n" );
+                lua = lua.replace( /[\r\n\s]+$/m, "" ); // rtrim
+                lua = unescape( encodeURIComponent( lua ) ); // Fanciness to keep UTF-8 chars well
+                if ( "" === lua ) {
+                    action.encoded_lua = false;
+                    delete action.lua;
+                } else {
+                    action.encoded_lua = true;
+                    action.lua = btoa( lua );
+                }
             } else {
                 console.log("buildActionList: " + actionType + " action unknown");
                 scene = false;
@@ -2255,7 +2285,7 @@ if (false) {
         });
         return scene;
     }
-    
+
     function handleActionsSaveClick( ev ) {
         var tcf = buildActionList( jQuery( 'div#tripactions') );
         var ucf = buildActionList( jQuery( 'div#untripactions') );
@@ -2277,6 +2307,19 @@ if (false) {
         alert( "Configuration not saved. Please correct the indicated errors, then try again." );
     }
 
+    function updateActionControls() {
+        jQuery( 'div.actionlist' ).each( function( ix ) {
+            var section = jQuery( this );
+            jQuery('div.controls i#action-up', section).attr('disabled', false);
+            jQuery('div.actionrow:first div.controls i#action-up', section).attr('disabled', true);
+            jQuery('div.controls i#action-down', section).attr('disabled', false);
+            jQuery('div.actionrow:last div.controls i#action-down', section).attr('disabled', true);
+        });
+
+        /* Save and revert buttons */
+        updateSaveControls();
+    }
+
     function changeActionRow( row ) {
         console.log("changeActionRow: updating cached config");
         configModified = true;
@@ -2290,25 +2333,10 @@ if (false) {
             var myid = api.getCpanelDeviceId();
             iData[myid].cdata[sn] = scene;
         }
-        
-        /* Update row controls */
-        jQuery('div.controls i.action-up', section).prop('disabled', false);
-        jQuery('div.actionrow:first-child div.controls i.action-up', section).prop('disabled', true);
-        /* Down is more complicated because the "Add" button row is
-           the last child in each group. Select only the conditionrows in each
-           group, then apply to the last in each of those. */
-        jQuery('div.controls i.action-down', section).prop('disabled', false);
-        jQuery('div.actionrow:last-child div.controls i.action-down', section).prop('disabled', true);
-        /*
-        jQuery('div.conditiongroup').each( function( ix, grpEl ) {
-            jQuery( 'div.conditionrow:last div.controls i.action-down', grpEl )
-                .prop('disabled', true);
-        });
-        */
-        /* Save and revert buttons */
-        updateSaveControls();
+
+        updateActionControls();
     }
-    
+
     function handleActionValueChange( ev ) {
         var row = jQuery( ev.currentTarget ).closest( 'div.actionrow' );
         changeActionRow( row );
@@ -2356,6 +2384,17 @@ if (false) {
                             }
                         }
                     }
+                    /* Add variables */
+                    var cd = iData[ api.getCpanelDeviceId() ].cdata;
+                    if ( cd.variables ) {
+                        inp.append( '<option disabled/>' ).append( '<option class="optheading" disabled>--Variables--</option>' );
+                        for ( var vname in cd.variables ) {
+                            if ( cd.variables.hasOwnProperty( vname ) ) {
+                                var opt = jQuery( '<option/>' ).val( '{' + vname + '}' ).text( '{'+vname+'}' );
+                                inp.append( opt );
+                            }
+                        }
+                    }
                 } else if ( parm.type == "scene" ) {
                     inp = makeSceneMenu();
                     inp.prepend( '<option value="">--choose--</option>' );
@@ -2364,15 +2403,26 @@ if (false) {
                             for ( var j=0; j<parm.extraValues.length; j++ ) {
                                 var opt = jQuery( '<option/>' ).val( parm.extraValues[j] ).text( parm.extraValues[j] );
                                 //inp.append( opt );
-                                opt.insertAfter( jQuery( 'option[value=""]:first-child', inp ) );
+                                opt.insertAfter( jQuery( 'option[value=""]:first', inp ) );
                             }
                         } else {
                             for ( var key in parm.extraValues ) {
                                 if ( parm.extraValues.hasOwnProperty( key ) ) {
                                     var opt = jQuery( '<option/>' ).val( key ).text( parm.extraValues[key] );
-                                    opt.insertAfter( jQuery( 'option[value=""]:first-child', inp ) );
+                                    opt.insertAfter( jQuery( 'option[value=""]:first', inp ) );
                                     //inp.append( opt );
                                 }
+                            }
+                        }
+                    }
+                    /* Add variables */
+                    var cd = iData[ api.getCpanelDeviceId() ].cdata;
+                    if ( cd.variables ) {
+                        inp.append( '<option disabled/>' ).append( '<option class="optheading" disabled>--Variables--</option>' );
+                        for ( var vname in cd.variables ) {
+                            if ( cd.variables.hasOwnProperty( vname ) ) {
+                                var opt = jQuery( '<option/>' ).val( '{' + vname + '}' ).text( '{'+vname+'}' );
+                                inp.append( opt );
                             }
                         }
                     }
@@ -2382,6 +2432,17 @@ if (false) {
                     inp = jQuery('<select class="argument form-control form-control-sm"/>');
                     inp.append('<option value="0">0/off/false</option>');
                     inp.append('<option value="1">1/on/true</option>');
+                    /* Add variables */
+                    var cd = iData[ api.getCpanelDeviceId() ].cdata;
+                    if ( cd.variables ) {
+                        inp.append( '<option disabled/>' ).append( '<option class="optheading" disabled>--Variables--</option>' );
+                        for ( var vname in cd.variables ) {
+                            if ( cd.variables.hasOwnProperty( vname ) ) {
+                                var opt = jQuery( '<option/>' ).val( '{' + vname + '}' ).text( '{'+vname+'}' );
+                                inp.append( opt );
+                            }
+                        }
+                    }
                 } else if ( parm.type == "ui1" && parm.min !== undefined && parm.max !== undefined ) {
                     inp = jQuery('<div class="argument tbslider"/>');
                     inp.slider({
@@ -2400,11 +2461,11 @@ if (false) {
                     inp.slider("option", "disabled", false);
                     inp.slider("option", "value", parm.default || parm.min);
                 } else if ( parm.type.match(/^(r|u?i)[124]$/i ) ) {
-                    inp = jQuery( '<input class="argument narrow form-control form-control-sm">' );
+                    inp = jQuery( '<input class="argument narrow form-control form-control-sm" list="reactorvars">' );
                     inp.attr( 'placeholder', action.parameters[k].name );
                 } else {
                     console.log("J_ReactorSensor_UI7.js: using default field presentation for type " + String(parm.type));
-                    inp = jQuery( '<input class="argument form-control form-control-sm">' );
+                    inp = jQuery( '<input class="argument form-control form-control-sm" list="reactorvars">' );
                     inp.attr( 'placeholder', action.parameters[k].name );
                 }
                 inp.attr('id', parm.name );
@@ -2426,7 +2487,7 @@ if (false) {
         }
         return;
     }
-    
+
     function handleActionActionChange( ev ) {
         configModified = true;
         var el = jQuery( ev.currentTarget );
@@ -2435,7 +2496,7 @@ if (false) {
         changeActionAction( row, newVal );
         changeActionRow( row );
     }
-    
+
     function deepcopy(obj) {
         if ( null == obj || typeof(obj) != "object" ) return obj;
         var ret = obj.constructor();
@@ -2444,7 +2505,7 @@ if (false) {
         }
         return ret;
     }
-    
+
     function merge( dest, src ) {
         if ( typeof(dest) != typeof(src) || typeof(src) != "object") {
             return src;
@@ -2471,7 +2532,7 @@ if (false) {
         }
         return false;
     }
-    
+
     function changeActionDevice( row, newVal, fnext, fargs ) {
         var ct = jQuery( 'div.actiondata', row );
         var actionMenu = jQuery( 'select#actionmenu', ct );
@@ -2522,7 +2583,7 @@ if (false) {
                     if ( ai.hidden ) {
                         continue;
                     }
-                    
+
                     var opt = jQuery('<option></option>');
                     opt.val( key );
                     opt.text( actname );
@@ -2587,7 +2648,7 @@ if (false) {
             }
         });
     }
-    
+
     function handleActionDeviceChange( ev ) {
         configModified = true;
         var el = jQuery( ev.currentTarget );
@@ -2595,7 +2656,7 @@ if (false) {
         var row = el.closest( 'div.actionrow' );
         changeActionDevice( row, newVal, changeActionRow, [ row ] );
     }
-    
+
     function changeActionType( row, newVal ) {
         var ct = jQuery('div.actiondata', row);
         ct.empty();
@@ -2607,26 +2668,29 @@ if (false) {
             jQuery( 'select#actionmenu', ct ).on( 'change.reactor', handleActionActionChange );
             jQuery( 'i#action-try', row ).show();
         } else if ( newVal == 'comment' ) {
-            ct.append('<input type="text" class="argument form-control form-control-sm" placeholder="Enter comment text">');
+            ct.append('<input type="text" id="comment" class="argument form-control form-control-sm" placeholder="Enter comment text">');
             jQuery( 'input', ct ).on( 'change.reactor', handleActionValueChange );
         } else if ( newVal == "delay" ) {
-            ct.append('<label for="delay">for <input id="delay" type="text" class="argument form-control form-control-sm" placeholder="SS or MM:SS or HH:MM:SS"></label>');
+            ct.append('<label for="delay">for <input id="delay" type="text" class="argument narrow form-control form-control-sm" title="Enter delay time as seconds, MM:SS, or HH:MM:SS" placeholder="delay time" list="reactorvars"></label>');
             ct.append('<select id="delaytype" class="form-control form-control-sm"><option value="inline">from this point</option><option value="start">from start of actions</option></select>');
             jQuery( 'input', ct ).on( 'change.reactor', handleActionValueChange );
             jQuery( 'select', ct ).on( 'change.reactor', handleActionValueChange );
         } else if ( newVal == "runscene" ) {
             var m = makeSceneMenu();
-            m.prepend('<option value="">--choose--</option>');
-            m.val("");
-            m.attr('id', 'scene');
+            m.prepend('<option value="">--choose--</option>').val("").attr('id', 'scene');
             m.on( 'change.reactor', handleActionValueChange );
             ct.append( m );
             jQuery( 'i#action-import', row ).show();
+        } else if ( "runlua" === newVal ) {
+            var txt = jQuery( '<textarea id="lua" wrap="off" class="luacode form-control form-control-sm" rows="6"/>' );
+            ct.append( txt );
+            txt.on( 'change.luaview', handleActionValueChange );
+            ct.append('<div class="tbhint">Your Lua code must return boolean <em>true</em> or <em>false</em>. Action execution will stop if anything other than boolean true, or nothing, is returned by your code (this is a feature).</div>');
         } else {
             ct.append('<div class="tberror">Type ' + newVal + '???</div>');
         }
     }
-    
+
     function handleActionChange( ev ) {
         configModified = true;
         var row = jQuery( ev.currentTarget ).closest( '.actionrow' );
@@ -2646,31 +2710,28 @@ if (false) {
             /* Move up. */
 
             /* Move up in display */
-            var prior = row.prev(); /* find prior row */
+            var prior = row.prev( 'div.actionrow' ); /* find prior row */
             if ( prior.length > 0 ) {
                 row.detach();
                 row.insertBefore( prior );
-                configModified = true;
                 changeActionRow( row ); /* pass it on */
             }
         } else if ( "action-down" === op ) {
             /* Move down */
 
             /* Move down in display */
-            var next = row.next();
+            var next = row.next( 'div.actionrow' );
             if ( next.length > 0 ) {
                 row.detach();
                 row.insertAfter( next );
-                configModified = true;
                 changeActionRow( row );
             }
         } else if ( "action-delete" === op ) {
             row.remove();
-            configModified = true;
             changeActionRow( row ); // ???
         } else if ( "action-try" === op ) {
             if ( jQuery( '.tberror', row ).length > 0 ) {
-                alert( 'Please fix errors before attempting to run this action.' );
+                alert( 'Please fix the errors before attempting to run this action.' );
                 return;
             }
             var typ = jQuery( 'select#actiontype', row ).val() || "comment";
@@ -2685,13 +2746,33 @@ if (false) {
                 });
                 api.performActionOnDevice( d, pt[0], pt[1], {
                     actionArguments: param,
-                    onSuccess: function() {
-                        alert( "The action completed successfully!" );
+                    onSuccess: function( xhr ) {
+                        console.log("performActionOnDevice.onSuccess: " + String(xhr));
+                        if (typeof(xhr)==="object") {
+                            for ( var k in xhr ) {
+                                if ( xhr.hasOwnProperty(k) )
+                                    console.log("xhr." + k + "=" + String(xhr[k]));
+                            }
+                        }
+                        if ( "object" === typeof( xhr ) ) {
+                            if ( xhr.responseText && xhr.responseText.match( /ERROR:/ ) ) {
+                                alert( xhr.responseText );
+                            } else {
+                                alert( xhr.responseText );
+                            }
+                        }
+                        // alert( "The action completed successfully!" );
                     },
-                    onFailure: function() {
+                    onFailure: function( xhr ) {
                         //??? are there undocumented parameters here?
-                        alert( "The action caused an error. It's a shame Vera doesn't expose any detail information in its API. You're going to have to go look at the log to see what went wrong." );
-                    } 
+                        if (typeof(xhr)==="object") {
+                            for ( var k in xhr ) {
+                                if ( xhr.hasOwnProperty(k) )
+                                    console.log("xhr." + k + "=" + String(xhr[k]));
+                            }
+                        }
+                        alert( "An error occurred. Try again in a moment; Vera may be busy." );
+                    }
                 } );
             } else {
                 alert( "Can't perform selected action. You should not be seeing this message." );
@@ -2735,12 +2816,12 @@ if (false) {
                             changeActionType( newRow, "device" );
                             if ( 0 == jQuery( 'select.devicemenu option[value="' + act.device + '"]', newRow ).length ) {
                                 var opt = jQuery( '<option/>' ).val( act.device ).text( '#' + act.device + ' ' + ( act.deviceName || 'name?' ) + ' (missing)' );
-                                // opt.insertAfter( jQuery( 'select.devicemenu option[value=""]:first-child', newRow ) );
+                                // opt.insertAfter( jQuery( 'select.devicemenu option[value=""]:first', newRow ) );
                                 jQuery( 'select.devicemenu', newRow ).prepend( opt ).addClass( "tberror" );
                             }
                             jQuery( 'select.devicemenu', newRow ).val( act.device );
                             pred = newRow.addClass( "tbmodified" ).insertAfter( pred );
-                            changeActionDevice( newRow, act.device || "", function( row, action ) { 
+                            changeActionDevice( newRow, act.device || "", function( row, action ) {
                                 var key = action.service + "/" + action.action;
                                 if ( 0 == jQuery( 'select#actionmenu option[value="' + key + '"]', row ).length ) {
                                     var opt = jQuery( '<option/>' ).val( key ).text( key );
@@ -2759,7 +2840,7 @@ if (false) {
                                 }
                             }, [ newRow, act ]);
                         }
-                        
+
                         /* All actions inserted. Remove original row. */
                         row.remove();
                         configModified = true;
@@ -2776,9 +2857,15 @@ if (false) {
     }
 
     function getActionRow() {
-        var row = jQuery('<div class="row actionrow form-inline"></div>');
-        row.append('<div class="col-xs-12 col-sm-12 col-md-4 col-lg-2"><select id="actiontype" class="form-control form-control-sm"><option value="comment">Comment</option><option value="runscene">Run Scene</option><option value="device">Device Action</option><option value="delay">Delay</option></select></div>');
-        row.append('<div class="actiondata col-xs-12 col-sm-12 col-md-6 col-lg-8"></div>');
+        var row = jQuery( '<div class="row actionrow"></div>' );
+        row.append( '<div class="col-xs-12 col-sm-12 col-md-4 col-lg-2"><select id="actiontype" class="form-control form-control-sm">' +
+            '<option value="comment">Comment</option>' +
+            '<option value="device">Device Action</option>' +
+            '<option value="delay">Delay</option>' +
+            '<option value="runlua">Run Lua</option>' +
+            '<option value="runscene">Run Scene</option>' +
+            '</select></div>' );
+        row.append('<div class="actiondata col-xs-12 col-sm-12 col-md-6 col-lg-8 form-inline"></div>');
         var controls = jQuery('<div class="controls col-xs-12 col-sm-12 col-md-2 col-lg-2 text-right"></div>');
         controls.append( '<i id="action-try" class="material-icons md-btn" title="Try this action">directions_run</i>' );
         controls.append( '<i id="action-import" class="material-icons md-btn" title="Import scene to actions">save_alt</i>' );
@@ -2799,7 +2886,7 @@ if (false) {
         var newRow = getActionRow();
         newRow.insertBefore( jQuery( '.buttonrow', container ) );
     }
-    
+
     function loadActions( setName, scene ) {
         var section = jQuery( 'div#' + setName );
         var newRow;
@@ -2830,11 +2917,11 @@ if (false) {
                 } else if ( "device" === act.type ) {
                     if ( 0 == jQuery( 'select.devicemenu option[value="' + act.device + '"]', newRow ).length ) {
                         var opt = jQuery( '<option/>' ).val( act.device ).text( '#' + act.device + ' ' + ( act.deviceName || 'name?' ) + ' (missing)' );
-                        // opt.insertAfter( jQuery( 'select.devicemenu option[value=""]:first-child', newRow ) );
+                        // opt.insertAfter( jQuery( 'select.devicemenu option[value=""]:first', newRow ) );
                         jQuery( 'select.devicemenu', newRow ).prepend( opt ).addClass( "tberror" );
                     }
                     jQuery( 'select.devicemenu', newRow ).val( act.device );
-                    changeActionDevice( newRow, act.device || "", function( row, action ) { 
+                    changeActionDevice( newRow, act.device || "", function( row, action ) {
                         var key = action.service + "/" + action.action;
                         if ( 0 == jQuery( 'select#actionmenu option[value="' + key + '"]', row ).length ) {
                             var opt = jQuery( '<option/>' ).val( key ).text( key );
@@ -2851,6 +2938,11 @@ if (false) {
                             jQuery( '#' + action.parameters[j].name, row ).val( action.parameters[j].value || "" );
                         }
                     }, [ newRow, act ]);
+                } else if ( "runlua" === act.type ) {
+                    if ( act.lua ) {
+                        var lua = act.encoded_lua ? atob( act.lua ) : act.lua;
+                        jQuery( 'textarea', newRow ).val( lua );
+                    }
                 } else {
                     console.log("loadActions: what's a " + act.type + "? Skipping it!");
                     alert( "BUG: type " + act.type + " unknown, skipping." );
@@ -2861,7 +2953,7 @@ if (false) {
             }
         }
     }
-    
+
     function handleActionsRevertClick( ev ) {
         alert("not yet implemented");
     }
@@ -2884,16 +2976,16 @@ if (false) {
                 var ts = parseInt( selected.shift() );
                 var us = selected.length > 0 ? parseInt( selected.shift() ) : NaN;
                 if ( !isNaN(ts) ) {
-                    if ( undefined === cd.tripactions ) 
+                    if ( undefined === cd.tripactions )
                         cd.tripactions = { isReactorScene: true, groups: [ { actions:[] } ] };
-                    if ( 0 === cd.tripactions.groups.length ) 
+                    if ( 0 === cd.tripactions.groups.length )
                         cd.tripactions.groups = [ { actions: [] } ];
                     cd.tripactions.groups[0].actions.unshift( { type: "runscene", scene: ts } );
                 }
                 if ( !isNaN(us) ) {
-                    if ( undefined === cd.untripactions ) 
+                    if ( undefined === cd.untripactions )
                         cd.untripactions = { isReactorScene: true, groups: [ { actions:[] } ] };
-                    if ( 0 === cd.untripactions.groups.length ) 
+                    if ( 0 === cd.untripactions.groups.length )
                         cd.untripactions.groups = [ { actions: [] } ];
                     cd.untripactions.groups[0].actions.unshift( { type: "runscene", scene: us } );
                 }
@@ -2906,10 +2998,23 @@ if (false) {
             /* Load existing configuration (if any) */
             loadActions( 'tripactions', cd.tripactions || {} );
             loadActions( 'untripactions', cd.untripactions || {} );
+            updateActionControls();
             
+            /* Set up a data list with our variables */
+            var dl = jQuery('<datalist id="reactorvars"></datalist>');
+            if ( cd.variables ) {
+                for ( var vname in cd.variables ) {
+                    if ( cd.variables.hasOwnProperty( vname ) ) {
+                        var opt = jQuery( '<option/>' ).val( '{'+vname+'}' ).text( '{'+vname+'}' );
+                        dl.append( opt );
+                    }
+                }
+            }
+            jQuery( 'div.reactoractions' ).append( dl );
+
             jQuery("button.addaction").on( 'click.reactor', handleAddActionClick );
-            jQuery("button#saveconf").on( 'click.reactor', handleActionsSaveClick ).attr( "disabled", true );
-            jQuery("button#revertconf").on( 'click.reactor', handleActionsRevertClick ).attr( "disabled", true );
+            jQuery("button#saveconf").on( 'click.reactor', handleActionsSaveClick ).prop( "disabled", true );
+            jQuery("button#revertconf").on( 'click.reactor', handleActionsRevertClick ).prop( "disabled", true );
 
             api.registerEventHandler('on_ui_cpanel_before_close', ReactorSensor, 'onBeforeCpanelClose');
         }
@@ -2919,7 +3024,7 @@ if (false) {
             alert( e.stack );
         }
     }
-    
+
     function preloadActivities() {
         initModule();
 
@@ -2934,10 +3039,9 @@ if (false) {
         html += '.tbwarn { border: 1px solid yellow; background-color: yellow; }';
         html += 'i.md-btn:disabled { color: #cccccc; cursor: auto; }';
         html += 'i.md-btn[disabled] { color: #cccccc; cursor: auto; }';
-        html += 'i.md-btn { color: #428BCA; font-size: 14pt; cursor: pointer; }';
+        html += 'i.md-btn { color: #2d6a9f; font-size: 14pt; cursor: pointer; }';
         html += 'input.tbinvert { min-width: 16px; min-height: 16px; }';
-        html += 'div.fullwidth { width: 100%; }';
-        html += 'input.narrow { max-width: 6em; }';
+        html += 'input.narrow { max-width: 8em; }';
         html += 'div.actionlist { border-radius: 8px; border: 2px solid #428BCA; margin-bottom: 16px; }';
         html += 'div.actionlist .row { margin-right: 0px; margin-left: 0px; }';
         html += 'div.tblisttitle { background-color: #428BCA; color: #fff; font-size: 16px; font-weight: bold; padding: 8px; min-height: 42px; }';
@@ -2948,6 +3052,9 @@ if (false) {
         html += 'div.actionlist div.actionrow:nth-child(odd) { background-color: #EFF6FF; }';
         html += 'div.actionrow.tbmodified:not(.tberror) { border-left: 4px solid green; }';
         html += 'div.actionrow.tberror { border-left: 4px solid red; }';
+        html += 'input#comment { width: 100% !important; }';
+        html += 'textarea.luacode { font-family: monospace; resize: vertical; width: 100% !important; }';
+        html += 'div.tbhint { font-size: 90%; font-weight: normal; }';
         html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
         html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
         html += 'div.warning { color: red; }';
@@ -2957,7 +3064,7 @@ if (false) {
         html += '.tbslider .ui-slider-range-min { background-color: #12805b !important; }';
         html += "</style>";
         jQuery("head").append( html );
-        
+
         api.setCpanelContent( '<div id="loading">Please wait... loading device and activity data, which may take a few seconds.</div>' );
 
         /* Load the device data */
@@ -2969,27 +3076,27 @@ if (false) {
             timeout: 15000
         }).done( function( data, statusText, jqXHR ) {
             console.log("D_ReactorDeviceInfo loaded, " + String(Date.now()-start) + "ms");
-            
+
             deviceInfo = data;
-            
+
             /* Body content */
             html += '<div class="reactoractions fullwidth">';
 
             html += '<div id="tripactions" class="actionlist">';
             html += '<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span id="titletext">Trip Actions</span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>';
-            html += '<div class="row buttonrow"><div class="col-sm-1"><button id="addtripaction" class="addaction btn btn-sm btn-primary">Add Trip Action</button></div></div>';            
+            html += '<div class="row buttonrow"><div class="col-sm-1"><button id="addtripaction" class="addaction btn btn-sm btn-primary">Add Trip Action</button></div></div>';
             html += '</div>'; // #tripactions
             html += '<div id="untripactions" class="actionlist">';
             html += '<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span id="titletext">Untrip Actions</span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>';
-            html += '<div class="row buttonrow"><div class="col-sm-1"><button id="adduntripaction" class="addaction btn btn-sm btn-primary">Add Untrip Action</button></div></div>';            
+            html += '<div class="row buttonrow"><div class="col-sm-1"><button id="adduntripaction" class="addaction btn btn-sm btn-primary">Add Untrip Action</button></div></div>';
             html += '</div>'; // untripactions
 
             html += '</div>'; // reactoractions
-            
+
             html += "<p>Test buttons? Each action? Each set?</p>";
 
             html += footer();
-            
+
             jQuery('div#loading').replaceWith( jQuery( html ) );
 
             doActivities();
