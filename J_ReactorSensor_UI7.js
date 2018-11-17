@@ -48,7 +48,7 @@ var ReactorSensor = (function(api, $) {
             ' <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=debug" target="_blank">Toggle&nbsp;Debug</a>' +
             ' &bull; <a href="/cgi-bin/cmh/log.sh?Device=LuaUPnP" target="_blank">Log&nbsp;File</a>' +
             ' &bull; <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=status" target="_blank">Plugin&nbsp;Status</a>' +
-            ' &bull; <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=summary" target="_blank">Logic&nbsp;Summary</a>' +
+            ' &bull; <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=summary&device=' + api.getCpanelDeviceId() + '" target="_blank">Logic&nbsp;Summary</a>' +
             '</div>';
         return html;
     }
@@ -119,7 +119,7 @@ var ReactorSensor = (function(api, $) {
         cdata.device = myid;
         if ( upgraded ) {
             /* Write updated config. We don't care if it fails, as nothing we can't redo would be lost. */
-            api.setDeviceStatePersistent( myid, serviceId, "cdata", JSON.stringify( cdata ) );
+            api.setDeviceStateVariablePersistent( myid, serviceId, "cdata", JSON.stringify( cdata ) );
         }
 
         iData[ myid ] = { cdata: cdata, ixCond: ixCond, ixGroup: ixGroup };
@@ -204,7 +204,7 @@ var ReactorSensor = (function(api, $) {
      * Find cdata group
      */
     function findCdataGroupIndex( grpid ) {
-        var cdata = iData[ api.getCpanelDeviceId() ];
+        var cdata = iData[ api.getCpanelDeviceId() ].cdata;
         for ( var ix=0; ix<cdata.conditions.length; ++ix ) {
             if ( cdata.conditions[ix].groupid === grpid ) {
                 return ix;
@@ -518,16 +518,12 @@ var ReactorSensor = (function(api, $) {
         jQuery('button#addgroup').prop('disabled', nset );
 
         /* Up/down tools for conditions enabled except up for first and down
-           for last. */
+           for last in each group. */
         jQuery('div.controls i.action-up').attr('disabled', false);
-        jQuery('div.conditionrow:first div.controls i.action-up').attr('disabled', true);
-        /* Down is more complicated because the "Add Condition" button row is
-           the last child in each group. Select only the conditionrows in each
-           group, then apply to the last in each of those. */
         jQuery('div.controls i.action-down').attr('disabled', false);
         jQuery('div.conditiongroup').each( function( ix, grpEl ) {
-            jQuery( 'div.conditionrow:last div.controls i.action-down', grpEl )
-                .attr('disabled', true);
+            jQuery( 'div.conditionrow:first div.controls i.action-up', grpEl ).attr('disabled', true);
+            jQuery( 'div.conditionrow:last div.controls i.action-down', grpEl ).attr('disabled', true);
         });
 
         /* Delete button of single condition in first condition group is
@@ -550,6 +546,7 @@ var ReactorSensor = (function(api, $) {
         var typ = jQuery("div.condtype select", row).val();
         cond.type = typ;
         jQuery('.tberror', row).removeClass('tberror');
+        row.removeClass('tberror');
         switch (typ) {
             case 'comment':
                 cond.comment = jQuery("div.params input", row).val();
@@ -669,6 +666,8 @@ var ReactorSensor = (function(api, $) {
             default:
                 break;
         }
+        
+        row.has('.tberror').addClass('tberror');
 
         updateControls();
     }
@@ -1151,6 +1150,10 @@ var ReactorSensor = (function(api, $) {
         var newId = getUID("grp");
         var condgroup = jQuery('<div class="conditiongroup"></div>');
         condgroup.attr('id', newId);
+        condgroup.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span id="titletext"></span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>');
+        jQuery( 'span#titletext', condgroup ).text( "Group " + newId );
+        jQuery("button#addgroup", condgroup).on( 'click.reactor', handleAddGroupClick );
+        jQuery("button#saveconf", condgroup).on( 'click.reactor', handleSaveClick );
 
         /* Insert a new divider with "OR" caption */
         jQuery('<div class="row divider"><div class="col-sm-5"><hr></div><div class="col-sm-2"><h5 style="text-align: center">OR</h5></div><div class="col-sm-5"><hr></div></div>')
@@ -1163,7 +1166,7 @@ var ReactorSensor = (function(api, $) {
         condgroup.append(cel); /* Add it to the conditiongroup */
 
         /* Add an "Add Condition" button for the new group */
-        cel = jQuery('<div class="row"><div class="col-sm-1"><button class="addcond btn btn-sm btn-primary">Add Condition</button></div></div>');
+        cel = jQuery('<div class="row buttonrow"><div class="col-xs-12 col-sm-12"><button class="addcond btn btn-sm btn-primary">Add Condition</button></div></div>');
         jQuery("button.addcond", cel).prop('disabled',true); /* Add Cond is disabled to start */
         jQuery("button.addcond", cel).on( 'click.reactor', handleAddConditionClick );
 
@@ -1293,7 +1296,7 @@ var ReactorSensor = (function(api, $) {
         var el = jQuery('<div class="row conditionrow"></div>');
         el.append( '<div class="col-sm-2 condtype"><select class="form-control form-control-sm"><option value="">--choose--</option></select></div>' );
         el.append( '<div class="col-sm-9 params"></div>' );
-        el.append( '<div class="col-sm-1 controls"></div>');
+        el.append( '<div class="col-sm-1 controls text-right"></div>');
         jQuery("div.controls", el).append('<i class="material-icons md-btn action-up">arrow_upward</i>');
         jQuery("div.controls", el).append('<i class="material-icons md-btn action-down">arrow_downward</i>');
         jQuery("div.controls", el).append('<i class="material-icons md-btn action-delete">clear</i>');
@@ -1329,6 +1332,8 @@ var ReactorSensor = (function(api, $) {
 
             /* Create div.conditiongroup and add conditions */
             var gel = jQuery('<div class="conditiongroup"></div>').attr("id", grp.groupid);
+            gel.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span id="titletext"></span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>');
+            jQuery( 'span#titletext', gel ).text( "Group: " + grp.groupid );
             for (var nc=0; nc<grp.groupconditions.length; ++nc) {
                 var cond = grp.groupconditions[nc];
                 var row = getConditionRow();
@@ -1349,7 +1354,7 @@ var ReactorSensor = (function(api, $) {
             }
 
             /* Append "Add Condition" button */
-            gel.append('<div class="row"><div class="col-sm-1"><button class="addcond btn btn-sm btn-primary">Add Condition</button></div></div>');
+            gel.append('<div class="row buttonrow"><div class="col-xs-12 col-sm-12"><button class="addcond btn btn-sm btn-primary">Add Condition</button></div></div>');
 
             /* Append the group */
             jQuery("div#conditions").append(gel);
@@ -1409,8 +1414,10 @@ var ReactorSensor = (function(api, $) {
      * Handle save click: save the current configuration.
      */
     function handleSaveClick( ev, fnext, fargs ) {
+        var myid = api.getCpanelDeviceId();
+        
         /* Rip through conditions and clean up before saving */
-        var ixCond = iData[api.getCpanelDeviceId()].ixCond;
+        var ixCond = iData[myid].ixCond;
         for ( var condid in ixCond ) {
             if ( ixCond.hasOwnProperty( condid ) ) {
                 var cond = ixCond[condid];
@@ -1445,10 +1452,10 @@ var ReactorSensor = (function(api, $) {
                 }
             }
         }
+        
         /* Save to persistent state */
-        var myid = api.getCpanelDeviceId();
         iData[myid].cdata.timestamp = Math.floor( Date.now() / 1000 );
-        api.setDeviceStatePersistent( myid, serviceId, "cdata", JSON.stringify( iData[myid].cdata ),
+        api.setDeviceStateVariablePersistent( myid, serviceId, "cdata", JSON.stringify( iData[myid].cdata ),
         {
             'onSuccess' : function() {
                 configModified = false;
@@ -1516,7 +1523,7 @@ var ReactorSensor = (function(api, $) {
         } else {
             jQuery('select,input#testtime', el.closest('div.row')).prop('disabled', true);
         }
-        api.setDeviceStatePersistent( api.getCpanelDeviceId(), serviceId, "TestTime", vv );
+        api.setDeviceStateVariablePersistent( api.getCpanelDeviceId(), serviceId, "TestTime", vv );
 
         el = jQuery('input#testhousemode', container);
         if ( el.prop('checked') ) {
@@ -1526,7 +1533,7 @@ var ReactorSensor = (function(api, $) {
             jQuery('select', el.closest('div.row')).prop('disabled', true);
             vv = "";
         }
-        api.setDeviceStatePersistent( api.getCpanelDeviceId(), serviceId, "TestHouseMode", vv );
+        api.setDeviceStateVariablePersistent( api.getCpanelDeviceId(), serviceId, "TestHouseMode", vv );
     }
 
     function doTest()
@@ -1631,7 +1638,7 @@ var ReactorSensor = (function(api, $) {
         }
         jQuery('input#testhousemode,select#mode', container).on( 'change.reactor', handleTestChange );
 
-if (false) {
+if (false) { // ???
         jQuery.ajax({
             url: api.getDataRequestURL(),
             data: {
@@ -1661,6 +1668,7 @@ if (false) {
     }
 
     function updateStatus( pdev ) {
+        console.log("**** updateStatus() ****");
         var stel = jQuery('div#reactorstatus');
         if ( stel.length === 0 || !inStatusPanel ) {
             /* If not displayed, do nothing. */
@@ -1820,6 +1828,7 @@ if (false) {
                 if ( args.states[k].variable.match( /^(cdata|cstate|Tripped|Armed)$/ ) ||
                         args.states[k].service == "urn:toggledbits-com:serviceId:ReactorValues" ) {
                     doUpdate = true;
+                    break;
                     // console.log( args.states[k].service + '/' + args.states[k].variable + " updated!");
                 }
             }
@@ -1865,7 +1874,7 @@ if (false) {
         jQuery("button#revertconf", container).prop('disabled', !configModified);
     }
 
-    function handleVariableChange() {
+    function handleVariableChange( ev ) {
         var container = jQuery('div#variables');
         var myid = api.getCpanelDeviceId();
         var cd = iData[myid].cdata;
@@ -1875,12 +1884,12 @@ if (false) {
         }
 
         jQuery('.tberror', container).removeClass( 'tberror' );
-        jQuery('div.row.var', container).each( function( ix, obj ) {
+        jQuery('div.var', container).each( function( ix, obj ) {
             var row = jQuery(obj);
             var vname = row.attr("id");
-            var expr = jQuery('input.expr', row).val();
+            var expr = jQuery('textarea.expr', row).val();
             if ( expr === "" ) {
-                jQuery('input.expr', row).addClass('tberror');
+                jQuery('textarea.expr', row).addClass('tberror');
             }
             if ( cd.variables[vname] === undefined ) {
                 cd.variables[vname] = { name: vname, expression: expr };
@@ -1894,6 +1903,36 @@ if (false) {
         updateVariableControls();
     }
 
+    function handleTryExprClick( ev ) {
+        var row = jQuery( ev.currentTarget ).closest( "div.var" );
+        jQuery.ajax({
+            url: api.getDataRequestURL(),
+            data: {
+                id: "lr_Reactor",
+                action: "tryexpression",
+                device: api.getCpanelDeviceId(),
+                expr: jQuery( 'textarea.expr', row ).val() || "?"
+            },
+            dataType: "json",
+            timeout: 2000
+        }).done( function( data, statusText, jqXHR ) {
+            var msg;
+            if ( data.err ) {
+                msg = 'There is an error in the expression';
+                if ( data.err.location ) {
+                    jQuery('textarea.expr', row).focus().prop('selectionStart', data.err.location);
+                    msg += ' at ' + String( data.err.location );
+                }
+                msg += ': ' + data.err.message;
+            } else {
+                msg = "The expression result is: " + String( data.resultValue ) + ' (' + typeof( data.resultValue ) + ')';
+            }
+            alert( msg );
+        }).fail( function( jqXHR ) {
+            alert( "There was an error making the request. Vera may be busy; try again in a moment." );
+        });
+    }
+
     function handleDeleteVariableClick( ev ) {
         var row = jQuery( ev.currentTarget ).closest( 'div.row.var' );
         var vname = row.attr('id');
@@ -1905,39 +1944,47 @@ if (false) {
         }
     }
 
+    function getVariableRow() {
+        var editrow = jQuery('<div class="row var"></div>');
+        editrow.append( '<div id="varname" class="col-xs-12 col-sm-12 col-md-2"></div>' );
+        editrow.append( '<div class="col-xs-11 col-sm-11 col-md-9"><textarea class="expr form-control form-control-sm"/></div>' );
+        editrow.append( '<div class="col-xs-1 col-sm-1 col-md-1 text-right"><i id="tryexpr" class="material-icons md-btn" title="Try this expression">directions_run</i><i id="deletevar" class="material-icons md-btn">clear</i></div>' );
+        jQuery( 'textarea.expr', editrow ).on('change.reactor', handleVariableChange);
+        jQuery( 'i#tryexpr', editrow ).on('click.reactor', handleTryExprClick);
+        jQuery( 'i#deletevar', editrow ).on('click.reactor', handleDeleteVariableClick);
+        return editrow;
+    }
+    
     function handleAddVariableClick() {
         var container = jQuery('div#variables');
 
-        var editrow = jQuery('<div class="row editrow"></div>');
-        editrow.append( '<div class="col-sm-6 col-md-2 col-lg-1"><input class="varname form-control form-control-sm"></div>' );
-        editrow.append( '<div class="col-sm-12 col-md-9 col-lg-10"><input type="text" class="expr form-control form-control-sm"></div>' );
-        editrow.append( '<div class="col-sm-6 col-md-1"><i class="material-icons md-btn deletevar">clear</i></div>' );
-        jQuery( 'div.row.var input,i', container ).prop( 'disabled', true );
+        var editrow = getVariableRow();
+        jQuery( 'div.var textarea,i.md-btn', container ).prop( 'disabled', true );
         jQuery( 'button#addvar', container ).prop( 'disabled', true );
-        jQuery( 'input.expr', editrow ).prop('disabled', true).on('change.reactor',handleVariableChange);
-        jQuery( 'i.deletevar', editrow ).on('click.reactor',handleDeleteVariableClick);
-        jQuery( 'input.varname', editrow ).on('change.reactor', function( ev ) {
+        jQuery( 'textarea.expr', editrow ).prop('disabled', true);
+        jQuery( 'div#varname', editrow ).empty().append( '<input class="form-control form-control-sm" title="Enter a variable name and then TAB out of the field.">' );
+        jQuery( 'div#varname input', editrow ).on('change.reactor', function( ev ) {
             /* Convert to regular row */
             var f = jQuery( ev.currentTarget );
             var vname = f.val();
             if ( vname === "" || jQuery( 'div.row.var#' + vname ).length > 0 || !vname.match( /^[A-Z][A-Z0-9_]*$/i ) ) {
                 f.addClass('tberror');
+                f.closest('.row').addClass( 'tberror' );
                 f.focus();
             } else {
-                /* Set the row ID to the name */
-                var row = f.closest('div.row');
-                row.removeClass('editrow').addClass('var').attr('id', vname);
+                var row = f.closest( '.row' ).attr('id', vname).removeClass('editrow').removeClass('tberror');
+                jQuery( '.tberror', row ).removeClass('editrow');
                 /* Remove the name input field and swap in the name (text) */
                 f.parent().empty().text(vname);
                 /* Re-enable fields and add button */
-                jQuery('div.row.var input,i', container).prop('disabled', false);
+                jQuery( 'div.var textarea,i.md-btn', container ).prop('disabled', false);
                 jQuery( 'button#addvar', container ).prop( 'disabled', false );
                 /* Do the regular stuff */
-                handleVariableChange();
+                handleVariableChange( null );
             }
         });
-        jQuery( 'div.reactorgroup', container ).append( editrow );
-        jQuery( 'input.varname', editrow ).focus();
+        editrow.insertBefore( jQuery( '.buttonrow', container ) );
+        jQuery( 'div#varname input', editrow ).focus();
     }
 
     /**
@@ -1946,31 +1993,29 @@ if (false) {
     function redrawVariables() {
         var container = jQuery('div#variables');
         container.empty();
-        var gel = jQuery('<div class="reactorgroup"></div>');
+        var gel = jQuery('<div class="vargroup"></div>');
+        gel.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span id="titletext">Defined Variables</span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>');
         var cdata = iData[api.getCpanelDeviceId()].cdata;
         for ( var vn in cdata.variables ) {
             if ( cdata.variables.hasOwnProperty( vn ) ) {
                 var vd = cdata.variables[vn];
-                var el = jQuery('<div class="row var" id="' + vn + '"></div>');
-                el.append( jQuery( '<div class="col-sm-6 col-md-2 col-lg-1"></div>' ).text( vn ) );
-                el.append( '<div class="col-sm-12 col-md-9 col-lg-10"><input type="text" class="expr form-control form-control-sm"></div>' );
-                el.append( '<div class="col-sm-6 col-md-1"><i class="material-icons md-btn deletevar">clear</i></div>' );
+                var el = getVariableRow();
+                el.attr('id', vn);
+                jQuery( 'div#varname', el).text( vn );
+                jQuery( 'textarea.expr', el ).val( vd.expression );
                 gel.append( el );
-                jQuery( 'input.expr', el ).val( vd.expression );
             }
         }
+
+        /* Add "Add" button */
+        gel.append('<div class="row buttonrow">' +
+            '<div class="col-xs-12 col-sm-12"><button id="addvar" class="btn btn-sm btn-primary">Add Variable/Expression</button></div>' +
+            '</div>');
 
         /* Append the group */
         container.append(gel);
 
-        container.append('<div class="row">' +
-            '<div class="col-sm-2"><button id="addvar" class="btn btn-sm btn-primary">Add Variable/Expression</button></div>' +
-            '<div class="col-sm-4"><hr></div>' +
-            '<div class="col-sm-6"><button id="saveconf" class="btn btn-sm btn-success">Save</button><button id="revertconf" class="btn btn-sm btn-danger">Revert</button></div>' +
-            '</div>');
         jQuery("button#addvar", container).on( 'click.reactor', handleAddVariableClick );
-        jQuery("input.expr", container).on( 'change.reactor', handleVariableChange );
-        jQuery('i.deletevar', container).on('click.reactor', handleDeleteVariableClick);
         jQuery("button#saveconf", container).on( 'click.reactor', handleSaveClick );
         jQuery("button#revertconf", container).on( 'click.reactor', handleRevertClick );
 
@@ -1998,11 +2043,17 @@ if (false) {
             html += '.tbwarn { border: 1px solid yellow; background-color: yellow; }';
             html += 'i.md-btn:disabled { color: #cccccc; cursor: auto; }';
             html += 'i.md-btn[disabled] { color: #cccccc; cursor: auto; }';
-            html += 'i.md-btn { color: #006040; font-size: 13pt; cursor: pointer; }';
+            html += 'i.md-btn { color: #006040; font-size: 14pt; cursor: pointer; }';
             html += 'input.tbinvert { min-width: 16px; min-height: 16px; }';
-            html += 'div.conditions { width: 100%; }';
+            html += 'div.tblisttitle { background-color: #444444; color: #fff; font-size: 16px; font-weight: bold; padding: 8px; min-height: 42px; }';
             html += 'input.narrow { max-width: 6em; }';
-            html += 'div.conditiongroup { border-radius: 8px; border: 2px solid #006040; padding: 8px; }';
+            html += 'div.vargroup { border-radius: 8px; border: 2px solid #444444; margin-bottom: 8px; }';
+            html += 'div.vargroup .row { margin-right: 0px; margin-left: 0px; }';
+            html += 'div.vargroup div.var:nth-child(odd) { background-color: #efefef; }';
+            html += 'div.var,div.buttonrow { padding: 8px; }';
+            html += 'div.var.tbmodified:not(.tberror) { border-left: 4px solid green; }';
+            html += 'div.var.tberror { border-left: 4px solid red; }';
+            html += 'textarea.expr { font-family: monospace; resize: vertical; width: 100% !important; }';
             html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
             html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
             html += "</style>";
@@ -2010,7 +2061,8 @@ if (false) {
 
             /* Body content */
             html = '';
-            html += '<div class="row"><div class="col-cs-12 col-sm-12">Expressions allow you to do complex arithmetic, string, and other operations that otherwise cannot be done in the Conditions editor. When you create an expression, you specify a variable name into which its result is stored. You can then use that variable name in your conditions.</div></div>';
+            html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>Expressions/Variables</h3></div></div>';
+            html += '<div class="row"><div class="col-xs-12 col-sm-12">Expressions allow you to do complex arithmetic, string, and other operations that otherwise cannot be done in the Conditions editor. When you create an expression, you specify a variable name into which its result is stored. You can then use that variable name in your conditions and activities.</div></div>';
             html += '<div id="variables"></div>';
 
             html += footer();
@@ -2046,11 +2098,17 @@ if (false) {
             html += '.tbwarn { border: 1px solid yellow; background-color: yellow; }';
             html += 'i.md-btn:disabled { color: #cccccc; cursor: auto; }';
             html += 'i.md-btn[disabled] { color: #cccccc; cursor: auto; }';
-            html += 'i.md-btn { color: #004020; font-size: 12pt; cursor: pointer; }';
+            html += 'i.md-btn { color: #004020; font-size: 14pt; cursor: pointer; }';
             html += 'input.tbinvert { min-width: 16px; min-height: 16px; }';
             html += 'div.conditions { width: 100%; }';
+            html += 'div.tblisttitle { background-color: #006040; color: #fff; font-size: 16px; font-weight: bold; padding: 8px; min-height: 42px; }';
             html += 'input.narrow { max-width: 6em; }';
-            html += 'div.conditiongroup { border-radius: 8px; border: 2px solid #006040; padding: 8px; }';
+            html += 'div.conditiongroup { border-radius: 8px; border: 2px solid #006040; margin-bottom: 8px; }';
+            html += 'div.conditiongroup .row { margin-right: 0px; margin-left: 0px; }';
+            html += 'div.conditiongroup div.conditionrow:nth-child(odd) { background-color: #e6ffe6; }';
+            html += 'div.conditionrow,div.buttonrow { padding: 8px; }';
+            html += 'div.conditionrow.tbmodified:not(.tberror) { border-left: 4px solid green; }';
+            html += 'div.conditionrow.tberror { border-left: 4px solid red; }';
             html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
             html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
             html += 'div.warning { color: red; }';
@@ -2064,7 +2122,7 @@ if (false) {
 
             var rr = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "Retrigger" ) || "0";
             if ( rr !== "0" ) {
-                html += '<div class="row"><div class="warning col-cs-12 col-sm-12">WARNING! Retrigger is on! You should avoid using time-related conditions in this ReactorSensor, as they may cause retriggers frequent retriggers!</div></div>';
+                html += '<div class="row"><div class="warning col-xs-12 col-sm-12">WARNING! Retrigger is on! You should avoid using time-related conditions in this ReactorSensor, as they may cause retriggers frequent retriggers!</div></div>';
             }
 
             html += '<div id="conditions"></div>';
@@ -2169,7 +2227,7 @@ if (false) {
             var lua = jQuery( 'textarea', row ).val() || "";
             // check Lua?
             if ( lua.match( /^[\r\n\s]*$/ ) ) {
-                jQuery( 'textarea' ).addClass( "tberror" );
+                jQuery( 'textarea', row ).addClass( "tberror" );
                 row.addClass( "tberror" );
             }
         } else {
@@ -2291,15 +2349,24 @@ if (false) {
         var ucf = buildActionList( jQuery( 'div#untripactions') );
         if ( tcf && ucf ) {
             var myid = api.getCpanelDeviceId();
-            iData[myid].cdata.tripactions = tcf;
-            iData[myid].cdata.untripactions = ucf;
+            /* If either "scene" has no actions, just delete the config */
+            if ( tcf.groups.length == 1 && tcf.groups[0].actions.length == 0 ) {
+                delete iData[myid].cdata.tripactions;
+            } else {
+                iData[myid].cdata.tripactions = tcf;
+            }
+            if ( ucf.groups.length == 1 && ucf.groups[0].actions.length == 0 ) {
+                delete iData[myid].cdata.untripactions;
+            } else {
+                iData[myid].cdata.untripactions = ucf;
+            }
             /* Save has async action, so use callback to complete. */
             handleSaveClick( ev, function() {
                 if ( !configModified ) { /* successful save? */
                     jQuery( 'div.actionlist.tbmodified' ).removeClass( "tbmodified" );
                     jQuery( 'div.actionlist .tbmodified' ).removeClass( "tbmodified" );
                     /* Scene refs are upgraded to actions, so delete old on save */
-                    api.setDeviceStatePersistent( api.getCpanelDeviceId(), serviceId, "Scenes", "" );
+                    api.setDeviceStateVariablePersistent( api.getCpanelDeviceId(), serviceId, "Scenes", "" );
                 }
             }, [] ); /* pass up */
             return;
@@ -3080,6 +3147,9 @@ if (false) {
             deviceInfo = data;
 
             /* Body content */
+            html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>Activities</h3></div></div>';
+            html += '<div class="row"><div class="col-xs-12 col-sm-12">Activities are actions that Reactor will perform on its own when tripped or untripped.</div></div>';
+            
             html += '<div class="reactoractions fullwidth">';
 
             html += '<div id="tripactions" class="actionlist">';
@@ -3092,8 +3162,6 @@ if (false) {
             html += '</div>'; // untripactions
 
             html += '</div>'; // reactoractions
-
-            html += "<p>Test buttons? Each action? Each set?</p>";
 
             html += footer();
 
