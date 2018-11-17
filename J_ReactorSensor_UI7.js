@@ -2282,9 +2282,12 @@ if (false) { // ???
                 action.device = parseInt( jQuery( 'select.devicemenu', row ).val() );
                 action.deviceName = deviceByNumber[ action.device ].name;
                 var s = jQuery( 'select#actionmenu', row ).val() || "";
-                var p = s.split( /\//, 2 );
-                action.service = p[0]; action.action = p[1];
+                var pt = s.split( /\//, 2 );
+                action.service = pt[0]; action.action = pt[1];
                 var ai = actions[ s ];
+                if ( ai && ai.deviceOverride && ai.deviceOverride[action.device] ) {
+                    ai = ai.deviceOverride[action.device];
+                }
                 if ( ! ai ) {
                     console.log( "Can't find actioninfo for " + s );
                     scene = false;
@@ -2319,6 +2322,19 @@ if (false) { // ???
                     return false;
                 }
                 // action.sceneName = sceneByNumber[ action.scene ].name
+                jQuery.ajax({
+                    url: api.getDataRequestURL(),
+                    data: {
+                        id: "lr_Reactor",
+                        action: "preloadscene",
+                        device: api.getCpanelDeviceId(),
+                        scene: action.scene
+                    },
+                    dataType: "json",
+                    timeout: 2000
+                }).done( function( data, statusText, jqXHR ) {
+                }).fail( function( jqXHR ) {
+                }); 
             } else if ( "runlua" === actionType ) {
                 var lua = jQuery( 'textarea', row ).val() || "";
                 lua = lua.replace( /\r\n/g, "\n" );
@@ -2434,9 +2450,10 @@ if (false) { // ???
                 if ( undefined !== parm.values ) {
                     /* Menu, can be array or object (key/value map) */
                     inp = jQuery('<select class="argument form-control form-control-sm"/>');
+                    var opt;
                     if ( Array.isArray( parm.values ) ) {
                         for ( var j = 0; j<parm.values.length; j++ ) {
-                            var opt = jQuery("<option/>");
+                            opt = jQuery("<option/>");
                             opt.val( parm.values[j] );
                             opt.text( parm.values[j] );
                             inp.append( opt );
@@ -2444,7 +2461,7 @@ if (false) { // ???
                     } else {
                         for ( var key in parm.values ) {
                             if ( parm.values.hasOwnProperty( key ) ) {
-                                var opt = jQuery("<option/>");
+                                opt = jQuery("<option/>");
                                 opt.val( key );
                                 opt.text( parm.values[key] );
                                 inp.append( opt );
@@ -2457,7 +2474,7 @@ if (false) { // ???
                         inp.append( '<option disabled/>' ).append( '<option class="optheading" disabled>--Variables--</option>' );
                         for ( var vname in cd.variables ) {
                             if ( cd.variables.hasOwnProperty( vname ) ) {
-                                var opt = jQuery( '<option/>' ).val( '{' + vname + '}' ).text( '{'+vname+'}' );
+                                opt = jQuery( '<option/>' ).val( '{' + vname + '}' ).text( '{'+vname+'}' );
                                 inp.append( opt );
                             }
                         }
@@ -2539,7 +2556,7 @@ if (false) { // ???
                 inp.on( 'change.reactor', handleActionValueChange );
                 /* If there are more than one parameters, wrap each in a label. */
                 if ( action.parameters.length > 1 ) {
-                    var label = jQuery("<label class='argument'/>");
+                    var label = jQuery("<label class='argument foo1'/>");
                     label.attr("for", parm.name );
                     label.text( ( parm.label || parm.name ) + ": " );
                     if ( parm.optional ) label.addClass("optarg");
@@ -2900,7 +2917,7 @@ if (false) { // ???
                                     var a = action.arguments[j];
                                     if ( 0 === jQuery( '#' + a.name, row ).length ) {
                                         var inp = jQuery( '<input class="argument form-control form-control-sm">' ).attr('id', a.name);
-                                        var lbl = jQuery( '<label/>' ).attr('for', a.name).text(a.name).addClass('tbrequired').append(inp);
+                                        var lbl = jQuery( '<label class="foo2"/>' ).attr('for', a.name).text(a.name).addClass('tbrequired').append(inp);
                                         jQuery( 'div.actiondata', row ).append( lbl );
                                     }
                                     jQuery( '#' + a.name, row ).val( a.value || "" );
@@ -2997,9 +3014,9 @@ if (false) { // ???
                         jQuery( 'select#actionmenu', row ).val( key );
                         changeActionAction( row, key );
                         for ( var j=0; j<(action.parameters || []).length; j++ ) {
-                            if ( 0 === jQuery( '#' + action.parameters[j].name, row ).length ) {
+                            if ( false && 0 === jQuery( '#' + action.parameters[j].name, row ).length ) {
                                 var inp = jQuery( '<input class="argument form-control form-control-sm">' ).attr('id', action.parameters[j].name);
-                                var lbl = jQuery( '<label/>' ).attr('for', action.parameters[j].name).text(action.parameters[j].name).addClass('tbrequired').append(inp);
+                                var lbl = jQuery( '<label class="foo3"/>' ).attr('for', action.parameters[j].name).text(action.parameters[j].name).addClass('tbrequired').append(inp);
                                 jQuery( 'div.actiondata', row ).append( lbl );
                             }
                             jQuery( '#' + action.parameters[j].name, row ).val( action.parameters[j].value || "" );
