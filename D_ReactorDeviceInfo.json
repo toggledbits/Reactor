@@ -5675,7 +5675,19 @@
 		}, {
 			"service": "urn:upnp-org:serviceId:HVAC_UserOperatingMode1",
 			"action": "SetEnergyModeTarget",
-			"description": "Set energy mode"
+			"description": "Set energy mode",
+            "_comment": "2018-11-16 PHR This is a temporary fix because AVT was using NewEnergyModeTarget rather than the standard NewModeTarget",
+            "parameters": [{
+                "type": "string",
+                "name": "NewEnergyModeTarget",
+                "related": "EnergyModeTarget",
+                "default": "Normal",
+                "values": {
+                    "Normal": "Normal", 
+                    "EnergySavingsMode": "Savings"
+                },
+                "direction": "in"
+            }]
 		}, {
 			"service": "urn:upnp-org:serviceId:HVAC_FanOperatingMode1",
 			"action": "SetMode",
