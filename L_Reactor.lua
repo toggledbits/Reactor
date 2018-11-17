@@ -684,7 +684,7 @@ local function stopScene( ctx, taskid, tdev )
     luup.variable_set( MYSID, "runscene", json.encode(sceneState), pluginDevice )
 end
 
--- Run Lua fragment for scene.
+-- Run Lua fragment for scene. Returns result,error
 local function execLua( fname, luafragment, extarg, tdev )
     D("execLua(%1,<luafragment>,%2,%3)", fname, extarg, tdev)
 
@@ -698,7 +698,7 @@ local function execLua( fname, luafragment, extarg, tdev )
             L({level=1,msg="%1 %(2) [%3] Lua failed"}, 
                 luup.devices[tdev].description, tdev, fname)
             luup.log( "Reactor: " .. err .. "\n" .. luafragment, 1 )
-            return false, true -- flag error
+            return false, err -- flag error
         end
         luaFunc[fname] = fnc
     end
@@ -718,7 +718,7 @@ local function execLua( fname, luafragment, extarg, tdev )
     end
     -- Add reactor_device and reactor_ext_arg for backwards compatibility
     local newenv = { Reactor=_R, reactor_device=tdev, reactor_ext_arg=extarg }
-    newenv.print = function( ... ) L("%1 (%2) [%3]: " .. table.concat( arg, "\t"), luup.devices[tdev].description, tdev, fname) end
+    newenv.print = function( ... ) local m = table.concat( arg, "\t" ) addEvent{ dev=tdev, event="diag", script=fname, message=m} L("%1 (%2) [%3]: " .. m, luup.devices[tdev].description, tdev, fname) end
     for k,e in pairs( sensorState[tostring(tdev)].configData.variables or {} ) do
         newenv[k] = luup.variable_get( VARSID, k, tdev ) -- also as global
         _R.expressions[k] = { expression=e.expression, value=newenv[k] }
@@ -727,10 +727,10 @@ local function execLua( fname, luafragment, extarg, tdev )
     local oldenv = getfenv(fnc)
     setfenv(fnc, newenv)
     D("execLua() env is %1", newenv)
-    local ret = fnc() -- ??? handle runtime error?
+    local success, ret = pcall( fnc ) -- protect from runtime errors within
     setfenv(fnc, oldenv)
-    D("execLua() lua returns (%2)%1", ret, type(ret))
-    return ret
+    D("execLua() lua success=%3 return=(%2)%1", ret, type(ret), success)
+    return ret, (not success) and ret or false
 end
 
 local runScene -- forward declaration
@@ -876,9 +876,18 @@ local function execSceneGroups( tdev, taskid )
                         end
                     end
                     local more, err = execLua( fname, lua, nil, tdev )
-                    if not ( err or more ) then
-                        L("%1 (%2) scene %5 execution of Lua at step %3 returned %4, stopping actions.",
-                            tdev, luup.devices[tdev].description, ix, more, scd.id)
+                    if err then
+                        addEvent{ dev=tdev, event="abortscene", scene=scd.id, sceneName=scd.name or scd.id, reason="Lua error: " .. tostring(err) }
+                        L({level=1,msg="%1 (%2) aborting scene %3 Lua execution at group step %4, Lua failed: %4"},
+                            luup.devices[tdev].description, tdev, scd.id, ix)
+                        L{level=2,msg="Lua:\n"..lua} -- concat to avoid formatting
+                        -- Throw on the brakes! (stop all scenes in context)
+                        stopScene( tdev, nil, tdev )
+                        return nil
+                    elseif not more then
+                        addEvent{ dev=tdev, event="abortscene", scene=scd.id, sceneName=scd.name or scd.id, reason="Lua returned (" .. type(more) .. ")" .. tostring(more) }
+                        L("%1 (%2) scene %3 Lua at step %4 returned (%5)%6, stopping actions.",
+                            luup.devices[tdev].description, tdev, scd.id, ix, type(more), more)
                         stopScene( nil, taskid, tdev )
                         return nil
                     end
@@ -897,6 +906,7 @@ local function execSceneGroups( tdev, taskid )
     end
 
     -- We've run out of groups!
+    addEvent{ dev=tdev, event="endscene", scene=scd.id, sceneName=scd.name or scd.id }
     D("execSceneGroups(%3) reached end of scene %1 (%2)", scd.id, scd.name, taskid)
     stopScene( nil, taskid, tdev )
     return nil
@@ -918,6 +928,9 @@ local function execScene( scd, tdev, options )
         stopScene( ctx, nil, tdev )
     end
 
+    -- Mark
+    addEvent{ dev=tdev, event="startscene", scene=scd.id, sceneName=scd.name or scd.id}
+    
     -- If there's scene lua, try to run it.
     if ( scd.lua or "" ) ~= "" then
         D("execScene() handling scene (global) Lua")
@@ -935,9 +948,18 @@ local function execScene( scd, tdev, options )
         -- Note name is context-free, because all runners of this scene use same
         -- code. Environment will reflect different context at runtime.
         local fname = string.format("scene%s_start", tostring(scd.id))
-        local res,err = execLua( fname, luafragment, options.externalArgument, tdev )
-        if not ( err or res ) then
-            D("execScene() scene Lua returned (%1)%2, not running scene groups.", type(res), res)
+        local more,err = execLua( fname, luafragment, options.externalArgument, tdev )
+        if err then
+            addEvent{ dev=tdev, event="abortscene", scene=scd.id, sceneName=scd.name or scd.id, reason="Lua error: " .. tostring(err) }
+            L({level=1,msg="%1 (%2) scene %3 scene Lua failed: %4"},
+                luup.devices[tdev].description, tdev, scd.id, err)
+            L{level=2,msg="Lua:\n"..luafragment} -- concat to avoid formatting
+            return
+        end
+        if not more then
+            addEvent{ dev=tdev, event="abortscene", scene=scd.id, sceneName=scd.name or scd.id, reason="Lua returned (" .. type(more) .. ")" .. tostring(more) }
+            L("%1 (%2) scene %3 Lua returned (%4)%5, scene run aborted.",
+                luup.devices[tdev].description, tdev. scd.id, type(more), more)
             return
         end
     end
@@ -2475,7 +2497,7 @@ local function getEvents( deviceNum )
     end
     local resp = "    Events" .. EOL
     for _,e in ipairs( ( sensorState[tostring(deviceNum)] or {}).eventList or {} ) do
-        resp = resp .. string.format("        %15s ", e.time or os.date("%x.%X", e.when or 0) )
+        resp = resp .. string.format("        %15s ", os.date("%x %X", e.when or 0) )
         resp = resp .. ( e.event or "event?" ) .. ":"
         for k,v in pairs(e) do
             if not ( k == "time" or k == "when" or k == "event" or ( k == "dev" and tostring(v)==tostring(deviceNum) ) ) then
@@ -2529,7 +2551,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
         
     elseif action == "summary" then
         local r = ""
-        r = r .. rep("*", 29) .. " LOGIC SUMMARY REPORT " .. rep("*", 29) .. EOL
+        r = r .. string.rep("*", 29) .. " LOGIC SUMMARY REPORT " .. string.rep("*", 29) .. EOL
         r = r .. "   Version: " .. tostring(_PLUGIN_VERSION) .. " config " .. tostring(_CONFIGVERSION) .. EOL
         r = r .. "Local time: " .. os.date("%Y-%m-%dT%H:%M:%S%z") .. ", DST=" .. tostring(luup.variable_get( MYSID, "LastDST", pluginDevice )) .. EOL
         r = r .. "House mode: " .. tostring(luup.variable_get( MYSID, "HouseMode", pluginDevice )) .. EOL
