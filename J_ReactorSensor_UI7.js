@@ -2243,6 +2243,7 @@ if (false) { // ???
         var scene = { isReactorScene: true, name: root.attr('id'), groups: [] };
         var group = { actions: [] };
         scene.groups.push( group );
+        var firstScene = true;
         jQuery( 'div.actionrow', root ).each( function( ix ) {
             var row = $( this );
             var actionType = jQuery( 'select#actiontype', row ).val();
@@ -2328,13 +2329,15 @@ if (false) { // ???
                         id: "lr_Reactor",
                         action: "preloadscene",
                         device: api.getCpanelDeviceId(),
-                        scene: action.scene
+                        scene: action.scene,
+                        flush: firstScene ? 0 : 1
                     },
                     dataType: "json",
                     timeout: 2000
                 }).done( function( data, statusText, jqXHR ) {
                 }).fail( function( jqXHR ) {
                 }); 
+                firstScene = false;
             } else if ( "runlua" === actionType ) {
                 var lua = jQuery( 'textarea', row ).val() || "";
                 lua = lua.replace( /\r\n/g, "\n" );
