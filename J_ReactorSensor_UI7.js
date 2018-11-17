@@ -105,12 +105,6 @@ var ReactorSensor = (function(api, $) {
             var grp = cdata.conditions[ig];
             ixGroup[ grp.groupid ] = grp;
             for ( var ic=0; ic<(grp.groupconditions || {}).length; ic++ ) {
-                if ( grp.groupconditions[ic].operator === undefined && grp.groupconditions[ic].condition !== undefined ) {
-                    /* Fixup v2 */
-                    grp.groupconditions[ic].operator = grp.groupconditions[ic].condition;
-                    delete grp.groupconditions[ic].condition;
-                    upgraded = true;
-                }
                 ixCond[ grp.groupconditions[ic].id ] = grp.groupconditions[ic];
             }
         }
@@ -1426,9 +1420,6 @@ var ReactorSensor = (function(api, $) {
                         removeConditionProperties( cond, 'comment' );
                         break;
                     case 'service':
-                        if ( cond.operator !== undefined && cond.condition !== undefined ) {
-                            delete cond.condition;
-                        }
                         delete cond.comment;
                         cond.device = parseInt( cond.device );
                         break;
@@ -1637,34 +1628,6 @@ var ReactorSensor = (function(api, $) {
             }
         }
         jQuery('input#testhousemode,select#mode', container).on( 'change.reactor', handleTestChange );
-
-if (false) { // ???
-        jQuery.ajax({
-            url: api.getDataRequestURL(),
-            data: {
-                id: "lu_device",
-                output_format: "xml"
-            },
-            dataType: "xml",
-            timeout: 15000
-        }).done( function( data, statusText, jqXHR ) {
-            var seen = {};
-            var services = jQuery( data ).find( "service" );
-            services.each( function( ix, obj ) {
-                var tb = jQuery( obj );
-                var svc = jQuery("serviceId", tb).text() || "";
-                var url = jQuery("SCPDURL", tb).text() || "";
-                if ( undefined === seen[ svc ] ) {
-                    console.log( svc + " => " + url );
-                }
-                seen[ svc ] = url;
-            });
-        }).fail( function( jqXHR, textStatus, errorThrown ) {
-            // Bummer.
-            console.log("Failed to load lu_device data: " + textStatus + " " + String(errorThrown));
-            console.log(jqXHR.responseText);
-        });
-}
     }
 
     function updateStatus( pdev ) {
@@ -2148,8 +2111,8 @@ if (false) { // ???
         var ud = api.getUserData();
         var scenes = api.cloneObject( ud.scenes );
         var menu = jQuery( '<select class="form-control form-control-sm" />' );
-        /* If lots of scenes, sort by room; otherwise, use straight as-is */ // ???
-        if ( true || scenes.length > 10 ) {
+        /* If lots of scenes, sort by room; otherwise, use straight as-is */
+        if ( scenes.length > 10 ) {
             var rooms = api.cloneObject( ud.rooms );
             var rid = {};
             for ( var i=0; i<rooms.length; ++i ) {
@@ -2815,7 +2778,7 @@ if (false) { // ???
             }
         } else if ( "action-delete" === op ) {
             row.remove();
-            changeActionRow( row ); // ???
+            changeActionRow( row );
         } else if ( "action-try" === op ) {
             if ( jQuery( '.tberror', row ).length > 0 ) {
                 alert( 'Please fix the errors before attempting to run this action.' );

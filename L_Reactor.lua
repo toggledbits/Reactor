@@ -1334,11 +1334,11 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         end
 
         -- Evaluate conditions. Any failure is a bail-out.'
-        local op = cond.operator or cond.condition -- ??? legacy
+        local op = cond.operator
         D("evaluateCondition() %1: %2/%3 %4%5%6?", cond.type, cond.service, cond.variable, vv, op, cv)
         if op == "=" then
             if vv ~= cv then return false end
-        elseif op == "<>" or op == "><" then -- latter from bug pre-1.2 ??? expireme
+        elseif op == "<>" then
             if vv == cv then return false end
         elseif op == ">" then
             if vn == nil or cn == nil or vn <= cn then return false end
@@ -1387,7 +1387,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         scheduleTick( { id=tdev, info="weekday "..cond.id }, nextDay )
         cond.lastvalue = { value=ndt.wday, timestamp=now }
         local wd = split( cond.value )
-        local op = cond.operator or cond.condition -- ??? legacy
+        local op = cond.operator
         D("evaluateCondition() weekday %1 among %2", ndt.wday, wd)
         if not isOnList( wd, tostring( ndt.wday ) ) then return false,false end
         -- OK, we're on the right day of the week. Which week?
@@ -1437,7 +1437,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
             luup.variable_set( MYSID, "sundata", json.encode(sundata), pluginDevice )
         end
         local nowMSM = ndt.hour * 60 + ndt.min
-        local op = cond.operator or cond.condition or "bet" -- legacy ???
+        local op = cond.operator or "bet"
         local tparam = split( cond.value or "sunrise+0,sunset+0" )
         local cp,boffs = string.match( tparam[1], "^([^%+%-]+)(.*)" )
         boffs = tonumber( boffs or "0" ) or 0
@@ -1474,7 +1474,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
     elseif cond.type == "trange" then
         -- Time, with various components specified, or not.
         cond.lastvalue = { value=now, timestamp=now }
-        local op = cond.operator or cond.condition or "bet" -- ??? legacy
+        local op = cond.operator or "bet"
         -- Split, pad, and complete date. Any missing parts are filled in with the
         -- current date/time's corresponding part.
         local tparam = split( cond.value, ',' )
@@ -2010,16 +2010,6 @@ local function startSensor( tdev, pdev )
 
     -- Start the sensor's tick.
     scheduleDelay( { id=tostring(tdev), func=sensorTick, owner=tdev }, 5 )
-
-    -- If this sensor uses scenes (and we run them), try to load them. UPGRADE ???
-    --[[
-    if getVarNumeric( "UseReactorScenes", 1, tdev, RSSID ) ~= 0 then
-        local sc = split( luup.variable_get( RSSID, "Scenes", tdev ) or "" )
-        for _,k in ipairs(sc) do
-            getSceneData( tonumber(k), tdev )
-        end
-    end
-    ==]]
 
     luup.set_failure( false, tdev )
     return true
