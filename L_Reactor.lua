@@ -493,7 +493,6 @@ local function sensor_runOnce( tdev )
         initVar( "MaxChangeRate", "", tdev, RSSID )
         initVar( "AutoUntrip", 0, tdev, SENSOR_SID )
         initVar( "UseReactorScenes", 1, tdev, RSSID ) -- 107
-        initVar( "Scenes", "", tdev, RSSID )
     end
 
     if s < 00108 then
@@ -635,8 +634,8 @@ local function getSceneData( sceneId, tdev )
     -- Still a valid Vera scene?
     if luup.scenes[sceneId] == nil then
         -- Nope.
-        L({level=1,msg="Scene %1 in configuration for %2 (%3) is no longer available!"}, sceneId,
-            tdev, (luup.devices[tdev] or {}).description)
+        L({level=1,msg="Scene %1 in configuration for %3 (%2) is no longer available!"}, sceneId,
+            tdev, luup.devices[tdev].description)
         sceneData[skey] = nil
         return nil
     end
@@ -1019,9 +1018,26 @@ local function loadSensorConfig( tdev )
         L("Unable to parse JSON data at %2, %1 in %3", pos, err, s)
         return error("Unable to load configuration")
     end
+    -- Check old-style scene runners, fix.
+    s = luup.variable_get( RSSID, "Scenes", tdev ) or ""
+    if s ~= "" then
+        L({level=2,msg="%3 (%2) Upgrading old-style scene pair %1 to actions (one-time upgrade)"}, 
+            s, tdev, luup.devices[tdev].description)
+        
+        local st = split( s, "," )
+        if st[1] ~= "" then
+            cdata.tripactions = { groups={ { delay=0, actions={ ['type']="runscene", scene=st[1] } } } }
+        end
+        if #st > 1 and st[2] ~= "" then
+            cdata.untripactions = { groups={ { delay=0, actions={ ['type']="runscene", scene=st[2] } } } }
+        end
+        luup.variable_set( RSSID, "cdata", json.encode( cdata ), tdev )
+        luup.variable_set( RSSID, "Scenes", "", tdev )
+    end
+    -- Save to cache.
     sensorState[tostring(tdev)].configData = cdata
     -- When loading sensor config, dump luaFunc so that any changes to code
-    -- in actions or scenes is honored.
+    -- in actions or scenes are honored immediately.
     luaFunc = {}
 end
 
@@ -1927,13 +1943,15 @@ local function startSensor( tdev, pdev )
     -- Start the sensor's tick.
     scheduleDelay( { id=tostring(tdev), func=sensorTick, owner=tdev }, 5 )
 
-    -- If this sensor uses scenes (and we run them), try to load them.
+    -- If this sensor uses scenes (and we run them), try to load them. UPGRADE ???
+    --[[
     if getVarNumeric( "UseReactorScenes", 1, tdev, RSSID ) ~= 0 then
         local sc = split( luup.variable_get( RSSID, "Scenes", tdev ) or "" )
         for _,k in ipairs(sc) do
             getSceneData( tonumber(k), tdev )
         end
     end
+    ==]]
 
     luup.set_failure( false, tdev )
     return true
@@ -2328,6 +2346,8 @@ function watch( dev, sid, var, oldVal, newVal )
     end
 end
 
+local EOL = "\r\n"
+
 local function getDevice( dev, pdev, v )
     if v == nil then v = luup.devices[dev] end
     if json == nil then json = require("dkjson") end
@@ -2363,11 +2383,51 @@ local function getDevice( dev, pdev, v )
     return devinfo
 end
 
+local function getReactorScene( t, s )
+    local resp = "    " .. t .. ( s and "" or " (none)" ) .. EOL
+    local pfx = "        "
+    if s then
+        for _,gr in ipairs( s.groups or {}) do
+            if (gr.delay or 0) > 0 then
+                resp = resp .. pfx .. "Delay " .. gr.delay .. " " .. (gr.delaytype or "inline") .. EOL
+            end
+            for _,act in ipairs( gr.actions or {} ) do
+                if act.type == "comment" then
+                    resp = resp .. pfx .. "Comment: " .. tostring(act.comment)
+                elseif act.type == "runlua" then
+                    local mime = require('mime')
+                    local lua = (act.encoded_lua or 0) and mime.unb64( act.lua ) or act.lua
+                    lua = (lua or ""):gsub( "\r\n", "\n" )
+                    lua = lua:gsub( "\r", "\n" )
+                    lua = lua:gsub( "\n", EOL .. pfx .. "    " )
+                    resp = resp .. pfx .. "Run Lua:" .. EOL .. pfx .."    " .. tostring(lua)
+                elseif act.type == "runscene" then
+                    resp = resp .. pfx .. "Run scene " .. tostring(act.scene) .. " " .. ((luup.scenes[act.scene] or {}).description or (act.sceneName or "").."?")
+                elseif act.type == "device" then
+                    local p = {}
+                    for _,pp in ipairs( act.parameters or {} ) do
+                        table.insert( p, pp.name .. "=" .. tostring(pp.value) )
+                    end
+                    p = table.concat( p, ", " )
+                    resp = resp .. pfx .. "Device " .. (act.device or "?") .. " (" .. 
+                        ((luup.devices[act.device or 0] or {}).description or (act.deviceName or "").."?") .. 
+                        ") action " .. (act.service or "?") .. "/" .. 
+                        (act.action or "?") .. "( " .. p .. " )"
+                else
+                    resp = resp .. pfx .. "Action type " .. act.type .. "?"
+                end
+                resp = resp .. EOL
+            end
+        end
+    end
+    return resp
+end
+
 local function getEvents( deviceNum )
     if deviceNum == nil or luup.devices[deviceNum] == nil or luup.devices[deviceNum].device_type ~= RSTYPE then
         return "no events: device does not exist or is not ReactorSensor"
     end
-    local resp = "    Events\r\n"
+    local resp = "    Events" .. EOL
     for _,e in ipairs( ( sensorState[tostring(deviceNum)] or {}).eventList or {} ) do
         resp = resp .. string.format("        %15s ", e.time or os.date("%x.%X", e.when or 0) )
         resp = resp .. ( e.event or "event?" ) .. ":"
@@ -2376,7 +2436,7 @@ local function getEvents( deviceNum )
                 resp = resp .. string.format(" %s=%s,", tostring(k), tostring(v))
             end
         end
-        resp = resp .. "\r\n"
+        resp = resp .. EOL
     end
     return resp
 end
@@ -2419,24 +2479,17 @@ function request( lul_request, lul_parameters, lul_outputformat )
         else
             return "ERROR, device number invalid or is not a ReactorSensor", "text/plain"
         end
-    elseif action == "loadscenes" then
+        
+    elseif action == "preloadscene" then
         -- Preload scenes used by a ReactorSensor. Call by UI during edit.
-        -- ??? Put on waiting scenes list instead?
-        local v = luup.variable_get( RSSID, "Scenes", deviceNum or -1 ) or ""
-        local r = split(v, ",")
-        local res = { scenes={} }
-        for _,s in ipairs(r) do
-            if s ~= "" then
-                status, msg = pcall( loadScene, tonumber(s), pluginDevice )
-                table.insert( res.scenes, { scene=s, status=status } )
-            end
-        end
-        return json.encode( res ), "application/json"
+        status, msg = pcall( loadScene, tonumber(lul.parameters.scene or 0), pluginDevice )
+        return json.encode( { status=status,message=msg ), "application/json"
+        
     elseif action == "summary" then
-        local r, EOL = "", "\r\n"
+        local r = ""
         r = r .. "LOGIC SUMMARY REPORT" .. EOL
         r = r .. "   Version: " .. tostring(_PLUGIN_VERSION) .. " config " .. tostring(_CONFIGVERSION) .. EOL
-        r = r .. "Local time: " .. os.date("%Y-%m-%d %H:%M:%S") .. ", DST=" .. tostring(luup.variable_get( MYSID, "LastDST", pluginDevice )) .. EOL
+        r = r .. "Local time: " .. os.date("%Y-%m-%dT%H:%M:%S%z") .. ", DST=" .. tostring(luup.variable_get( MYSID, "LastDST", pluginDevice )) .. EOL
         r = r .. "House mode: " .. tostring(luup.variable_get( MYSID, "HouseMode", pluginDevice )) .. EOL
         r = r .. "  Sun data: " .. tostring(luup.variable_get( MYSID, "sundata", pluginDevice )) .. EOL
         for n,d in pairs( luup.devices ) do
@@ -2512,6 +2565,8 @@ function request( lul_request, lul_parameters, lul_outputformat )
                         r = r .. EOL
                     end
                 end
+                r = r .. getReactorScene( "Trip Actions", cdata.tripactions );
+                r = r .. getReactorScene( "Untrip Actions", cdata.untripactions );
                 r = r .. getEvents( n )
             end
         end
