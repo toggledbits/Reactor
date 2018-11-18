@@ -2737,9 +2737,9 @@ var ReactorSensor = (function(api, $) {
                     var nodata = false;
                     var actname = service.actionList[j].name;
                     var ai;
-                    if ( deviceInfo.services[service] && (deviceInfo.service[service].actions || {})[actname] ) {
+                    if ( deviceInfo.services[service.serviceId] && (deviceInfo.services[service.serviceId].actions || {})[actname] ) {
                         /* Have extended data */
-                        ai = deviceInfo.services[service].actions[actname];
+                        ai = deviceInfo.services[service.serviceId].actions[actname];
                     } else {
                         /* No extended data; copy what we got from lu_actions */
                         nodata = true;
@@ -3147,6 +3147,7 @@ var ReactorSensor = (function(api, $) {
             }
             
             jQuery( 'div#tbcopyright' ).append( ' <span id="deviceinfoinfo">Device Info serial ' + deviceInfo.serial + '</span>' );
+            jQuery( 'div#supportlinks' ).append( ' &#0149; <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=infoupdate" target="_blank">Update DeviceInfo</a>');
             jQuery( 'div.supportlinks' ).append( '<p>[1] This device/action does not have enhancement data available. Please report this device in the Reactor forum thread for device reports.</p>' );
 
             var cd = iData[myid].cdata;
