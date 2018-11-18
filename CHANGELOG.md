@@ -2,11 +2,10 @@
 
 ## Version 2.0develop (development) ##
 
+* Reactor now supports its own activities, and no longer requires that the user create scenes separately outside of Reactor. You asked for a "scene builder," so here's my first attempt (well, the first one that you seeing :) ).
 * Expire cached state for conditions; use is only upon update, and between updates, which may be a large span of time, the memory used is held by the reference; expiring the entry after a short period balances memory use with performance. The expiry is tunable via the master device's StateCacheExpiry parameter (0 disables expiry).
 * ReactorSensors now implement RunScene and StopScene; scenes run by a ReactorSensor run in the context of the sensor, rather than the Reactor master device (which can still run scenes in its own context). The global (Vera-wide) scene context (assigned by context device 0) is also supported. This means that scenes can now be run (or stopped) in three different types of non-overlapping context, to avoid multiple sensor actions from stepping on each other.
 * The SetVariable action is now implemented for ReactorSensors; it sets the value of a Reactor variable (or creates it with the given value). This allows activities a shortcut to manipulate values.
-
-??? FUTURE: The SetDeviceState action is now implemented on the Reactor master device. This action is a pass-through to luup.variable_set() and allows Reactor activities to set any service state variable on any device.
 
 ## Version 1.8 (released) ##
 
