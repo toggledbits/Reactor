@@ -504,13 +504,13 @@
 						"direction": "in",
 						"name": "NewHeatSetpoint",
 						"related": "A_ARG_TYPE_r4",
-                        "optional": 1
+						"optional": 1
 					}, {
 						"type": "r4",
 						"direction": "in",
 						"name": "NewCoolSetpoint",
 						"related": "A_ARG_TYPE_r4",
-                        "optional": 1
+						"optional": 1
 					}]
 				}
 			}
@@ -611,10 +611,10 @@
 				"SetCurrentSetpoint": {
 					"description": "Set current setpoint",
 					"parameters": [{
-                        "name": "Application",
-                        "type": "string",
-                        "values": [ "Heating", "Cooling" ]
-                    },{
+						"name": "Application",
+						"type": "string",
+						"values": [ "Heating", "Cooling" ]
+					},{
 						"name": "NewCurrentSetpoint",
 						"type": "r4",
 						"min": 0,
@@ -752,7 +752,7 @@
 						"name": "VariableName",
 						"related": "str_arg",
 						"type": "string",
-                        "list": "reactor:vars"
+						"list": "reactor:vars"
 					}, {
 						"direction": "in",
 						"name": "NewValue",
@@ -5605,6 +5605,34 @@
 					}]
 				}
 			}
+		},
+		"urn:toggledbits-com:serviceId:DeusExMachinaII1": {
+			"actions": {
+				"Deactivate": {
+					"name": "Deactivate"
+				},
+				"Activate": {
+					"name": "Activate"
+				},
+				"SetEnabled": {
+					"name": "SetEnabled",
+					"parameters": [{
+						"direction": "in",
+						"name": "NewEnabledValue",
+						"related": "Enabled",
+						"default": "0",
+						"type": "boolean"
+					}]
+				},
+				"GetPluginVersion": {
+					"name": "GetPluginVersion",
+					"parameters": [{
+						"direction": "out",
+						"name": "ResultVersion",
+						"type": "string"
+					}]
+				}
+			}
 		}
 	},
 	"devices": {
@@ -5676,18 +5704,18 @@
 			"service": "urn:upnp-org:serviceId:HVAC_UserOperatingMode1",
 			"action": "SetEnergyModeTarget",
 			"description": "Set energy mode",
-            "_comment": "2018-11-16 PHR This is a temporary fix because AVT was using NewEnergyModeTarget rather than the standard NewModeTarget",
-            "parameters": [{
-                "type": "string",
-                "name": "NewEnergyModeTarget",
-                "related": "EnergyModeTarget",
-                "default": "Normal",
-                "values": {
-                    "Normal": "Normal", 
-                    "EnergySavingsMode": "Savings"
-                },
-                "direction": "in"
-            }]
+			"_comment": "2018-11-16 PHR This is a temporary fix because AVT was using NewEnergyModeTarget rather than the standard NewModeTarget",
+			"parameters": [{
+				"type": "string",
+				"name": "NewEnergyModeTarget",
+				"related": "EnergyModeTarget",
+				"default": "Normal",
+				"values": {
+					"Normal": "Normal",
+					"EnergySavingsMode": "Savings"
+				},
+				"direction": "in"
+			}]
 		}, {
 			"service": "urn:upnp-org:serviceId:HVAC_FanOperatingMode1",
 			"action": "SetMode",
@@ -5717,6 +5745,7 @@
 		}, {
 			"service": "urn:upnp-org:serviceId:HVAC_FanOperatingMode1",
 			"action": "SetMode",
+			"description": "Set fan mode",
 			"parameters": [{
 				"direction": "in",
 				"type": "string",
@@ -5730,10 +5759,12 @@
 			}]
 		}, {
 			"service": "urn:upnp-org:serviceId:TemperatureSetpoint1_Heat",
-			"action": "SetCurrentSetpoint"
+			"action": "SetCurrentSetpoint",
+			"description": "Set heating setpoint"
 		}, {
 			"service": "urn:upnp-org:serviceId:TemperatureSetpoint1_Cool",
-			"action": "SetCurrentSetpoint"
+			"action": "SetCurrentSetpoint",
+			"description": "Set cooling setpoint"
 		}, {
 			"service": "urn:toggledbits-com:serviceId:VenstarColorTouchThermostat1",
 			"action": "SetHomeAway"
