@@ -2087,7 +2087,7 @@ function startPlugin( pdev )
 --]]
 
     L("Plugin version %2, device %1 (%3)", pdev, _PLUGIN_VERSION, luup.devices[pdev].description)
-
+    
     luup.variable_set( MYSID, "Message", "Initializing...", pdev )
     luup.variable_set( MYSID, "NumRunning", "0", pdev )
 
@@ -2145,7 +2145,7 @@ function startPlugin( pdev )
 
     -- One-time stuff
     plugin_runOnce( pdev )
-
+    
     -- Initialize and start the plugin timer and master tick
     runStamp = 1
     scheduleDelay( { id=tostring(pdev), func=waitSystemReady, owner=pdev }, 5 )
@@ -2635,6 +2635,46 @@ function request( lul_request, lul_parameters, lul_outputformat )
         local result, err = luaxp.evaluate( expr, ctx )
         local ret = { resultValue=result, err=err or false, expression=expr }
         return json.encode( ret ), "application/json"
+        
+    elseif action == "infoupdate" then
+        -- Fetch and install updated deviceinfo file; these will change more frequently than the plugin.
+        -- Updates are user-driven from the UI, and the user is advised that the version of firmware is
+        -- sent to my server to ensure that the correct file is received (if per-version exceptions are 
+        -- needed). The version info and any other data collected by the process are not stored except 
+        -- in temporary logs that are periodically purged, and not for any analytical purpose.
+        local http = require("socket.http")
+        local https = require("ssl.https")
+        local ltn12 = require("ltn12")
+        if isOpenLuup then return json.encode( { status=false, message="This method of update is not supported on openLuup (yet)" } ), "application/json" end
+        local f = io.open( "/tmp/D_ReactorDeviceInfo.tmp", "w" )
+        if not f then return json.encode( { status=false, message="A temporary file could not be opened" } ), "application/json" end
+        local body = "action=fetch&fv=" .. luup.version .. "&pv=" .. _PLUGIN_VERSION
+        local req =  {
+            method = "POST",
+            url = "https://www.toggledbits.com/deviceinfo/latest.php",
+            redirect = false,
+            headers = { ['Content-Length']=string.len( body ), ['Content-Type']="application/x-www-form-urlencoded" },
+            source = ltn12.source.string( body ),
+            sink = ltn12.sink.file( f ),
+            verify = luup.variable_get( MYSID, "SSLVerify", pluginDevice ) or "none",
+            protocol = luup.variable_get( MYSID, "SSLProtocol", pluginDevice ) or 'tlsv1',
+            options = luup.variable_get( MYSID, "SSLOptions", pluginDevice ) or 'all'
+        }
+        http.TIMEOUT = timeout
+        https.TIMEOUT = timeout
+        local cond, httpStatus, httpHeaders = https.request( req )
+        D("doMatchQuery() returned from request(), cond=%1, httpStatus=%2, httpHeaders=%3", cond, httpStatus, httpHeaders)
+        -- Handle special errors from socket library
+        if tonumber(httpStatus) == nil then
+            respBody = httpStatus
+            httpStatus = 500
+        end
+        if httpStatus == 200 then
+            os.execute( "rm -f /etc/cmh-ludl/D_ReactorDeviceInfo.json.lzo" )
+            os.execute( "mv -f /tmp/D_ReactorDeviceInfo.tmp /etc/cmh-ludl/D_ReactorDeviceInfo.json" )
+            return json.encode( { status=true, message="Device info updated" } ), "application/json" 
+        end
+        return json.encode( { status=false, message="Can't update device info, status " .. httpStatus } ), "application/json"
 
     elseif action == "config" or action == "backup" then
         local st = { _comment="Reactor configuration " .. os.date("%x %X"), timestamp=os.time(), version=_PLUGIN_VERSION, sensors={} }
