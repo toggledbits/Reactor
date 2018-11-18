@@ -30,7 +30,7 @@ var ReactorSensor = (function(api, $) {
     var inStatusPanel = false;
     var lastx = 0;
     var condTypeName = { "service": "Service/Variable", "housemode": "House Mode", "comment": "Comment", "weekday": "Weekday",
-        "sun": "Sunrise/Sunset", "trange": "Date/Time", "reload": "Luup Reloaded" };
+        "sun": "Sunrise/Sunset", "trange": "Date/Time", "interval": "Interval", "reload": "Luup Reloaded" };
     var weekDayName = [ '?', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat' ];
     var monthName = [ '?', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec' ];
     var opName = { "bet": "between", "nob": "not between", "after": "after", "before": "before" };
@@ -70,6 +70,14 @@ var ReactorSensor = (function(api, $) {
             return parseInt( s );
         }
         return NaN;
+    }
+    
+    /* Like getInteger(), but returns dflt if no value provided (blank/all whitespace) */
+    function getOptionalInteger( s, dflt ) {
+        if ( String(s).match( /^\s*$/ ) ) {
+            return dflt;
+        }
+        return getInteger( s );
     }
 
     /* Load configuration data. */
@@ -356,6 +364,25 @@ var ReactorSensor = (function(api, $) {
                 str += ' ' + textDateTime( t[0], t[1], t[2], t[3], t[4], false );
                 if ( cond.operator !== "before" && cond.operator !== "after" ) {
                     str += ' and ' + textDateTime( t[5], t[6], t[7], t[8], t[9], true );
+                }
+                break;
+           
+            case 'interval':
+                str += "every";
+                if ( cond.days > 0 ) {
+                    str += " " + String(cond.days) + " days";
+                }
+                if ( cond.hours > 0 ) {
+                    str += " " + String(cond.hours) + " hours";
+                }
+                if ( cond.mins > 0 ) {
+                    str += " " + String(cond.mins) + " minutes";
+                }
+                if ( "" != (cond.basetime || "") ) {
+                    var t = cond.basetime.split(/,/);
+                    str += " (relative to ";
+                    str += t[0] + ":" + t[1];
+                    str += ")";
                 }
                 break;
 
@@ -651,6 +678,38 @@ var ReactorSensor = (function(api, $) {
                     res.push("");
                 }
                 cond.value = res.join(',');
+                break;
+                
+            case 'interval':
+                var v = getOptionalInteger( jQuery('div.params #days', row).val(), 0 );
+                if ( isNaN(v) || v < 0 ) {
+                    jQuery( 'div.params #days', row ).addClass( 'tberror' );
+                } else {
+                    cond.days = v;
+                }
+                v = getOptionalInteger( jQuery('div.params #hours', row).val(), 0 );
+                if ( isNaN(v) || v < 0 ) {
+                    jQuery( 'div.params #hours', row ).addClass( 'tberror' );
+                } else {
+                    cond.hours = v;
+                }
+                var v = getOptionalInteger( jQuery('div.params #mins', row).val(), 0 );
+                if ( isNaN(v) || v < 0 ) {
+                    jQuery( 'div.params #mins', row ).addClass( 'tberror' );
+                } else {
+                    cond.mins = v;
+                }
+                var t = cond.days * 1440 + cond.hours * 60 + cond.mins;
+                if ( 0 == t ) {
+                    jQuery( 'div.params select', row ).addClass( 'tberror' );
+                }
+                var rh = jQuery( 'div.params select#relhour' ).val() || "00";
+                var rm = jQuery( 'div.params select#relmin' ).val() || "00";
+                if ( rh == "00" && rm == "00" ) {
+                    cond.basetime = "";
+                } else {
+                    cond.basetime = rh + "," + rm;
+                }
                 break;
 
             case 'reload':
@@ -1075,9 +1134,56 @@ var ReactorSensor = (function(api, $) {
                 jQuery("select", container).on( 'change.reactor', handleRowChange );
                 jQuery("input", container).on( 'change.reactor', handleRowChange );
                 break;
+                
+            case 'interval':
+                var el = jQuery( '<label for="days">every </label>' );
+                el.append( '<input id="days" title="Enter an integer >= 0" value="0" class="tiny text-center form-control form-control-sm">' );
+                el.append( ' days ' );
+                container.append( el );
+                container.append( " " );
+                el = jQuery( '<label for="hours"> </label>' );
+                el.append( '<input id="hours" title="Enter an integer >= 0" class="tiny text-center form-control form-control-sm">' );
+                el.append( ' hours ' );
+                container.append( el );
+                container.append( " " );
+                el = jQuery( '<label for="mins"> </label> ');
+                el.append( '<input id="mins" title="Enter an integer >= 0" value="0" class="tiny text-center form-control form-control-sm">' );
+                el.append( ' minutes ');
+                container.append( el );
+                container.append( " " );
+                el = jQuery( '<label/>' ).text( " relative to ");
+                var mm = jQuery('<select id="relhour" class="form-control form-control-sm"/>');
+                for ( var hh=0; hh<24; hh++ ) {
+                    var v = ( hh < 10 ? "0" : "" ) + String(hh);
+                    var opt = jQuery('<option/>').val( v ).text( v );
+                    mm.append( opt );
+                }
+                el.append( mm );
+                el.append(" : ");
+                mm = jQuery('<select id="relmin" class="form-control form-control-sm"/>');
+                for ( var m=0; m<60; m+=5 ) {
+                    var v = ( m < 10 ? "0" : "" ) + String(m);
+                    var opt = jQuery('<option/>').val( v ).text( v );
+                    mm.append( opt );
+                }
+                el.append(mm);
+                container.append(el);
+                container.append( " " );
+                jQuery( "#days", container ).val( cond.days || 0 );
+                jQuery( "#hours", container ).val( cond.hours===undefined ? 1 : cond.hours );
+                jQuery( "#mins", container ).val( cond.mins || 0 );
+                if ( "" != ( cond.basetime || "" ) ) {
+                    mm = cond.basetime.split(/,/);
+                    jQuery( '#relhour', container ).val( mm[0] || '00' );
+                    jQuery( '#relmin', container ).val( mm[1] || '00' );
+                }
+                jQuery("select,input", container).on( 'change.reactor', handleRowChange );
+                break;
 
             case 'reload':
-                /* falls through */
+                /* no fields */
+                break;
+
             default:
                 /* nada */
         }
@@ -1295,7 +1401,7 @@ var ReactorSensor = (function(api, $) {
         jQuery("div.controls", el).append('<i class="material-icons md-btn action-down">arrow_downward</i>');
         jQuery("div.controls", el).append('<i class="material-icons md-btn action-delete">clear</i>');
 
-        [ "comment", "service", "housemode", "sun", "weekday", "trange", "reload" ].forEach( function( k ) {
+        [ "comment", "service", "housemode", "sun", "weekday", "trange", "interval", "reload" ].forEach( function( k ) {
             jQuery( "div.condtype select", el ).append( jQuery( "<option/>" ).val( k ).text( condTypeName[k] ) );
         });
 
@@ -1434,6 +1540,9 @@ var ReactorSensor = (function(api, $) {
                         break;
                     case 'trange':
                         removeConditionProperties( cond, 'operator,value' );
+                        break;
+                    case 'interval':
+                        removeConditionProperties( cond, 'days,hours,mins,basetime,duty' );
                         break;
                     case 'reload':
                         removeConditionProperties( cond, "" );
@@ -1731,6 +1840,10 @@ var ReactorSensor = (function(api, $) {
                         if ( currentValue !== undefined ) {
                             currentValue = new Date( currentValue * 1000 ).toLocaleString();
                         }
+                        break;
+                        
+                    case 'interval':
+                        currentValue = new Date( currentValue * 1000 ).toLocaleString();
                         break;
 
                     default:
@@ -2065,7 +2178,8 @@ var ReactorSensor = (function(api, $) {
             html += 'input.tbinvert { min-width: 16px; min-height: 16px; }';
             html += 'div.conditions { width: 100%; }';
             html += 'div.tblisttitle { background-color: #006040; color: #fff; font-size: 16px; font-weight: bold; padding: 8px; min-height: 42px; }';
-            html += 'input.narrow { max-width: 6em; }';
+            html += 'input.narrow { max-width: 8em; }';
+            html += 'input.tiny { max-width: 3em; }';
             html += 'div.conditiongroup { border-radius: 8px; border: 2px solid #006040; margin-bottom: 8px; }';
             html += 'div.conditiongroup .row { margin-right: 0px; margin-left: 0px; }';
             html += 'div.conditiongroup div.conditionrow:nth-child(odd) { background-color: #e6ffe6; }';
@@ -2580,6 +2694,18 @@ var ReactorSensor = (function(api, $) {
         }
         return false;
     }
+    
+    /* Find an override for a device. Right now, simple as can be. Future: anything. */
+    function getDeviceOverride( devnum ) {
+        var devobj = deviceByNumber[devnum];
+        if ( undefined !== devobj ) {
+            var mytype = devobj.device_type || "?";
+            if ( deviceInfo.devices[ 'type:' + mytype ] ) {
+                return deviceInfo.devices[ 'type:' + mytype ];
+            }
+        }
+        return false;
+    }
 
     function changeActionDevice( row, newVal, fnext, fargs ) {
         var ct = jQuery( 'div.actiondata', row );
@@ -2603,23 +2729,24 @@ var ReactorSensor = (function(api, $) {
             dataType: "json",
             timeout: 5000
         }).done( function( data, statusText, jqXHR ) {
-            var mytype = (deviceByNumber[newVal] || {}).device_type || "";
             for ( var i=0; i<data.serviceList.length; i++ ) {
                 var section = jQuery( "<select/>" );
                 var service = data.serviceList[i];
                 var serviceInfo = getServiceInfo( service.serviceId );
                 for ( var j=0; j<service.actionList.length; j++ ) {
+                    var nodata = false;
                     var actname = service.actionList[j].name;
                     var ai;
-                    if ( serviceInfo && serviceInfo.actions && serviceInfo.actions[actname] ) {
+                    if ( deviceInfo.services[service] && (deviceInfo.service[service].actions || {})[actname] ) {
                         /* Have extended data */
-                        ai = serviceInfo.actions[actname];
+                        ai = deviceInfo.services[service].actions[actname];
                     } else {
-                        /* No extended data; copy what we got from lu_action */
-                        ai = { service: service.serviceId, action: actname, parameters: [] };
+                        /* No extended data; copy what we got from lu_actions */
+                        nodata = true;
+                        ai = { service: service.serviceId, action: actname, parameters: service.actionList[j].arguments };
                         for ( var ip=0; ip < (service.actionList[j].arguments || []).length; ++ip ) {
                             var p = service.actionList[j].arguments[ip];
-                            ai.parameters.push( { name: p.name, type: p.dataType } );
+                            p.type = p.dataType || "string";
                         }
                     }
                     var key = service.serviceId + "/" + actname;
@@ -2635,6 +2762,7 @@ var ReactorSensor = (function(api, $) {
                     var opt = jQuery('<option></option>');
                     opt.val( key );
                     opt.text( actname );
+                    if ( nodata ) opt.addClass( "nodata" );
                     section.append( opt.clone() );
                 }
                 if ( jQuery("option", section).length > 0 ) {
@@ -2647,11 +2775,13 @@ var ReactorSensor = (function(api, $) {
                     actionMenu.append( section.children() );
                 }
             }
-            if ( deviceInfo.devices && deviceInfo.devices['type:'+mytype] ) {
+            var over = getDeviceOverride( newVal ); 
+            if ( over ) {
                 var known = jQuery("<select/>");
                 known.append( "<option class='optheading' value='' disabled><b>---Common Actions---</b></option>" );
-                for ( var j=0; j<deviceInfo.devices['type:'+mytype].length; j++ ) {
-                    var devact = deviceInfo.devices['type:'+mytype][j];
+                for ( var j=0; j<over.length; j++ ) {
+                    /* Clone base action, copy top-level keys of device override over base. */
+                    var devact = over[j];
                     var act = deepcopy( deviceInfo.services[devact.service].actions[devact.action] );
                     for ( var k in devact ) {
                         if ( devact.hasOwnProperty(k) ) {
@@ -2682,6 +2812,7 @@ var ReactorSensor = (function(api, $) {
             }
         }).fail( function( jqXHR, textStatus, errorThrown ) {
             // Bummer.
+            // ??? Simple(too) way? foreach service in deviceInfo { if device_supports_service { add actions to menu } }
             if ( 500 === jqXHR.status ) {
                 alert("Can't load service data for device. Luup may be reloading. Try again in a moment.");
             } else {
@@ -3016,6 +3147,7 @@ var ReactorSensor = (function(api, $) {
             }
             
             jQuery( 'div#tbcopyright' ).append( ' <span id="deviceinfoinfo">Device Info serial ' + deviceInfo.serial + '</span>' );
+            jQuery( 'div.supportlinks' ).append( '<p>[1] This device/action does not have enhancement data available. Please report this device in the Reactor forum thread for device reports.</p>' );
 
             var cd = iData[myid].cdata;
 
@@ -3109,6 +3241,8 @@ var ReactorSensor = (function(api, $) {
         html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
         html += 'div.warning { color: red; }';
         html += 'option.optheading { font-weight: bold; }';
+        html += 'option.nodata { font-style: italic; }';
+        html += 'option.nodata:after { content: "[1] see footer"; }';
         html += '.tbslider { display: inline-block; width: 200px; height: 1em; border-radius: 8px; }';
         html += '.tbslider .ui-slider-handle { background: url("/cmh/skins/default/img/other/slider_horizontal_cursor_24.png?") no-repeat scroll left center rgba(0,0,0,0); cursor: pointer !important; height: 24px !important; width: 24px !important; margin-top: 6px; font-size: 12px; text-align: center; padding-top: 4px; text-decoration: none; }';
         html += '.tbslider .ui-slider-range-min { background-color: #12805b !important; }';
