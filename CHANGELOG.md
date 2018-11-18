@@ -1,5 +1,9 @@
 # Change Log #
 
+## Version 1.9 (stable branch) ##
+
+* Add Interval condition type, which becomes *true* for a short period on the specified interval (days, hours, minutes). An optional relative time spec anchors the cycle reference time; for example, a 4 hour interval with a relative time of 15:00 (3pm) will fire at 03:00, 07:00, 11:00, 15:00, 19:00, and 23:00.
+
 ## Version 1.8 (released) ##
 
 * Add civil, nautical, and astronomical dawn/dusk timing to sunrise/sunset conditions. This is by request from several users at relatively extreme latitudes, for whom the offsets to sunrise/sunset are insufficient to accurately represent light/dark conditions throughout the year with continuous tweaking.
