@@ -1600,6 +1600,67 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         luup.variable_set( RSSID, "LastLoad", loadtime, tdev )
         -- Return timer flag true when reloaded is true, so we get a reset shortly after.
         return reloaded,reloaded
+    elseif cond.type == "interval" then
+        cond.lastvalue = { value=now, timestamp=now }
+        local interval = 60 * (cond.days * 1440 + cond.hours * 60 + cond.mins)
+        if interval < 60 then interval = 60 end -- "can never happen" (yeah, hold my beer)
+        -- Get our base time and make it a real time
+        local pt = split( cond.basetime or "" )
+        if #pt == 2 then
+            ndt.hour = tonumber(pt[1])
+            ndt.min = tonumber(pt[2])
+        else
+            ndt.hour = 0
+            ndt.min = 0
+        end
+        ndt.sec = 0
+        local baseTime = os.time( ndt )
+        D("evaluateCondition() interval %1 secs baseTime %2", interval, baseTime)
+        local cs = sensorState[tostring(tdev)].condState[cond.id]
+        D("evaluateCondition() condstate %1", cs)
+        if cs ~= nil then
+            -- Not the very first run...
+            local lastTrue = cs.lastvalue or 0
+            -- Our next true relative to lastTrue considers both interval and baseTime
+            -- For example, if interval is 4 hours, and baseTime is 3:00pm, the condition
+            -- fires at 3am, 7am, 11am, 3pm, 7pm, 11pm (interval goes through baseTime).
+            local offs = lastTrue - baseTime
+            local nint = math.floor( offs / interval ) + 1
+            local nextTrue = baseTime + nint * interval
+            D("evaluateCondition() current state is %1 as of %2, next %3", cs.laststate, lastTrue, nextTrue)
+            if cs.laststate then
+                -- We are currently true; schedule next interval and go false
+                while nextTrue <= now do nextTrue = nextTrue + interval end -- ??? use maths
+                D("evaluateCondition() resetting, next %1", nextTrue)
+                scheduleTick( { id=tdev,info="interval "..cond.id }, nextTrue )
+                cond.lastvalue.value = lastTrue -- preserve reference point
+                return false,false
+            else
+                -- Check to see if we've missed an interval
+                if nextTrue > ( lastTrue + interval ) then 
+                    D("evaluateConditions() we must missed an interval! Forcing true...")
+                    nextTrue = now
+                end
+                -- We are false; have we reached edge time yet?
+                if now < nextTrue then
+                    -- Haven't met interval yet.
+                    local delay = nextTrue - now
+                    D("evaluateCondition() too early, delaying %1 seconds", delay)
+                    scheduleDelay( { id=tdev,info="interval "..cond.id }, delay )
+                    cond.lastvalue.value = lastTrue -- preserve reference point
+                    return false,false
+                end
+                D("evaluationCondition() interval edge met or exceeded!")
+            end
+        else
+            -- First run. Delay until the first interval.
+            
+        end
+        -- Go true.
+        D("evaluateConditions() triggering interval condition %1", cond.id)
+        -- On time greater of 15 seconds or duty cycle as % of interval, but never more than interval-5 seconds.
+        scheduleDelay( { id=tdev,info="interval "..cond.id }, math.min( math.max( 15, interval * (cond.duty or 0) / 100 ), interval-5 ) )
+        return true,false
     else
         L({level=2,msg="Sensor %1 (%2) unknown condition type %3 for cond %4 in group %5; fails."},
             tdev, luup.devices[tdev].description, cond.type, cond.id, grp.groupid)
