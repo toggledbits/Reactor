@@ -856,6 +856,9 @@ local function execSceneGroups( tdev, taskid )
                             scd.name or "", scd.id )
                         luup.call_action( action.service, action.action, param, devnum )
                     end
+                elseif action.type == "housemode" then
+                    D("execSceneGroups() setting house mode to %1", action.housemode)
+                    luup.call_action( "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "SetHouseMode", { Mode=action.housemode or "1" }, 0 )
                 elseif action.type == "runscene" then
                     -- Run scene in same context as this one. Whoa... recursion... depth???
                     local scene = resolveVarRef( action.scene, tdev )
@@ -2532,8 +2535,17 @@ local function getReactorScene( t, s )
                         ((luup.devices[act.device or 0] or {}).description or (act.deviceName or "").."?") .. 
                         ") action " .. (act.service or "?") .. "/" .. 
                         (act.action or "?") .. "( " .. p .. " )"
+                elseif act.type == "housemode" then
+                    resp = resp .. pfx .. "Change house mode to " .. tostring(act.housemode)
                 else
                     resp = resp .. pfx .. "Action type " .. act.type .. "?"
+                    local arr = {}
+                    for k,v in pairs(act) do
+                        if k ~= "type" then
+                            table.insert( arr, k + "=" + tostring(v) )
+                        end
+                    end
+                    if #arr then resp = resp .. " " .. table.concat( arr, ", " ) end
                 end
                 resp = resp .. EOL
             end

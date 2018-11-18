@@ -2294,6 +2294,8 @@ var ReactorSensor = (function(api, $) {
             }
             // check parameters, with value/type check when available?
             // type, valueSet/value list, min/max
+        } else if ( "housemode" == actionType ) {
+            var mode = jQuery( 'select#housemode', row).val();
         } else if ( actionType == "runscene" ) {
             var sc = jQuery( 'select#scene', row ).val() || "";
             if ( "" === sc ) {
@@ -2392,6 +2394,8 @@ var ReactorSensor = (function(api, $) {
                     }
                     action.parameters.push( p );
                 }
+            } else if ( "housemode" == actionType ) {
+                action.housemode = jQuery( 'select#housemode', row ).val() || "1";
             } else if ( actionType == "runscene" ) {
                 action.scene = parseInt( jQuery( "select#scene", row ).val() || "0" );
                 if ( isNaN( action.scene ) || 0 === action.scene ) {
@@ -2729,6 +2733,7 @@ var ReactorSensor = (function(api, $) {
             dataType: "json",
             timeout: 5000
         }).done( function( data, statusText, jqXHR ) {
+            var hasAction = false;
             for ( var i=0; i<data.serviceList.length; i++ ) {
                 var section = jQuery( "<select/>" );
                 var service = data.serviceList[i];
@@ -2764,6 +2769,8 @@ var ReactorSensor = (function(api, $) {
                     opt.text( actname );
                     if ( nodata ) opt.addClass( "nodata" );
                     section.append( opt.clone() );
+                    
+                    hasAction = true;
                 }
                 if ( jQuery("option", section).length > 0 ) {
                     var opt = jQuery("<option/>");
@@ -2788,11 +2795,13 @@ var ReactorSensor = (function(api, $) {
                             act[k] = devact[k];
                         }
                     }
+                    if ( devact.hidden ) continue;
                     var opt = jQuery('<option/>');
                     var key = devact.service + "/" + devact.action;
                     opt.val( key );
                     opt.text( act.description || devact.action );
                     known.append( opt );
+                    hasAction = true;
                     if ( undefined === actions[key] ) {
                         act.deviceOverride = {};
                         act.deviceOverride[newVal] = act;
@@ -2804,7 +2813,8 @@ var ReactorSensor = (function(api, $) {
                 known.append("<option disabled/>");
                 actionMenu.prepend( known.children() );
             }
-            actionMenu.prepend( '<option value="">--choose--</option>' );
+            var lopt = jQuery( '<option/>' ).val( "" ).text( hasAction ? "--choose action--" : "(invalid device--no actions)" );
+            actionMenu.prepend( lopt );
             actionMenu.val("");
             actionMenu.attr( 'disabled', false );
             if ( undefined !== fnext ) {
@@ -2849,6 +2859,12 @@ var ReactorSensor = (function(api, $) {
         } else if ( newVal == 'comment' ) {
             ct.append('<input type="text" id="comment" class="argument form-control form-control-sm" placeholder="Enter comment text">');
             jQuery( 'input', ct ).on( 'change.reactor', handleActionValueChange );
+        } else if ( newVal == "housemode" ) {
+            var m = jQuery( '<select id="housemode" class="form-control form-control-sm">')
+                .append( '<option value="1">Home</option>' ).append( '<option value="2">Away</option>' )
+                .append( '<option value="3">Night</option>' ).append( '<option value="4">Vacation</option>' );
+            m.on( 'change.reactor', handleActionValueChange );
+            ct.append( m );
         } else if ( newVal == "delay" ) {
             ct.append('<label for="delay">for <input id="delay" type="text" class="argument narrow form-control form-control-sm" title="Enter delay time as seconds, MM:SS, or HH:MM:SS" placeholder="delay time" list="reactorvars"></label>');
             ct.append('<select id="delaytype" class="form-control form-control-sm"><option value="inline">from this point</option><option value="start">from start of actions</option></select>');
@@ -2863,7 +2879,7 @@ var ReactorSensor = (function(api, $) {
         } else if ( "runlua" === newVal ) {
             var txt = jQuery( '<textarea id="lua" wrap="off" class="luacode form-control form-control-sm" rows="6"/>' );
             ct.append( txt );
-            txt.on( 'change.luaview', handleActionValueChange );
+            txt.on( 'change.reactor', handleActionValueChange );
             ct.append('<div class="tbhint">Your Lua code must return boolean <em>true</em> or <em>false</em>. Action execution will stop if anything other than boolean true, or nothing, is returned by your code (this is a feature). It is also recommended that the first line of your Lua be a comment with text to help you identify the code--if there\'s an error logged, the first line of the script is almost always shown. Also, you can use the <tt>print()</tt> function to write to Reactor\'s event log, which is shown in the Logic Summary and easier/quicker to get at than the Vera logs.</div>');
         } else {
             ct.append('<div class="tberror">Type ' + newVal + '???</div>');
@@ -3040,6 +3056,7 @@ var ReactorSensor = (function(api, $) {
         row.append( '<div class="col-xs-12 col-sm-12 col-md-4 col-lg-2"><select id="actiontype" class="form-control form-control-sm">' +
             '<option value="comment">Comment</option>' +
             '<option value="device">Device Action</option>' +
+            '<option value="housemode">Change House Mode</option>' +
             '<option value="delay">Delay</option>' +
             '<option value="runlua">Run Lua</option>' +
             '<option value="runscene">Run Scene</option>' +
@@ -3117,6 +3134,8 @@ var ReactorSensor = (function(api, $) {
                             jQuery( '#' + action.parameters[j].name, row ).val( action.parameters[j].value || "" );
                         }
                     }, [ newRow, act ]);
+                } else if ( "housemode" === act.type ) {
+                    var mode = jQuery( 'select#housemode', newRow ).val( act.housemode || 1 );
                 } else if ( "runlua" === act.type ) {
                     if ( act.lua ) {
                         var lua = act.encoded_lua ? atob( act.lua ) : act.lua;
