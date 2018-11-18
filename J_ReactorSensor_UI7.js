@@ -2413,26 +2413,24 @@ var ReactorSensor = (function(api, $) {
                 if ( parm.valueSet && deviceInfo.valuesets[parm.valueSet] ) {
                     parm.values = deviceInfo.valuesets[parm.valueSet];
                 }
-                if ( undefined !== parm.values ) {
-                    /* Menu, can be array or object (key/value map) */
+                if ( undefined !== parm.values && Array.isArray( parm.values ) ) {
+                    /* Menu, can be array of strings or objects */
                     inp = jQuery('<select class="argument form-control form-control-sm"/>');
                     var opt;
-                    if ( Array.isArray( parm.values ) ) {
-                        for ( var j = 0; j<parm.values.length; j++ ) {
-                            opt = jQuery("<option/>");
-                            opt.val( parm.values[j] );
-                            opt.text( parm.values[j] );
-                            inp.append( opt );
-                        }
-                    } else {
-                        for ( var key in parm.values ) {
-                            if ( parm.values.hasOwnProperty( key ) ) {
-                                opt = jQuery("<option/>");
-                                opt.val( key );
-                                opt.text( parm.values[key] );
-                                inp.append( opt );
+                    for ( var j=0; j<parm.values.length; j++ ) {
+                        var opt = jQuery( '<option/>' );
+                        if ( "object" === typeof(parm.values[j]) ) {
+                            for ( var z in parm.values[j] ) {
+                                if ( parm.values[j].hasOwnProperty( z ) ) {
+                                    opt.val( String(z) );
+                                    opt.text( String( parm.values[j][z] ) );
+                                }
                             }
+                        } else {
+                            opt.val( String( parm.values[j] ) );
+                            opt.text( String( parm.values[j] ) );
                         }
+                        inp.append( opt );
                     }
                     /* Add variables */
                     var cd = iData[ api.getCpanelDeviceId() ].cdata;
@@ -2510,7 +2508,7 @@ var ReactorSensor = (function(api, $) {
                     });
                     inp.slider("option", "disabled", false);
                     inp.slider("option", "value", parm.default || parm.min);
-                } else if ( parm.type.match(/^(r|u?i)[124]$/i ) ) {
+                } else if ( (parm.type || "").match(/^(r|u?i)[124]$/i ) ) {
                     inp = jQuery( '<input class="argument narrow form-control form-control-sm" list="reactorvars">' );
                     inp.attr( 'placeholder', action.parameters[k].name );
                 } else {
@@ -2592,13 +2590,13 @@ var ReactorSensor = (function(api, $) {
         jQuery('.argument', ct).remove();
         if ( newVal == "" ) { return; }
 
-        /* Use lu_actions to get list of services/actions for this device. We could
+        /* Use actions/lu_actions to get list of services/actions for this device. We could
            also use lu_device and fetch/parse /luvd/S_...xml to get even more data,
            but let's see how this goes for now. */
         jQuery.ajax({
             url: api.getDataRequestURL(),
             data: {
-                id: "lu_actions",
+                id: "actions",
                 DeviceNum: newVal,
                 output_format: "json"
             },
@@ -3016,6 +3014,8 @@ var ReactorSensor = (function(api, $) {
             if ( configModified && confirm( "You have unsaved changes. Press OK to save them, or Cancel to discard them." ) ) {
                 handleSaveClick( undefined );
             }
+            
+            jQuery( 'div#tbcopyright' ).append( ' <span id="deviceinfoinfo">Device Info serial ' + deviceInfo.serial + '</span>' );
 
             var cd = iData[myid].cdata;
 
@@ -3119,13 +3119,22 @@ var ReactorSensor = (function(api, $) {
 
         /* Load the device data */
         var start = Date.now();
-        console.log("Loading D_ReactorDeviceInfo.json");
+        var urlbase = api.getDataRequestURL();
+        console.log("Base URL: " + urlbase);
+        urlbase = urlbase.replace( /data_request.*$/i, "" );
+        console.log("Fetching " + urlbase + "D_ReactorDeviceInfo.json");
         jQuery.ajax({
-            url: api.getSendCommandURL() + "/D_ReactorDeviceInfo.json",
+            url: urlbase + "D_ReactorDeviceInfo.json",
             dataType: "json",
             timeout: 15000
         }).done( function( data, statusText, jqXHR ) {
-            console.log("D_ReactorDeviceInfo loaded, " + String(Date.now()-start) + "ms");
+            console.log("D_ReactorDeviceInfo loaded (" + String(Date.now()-start) + 
+                "ms), timestamp=" + String(data.timestamp) + ", serial=" +
+                String(data.serial));
+            if ( (data.serial || 0) < 0.323 ) {
+                jQuery("div#loading").empty().append( '<h3>Update Required</h3>Your D_ReactorDeviceInfo.json file needs to be at least serial 0.323. Please <a href="/port_3480/data_request?id=lr_Reactor&action=infoupdate" target="_blank">click here to update the file</a>, then go back to the Control tab and come back here.<p><em>PRIVACY NOTICE:</em> Clicking this link will send the firmware version information and plugin version to the server. This information is used to select the correct file for your configuration, and is not used for tracking, authentication, or access control.</p>' );
+                return;
+            }
 
             deviceInfo = data;
 
