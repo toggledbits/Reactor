@@ -1,7 +1,12 @@
 # Change Log #
 
 ## Version 2.0develop (development) ##
+2018-11-19:
+* (internal) Enhance exception syntax in deviceinfo with reach into state variables and attributes.
+* (internal) Improve validation of device fields by checking type, value range, etc. against definition.
+* (internal) Improve default selection on initial display of new rows.
 
+2018-11-18 and prior:
 * Reactor now supports its own activities, and no longer requires that the user create scenes separately outside of Reactor. You asked for a "scene builder," so here's my first attempt (well, the first one that you seeing :) ).
 * New condition type "Interval" is true for a brief period at the specified interval (days, hours, minutes). A "relative to" time specification allows adjustment of the reference time for the cycle; for example, a 4 hour interval with a relative time of 15:00 (3pm) will fire at 03:00, 07:00, 11:00, 15:00, 19:00, and 23:00.
 * Expire cached state for conditions; use is only upon update, and between updates, which may be a large span of time, the memory used is held by the reference; expiring the entry after a short period balances memory use with performance. The expiry is tunable via the master device's StateCacheExpiry parameter (0 disables expiry).
