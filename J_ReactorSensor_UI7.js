@@ -1642,6 +1642,145 @@ var ReactorSensor = (function(api, $) {
         api.setDeviceStateVariablePersistent( api.getCpanelDeviceId(), serviceId, "TestHouseMode", vv );
     }
 
+    function processServiceFile( deviceType, serviceId, scpdurl ) {
+        return jQuery.ajax({
+            url: rp + scpdurl,
+            dataType: "xml",
+            timeout: 5000
+        }).done( function( serviceData, statusText ) {
+            console.log("Got service data for " + serviceId + " type " + deviceType);
+            var sd = { version: 1, timestamp: Date.now(), devicetype: deviceType, service: serviceId, stateVariables: {}, actions: {} }
+            var svs = $(serviceData).find( 'stateVariable' );
+            svs.each( function() {
+                var name = $('name', this).text();
+                var type = $('dataType', this).text();
+                sd.stateVariables[name] = { name: name, type: type };
+                if ( $('defaultValue', this).length > 0 ) sd.stateVariables[name].default = $('defaultValue', this).text();
+                if ( $('shortCode', this).length > 0 ) sd.stateVariables[name].shortcode = $('shortCode', this).text();
+                if ( $('Optional', this).length > 0 ) sd.stateVariables[name].optional = true;
+                if ( $(this).attr('sendEvents') === "yes" ) sd.stateVariables[name].events = true;
+                if ( $('sendEventsAttribute', this).text() === "yes" ) sd.stateVariables[name].events = true;
+                if ( $('allowedValueRange', this).length > 0 ) {
+                    var min = $(this).find('minimum').text();
+                    var max = $(this).find('maximum').text();
+                    sd.stateVariables[name].min = min;
+                    sd.stateVariables[name].max = max;
+                }
+                var vals = $(this).find( 'allowedValue' );
+                if ( vals.length ) {
+                    sd.stateVariables[name].values = [];
+                    vals.each( function() {
+                        sd.stateVariables[name].values.push( $(this).text() );
+                    });
+                }
+            });
+            svs = $(serviceData).find( 'action' );
+            svs.each( function() {
+                var actname = $(this).children('name').text();
+                sd.actions[actname] = { name: actname };
+                var args = $(this).find( 'argument' );
+                if ( args.length > 0 ) {
+                    sd.actions[actname].parameters = [];
+                    args.each( function() {
+                        var name = $('name', this).text();
+                        var dir = $('direction', this).text() || "?";
+                        var po = { name: name, direction: dir };
+                        if ( $('relatedStateVariable', this).length == 0 ) {
+                            po.type = "string";
+                        } else {
+                            var rel = $('relatedStateVariable', this).text();
+                            po.related = rel;
+                            po.type = (sd.stateVariables[rel] || {}).type || "string";
+                        }
+                        if ( $('retval', this).length > 0 ) po.retval = true;
+                        sd.actions[actname].parameters.push( po );
+                    });
+                }
+            });
+            var sdata = JSON.stringify(sd);
+            console.log( sdata );
+            jQuery.ajax({
+                type: "POST",
+                url: "https://www.toggledbits.com/deviceinfo/submit.php",
+                contentType: "application/json",
+                data: sdata,
+                processData: false,
+                dataType: "json"
+            }).done( function( ) {
+                /* Nothing to do */
+            }).fail( function( jqXHR, textStatus, err ) {
+                console.log("POST failed: " + String(err));
+            });
+        }).fail( function( jqXHR, textStatus, err ) {
+            console.log(String(err));
+        });
+    }
+    
+    function sendDeviceData( ev ) {
+        var ct = jQuery( ev.currentTarget ).closest( 'div' );
+        var device = jQuery( 'select#devices', ct ).val() || "";
+        if ( "" === device ) {
+            alert("Please select a device first.");
+            return;
+        }
+        var rp = api.getDataRequestURL().replace( /\/data_request.*$/, "/" );
+        /* Fetch the device file */
+        jQuery.ajax({
+            url: api.getDataRequestURL(),
+            data: {
+                id: "lu_device",
+                output_format: "xml"
+            },
+            dataType: "xml",
+            timeout: 15000
+        }).done( function( data, statusText, jqXHR ) {
+            var devs = jQuery( data ).find( "device" );
+            devs.each( function() {
+                var devid = $(this).children('Device_Num').text();
+                if ( devid == device ) {
+                    var typ = $('deviceType', this).text();
+                    
+                    /* Send device data */
+                    var dd = { version: 1, timestamp: Date.now(), devicetype: typ };
+                    dd.manufacturer = $( 'manufacturer', this ).text();
+                    dd.modelname = $( 'modelName', this ).text();
+                    dd.modelnum = $( 'modelNumber', this ).text();
+                    dd.modeldesc = $( 'modelDescription', this ).text();
+                    dd.category = $( 'Category_Num', this).text();
+                    dd.subcat = $( 'Subcategory_Num', this).text();
+                    jQuery.ajax({
+                        url: "https://www.toggledbits.com/deviceinfo/submit.php",
+                        type: "POST",
+                        contentType: "application/json",
+                        data: JSON.stringify( dd ),
+                        processData: false,
+                        dataType: 'json'
+                    }).done( function( ) {
+                        /* nothing */
+                    }).fail( function( jqXHR, textStatus, err ) {
+                        console.log('Post of device data failed: ' + String(err));
+                    });
+                    
+                    /* Handle services */
+                    var sl = $(this).find('serviceList');
+                    var services = sl.find('service');
+                    services.each( function() {
+                        console.log( $('serviceId',this).text() + " at " + $("SCPDURL",this).text() );
+                        var serviceId = $('serviceId', this).text();
+                        var scpdurl = $("SCPDURL", this).text();
+                        processServiceFile( deviceType, serviceId, scpdurl );
+                    });
+                }
+            });
+            alert("Thank you! Your data has been submitted.");
+        }).fail( function( jqXHR, textStatus, errorThrown ) {
+            // Bummer.
+            alert("Unable to request data from Vera. Try again in a moment; it may be reloading or busy.");
+            console.log("Failed to load lu_device data: " + textStatus + " " + String(errorThrown));
+            console.log(jqXHR.responseText);
+        });
+    }
+
     function doTest()
     {
         if ( configModified && confirm( "You have unsaved changes. Press OK to save them, or Cancel to discard them." ) ) {
@@ -1689,6 +1828,8 @@ var ReactorSensor = (function(api, $) {
         } catch (exc) {
             html += "<div>Can't display sun data: " + exc.toString() + "</div>";
         }
+        
+        html += '<div id="enhancement"><h5>Submit Enhancement Data</h5>If you have a device that is missing "Common Actions" or warns you about missing enhancement data in the Activities tab, you can submit the device data to rigpapa for evaluation. This process sends the relevant data about the device. It does not send any identifying information about you or your Vera, and the data is used only for enhancement of the device database. <label>Select Device: <select id="devices"></select> <button id="submitdata">Submit Device Data</button></div>';
 
         html += footer();
 
@@ -1743,6 +1884,12 @@ var ReactorSensor = (function(api, $) {
             }
         }
         jQuery('input#testhousemode,select#mode', container).on( 'change.reactor', handleTestChange );
+        
+        var deviceMenu = makeDeviceMenu( "", "" );
+        deviceMenu.attr('id', 'devices');
+        deviceMenu.prepend( '<option value="">--choose device--</option>' );
+        jQuery( 'div#enhancement select#devices' ).replaceWith( deviceMenu );
+        jQuery( 'div#enhancement button#submitdata' ).on( 'click.reactor', sendDeviceData );
     }
 
     function updateStatus( pdev ) {
@@ -2347,7 +2494,7 @@ var ReactorSensor = (function(api, $) {
                                     v = parseInt( v );
                                     if ( undefined === inttypes[typ] ) {
                                         console.log( "validateActionRow: no type data for " + typ );
-                                    } else if ( isNaN(v) || ( v < inttypes[typ].min ) || ( v > inttypes[typ], max ) ||
+                                    } else if ( isNaN(v) || ( v < inttypes[typ].min ) || ( v > inttypes[typ].max ) ||
                                         ( undefined !== p.min && v < p.min ) || ( undefined != p.max && v > p.max ) ) {
                                         field.addClass( 'tberror' ); // ???explain why?
                                     }
@@ -2367,7 +2514,7 @@ var ReactorSensor = (function(api, $) {
                 }
             }
         } else if ( "housemode" == actionType ) {
-            var mode = jQuery( 'select#housemode', row).val();
+            /* nothing to check */
         } else if ( actionType == "runscene" ) {
             var sc = jQuery( 'select#scene', row ).val() || "";
             if ( "" === sc ) {
@@ -2744,33 +2891,6 @@ var ReactorSensor = (function(api, $) {
         return ret;
     }
 
-    function merge( dest, src ) {
-        if ( typeof(dest) != typeof(src) || typeof(src) != "object") {
-            return src;
-        }
-        for ( var m in src ) {
-            if ( src.hasOwnProperty(m) ) {
-                if ( dest.hasOwnProperty(m) ) {
-                    dest[m] = merge( dest[m], src[m] );
-                } else {
-                    dest[m] = src[m];
-                }
-            }
-        }
-        return dest;
-    }
-
-    function getServiceInfo( svc ) {
-        if ( typeof( deviceInfo ) !== "undefined" ) {
-            if ( typeof( deviceInfo.services ) !== "undefined" ) {
-                if ( typeof( deviceInfo.services[svc] ) !== "undefined" ) {
-                    return deviceInfo.services[svc];
-                }
-            }
-        }
-        return false;
-    }
-    
     /* Perform numeric comparison for device override */
     function doNumericComparison( str1, op, str2 ) {
         var v1 = parseInt( str1 );
@@ -2805,8 +2925,8 @@ var ReactorSensor = (function(api, $) {
                     var match = true;
                     for ( var ic=0; ic<cond.length; ++ic ) {
                         /* Each condition uses simple RPN script */
-                        pt = cond[ic].split( /,/ );
-                        stack = []; /* Start off */
+                        var pt = cond[ic].split( /,/ );
+                        var stack = []; /* Start off */
                         var refdev = devnum;
                         while ( pt.length > 0 ) {
                             var seg = decodeURIComponent( pt.shift() || "" ).trim();
@@ -2883,8 +3003,8 @@ var ReactorSensor = (function(api, $) {
                                 " end of conditions stack len expected 1 got " + stack.length );
                         }
                         var result = stack.pop() || null;
-                        console.log("getDeviceOverride: eval of " + cond[ic] + " yields (" + typeof(result) + ")"
-                            + String(result));
+                        console.log("getDeviceOverride: eval of " + cond[ic] + " yields (" + 
+                            typeof(result) + ")" + String(result));
                         if ( ! ( typeof(result)==="boolean" && result ) ) {
                             match = false;
                             break; /* stop testing conds */
@@ -2903,7 +3023,7 @@ var ReactorSensor = (function(api, $) {
         }
         return false;
     }
-
+    
     function changeActionDevice( row, newVal, fnext, fargs ) {
         var ct = jQuery( 'div.actiondata', row );
         var actionMenu = jQuery( 'select#actionmenu', ct );
@@ -2930,7 +3050,6 @@ var ReactorSensor = (function(api, $) {
             for ( var i=0; i<data.serviceList.length; i++ ) {
                 var section = jQuery( "<select/>" );
                 var service = data.serviceList[i];
-                var serviceInfo = getServiceInfo( service.serviceId );
                 for ( var j=0; j<service.actionList.length; j++ ) {
                     var nodata = false;
                     var actname = service.actionList[j].name;
@@ -3350,7 +3469,7 @@ var ReactorSensor = (function(api, $) {
                         }
                     }, [ newRow, act ]);
                 } else if ( "housemode" === act.type ) {
-                    var mode = jQuery( 'select#housemode', newRow ).val( act.housemode || 1 );
+                    jQuery( 'select#housemode', newRow ).val( act.housemode || 1 );
                 } else if ( "runlua" === act.type ) {
                     if ( act.lua ) {
                         var lua = act.encoded_lua ? atob( act.lua ) : act.lua;
