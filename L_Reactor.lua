@@ -1493,12 +1493,15 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         tpart[8] = ( tparam[8] == "" ) and tpart[3] or tparam[8]
         tpart[9] = ( tparam[9] == "" ) and tpart[4] or tparam[9]
         tpart[10] = ( tparam[10] == "" ) and tpart[5] or tparam[10]
+        -- Sanity check year to avoid nil dates coming from os.time()
+        if tpart[1] < 1970 then tpart[1] = 1970 elseif tpart[1] > 2037 then tpart[1] = 2037 end
+        if tpart[6] < 1970 then tpart[6] = 1970 elseif tpart[6] > 2037 then tpart[6] = 2037 end
         D("evaluationCondition() clean tpart=%1", tpart)
         if tparam[2] == "" then
             -- No date specified, only time components. Magnitude comparison.
             D("evaluateCondition() time-only comparison, now is %1, ndt is %2", now, ndt)
             local nowMSM = ndt.hour * 60 + ndt.min
-            local startMSM = tonumber( tparam[4] ) * 60 + tonumber( tparam[5] )
+            local startMSM = tonumber( tpart[4] ) * 60 + tonumber( tpart[5] )
             if op == "after" then
                 D("evaluateCondition() time-only comparison %1 after %2", nowMSM, startMSM)
                 doNextCondCheck( { id=tdev,info="trangeHM "..cond.id }, nowMSM, startMSM )
@@ -1509,7 +1512,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
                 if nowMSM >= startMSM then return false,false end
             else
                 -- Between, or not
-                local endMSM = tonumber( tparam[9] ) * 60 + tonumber( tparam[10] )
+                local endMSM = tonumber( tpart[9] ) * 60 + tonumber( tpart[10] )
                 local between
                 if endMSM <= startMSM then
                     between = nowMSM >= startMSM or nowMSM < endMSM

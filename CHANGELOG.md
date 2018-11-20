@@ -1,7 +1,8 @@
 # Change Log #
 
 ## Version 2.0develop (development) ##
-2018-11-19:
+2018-11-20:
+* (bug) Fix a Y2K38 issue (!) where a user can enter a year for a date/time condition that would produce an out-of-range value for Vera's 32-bit OS; restrict year values to a compliant subset (1970-2037).
 * (internal) Enhance exception syntax in deviceinfo with reach into state variables and attributes.
 * (internal) Improve validation of device fields by checking type, value range, etc. against definition.
 * (internal) Improve default selection on initial display of new rows.
