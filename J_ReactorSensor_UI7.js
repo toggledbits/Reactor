@@ -1642,14 +1642,16 @@ var ReactorSensor = (function(api, $) {
         api.setDeviceStateVariablePersistent( api.getCpanelDeviceId(), serviceId, "TestHouseMode", vv );
     }
 
-    function processServiceFile( deviceType, serviceId, scpdurl ) {
-        return jQuery.ajax({
-            url: rp + scpdurl,
+    function processServiceFile( dd, serviceId, scpdurl ) {
+        var jqXHR = jQuery.ajax({
+            url: scpdurl,
             dataType: "xml",
             timeout: 5000
-        }).done( function( serviceData, statusText ) {
-            console.log("Got service data for " + serviceId + " type " + deviceType);
-            var sd = { version: 1, timestamp: Date.now(), devicetype: deviceType, service: serviceId, stateVariables: {}, actions: {} }
+        });
+        
+        jqXHR.done( function( serviceData, statusText ) {
+            console.log("Got service data for " + serviceId);
+            var sd = { service: serviceId, stateVariables: {}, actions: {} };
             var svs = $(serviceData).find( 'stateVariable' );
             svs.each( function() {
                 var name = $('name', this).text();
@@ -1697,23 +1699,14 @@ var ReactorSensor = (function(api, $) {
                     });
                 }
             });
-            var sdata = JSON.stringify(sd);
-            console.log( sdata );
-            jQuery.ajax({
-                type: "POST",
-                url: "https://www.toggledbits.com/deviceinfo/submit.php",
-                contentType: "application/json",
-                data: sdata,
-                processData: false,
-                dataType: "json"
-            }).done( function( ) {
-                /* Nothing to do */
-            }).fail( function( jqXHR, textStatus, err ) {
-                console.log("POST failed: " + String(err));
-            });
-        }).fail( function( jqXHR, textStatus, err ) {
+            dd.services[ sd.service ] = sd;
+        });
+        
+        jqXHR.fail( function( jqXHR, textStatus, err ) {
             console.log(String(err));
         });
+        
+        return jqXHR.promise();
     }
     
     function sendDeviceData( ev ) {
@@ -1723,7 +1716,6 @@ var ReactorSensor = (function(api, $) {
             alert("Please select a device first.");
             return;
         }
-        var rp = api.getDataRequestURL().replace( /\/data_request.*$/, "/" );
         /* Fetch the device file */
         jQuery.ajax({
             url: api.getDataRequestURL(),
@@ -1738,41 +1730,93 @@ var ReactorSensor = (function(api, $) {
             devs.each( function() {
                 var devid = $(this).children('Device_Num').text();
                 if ( devid == device ) {
+                    
+                    // https://stackoverflow.com/questions/13651243/how-do-i-chain-a-sequence-of-deferred-functions-in-jquery-1-8-x#24041521
+                    var copy = function(a) { return Array.prototype.slice.call(a); }; 
+                    $.sequence = function( chain, continueOnFailure ) {
+                        var handleStep, handleResult,
+                            steps = copy(chain),
+                            def = new $.Deferred(),
+                            defs = [],
+                            results = [];
+                        handleStep = function () {
+                            if (!steps.length) {
+                                def.resolveWith(defs, [ results ]);
+                                return;
+                            }
+                            var step = steps.shift(),
+                                result = step();
+                            handleResult(
+                                $.when(result).always(function () {
+                                    defs.push(this);
+                                }).done(function () {
+                                    results.push({ resolved: copy(arguments) });
+                                }).fail(function () {
+                                    results.push({ rejected: copy(arguments) });
+                                })
+                            );
+                        };
+                        handleResult = continueOnFailure ?
+                            function (result) {
+                                result.always(function () {
+                                    handleStep();
+                                });
+                            } :
+                            function (result) {
+                                result.done(handleStep)
+                                    .fail(function () {
+                                        def.rejectWith(defs, [ results ]);
+                                    });
+                            };
+                        handleStep();
+                        return def.promise();
+                    };
+                        
                     var typ = $('deviceType', this).text();
+                    var chain = [];
                     
                     /* Send device data */
-                    var dd = { version: 1, timestamp: Date.now(), devicetype: typ };
+                    var dd = { version: 1, timestamp: Date.now(), devicetype: typ, services: {} };
                     dd.manufacturer = $( 'manufacturer', this ).text();
                     dd.modelname = $( 'modelName', this ).text();
                     dd.modelnum = $( 'modelNumber', this ).text();
                     dd.modeldesc = $( 'modelDescription', this ).text();
                     dd.category = $( 'Category_Num', this).text();
                     dd.subcat = $( 'Subcategory_Num', this).text();
-                    jQuery.ajax({
-                        url: "https://www.toggledbits.com/deviceinfo/submit.php",
-                        type: "POST",
-                        contentType: "application/json",
-                        data: JSON.stringify( dd ),
-                        processData: false,
-                        dataType: 'json'
-                    }).done( function( ) {
-                        /* nothing */
-                    }).fail( function( jqXHR, textStatus, err ) {
-                        console.log('Post of device data failed: ' + String(err));
-                    });
                     
                     /* Handle services */
+                    var rp = api.getDataRequestURL().replace( /\/data_request.*$/i, "" );
                     var sl = $(this).find('serviceList');
                     var services = sl.find('service');
                     services.each( function() {
                         console.log( $('serviceId',this).text() + " at " + $("SCPDURL",this).text() );
                         var serviceId = $('serviceId', this).text();
                         var scpdurl = $("SCPDURL", this).text();
-                        processServiceFile( deviceType, serviceId, scpdurl );
+                        chain.push( function() { return processServiceFile( dd, serviceId, rp + scpdurl ); } );
+                    });
+                    
+                    chain.push( function() {
+                        var jd = JSON.stringify( dd );
+                        console.log("Sending " + jd);
+                        return jQuery.ajax({
+                            type: "POST",
+                            url: api.getDataRequestURL(),
+                            data: {
+                                id: "lr_Reactor",
+                                action: "submitdevice",
+                                data: jd
+                            },
+                            dataType: 'json'
+                        }).promise();
+                    });
+                                
+                    $.sequence( chain ).done( function() {
+                        alert("Thank you! Your data has been submitted.");
+                    }).fail( function() {
+                        alert("Something went wrong and the data could not be submitted.");
                     });
                 }
             });
-            alert("Thank you! Your data has been submitted.");
         }).fail( function( jqXHR, textStatus, errorThrown ) {
             // Bummer.
             alert("Unable to request data from Vera. Try again in a moment; it may be reloading or busy.");
@@ -1793,10 +1837,13 @@ var ReactorSensor = (function(api, $) {
 
         html = '<style>';
         html += 'input.narrow { max-width: 8em; }';
+        html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
+        html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
         html += '</style>';
         jQuery('head').append( html );
 
         html = '<div class="testfields">';
+        html += '<h3>Test Tools</h3>';
         html += '<div class="row">';
         html += '<div class="col-sm-2 col-md-2"><label for="testdateenable"><input type="checkbox" value="1" id="testdateenable">&nbsp;Test&nbsp;Date:</label></div>';
         html += '<div class="col-sm-10 col-md-10 form-inline"><select id="testyear" class="form-control form-control-sm"></select><select id="testmonth" class="form-control form-control-sm"></select><select class="form-control form-control-sm" id="testday"></select><input class="narrow form-control form-control-sm" id="testtime"></div>';
@@ -1829,7 +1876,7 @@ var ReactorSensor = (function(api, $) {
             html += "<div>Can't display sun data: " + exc.toString() + "</div>";
         }
         
-        html += '<div id="enhancement"><h5>Submit Enhancement Data</h5>If you have a device that is missing "Common Actions" or warns you about missing enhancement data in the Activities tab, you can submit the device data to rigpapa for evaluation. This process sends the relevant data about the device. It does not send any identifying information about you or your Vera, and the data is used only for enhancement of the device database. <label>Select Device: <select id="devices"></select> <button id="submitdata">Submit Device Data</button></div>';
+        html += '<div id="enhancement" class="form-inline"><h3>Submit Device Data</h3>If you have a device that is missing "Common Actions" or warns you about missing enhancement data in the Activities tab, you can submit the device data to rigpapa for evaluation. This process sends the relevant data about the device. It does not send any identifying information about you or your Vera, and the data is used only for enhancement of the device database. <label>Select Device: <select id="devices"></select> <button id="submitdata">Submit Device Data</button></div>';
 
         html += footer();
 
@@ -1887,7 +1934,7 @@ var ReactorSensor = (function(api, $) {
         
         var deviceMenu = makeDeviceMenu( "", "" );
         deviceMenu.attr('id', 'devices');
-        deviceMenu.prepend( '<option value="">--choose device--</option>' );
+        deviceMenu.prepend( '<option value="" selected>--choose device--</option>' );
         jQuery( 'div#enhancement select#devices' ).replaceWith( deviceMenu );
         jQuery( 'div#enhancement button#submitdata' ).on( 'click.reactor', sendDeviceData );
     }

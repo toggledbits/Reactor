@@ -23,8 +23,8 @@
     "inScene": 1,
     "Tabs": [{
             "Label": {
-                "lang_tag": "tabname_control",
-                "text": "Control"
+                "lang_tag": "tabname_status",
+                "text": "Status"
             },
             "Position": 0,
             "TabType": "flash",
@@ -303,7 +303,7 @@
         {
             "Label": {
                 "lang_tag": "tb_reactorsensor_doTest",
-                "text": "Test"
+                "text": "Tools"
             },
             "Position": 4,
             "TabType": "javascript",

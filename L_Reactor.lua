@@ -2733,8 +2733,8 @@ function request( lul_request, lul_parameters, lul_outputformat )
             protocol = luup.variable_get( MYSID, "SSLProtocol", pluginDevice ) or 'tlsv1',
             options = luup.variable_get( MYSID, "SSLOptions", pluginDevice ) or 'all'
         }
-        http.TIMEOUT = timeout
-        https.TIMEOUT = timeout
+        http.TIMEOUT = 30
+        https.TIMEOUT = 30
         local cond, httpStatus, httpHeaders = https.request( req )
         D("doMatchQuery() returned from request(), cond=%1, httpStatus=%2, httpHeaders=%3", cond, httpStatus, httpHeaders)
         -- Handle special errors from socket library
@@ -2748,6 +2748,39 @@ function request( lul_request, lul_parameters, lul_outputformat )
             return json.encode( { status=true, message="Device info updated" } ), "application/json" 
         end
         return json.encode( { status=false, message="Can't update device info, status " .. httpStatus } ), "application/json"
+        
+    elseif action == "submitdevice" then
+    
+        D("request() submitdevice with data %1", lul_parameters.data)
+        local http = require("socket.http")
+        local https = require("ssl.https")
+        local ltn12 = require("ltn12")
+        local body = lul_parameters.data
+        local resp = {}
+        local req =  {
+            method = "POST",
+            url = "https://www.toggledbits.com/deviceinfo/submitdevice.php",
+            redirect = false,
+            headers = { ['Content-Length']=string.len( body ), ['Content-Type']="application/json" },
+            source = ltn12.source.string( body ),
+            sink = ltn12.sink.table(resp),
+            verify = luup.variable_get( MYSID, "SSLVerify", pluginDevice ) or "none",
+            protocol = luup.variable_get( MYSID, "SSLProtocol", pluginDevice ) or 'tlsv1',
+            options = luup.variable_get( MYSID, "SSLOptions", pluginDevice ) or 'all'
+        }
+        http.TIMEOUT = 30
+        https.TIMEOUT = 30
+        local cond, httpStatus, httpHeaders = https.request( req )
+        D("doMatchQuery() returned from request(), cond=%1, httpStatus=%2, httpHeaders=%3", cond, httpStatus, httpHeaders)
+        -- Handle special errors from socket library
+        if tonumber(httpStatus) == nil then
+            respBody = httpStatus
+            httpStatus = 500
+        end
+        if httpStatus == 200 then
+            return json.encode( { status=true, message="OK" } ), "application/json"
+        end
+        return json.encode( { status=false, message="Can't send device info, status " .. httpStatus } ), "application/json"
 
     elseif action == "config" or action == "backup" then
         local st = { _comment="Reactor configuration " .. os.date("%x %X"), timestamp=os.time(), version=_PLUGIN_VERSION, sensors={} }
