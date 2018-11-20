@@ -13,7 +13,7 @@ local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
 local _PLUGIN_VERSION = "2.0develop"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
-local _CONFIGVERSION = 00200
+local _CONFIGVERSION = 00201
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -41,6 +41,8 @@ local isALTUI = false
 local isOpenLuup = false
 
 local TICKOFFS = 5 -- cond tasks try to run TICKOFFS seconds after top of minute
+
+local TRUESTRINGS = ":y:yes:t:true:1:" -- strings that mean true (also numeric ~= 0)
 
 local json = require("dkjson")
 local luaxp -- will only be loaded if needed
@@ -502,6 +504,10 @@ local function sensor_runOnce( tdev )
 
     if s < 00109 then
         luup.variable_set( RSSID, "sundata", nil, tdev ) -- moved to master
+    end
+    
+    if s < 00201 then
+        initVar( "ValueChangeHoldTime", 2, tdev, RSSID )
     end
     
     -- Update version last.
@@ -1368,9 +1374,19 @@ local function evaluateCondition( cond, grp, cdata, tdev )
             end
             if not found then return false end
         elseif op == "istrue" then
-            if vv == 0 then return false end
+            if (vn or 0) == 0 and not TRUESTRINGS:find( ":" .. vv:lower() .. ":" ) then return false end
         elseif op == "isfalse" then
-            if vv ~= 0 then return false end
+            if (vn or 0) ~= 0 or TRUESTRINGS:find( ":" .. vv:lower() .. ":" ) then return false end
+        elseif op == "change" then
+            local changed = false
+            local cs = sensorState[tostring(tdev)].condState[cond.id]
+            local changed = cs == nil or cs.lastvalue ~= vv
+            D("evaluateCondition() change op, condstate %1, val %2, changed %3", cs, vv, changed)
+            if not changed then return false end
+            -- Changed, go true and re-eval in 2 seconds (will go false unless changed again)
+            scheduleDelay( { id=tdev,info="change "..cond.id }, 
+                getVarNumeric( "ValueChangeHoldTime", 2, tdev, RSSID ) )
+            -- drop through to true return
         else
             L({level=1,msg="evaluateCondition() unknown op %1 in cond %2"}, op, cv)
             return false

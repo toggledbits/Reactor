@@ -2,6 +2,8 @@
 
 ## Version 2.0develop (development) ##
 2018-11-20:
+* (feature) Add service condition operators "is TRUE" and "is FALSE", which test a more general set of values to determine boolean state (some devices use 1/0, some the works true/false, etc.).
+* (feature) Add service condition operator "changes" to pulse true for a short period when the value changes (regardless of value--pulse if it's different from the prior value). The default pulse length is 2 seconds, but is configurable per ReactorSensor via ValueChangeHoldTime (seconds). The 2-second default generally changes faster than the Vera UI7 dashboard display updates, so the rapid change may not be visible on the dashboard card, but the ReactorSensor "Status" tab updates more quickly and exposes/confirms the activity.
 * (bug) Fix a Y2K38 issue (!) where a user can enter a year for a date/time condition that would produce an out-of-range value for Vera's 32-bit OS; restrict year values to a compliant subset (1970-2037).
 * (internal) Enhance exception syntax in deviceinfo with reach into state variables and attributes.
 * (internal) Improve validation of device fields by checking type, value range, etc. against definition.

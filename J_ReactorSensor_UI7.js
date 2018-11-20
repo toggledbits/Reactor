@@ -18,7 +18,7 @@ var ReactorSensor = (function(api, $) {
     /* unique identifier for this plugin... */
     var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
     
-    var DEVINFO_MINSERIAL = 1.374;
+    var DEVINFO_MINSERIAL = 2.88;
 
     var myModule = {};
 
@@ -43,6 +43,15 @@ var ReactorSensor = (function(api, $) {
     var inttypes = { "ui1": { min: 0, max: 255 }, "i1": { min: -128, max: 127 },
         "ui2": { min: 0, max: 65535 }, "i2": { min: -32768, max: 32767 },
         "ui4": { min: 0, max: 4294967295 }, "i4": { min: -2147483648, max:2147483647 } };
+    var serviceOps = [ { op: '=', desc: 'equals', args: 1 }, { op: '<>', desc: 'not equals', args: 1 },
+        { op: '<', desc: '<', args: 1 }, { op: '<=', desc: '<=', args: 1 }, 
+        { op: '>', desc: '>', args: 1 }, { op: '>=', desc: '>=', args: 1 },
+        { op: 'starts', desc: 'starts with', args: 1 }, { op: 'ends', desc: 'ends with', args: 1 },
+        { op: 'contains', desc: 'contains', args: 1 }, { op: 'in', desc: 'in', args: 1 },
+        { op: 'istrue', desc: 'is TRUE', args: 0 }, { op: 'isfalse', desc: 'is FALSE', args: 0 },
+        { op: 'change', desc: 'changes', args: 0 } ];
+    var serviceOpsIndex = {};
+
     /* Return footer */
     function footer() {
         var html = '';
@@ -201,6 +210,11 @@ var ReactorSensor = (function(api, $) {
                 return a.name.toLowerCase() > b.name.toLowerCase() ? 1 : -1;
             }
         );
+        
+        serviceOpsIndex = {};
+        for ( var ix=0; ix<serviceOps.length; ix++ ) {
+            serviceOpsIndex[serviceOps[ix].op] = serviceOps[ix];
+        }
     }
 
     /* Get parent state */
@@ -287,7 +301,16 @@ var ReactorSensor = (function(api, $) {
                 str += ( undefined !== deviceByNumber[cond.device] ?
                         deviceByNumber[cond.device].friendlyName :
                         '#' + cond.device + ' ' + ( cond.devicename === undefined ? "name unknown" : cond.devicename ) + ' (missing)' );
-                str += ' ' + cond.variable + ' ' + cond.operator + ' ' + cond.value;
+                str += ' ' + cond.variable;
+                var op = serviceOpsIndex[cond.operator || ""];
+                if ( undefined === op ) {
+                    str += ' ' + cond.operator + '?' + cond.value;
+                } else {
+                    str += ' ' + (op.desc || op.op);
+                    if ( undefined === op.args || op.args > 0 ) {
+                        str += ' ' + cond.value;
+                    }
+                }
                 break;
 
             case 'comment':
@@ -495,16 +518,9 @@ var ReactorSensor = (function(api, $) {
 
     function makeServiceOpMenu( cond ) {
         var el = jQuery('<select class="opmenu form-control form-control-sm"></select>');
-        el.append('<option value="=">equals</option>');
-        el.append( '<option value="&lt;&gt;">not equals</option>' );
-        el.append( '<option value="&lt;">&lt;</option>' );
-        el.append( '<option value="&lt;=">&lt;=</option>' );
-        el.append( '<option value="&gt;">&gt;</option>' );
-        el.append( '<option value="&gt;=">&gt;=</option>' );
-        el.append( '<option value="starts">Starts with</option>' );
-        el.append( '<option value="ends">Ends with</option>' );
-        el.append( '<option value="contains">Contains</option>' );
-        el.append( '<option value="in">in</option>' );
+        for ( var ix=0; ix<serviceOps.length; ix++ ) {
+            el.append( jQuery('<option/>').val(serviceOps[ix].op).text(serviceOps[ix].desc || serviceOps[ix].op) );
+        }
 
         if ( undefined !== cond ) {
             if ( cond == '><' ) { cond = '<>'; configModified = true; }
@@ -584,9 +600,11 @@ var ReactorSensor = (function(api, $) {
                 cond.device = parseInt( jQuery("div.params select.devicemenu", row).val() );
                 cond.service = jQuery("div.params select.varmenu", row).val();
                 cond.variable = cond.service.replace( /^[^\/]+\//, "" );
-                cond.service = cond.service.replace(/\/.*$/, "");
+                cond.service = cond.service.replace( /\/.*$/, "" );
                 cond.operator = jQuery("div.params select.opmenu", row).val();
-                cond.value = jQuery("input#value", row).val();
+                var op = serviceOpsIndex[cond.operator || ""];
+                jQuery( "input#value", row ).css( "visibility", ( undefined !== op && 0 === op.args ) ? "hidden" : "visible" );
+                cond.value = jQuery("input#value", row).val() || "";
                 break;
 
             case 'weekday':
@@ -983,10 +1001,12 @@ var ReactorSensor = (function(api, $) {
                 container.append(pp);
                 container.append('<input type="text" id="value" class="form-control form-control-sm">');
                 container.append('<i class="material-icons condmore" title="Show Options">expand_more</i>');
-                jQuery("input#value", container).val( cond.value );
+                var op = serviceOpsIndex[cond.operator || ""];
+                jQuery( "input#value", container).val( cond.value || "" )
+                    .css( "visibility", ( undefined !== op && 0 === op.args ) ? "hidden" : "visible" )
+                    .on( 'change.reactor', handleRowChange );
                 jQuery("select.varmenu", container).on( 'change.reactor', handleRowChange );
                 jQuery("select.opmenu", container).on( 'change.reactor', handleRowChange );
-                jQuery("input#value", container).on( 'change.reactor', handleRowChange );
                 jQuery("select.devicemenu", container).on( 'change.reactor', handleDeviceChange );
                 jQuery("i.condmore", container).on( 'click.reactor', handleExpandOptionsClick );
                 break;
