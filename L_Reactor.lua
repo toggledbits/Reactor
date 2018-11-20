@@ -13,7 +13,7 @@ local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
 local _PLUGIN_VERSION = "beta2.0-18111801"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
-local _CONFIGVERSION = 00200
+local _CONFIGVERSION = 00201
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -41,6 +41,8 @@ local isALTUI = false
 local isOpenLuup = false
 
 local TICKOFFS = 5 -- cond tasks try to run TICKOFFS seconds after top of minute
+
+local TRUESTRINGS = ":y:yes:t:true:1:" -- strings that mean true (also numeric ~= 0)
 
 local json = require("dkjson")
 local luaxp -- will only be loaded if needed
@@ -504,6 +506,10 @@ local function sensor_runOnce( tdev )
         luup.variable_set( RSSID, "sundata", nil, tdev ) -- moved to master
     end
     
+    if s < 00201 then
+        initVar( "ValueChangeHoldTime", 2, tdev, RSSID )
+    end
+    
     -- Update version last.
     if (s ~= _CONFIGVERSION) then
         luup.variable_set(RSSID, "Version", _CONFIGVERSION, tdev)
@@ -856,6 +862,9 @@ local function execSceneGroups( tdev, taskid )
                             scd.name or "", scd.id )
                         luup.call_action( action.service, action.action, param, devnum )
                     end
+                elseif action.type == "housemode" then
+                    D("execSceneGroups() setting house mode to %1", action.housemode)
+                    luup.call_action( "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "SetHouseMode", { Mode=action.housemode or "1" }, 0 )
                 elseif action.type == "runscene" then
                     -- Run scene in same context as this one. Whoa... recursion... depth???
                     local scene = resolveVarRef( action.scene, tdev )
@@ -1365,9 +1374,19 @@ local function evaluateCondition( cond, grp, cdata, tdev )
             end
             if not found then return false end
         elseif op == "istrue" then
-            if vv == 0 then return false end
+            if (vn or 0) == 0 and not TRUESTRINGS:find( ":" .. vv:lower() .. ":" ) then return false end
         elseif op == "isfalse" then
-            if vv ~= 0 then return false end
+            if (vn or 0) ~= 0 or TRUESTRINGS:find( ":" .. vv:lower() .. ":" ) then return false end
+        elseif op == "change" then
+            local changed = false
+            local cs = sensorState[tostring(tdev)].condState[cond.id]
+            local changed = cs == nil or cs.lastvalue ~= vv
+            D("evaluateCondition() change op, condstate %1, val %2, changed %3", cs, vv, changed)
+            if not changed then return false end
+            -- Changed, go true and re-eval in 2 seconds (will go false unless changed again)
+            scheduleDelay( { id=tdev,info="change "..cond.id }, 
+                getVarNumeric( "ValueChangeHoldTime", 2, tdev, RSSID ) )
+            -- drop through to true return
         else
             L({level=1,msg="evaluateCondition() unknown op %1 in cond %2"}, op, cv)
             return false
@@ -1490,12 +1509,15 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         tpart[8] = ( tparam[8] == "" ) and tpart[3] or tparam[8]
         tpart[9] = ( tparam[9] == "" ) and tpart[4] or tparam[9]
         tpart[10] = ( tparam[10] == "" ) and tpart[5] or tparam[10]
+        -- Sanity check year to avoid nil dates coming from os.time()
+        if tpart[1] < 1970 then tpart[1] = 1970 elseif tpart[1] > 2037 then tpart[1] = 2037 end
+        if tpart[6] < 1970 then tpart[6] = 1970 elseif tpart[6] > 2037 then tpart[6] = 2037 end
         D("evaluationCondition() clean tpart=%1", tpart)
         if tparam[2] == "" then
             -- No date specified, only time components. Magnitude comparison.
             D("evaluateCondition() time-only comparison, now is %1, ndt is %2", now, ndt)
             local nowMSM = ndt.hour * 60 + ndt.min
-            local startMSM = tonumber( tparam[4] ) * 60 + tonumber( tparam[5] )
+            local startMSM = tonumber( tpart[4] ) * 60 + tonumber( tpart[5] )
             if op == "after" then
                 D("evaluateCondition() time-only comparison %1 after %2", nowMSM, startMSM)
                 doNextCondCheck( { id=tdev,info="trangeHM "..cond.id }, nowMSM, startMSM )
@@ -1506,7 +1528,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
                 if nowMSM >= startMSM then return false,false end
             else
                 -- Between, or not
-                local endMSM = tonumber( tparam[9] ) * 60 + tonumber( tparam[10] )
+                local endMSM = tonumber( tpart[9] ) * 60 + tonumber( tpart[10] )
                 local between
                 if endMSM <= startMSM then
                     between = nowMSM >= startMSM or nowMSM < endMSM
@@ -2532,8 +2554,17 @@ local function getReactorScene( t, s )
                         ((luup.devices[act.device or 0] or {}).description or (act.deviceName or "").."?") .. 
                         ") action " .. (act.service or "?") .. "/" .. 
                         (act.action or "?") .. "( " .. p .. " )"
+                elseif act.type == "housemode" then
+                    resp = resp .. pfx .. "Change house mode to " .. tostring(act.housemode)
                 else
                     resp = resp .. pfx .. "Action type " .. act.type .. "?"
+                    local arr = {}
+                    for k,v in pairs(act) do
+                        if k ~= "type" then
+                            table.insert( arr, k + "=" + tostring(v) )
+                        end
+                    end
+                    if #arr then resp = resp .. " " .. table.concat( arr, ", " ) end
                 end
                 resp = resp .. EOL
             end
@@ -2721,8 +2752,8 @@ function request( lul_request, lul_parameters, lul_outputformat )
             protocol = luup.variable_get( MYSID, "SSLProtocol", pluginDevice ) or 'tlsv1',
             options = luup.variable_get( MYSID, "SSLOptions", pluginDevice ) or 'all'
         }
-        http.TIMEOUT = timeout
-        https.TIMEOUT = timeout
+        http.TIMEOUT = 30
+        https.TIMEOUT = 30
         local cond, httpStatus, httpHeaders = https.request( req )
         D("doMatchQuery() returned from request(), cond=%1, httpStatus=%2, httpHeaders=%3", cond, httpStatus, httpHeaders)
         -- Handle special errors from socket library
@@ -2736,6 +2767,39 @@ function request( lul_request, lul_parameters, lul_outputformat )
             return json.encode( { status=true, message="Device info updated" } ), "application/json" 
         end
         return json.encode( { status=false, message="Can't update device info, status " .. httpStatus } ), "application/json"
+        
+    elseif action == "submitdevice" then
+    
+        D("request() submitdevice with data %1", lul_parameters.data)
+        local http = require("socket.http")
+        local https = require("ssl.https")
+        local ltn12 = require("ltn12")
+        local body = lul_parameters.data
+        local resp = {}
+        local req =  {
+            method = "POST",
+            url = "https://www.toggledbits.com/deviceinfo/submitdevice.php",
+            redirect = false,
+            headers = { ['Content-Length']=string.len( body ), ['Content-Type']="application/json" },
+            source = ltn12.source.string( body ),
+            sink = ltn12.sink.table(resp),
+            verify = luup.variable_get( MYSID, "SSLVerify", pluginDevice ) or "none",
+            protocol = luup.variable_get( MYSID, "SSLProtocol", pluginDevice ) or 'tlsv1',
+            options = luup.variable_get( MYSID, "SSLOptions", pluginDevice ) or 'all'
+        }
+        http.TIMEOUT = 30
+        https.TIMEOUT = 30
+        local cond, httpStatus, httpHeaders = https.request( req )
+        D("doMatchQuery() returned from request(), cond=%1, httpStatus=%2, httpHeaders=%3", cond, httpStatus, httpHeaders)
+        -- Handle special errors from socket library
+        if tonumber(httpStatus) == nil then
+            respBody = httpStatus
+            httpStatus = 500
+        end
+        if httpStatus == 200 then
+            return json.encode( { status=true, message="OK" } ), "application/json"
+        end
+        return json.encode( { status=false, message="Can't send device info, status " .. httpStatus } ), "application/json"
 
     elseif action == "config" or action == "backup" then
         local st = { _comment="Reactor configuration " .. os.date("%x %X"), timestamp=os.time(), version=_PLUGIN_VERSION, sensors={} }

@@ -5,6 +5,9 @@
  *
  * Copyright 2018 Patrick H. Rigney, All Rights Reserved.
  * This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
+ *
+ * TO-DO:
+ *      - Delete state variables when expression variables are deleted (clean up).
  */
 /* globals api,jQuery,$,unescape */
 
@@ -14,6 +17,8 @@ var ReactorSensor = (function(api, $) {
 
     /* unique identifier for this plugin... */
     var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
+    
+    var DEVINFO_MINSERIAL = 2.88;
 
     var myModule = {};
 
@@ -35,6 +40,17 @@ var ReactorSensor = (function(api, $) {
     var monthName = [ '?', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec' ];
     var opName = { "bet": "between", "nob": "not between", "after": "after", "before": "before" };
     var houseModeName = [ '?', 'Home', 'Away', 'Night', 'Vacation' ];
+    var inttypes = { "ui1": { min: 0, max: 255 }, "i1": { min: -128, max: 127 },
+        "ui2": { min: 0, max: 65535 }, "i2": { min: -32768, max: 32767 },
+        "ui4": { min: 0, max: 4294967295 }, "i4": { min: -2147483648, max:2147483647 } };
+    var serviceOps = [ { op: '=', desc: 'equals', args: 1 }, { op: '<>', desc: 'not equals', args: 1 },
+        { op: '<', desc: '<', args: 1 }, { op: '<=', desc: '<=', args: 1 }, 
+        { op: '>', desc: '>', args: 1 }, { op: '>=', desc: '>=', args: 1 },
+        { op: 'starts', desc: 'starts with', args: 1 }, { op: 'ends', desc: 'ends with', args: 1 },
+        { op: 'contains', desc: 'contains', args: 1 }, { op: 'in', desc: 'in', args: 1 },
+        { op: 'istrue', desc: 'is TRUE', args: 0 }, { op: 'isfalse', desc: 'is FALSE', args: 0 },
+        { op: 'change', desc: 'changes', args: 0 } ];
+    var serviceOpsIndex = {};
 
     /* Return footer */
     function footer() {
@@ -71,7 +87,7 @@ var ReactorSensor = (function(api, $) {
         }
         return NaN;
     }
-    
+
     /* Like getInteger(), but returns dflt if no value provided (blank/all whitespace) */
     function getOptionalInteger( s, dflt ) {
         if ( String(s).match( /^\s*$/ ) ) {
@@ -194,6 +210,11 @@ var ReactorSensor = (function(api, $) {
                 return a.name.toLowerCase() > b.name.toLowerCase() ? 1 : -1;
             }
         );
+        
+        serviceOpsIndex = {};
+        for ( var ix=0; ix<serviceOps.length; ix++ ) {
+            serviceOpsIndex[serviceOps[ix].op] = serviceOps[ix];
+        }
     }
 
     /* Get parent state */
@@ -280,7 +301,16 @@ var ReactorSensor = (function(api, $) {
                 str += ( undefined !== deviceByNumber[cond.device] ?
                         deviceByNumber[cond.device].friendlyName :
                         '#' + cond.device + ' ' + ( cond.devicename === undefined ? "name unknown" : cond.devicename ) + ' (missing)' );
-                str += ' ' + cond.variable + ' ' + cond.operator + ' ' + cond.value;
+                str += ' ' + cond.variable;
+                var op = serviceOpsIndex[cond.operator || ""];
+                if ( undefined === op ) {
+                    str += ' ' + cond.operator + '?' + cond.value;
+                } else {
+                    str += ' ' + (op.desc || op.op);
+                    if ( undefined === op.args || op.args > 0 ) {
+                        str += ' ' + cond.value;
+                    }
+                }
                 break;
 
             case 'comment':
@@ -366,7 +396,7 @@ var ReactorSensor = (function(api, $) {
                     str += ' and ' + textDateTime( t[5], t[6], t[7], t[8], t[9], true );
                 }
                 break;
-           
+
             case 'interval':
                 str += "every";
                 if ( cond.days > 0 ) {
@@ -488,16 +518,9 @@ var ReactorSensor = (function(api, $) {
 
     function makeServiceOpMenu( cond ) {
         var el = jQuery('<select class="opmenu form-control form-control-sm"></select>');
-        el.append('<option value="=">equals</option>');
-        el.append( '<option value="&lt;&gt;">not equals</option>' );
-        el.append( '<option value="&lt;">&lt;</option>' );
-        el.append( '<option value="&lt;=">&lt;=</option>' );
-        el.append( '<option value="&gt;">&gt;</option>' );
-        el.append( '<option value="&gt;=">&gt;=</option>' );
-        el.append( '<option value="starts">Starts with</option>' );
-        el.append( '<option value="ends">Ends with</option>' );
-        el.append( '<option value="contains">Contains</option>' );
-        el.append( '<option value="in">in</option>' );
+        for ( var ix=0; ix<serviceOps.length; ix++ ) {
+            el.append( jQuery('<option/>').val(serviceOps[ix].op).text(serviceOps[ix].desc || serviceOps[ix].op) );
+        }
 
         if ( undefined !== cond ) {
             if ( cond == '><' ) { cond = '<>'; configModified = true; }
@@ -577,9 +600,11 @@ var ReactorSensor = (function(api, $) {
                 cond.device = parseInt( jQuery("div.params select.devicemenu", row).val() );
                 cond.service = jQuery("div.params select.varmenu", row).val();
                 cond.variable = cond.service.replace( /^[^\/]+\//, "" );
-                cond.service = cond.service.replace(/\/.*$/, "");
+                cond.service = cond.service.replace( /\/.*$/, "" );
                 cond.operator = jQuery("div.params select.opmenu", row).val();
-                cond.value = jQuery("input#value", row).val();
+                var op = serviceOpsIndex[cond.operator || ""];
+                jQuery( "input#value", row ).css( "visibility", ( undefined !== op && 0 === op.args ) ? "hidden" : "visible" );
+                cond.value = jQuery("input#value", row).val() || "";
                 break;
 
             case 'weekday':
@@ -599,16 +624,21 @@ var ReactorSensor = (function(api, $) {
                 if ( typ === "trange" && target !== undefined && target.hasClass('year') ) {
                     var pdiv = target.closest('div');
                     var newval = target.val();
-                    var losOtros;
-                    if ( pdiv.hasClass('start') ) {
-                        losOtros = jQuery('div.end input.year', row);
+                    /* Vera's a 32-bit system, so date range is bound to MAXINT32 (2038-Jan-19 03:14:07 aka Y2K38) */
+                    if ( newval < 1970 || newval > 2037 ) {
+                        target.addClass( 'tberror' );
                     } else {
-                        losOtros = jQuery('div.start input.year', row);
-                    }
-                    if ( newval === "" && losOtros.val() !== "" ) {
-                        losOtros.val("");
-                    } else if ( newval !== "" && losOtros.val() === "" ) {
-                        losOtros.val(newval);
+                        var losOtros;
+                        if ( pdiv.hasClass('start') ) {
+                            losOtros = jQuery('div.end input.year', row);
+                        } else {
+                            losOtros = jQuery('div.start input.year', row);
+                        }
+                        if ( newval === "" && losOtros.val() !== "" ) {
+                            losOtros.val("");
+                        } else if ( newval !== "" && losOtros.val() === "" ) {
+                            losOtros.val(newval);
+                        }
                     }
                 }
                 /* Fetch and load */
@@ -637,10 +667,6 @@ var ReactorSensor = (function(api, $) {
                     }
                     res.push( jQuery("div.end select.hourmenu", row).val() || "0" );
                     res.push( jQuery("div.end select.minmenu", row).val() || "0" );
-                }
-                if ( res[5] === "" && res[0] !== "" ) {
-                    res[5] = res[0];
-                    jQuery("div.end input.year", row).val( res[0] );
                 }
                 cond.value = res.join(',');
                 if ( typ === "trange" ) {
@@ -679,7 +705,7 @@ var ReactorSensor = (function(api, $) {
                 }
                 cond.value = res.join(',');
                 break;
-                
+
             case 'interval':
                 var v = getOptionalInteger( jQuery('div.params #days', row).val(), 0 );
                 if ( isNaN(v) || v < 0 ) {
@@ -719,7 +745,7 @@ var ReactorSensor = (function(api, $) {
             default:
                 break;
         }
-        
+
         row.has('.tberror').addClass('tberror');
 
         updateControls();
@@ -901,8 +927,7 @@ var ReactorSensor = (function(api, $) {
             var gc = grp.groupconditions[ic];
             /* Must be service, not this condition, and not the predecessor to this condition (recursive) */
             if ( cond.id !== gc.id && ( gc.after === undefined || gc.after !== cond.id ) ) {
-                var opt = jQuery('<option></option>');
-                opt.val( gc.id );
+                var opt = jQuery('<option/>').val( gc.id );
                 var t = makeConditionDescription( gc );
                 if ( t.length > 40 ) {
                     t = t.substr(0,36) + "...";
@@ -976,10 +1001,12 @@ var ReactorSensor = (function(api, $) {
                 container.append(pp);
                 container.append('<input type="text" id="value" class="form-control form-control-sm">');
                 container.append('<i class="material-icons condmore" title="Show Options">expand_more</i>');
-                jQuery("input#value", container).val( cond.value );
+                var op = serviceOpsIndex[cond.operator || ""];
+                jQuery( "input#value", container).val( cond.value || "" )
+                    .css( "visibility", ( undefined !== op && 0 === op.args ) ? "hidden" : "visible" )
+                    .on( 'change.reactor', handleRowChange );
                 jQuery("select.varmenu", container).on( 'change.reactor', handleRowChange );
                 jQuery("select.opmenu", container).on( 'change.reactor', handleRowChange );
-                jQuery("input#value", container).on( 'change.reactor', handleRowChange );
                 jQuery("select.devicemenu", container).on( 'change.reactor', handleDeviceChange );
                 jQuery("i.condmore", container).on( 'click.reactor', handleExpandOptionsClick );
                 break;
@@ -1134,7 +1161,7 @@ var ReactorSensor = (function(api, $) {
                 jQuery("select", container).on( 'change.reactor', handleRowChange );
                 jQuery("input", container).on( 'change.reactor', handleRowChange );
                 break;
-                
+
             case 'interval':
                 var el = jQuery( '<label for="days">every </label>' );
                 el.append( '<input id="days" title="Enter an integer >= 0" value="0" class="tiny text-center form-control form-control-sm">' );
@@ -1515,7 +1542,7 @@ var ReactorSensor = (function(api, $) {
      */
     function handleSaveClick( ev, fnext, fargs ) {
         var myid = api.getCpanelDeviceId();
-        
+
         /* Rip through conditions and clean up before saving */
         var ixCond = iData[myid].ixCond;
         for ( var condid in ixCond ) {
@@ -1552,7 +1579,7 @@ var ReactorSensor = (function(api, $) {
                 }
             }
         }
-        
+
         /* Save to persistent state */
         iData[myid].cdata.timestamp = Math.floor( Date.now() / 1000 );
         api.setDeviceStateVariablePersistent( myid, serviceId, "cdata", JSON.stringify( iData[myid].cdata ),
@@ -1636,6 +1663,189 @@ var ReactorSensor = (function(api, $) {
         api.setDeviceStateVariablePersistent( api.getCpanelDeviceId(), serviceId, "TestHouseMode", vv );
     }
 
+    function processServiceFile( dd, serviceId, scpdurl ) {
+        var jqXHR = jQuery.ajax({
+            url: scpdurl,
+            dataType: "xml",
+            timeout: 5000
+        });
+        
+        jqXHR.done( function( serviceData, statusText ) {
+            console.log("Got service data for " + serviceId);
+            var sd = { service: serviceId, stateVariables: {}, actions: {} };
+            var svs = $(serviceData).find( 'stateVariable' );
+            svs.each( function() {
+                var name = $('name', this).text();
+                var type = $('dataType', this).text();
+                sd.stateVariables[name] = { name: name, type: type };
+                if ( $('defaultValue', this).length > 0 ) sd.stateVariables[name].default = $('defaultValue', this).text();
+                if ( $('shortCode', this).length > 0 ) sd.stateVariables[name].shortcode = $('shortCode', this).text();
+                if ( $('Optional', this).length > 0 ) sd.stateVariables[name].optional = true;
+                if ( $(this).attr('sendEvents') === "yes" ) sd.stateVariables[name].events = true;
+                if ( $('sendEventsAttribute', this).text() === "yes" ) sd.stateVariables[name].events = true;
+                if ( $('allowedValueRange', this).length > 0 ) {
+                    var min = $(this).find('minimum').text();
+                    var max = $(this).find('maximum').text();
+                    sd.stateVariables[name].min = min;
+                    sd.stateVariables[name].max = max;
+                }
+                var vals = $(this).find( 'allowedValue' );
+                if ( vals.length ) {
+                    sd.stateVariables[name].values = [];
+                    vals.each( function() {
+                        sd.stateVariables[name].values.push( $(this).text() );
+                    });
+                }
+            });
+            svs = $(serviceData).find( 'action' );
+            svs.each( function() {
+                var actname = $(this).children('name').text();
+                sd.actions[actname] = { name: actname };
+                var args = $(this).find( 'argument' );
+                if ( args.length > 0 ) {
+                    sd.actions[actname].parameters = [];
+                    args.each( function() {
+                        var name = $('name', this).text();
+                        var dir = $('direction', this).text() || "?";
+                        var po = { name: name, direction: dir };
+                        if ( $('relatedStateVariable', this).length == 0 ) {
+                            po.type = "string";
+                        } else {
+                            var rel = $('relatedStateVariable', this).text();
+                            po.related = rel;
+                            po.type = (sd.stateVariables[rel] || {}).type || "string";
+                        }
+                        if ( $('retval', this).length > 0 ) po.retval = true;
+                        sd.actions[actname].parameters.push( po );
+                    });
+                }
+            });
+            dd.services[ sd.service ] = sd;
+        });
+        
+        jqXHR.fail( function( jqXHR, textStatus, err ) {
+            console.log(String(err));
+        });
+        
+        return jqXHR.promise();
+    }
+    
+    function sendDeviceData( ev ) {
+        var ct = jQuery( ev.currentTarget ).closest( 'div' );
+        var device = jQuery( 'select#devices', ct ).val() || "";
+        if ( "" === device ) {
+            alert("Please select a device first.");
+            return;
+        }
+        /* Fetch the device file */
+        jQuery.ajax({
+            url: api.getDataRequestURL(),
+            data: {
+                id: "lu_device",
+                output_format: "xml"
+            },
+            dataType: "xml",
+            timeout: 15000
+        }).done( function( data, statusText, jqXHR ) {
+            var devs = jQuery( data ).find( "device" );
+            devs.each( function() {
+                var devid = $(this).children('Device_Num').text();
+                if ( devid == device ) {
+                    
+                    // https://stackoverflow.com/questions/13651243/how-do-i-chain-a-sequence-of-deferred-functions-in-jquery-1-8-x#24041521
+                    var copy = function(a) { return Array.prototype.slice.call(a); }; 
+                    $.sequence = function( chain, continueOnFailure ) {
+                        var handleStep, handleResult,
+                            steps = copy(chain),
+                            def = new $.Deferred(),
+                            defs = [],
+                            results = [];
+                        handleStep = function () {
+                            if (!steps.length) {
+                                def.resolveWith(defs, [ results ]);
+                                return;
+                            }
+                            var step = steps.shift(),
+                                result = step();
+                            handleResult(
+                                $.when(result).always(function () {
+                                    defs.push(this);
+                                }).done(function () {
+                                    results.push({ resolved: copy(arguments) });
+                                }).fail(function () {
+                                    results.push({ rejected: copy(arguments) });
+                                })
+                            );
+                        };
+                        handleResult = continueOnFailure ?
+                            function (result) {
+                                result.always(function () {
+                                    handleStep();
+                                });
+                            } :
+                            function (result) {
+                                result.done(handleStep)
+                                    .fail(function () {
+                                        def.rejectWith(defs, [ results ]);
+                                    });
+                            };
+                        handleStep();
+                        return def.promise();
+                    };
+                        
+                    var typ = $('deviceType', this).text();
+                    var chain = [];
+                    
+                    /* Send device data */
+                    var dd = { version: 1, timestamp: Date.now(), devicetype: typ, services: {} };
+                    dd.manufacturer = $( 'manufacturer', this ).text();
+                    dd.modelname = $( 'modelName', this ).text();
+                    dd.modelnum = $( 'modelNumber', this ).text();
+                    dd.modeldesc = $( 'modelDescription', this ).text();
+                    dd.category = $( 'Category_Num', this).text();
+                    dd.subcat = $( 'Subcategory_Num', this).text();
+                    
+                    /* Handle services */
+                    var rp = api.getDataRequestURL().replace( /\/data_request.*$/i, "" );
+                    var sl = $(this).find('serviceList');
+                    var services = sl.find('service');
+                    services.each( function() {
+                        console.log( $('serviceId',this).text() + " at " + $("SCPDURL",this).text() );
+                        var serviceId = $('serviceId', this).text();
+                        var scpdurl = $("SCPDURL", this).text();
+                        chain.push( function() { return processServiceFile( dd, serviceId, rp + scpdurl ); } );
+                    });
+                    
+                    chain.push( function() {
+                        var jd = JSON.stringify( dd );
+                        console.log("Sending " + jd);
+                        return jQuery.ajax({
+                            type: "POST",
+                            url: api.getDataRequestURL(),
+                            data: {
+                                id: "lr_Reactor",
+                                action: "submitdevice",
+                                data: jd
+                            },
+                            dataType: 'json'
+                        }).promise();
+                    });
+                                
+                    $.sequence( chain ).done( function() {
+                        alert("Thank you! Your data has been submitted.");
+                    }).fail( function() {
+                        alert("Something went wrong and the data could not be submitted.");
+                    });
+                }
+            });
+        }).fail( function( jqXHR, textStatus, errorThrown ) {
+            // Bummer.
+            alert("Unable to request data from Vera. Try again in a moment; it may be reloading or busy.");
+            console.log("Failed to load lu_device data: " + textStatus + " " + String(errorThrown));
+            console.log(jqXHR.responseText);
+        });
+    }
+
     function doTest()
     {
         if ( configModified && confirm( "You have unsaved changes. Press OK to save them, or Cancel to discard them." ) ) {
@@ -1648,10 +1858,13 @@ var ReactorSensor = (function(api, $) {
 
         html = '<style>';
         html += 'input.narrow { max-width: 8em; }';
+        html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
+        html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
         html += '</style>';
         jQuery('head').append( html );
 
         html = '<div class="testfields">';
+        html += '<h3>Test Tools</h3>';
         html += '<div class="row">';
         html += '<div class="col-sm-2 col-md-2"><label for="testdateenable"><input type="checkbox" value="1" id="testdateenable">&nbsp;Test&nbsp;Date:</label></div>';
         html += '<div class="col-sm-10 col-md-10 form-inline"><select id="testyear" class="form-control form-control-sm"></select><select id="testmonth" class="form-control form-control-sm"></select><select class="form-control form-control-sm" id="testday"></select><input class="narrow form-control form-control-sm" id="testtime"></div>';
@@ -1683,6 +1896,8 @@ var ReactorSensor = (function(api, $) {
         } catch (exc) {
             html += "<div>Can't display sun data: " + exc.toString() + "</div>";
         }
+        
+        html += '<div id="enhancement" class="form-inline"><h3>Submit Device Data</h3>If you have a device that is missing "Common Actions" or warns you about missing enhancement data in the Activities tab, you can submit the device data to rigpapa for evaluation. This process sends the relevant data about the device. It does not send any identifying information about you or your Vera, and the data is used only for enhancement of the device database. <label>Select Device: <select id="devices"></select> <button id="submitdata">Submit Device Data</button></div>';
 
         html += footer();
 
@@ -1737,6 +1952,12 @@ var ReactorSensor = (function(api, $) {
             }
         }
         jQuery('input#testhousemode,select#mode', container).on( 'change.reactor', handleTestChange );
+        
+        var deviceMenu = makeDeviceMenu( "", "" );
+        deviceMenu.attr('id', 'devices');
+        deviceMenu.prepend( '<option value="" selected>--choose device--</option>' );
+        jQuery( 'div#enhancement select#devices' ).replaceWith( deviceMenu );
+        jQuery( 'div#enhancement button#submitdata' ).on( 'click.reactor', sendDeviceData );
     }
 
     function updateStatus( pdev ) {
@@ -1841,7 +2062,7 @@ var ReactorSensor = (function(api, $) {
                             currentValue = new Date( currentValue * 1000 ).toLocaleString();
                         }
                         break;
-                        
+
                     case 'interval':
                         currentValue = new Date( currentValue * 1000 ).toLocaleString();
                         break;
@@ -2030,7 +2251,7 @@ var ReactorSensor = (function(api, $) {
         jQuery( 'i#deletevar', editrow ).on('click.reactor', handleDeleteVariableClick);
         return editrow;
     }
-    
+
     function handleAddVariableClick() {
         var container = jQuery('div#variables');
 
@@ -2283,33 +2504,102 @@ var ReactorSensor = (function(api, $) {
                 var n = parseInt( delay );
                 if ( isNaN( n ) || n < 1 ) {
                     jQuery( 'input#delay', row ).addClass( "tberror" );
-                    row.addClass( "tberror" );
                 }
             }
         } else if ( actionType == "device" ) {
-            var act = jQuery('select#actionmenu', row).val() || "";
-            if ( "" === act ) {
-                jQuery( 'select#actionmenu', row ).addClass( "tberror" );
-                row.addClass( "tberror" );
+            var dev = jQuery( 'select.devicemenu', row ).val() || "";
+            if ( "" === dev ) {
+                jQuery( 'select.devicemenu', row ).addClass( 'tberror' );
+            } else {
+                var devnum = parseInt( dev );
+                var sact = jQuery('select#actionmenu', row).val() || "";
+                if ( "" === sact ) {
+                    jQuery( 'select#actionmenu', row ).addClass( "tberror" );
+                } else {
+                    // check parameters, with value/type check when available?
+                    // type, valueSet/value list, min/max
+                    var ai = actions[ sact ];
+                    if ( ai && ai.deviceOverride && ai.deviceOverride[devnum] ) {
+                        console.log('validateActionRow: applying device ' + devnum + ' override for ' + sact);
+                        ai = ai.deviceOverride[devnum];
+                    }
+                    if ( ! ai ) {
+                        console.log('validateActionRow: no info for ' + sact + ' device ' + devnum);
+                        jQuery( 'select.devicemenu', row ).addClass('tberror');
+                        ai = {};
+                    }
+                    for ( var k=0; k < (ai.parameters || [] ).length; k++ ) {
+                        var p = ai.parameters[k];
+                        if ( undefined === p.value ) { /* ignore fixed value */
+                            /* Fetch value */
+                            var field = jQuery( '#' + p.name, row );
+                            if ( field.length != 1 ) {
+                                console.log("validateActionRow: field " + p.name + " expected 1 found " +
+                                    field.length );
+                                continue; /* don't validate to avoid user jail */
+                            }
+                            var v = field.val() || "";
+                            v = v.replace( /^\s+/, "" ).replace( /\s+$/, "" );
+                            field.val( v ); /* replace with trimmed value */
+                            /* Ignore default here, it's assumed to be valid when needed */
+                            /* Blank and optional OK? Move on. */
+                            if ( "" === v ) {
+                                if ( p.optional ) {
+                                    continue;
+                                }
+                                /* Not optional, flag error. */
+                                field.addClass( 'tberror' );
+                            } else if ( v.match( /\{[^}]+\}/ ) ) {
+                                /* Variable reference, do nothing, can't check */
+                            } else {
+                                // check value type, range?
+                                // ??? subtypes? like RGB
+                                var typ = p.type || p.dataType || "string";
+                                if ( typ.match( /^u?i[124]$/i ) ) {
+                                    /* Integer. Watch for RGB spec of form #xxx or #xxxxxx */
+                                    v = v.replace( /^#([0-9a-f])([0-9a-f])([0-9a-f])$/i, "0x\\1\\1\\2\\2\\3\\3" );
+                                    v = v.replace( /^#[0-9a-f]{6,8}$/, "0x" );
+                                    v = parseInt( v );
+                                    if ( undefined === inttypes[typ] ) {
+                                        console.log( "validateActionRow: no type data for " + typ );
+                                    } else if ( isNaN(v) || ( v < inttypes[typ].min ) || ( v > inttypes[typ].max ) ||
+                                        ( undefined !== p.min && v < p.min ) || ( undefined != p.max && v > p.max ) ) {
+                                        field.addClass( 'tberror' ); // ???explain why?
+                                    }
+                                } else if ( "r4" === typ ) {
+                                    /* Float */
+                                    v = parseFloat( v );
+                                    if ( isNaN( v ) || ( undefined !== p.min && v < p.min ) || ( undefined !== p.max && v > p.max ) ) {
+                                        field.addClass( 'tberror' );
+                                    }
+                                } else if ( "string" !== typ ) {
+                                    /* Hmmm */
+                                    console.log("validateActionRow: no validation for type " + String(typ));
+                                }
+                            }
+                        }
+                    }
+                }
             }
-            // check parameters, with value/type check when available?
-            // type, valueSet/value list, min/max
+        } else if ( "housemode" == actionType ) {
+            /* nothing to check */
         } else if ( actionType == "runscene" ) {
             var sc = jQuery( 'select#scene', row ).val() || "";
             if ( "" === sc ) {
                 jQuery( 'select#scene' ).addClass( "tberror" );
-                row.addClass( "tberror" );
             }
         } else if ( "runlua" === actionType ) {
             var lua = jQuery( 'textarea', row ).val() || "";
             // check Lua?
             if ( lua.match( /^[\r\n\s]*$/ ) ) {
                 jQuery( 'textarea', row ).addClass( "tberror" );
-                row.addClass( "tberror" );
             }
         } else {
             row.addClass( "tberror" );
         }
+
+        row.has('.tberror').addClass('tberror');
+
     }
 
     function buildActionList( root ) {
@@ -2378,20 +2668,22 @@ var ReactorSensor = (function(api, $) {
                         // Fixed value
                         p.value = ai.parameters[k].value;
                     } else {
-                        var v = jQuery( '#' + p.name + '.argument', row ).val() || "";
+                        var v = jQuery( '#' + ai.parameters[k].name, row ).val() || "";
+                        if ( "" === v && undefined !== ai.parameters[k].default ) v = ai.parameters[k].default;
                         if ( "" === v ) {
                             if ( ai.parameters[k].optional ) {
                                 continue; /* skip it, not even on the list */
                             }
-                            console.log("buildActionList: " + s + " required parameter " + p.name + " has no value");
+                            console.log("buildActionList: " + s + " required parameter " + ai.parameters[k].name + " has no value");
                             scene = false;
                             return false;
-                        } else {
-                            p.value = v;
-                        }
+                        } 
+                        p.value = v;
                     }
                     action.parameters.push( p );
                 }
+            } else if ( "housemode" == actionType ) {
+                action.housemode = jQuery( 'select#housemode', row ).val() || "1";
             } else if ( actionType == "runscene" ) {
                 action.scene = parseInt( jQuery( "select#scene", row ).val() || "0" );
                 if ( isNaN( action.scene ) || 0 === action.scene ) {
@@ -2413,7 +2705,7 @@ var ReactorSensor = (function(api, $) {
                     timeout: 2000
                 }).done( function( data, statusText, jqXHR ) {
                 }).fail( function( jqXHR ) {
-                }); 
+                });
                 firstScene = false;
             } else if ( "runlua" === actionType ) {
                 var lua = jQuery( 'textarea', row ).val() || "";
@@ -2504,6 +2796,22 @@ var ReactorSensor = (function(api, $) {
         var row = jQuery( ev.currentTarget ).closest( 'div.actionrow' );
         changeActionRow( row );
     }
+    
+    function appendVariables( menu ) {
+        var cd = iData[ api.getCpanelDeviceId() ].cdata;
+        var first = true;
+        for ( var vname in (cd.variables||{}) ) {
+            if ( cd.variables.hasOwnProperty( vname ) ) {
+                if ( first ) {
+                    menu.append( '<option class="menuspacer" disabled/>' ).append( '<option id="variables" class="optheading" disabled>--Variables--</option>' );
+                    first = false;
+                }
+                menu.append(
+                    jQuery( '<option/>' ).val( '{' + vname + '}' ).text( '{' + vname + '}' )
+                );
+            }
+        }
+    }
 
     function changeActionAction( row, newVal ) {
         var ct = jQuery( 'div.actiondata', row );
@@ -2523,6 +2831,8 @@ var ReactorSensor = (function(api, $) {
             for ( var k=0; k<( action.parameters || [] ).length; ++k ) {
                 var parm = action.parameters[k];
                 if ( ( parm.direction || "in" ) == "out" ) continue; /* Don't display output params */
+                if ( parm.hidden ) continue; /* or hidden parameters */
+                if ( undefined !== parm.value ) continue; /* fixed value */
                 var inp;
                 if ( parm.valueSet && deviceInfo.valuesets[parm.valueSet] ) {
                     parm.values = deviceInfo.valuesets[parm.valueSet];
@@ -2547,19 +2857,16 @@ var ReactorSensor = (function(api, $) {
                         inp.append( opt );
                     }
                     /* Add variables */
-                    var cd = iData[ api.getCpanelDeviceId() ].cdata;
-                    if ( cd.variables ) {
-                        inp.append( '<option disabled/>' ).append( '<option class="optheading" disabled>--Variables--</option>' );
-                        for ( var vname in cd.variables ) {
-                            if ( cd.variables.hasOwnProperty( vname ) ) {
-                                opt = jQuery( '<option/>' ).val( '{' + vname + '}' ).text( '{'+vname+'}' );
-                                inp.append( opt );
-                            }
-                        }
+                    appendVariables( inp );
+                    /* As a default, just choose the first option, unless specified */
+                    if ( undefined !== parm.default ) {
+                        inp.val( parm.default );
+                    } else {
+                        jQuery( 'option:first' ).prop( 'selected', true );
                     }
                 } else if ( parm.type == "scene" ) {
                     inp = makeSceneMenu();
-                    inp.prepend( '<option value="">--choose--</option>' );
+                    inp.prepend( '<option value="" selected>--choose--</option>' );
                     if ( undefined !== parm.extraValues ) {
                         if ( Array.isArray( parm.extraValues ) ) {
                             for ( var j=0; j<parm.extraValues.length; j++ ) {
@@ -2578,34 +2885,16 @@ var ReactorSensor = (function(api, $) {
                         }
                     }
                     /* Add variables */
-                    var cd = iData[ api.getCpanelDeviceId() ].cdata;
-                    if ( cd.variables ) {
-                        inp.append( '<option disabled/>' ).append( '<option class="optheading" disabled>--Variables--</option>' );
-                        for ( var vname in cd.variables ) {
-                            if ( cd.variables.hasOwnProperty( vname ) ) {
-                                var opt = jQuery( '<option/>' ).val( '{' + vname + '}' ).text( '{'+vname+'}' );
-                                inp.append( opt );
-                            }
-                        }
-                    }
-                    inp.addClass( "argument" ).val("");
+                    appendVariables( inp );
                 } else if ( parm.type == "boolean" ) {
                     /* Menu */
                     inp = jQuery('<select class="argument form-control form-control-sm"/>');
                     inp.append('<option value="0">0/off/false</option>');
                     inp.append('<option value="1">1/on/true</option>');
                     /* Add variables */
-                    var cd = iData[ api.getCpanelDeviceId() ].cdata;
-                    if ( cd.variables ) {
-                        inp.append( '<option disabled/>' ).append( '<option class="optheading" disabled>--Variables--</option>' );
-                        for ( var vname in cd.variables ) {
-                            if ( cd.variables.hasOwnProperty( vname ) ) {
-                                var opt = jQuery( '<option/>' ).val( '{' + vname + '}' ).text( '{'+vname+'}' );
-                                inp.append( opt );
-                            }
-                        }
-                    }
-                } else if ( parm.type == "ui1" && parm.min !== undefined && parm.max !== undefined ) {
+                    appendVariables( inp );
+                    /* Don't set default, let default default */
+                } else if ( false && parm.type == "ui1" && parm.min !== undefined && parm.max !== undefined ) {
                     inp = jQuery('<div class="argument tbslider"/>');
                     inp.slider({
                         min: parm.min, max: parm.max, step: parm.step || 1,
@@ -2621,14 +2910,16 @@ var ReactorSensor = (function(api, $) {
                         }
                     });
                     inp.slider("option", "disabled", false);
-                    inp.slider("option", "value", parm.default || parm.min);
+                    inp.slider("option", "value", undefined === parm.default ? parm.min : parm.default ); //??? fixme: clobbered later
                 } else if ( (parm.type || "").match(/^(r|u?i)[124]$/i ) ) {
                     inp = jQuery( '<input class="argument narrow form-control form-control-sm" list="reactorvars">' );
                     inp.attr( 'placeholder', action.parameters[k].name );
+                    inp.val( undefined==parm.default ? (undefined==parm.min ? 0 : parm.min ) : parm.default );
                 } else {
                     console.log("J_ReactorSensor_UI7.js: using default field presentation for type " + String(parm.type));
                     inp = jQuery( '<input class="argument form-control form-control-sm" list="reactorvars">' );
                     inp.attr( 'placeholder', action.parameters[k].name );
+                    inp.val( undefined===parm.default ? "" : parm.default );
                 }
                 inp.attr('id', parm.name );
                 inp.on( 'change.reactor', handleActionValueChange );
@@ -2668,45 +2959,139 @@ var ReactorSensor = (function(api, $) {
         return ret;
     }
 
-    function merge( dest, src ) {
-        if ( typeof(dest) != typeof(src) || typeof(src) != "object") {
-            return src;
+    /* Perform numeric comparison for device override */
+    function doNumericComparison( str1, op, str2 ) {
+        var v1 = parseInt( str1 );
+        var v2 = parseInt( str2 );
+        if ( isNaN( v1 ) || isNaN( v2 ) ) {
+            return false;
         }
-        for ( var m in src ) {
-            if ( src.hasOwnProperty(m) ) {
-                if ( dest.hasOwnProperty(m) ) {
-                    dest[m] = merge( dest[m], src[m] );
-                } else {
-                    dest[m] = src[m];
-                }
-            }
-        }
-        return dest;
+        if ( op == "<" ) return v1 < v2;
+        if ( op == "<=" ) return v1 <= v2;
+        if ( op == ">" ) return v1 > v2;
+        if ( op == ">=" ) return v1 >= v2;
+        if ( op == "=" || op == "==" ) return v1 == v2;
+        if ( op == "!=" || op == "~=" ) return v1 != v2;
+        return false;
     }
 
-    function getServiceInfo( svc ) {
-        if ( typeof( deviceInfo ) !== "undefined" ) {
-            if ( typeof( deviceInfo.services ) !== "undefined" ) {
-                if ( typeof( deviceInfo.services[svc] ) !== "undefined" ) {
-                    return deviceInfo.services[svc];
+    /* Find an override for a device. */
+    function getDeviceOverride( devnum ) {
+        var devobj = deviceByNumber[devnum];
+        if ( undefined !== devobj ) {
+            var mytype = devobj.device_type || "?";
+            var base = deviceInfo.devices[mytype] || deviceInfo.devices[ 'type:' + mytype ];
+            if ( undefined !== base ) {
+                if ( Array.isArray( base ) ) {
+                    /* Early syntax without match conditions. Just return array */
+                    return base;
                 }
+                /* Attempt to find a match condition */
+                for ( var im=0; im<(base.match || []).length; im++ ) {
+                    /* Conditions separated by ";", all must be met. for match to succeed */
+                    var cond = (base.match[im].condition || "").split( /;/ );
+                    var match = true;
+                    for ( var ic=0; ic<cond.length; ++ic ) {
+                        /* Each condition uses simple RPN script */
+                        var pt = cond[ic].split( /,/ );
+                        var stack = []; /* Start off */
+                        var refdev = devnum;
+                        while ( pt.length > 0 ) {
+                            var seg = decodeURIComponent( pt.shift() || "" ).trim();
+                            if ( "parent" === seg ) {
+                                /* Does not change stack, but switches reference device to parent */
+                                if ( 0 !== devobj.id_parent ) {
+                                    refdev = devobj.id_parent;
+                                    devobj = deviceByNumber[ refdev ];
+                                }
+                            } else if ( "var" === seg ) {
+                                var vname = stack.pop() || "";
+                                var vserv = stack.pop() || "";
+                                var v = api.getDeviceStateVariable( refdev, vserv, vname ) || null;
+                                stack.push( v );
+                            } else if ( "attr" === seg ) {
+                                var aname = stack.pop() || "";
+                                var v = api.getDeviceAttribute( refdev, aname ) || null;
+                                stack.push( v );
+                            } else if ( "and" === seg ) {
+                                var op2 = stack.pop() || false;
+                                var op1 = stack.pop() || false;
+                                stack.push( op1 && op2 );
+                            } else if ( "or" === seg ) {
+                                var op2 = stack.pop() || false;
+                                var op1 = stack.pop() || false;
+                                stack.push( op1 || op2 );
+                            } else if ( "not" === seg ) {
+                                var v = stack.pop();
+                                if ( typeof(v) == "boolean" ) {
+                                    stack.push( !v );
+                                } else {
+                                    console.log("getDeviceOverride: not operand invalid type: (" + typeof(v) +
+                                        ")" + String(v));
+                                    stack.push( false );
+                                }
+                            } else if ( "isnull" === seg ) {
+                                var v = stack.pop() || null;
+                                stack.push( v === null );
+                            } else if ( "dup" === seg ) {
+                                var v = stack.pop() || null;
+                                stack.push( v );
+                                stack.push( v );
+                            } else if ( seg.match( /^(<|<=|>|>=|=|==|!=|~=)$/ ) ) {
+                                /* Binary op, takes two values */
+                                var op = seg;
+                                var oper2 = stack.pop();
+                                var oper1 = stack.pop();
+                                var result;
+                                if ( op == "==" || op == "=" ) {
+                                    result = oper1 == oper2;
+                                } else if ( op == "!=" || op == "~=" ) {
+                                    result = oper1 != oper2;
+                                } else {
+                                    result = doNumericComparison( oper1, op, oper2 );
+                                }
+                                stack.push( result );
+                            } else if ( seg.match( /^\// ) ) {
+                                /* Regular expression match */
+                                var re = new RegExp( seg );
+                                var v = stack.pop();
+                                stack.push( v.match( re ) );
+                            } else if ( seg.match( /^["']/ ) ) {
+                                var v = seg.substring( 1, seg.length-1 );
+                                stack.push( v );
+                            } else if ( ! isNaN( seg ) ) {
+                                stack.push( parseInt( seg ) );
+                            } else {
+                                console.log("getDeviceOverride: unrecognized op in " + cond[ic] + ": '" + seg + "'");
+                            }
+                        }
+                        /* Done. Test succeeds iff stack has true */
+                        if ( stack.length != 1 ) {
+                            console.log("getDeviceOverride: eval of " + cond[ic] + " for " + devobj.device_type +
+                                " end of conditions stack len expected 1 got " + stack.length );
+                        }
+                        var result = stack.pop() || null;
+                        console.log("getDeviceOverride: eval of " + cond[ic] + " yields (" + 
+                            typeof(result) + ")" + String(result));
+                        if ( ! ( typeof(result)==="boolean" && result ) ) {
+                            match = false;
+                            break; /* stop testing conds */
+                        }
+                        if ( match ) {
+                            console.log("getDeviceOverride: match condition " + cond[ic] +
+                                " succeeded for " + devnum + " (" + devobj.name + ") type " +
+                                devobj.device_type);
+                            return base.match[im].actions || [];
+                        }
+                    }
+                }
+                /* Return default actions for type */
+                return deviceInfo.devices[ 'type:' + mytype ].actions || [];
             }
         }
         return false;
     }
     
-    /* Find an override for a device. Right now, simple as can be. Future: anything. */
-    function getDeviceOverride( devnum ) {
-        var devobj = deviceByNumber[devnum];
-        if ( undefined !== devobj ) {
-            var mytype = devobj.device_type || "?";
-            if ( deviceInfo.devices[ 'type:' + mytype ] ) {
-                return deviceInfo.devices[ 'type:' + mytype ];
-            }
-        }
-        return false;
-    }
-
     function changeActionDevice( row, newVal, fnext, fargs ) {
         var ct = jQuery( 'div.actiondata', row );
         var actionMenu = jQuery( 'select#actionmenu', ct );
@@ -2729,10 +3114,10 @@ var ReactorSensor = (function(api, $) {
             dataType: "json",
             timeout: 5000
         }).done( function( data, statusText, jqXHR ) {
+            var hasAction = false;
             for ( var i=0; i<data.serviceList.length; i++ ) {
                 var section = jQuery( "<select/>" );
                 var service = data.serviceList[i];
-                var serviceInfo = getServiceInfo( service.serviceId );
                 for ( var j=0; j<service.actionList.length; j++ ) {
                     var nodata = false;
                     var actname = service.actionList[j].name;
@@ -2764,6 +3149,8 @@ var ReactorSensor = (function(api, $) {
                     opt.text( actname );
                     if ( nodata ) opt.addClass( "nodata" );
                     section.append( opt.clone() );
+
+                    hasAction = true;
                 }
                 if ( jQuery("option", section).length > 0 ) {
                     var opt = jQuery("<option/>");
@@ -2775,28 +3162,34 @@ var ReactorSensor = (function(api, $) {
                     actionMenu.append( section.children() );
                 }
             }
-            var over = getDeviceOverride( newVal ); 
+            var over = getDeviceOverride( newVal );
             if ( over ) {
                 var known = jQuery("<select/>");
                 known.append( "<option class='optheading' value='' disabled><b>---Common Actions---</b></option>" );
                 for ( var j=0; j<over.length; j++ ) {
-                    /* Clone base action, copy top-level keys of device override over base. */
                     var devact = over[j];
+                    if ( undefined === deviceInfo.services[devact.service] || undefined == deviceInfo.services[devact.service].actions[devact.action] ) {
+                        /* Service/action in device exception not "real". Fake it real good. */
+                        deviceInfo.services[devact.service] = deviceInfo.services[devact.service] || { actions: {} };
+                        deviceInfo.services[devact.service].actions[devact.action] = { name: devact.action, deviceOverride: {} };
+                    }
+                    /* There's a well-known service/action, so copy it, and apply overrides */
                     var act = deepcopy( deviceInfo.services[devact.service].actions[devact.action] );
                     for ( var k in devact ) {
                         if ( devact.hasOwnProperty(k) ) {
                             act[k] = devact[k];
                         }
                     }
+                    if ( act.hidden ) continue;
                     var opt = jQuery('<option/>');
-                    var key = devact.service + "/" + devact.action;
+                    var key = act.service + "/" + act.action;
                     opt.val( key );
-                    opt.text( act.description || devact.action );
+                    opt.text( act.description || act.action );
                     known.append( opt );
+                    hasAction = true;
                     if ( undefined === actions[key] ) {
-                        act.deviceOverride = {};
-                        act.deviceOverride[newVal] = act;
-                        actions[key] = act;
+                        actions[key] = deviceInfo.services[devact.service].actions[devact.action];
+                        actions[key].deviceOverride = { newVal: act };
                     } else {
                         actions[key].deviceOverride[newVal] = act;
                     }
@@ -2804,9 +3197,10 @@ var ReactorSensor = (function(api, $) {
                 known.append("<option disabled/>");
                 actionMenu.prepend( known.children() );
             }
-            actionMenu.prepend( '<option value="">--choose--</option>' );
-            actionMenu.val("");
+            var lopt = jQuery( '<option selected/>' ).val( "" ).text( hasAction ? "--choose action--" : "(invalid device--no actions)" );
+            actionMenu.prepend( lopt );
             actionMenu.attr( 'disabled', false );
+            jQuery( 'option:first', actionMenu ).prop( 'selected' );
             if ( undefined !== fnext ) {
                 fnext.apply( null, fargs );
             }
@@ -2842,6 +3236,7 @@ var ReactorSensor = (function(api, $) {
         jQuery( 'i#action-try,i#action-import', row ).hide();
         if ( newVal == 'device' ) {
             ct.append( makeDeviceMenu( "", "" ) );
+            jQuery( 'select.devicemenu', ct ).prepend( '<option value="" selected>--choose device--</option>' );
             ct.append('<select id="actionmenu" class="form-control form-control-sm"></select>');
             jQuery( 'select.devicemenu', ct ).on( 'change.reactor', handleActionDeviceChange );
             jQuery( 'select#actionmenu', ct ).on( 'change.reactor', handleActionActionChange );
@@ -2849,6 +3244,12 @@ var ReactorSensor = (function(api, $) {
         } else if ( newVal == 'comment' ) {
             ct.append('<input type="text" id="comment" class="argument form-control form-control-sm" placeholder="Enter comment text">');
             jQuery( 'input', ct ).on( 'change.reactor', handleActionValueChange );
+        } else if ( newVal == "housemode" ) {
+            var m = jQuery( '<select id="housemode" class="form-control form-control-sm">')
+                .append( '<option value="1">Home</option>' ).append( '<option value="2">Away</option>' )
+                .append( '<option value="3">Night</option>' ).append( '<option value="4">Vacation</option>' );
+            m.on( 'change.reactor', handleActionValueChange );
+            ct.append( m );
         } else if ( newVal == "delay" ) {
             ct.append('<label for="delay">for <input id="delay" type="text" class="argument narrow form-control form-control-sm" title="Enter delay time as seconds, MM:SS, or HH:MM:SS" placeholder="delay time" list="reactorvars"></label>');
             ct.append('<select id="delaytype" class="form-control form-control-sm"><option value="inline">from this point</option><option value="start">from start of actions</option></select>');
@@ -2856,14 +3257,14 @@ var ReactorSensor = (function(api, $) {
             jQuery( 'select', ct ).on( 'change.reactor', handleActionValueChange );
         } else if ( newVal == "runscene" ) {
             var m = makeSceneMenu();
-            m.prepend('<option value="">--choose--</option>').val("").attr('id', 'scene');
+            m.prepend('<option value="" selected>--choose--</option>').val("").attr('id', 'scene');
             m.on( 'change.reactor', handleActionValueChange );
             ct.append( m );
             jQuery( 'i#action-import', row ).show();
         } else if ( "runlua" === newVal ) {
             var txt = jQuery( '<textarea id="lua" wrap="off" class="luacode form-control form-control-sm" rows="6"/>' );
             ct.append( txt );
-            txt.on( 'change.luaview', handleActionValueChange );
+            txt.on( 'change.reactor', handleActionValueChange );
             ct.append('<div class="tbhint">Your Lua code must return boolean <em>true</em> or <em>false</em>. Action execution will stop if anything other than boolean true, or nothing, is returned by your code (this is a feature). It is also recommended that the first line of your Lua be a comment with text to help you identify the code--if there\'s an error logged, the first line of the script is almost always shown. Also, you can use the <tt>print()</tt> function to write to Reactor\'s event log, which is shown in the Logic Summary and easier/quicker to get at than the Vera logs.</div>');
         } else {
             ct.append('<div class="tberror">Type ' + newVal + '???</div>');
@@ -2918,15 +3319,32 @@ var ReactorSensor = (function(api, $) {
                 var d = parseInt( jQuery( 'select.devicemenu', row ).val() );
                 var s = jQuery( 'select#actionmenu', row ).val() || "";
                 var pt = s.split( /\//, 2 );
+                var act = deviceInfo.services[pt[0]].actions[pt[1]];
+                if ( act.deviceOverride[d] ) {
+                    act = act.deviceOverride[d];
+                }
                 var param = {};
-                $( '.argument', row ).each( function( ix ) {
-                    var f = jQuery( this );
-                    param[ f.attr('id') || "" ] = f.val();
-                });
+                var actionText = s + "(";
+                for ( var k=0; k<(act.parameters || {}).length; ++k ) {
+                    var p = act.parameters[k];
+                    if ( undefined !== p.value ) {
+                        /* Fixed value */
+                        param[p.name] = p.value;
+                        actionText += "{"+p.name+"="+String(p.value)+"}, ";
+                    } else {
+                        var v = jQuery( '#' + p.name, row ).val() || "";
+                        if ( "" === v && undefined !== p.default ) v = p.default;
+                        if ( "" === v && p.optional ) continue;
+                        param[p.name] = v;
+                        actionText += "{"+p.name+"="+String(v)+"}, ";
+                    }
+                }
+                actionText += '): ';
+
                 api.performActionOnDevice( d, pt[0], pt[1], {
                     actionArguments: param,
                     onSuccess: function( xhr ) {
-                        console.log("performActionOnDevice.onSuccess: " + String(xhr));
+                        console.log(actionText + "performActionOnDevice.onSuccess: " + String(xhr));
                         if (typeof(xhr)==="object") {
                             for ( var k in xhr ) {
                                 if ( xhr.hasOwnProperty(k) )
@@ -2935,9 +3353,9 @@ var ReactorSensor = (function(api, $) {
                         }
                         if ( "object" === typeof( xhr ) ) {
                             if ( xhr.responseText && xhr.responseText.match( /ERROR:/ ) ) {
-                                alert( xhr.responseText );
+                                alert( actionText + xhr.responseText );
                             } else {
-                                alert( xhr.responseText );
+                                alert( actionText + xhr.responseText );
                             }
                         }
                         // alert( "The action completed successfully!" );
@@ -3040,6 +3458,7 @@ var ReactorSensor = (function(api, $) {
         row.append( '<div class="col-xs-12 col-sm-12 col-md-4 col-lg-2"><select id="actiontype" class="form-control form-control-sm">' +
             '<option value="comment">Comment</option>' +
             '<option value="device">Device Action</option>' +
+            '<option value="housemode">Change House Mode</option>' +
             '<option value="delay">Delay</option>' +
             '<option value="runlua">Run Lua</option>' +
             '<option value="runscene">Run Scene</option>' +
@@ -3117,6 +3536,8 @@ var ReactorSensor = (function(api, $) {
                             jQuery( '#' + action.parameters[j].name, row ).val( action.parameters[j].value || "" );
                         }
                     }, [ newRow, act ]);
+                } else if ( "housemode" === act.type ) {
+                    jQuery( 'select#housemode', newRow ).val( act.housemode || 1 );
                 } else if ( "runlua" === act.type ) {
                     if ( act.lua ) {
                         var lua = act.encoded_lua ? atob( act.lua ) : act.lua;
@@ -3145,7 +3566,7 @@ var ReactorSensor = (function(api, $) {
             if ( configModified && confirm( "You have unsaved changes. Press OK to save them, or Cancel to discard them." ) ) {
                 handleSaveClick( undefined );
             }
-            
+
             jQuery( 'div#tbcopyright' ).append( ' <span id="deviceinfoinfo">Device Info serial ' + deviceInfo.serial + '</span>' );
             jQuery( 'div#supportlinks' ).append( ' &#0149; <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=infoupdate" target="_blank">Update DeviceInfo</a>');
             jQuery( 'div.supportlinks' ).append( '<p>[1] This device/action does not have enhancement data available. Please report this device in the Reactor forum thread for device reports.</p>' );
@@ -3182,7 +3603,7 @@ var ReactorSensor = (function(api, $) {
             loadActions( 'tripactions', cd.tripactions || {} );
             loadActions( 'untripactions', cd.untripactions || {} );
             updateActionControls();
-            
+
             /* Set up a data list with our variables */
             var dl = jQuery('<datalist id="reactorvars"></datalist>');
             if ( cd.variables ) {
@@ -3263,10 +3684,10 @@ var ReactorSensor = (function(api, $) {
             dataType: "json",
             timeout: 15000
         }).done( function( data, statusText, jqXHR ) {
-            console.log("D_ReactorDeviceInfo loaded (" + String(Date.now()-start) + 
+            console.log("D_ReactorDeviceInfo loaded (" + String(Date.now()-start) +
                 "ms), timestamp=" + String(data.timestamp) + ", serial=" +
                 String(data.serial));
-            if ( (data.serial || 0) < 0.323 ) {
+            if ( (data.serial || 0) < DEVINFO_MINSERIAL ) {
                 jQuery("div#loading").empty().append( '<h3>Update Required</h3>Your D_ReactorDeviceInfo.json file needs to be at least serial 0.323. Please <a href="/port_3480/data_request?id=lr_Reactor&action=infoupdate" target="_blank">click here to update the file</a>, then go back to the Control tab and come back here.<p><em>PRIVACY NOTICE:</em> Clicking this link will send the firmware version information and plugin version to the server. This information is used to select the correct file for your configuration, and is not used for tracking, authentication, or access control.</p>' );
                 return;
             }
@@ -3276,7 +3697,7 @@ var ReactorSensor = (function(api, $) {
             /* Body content */
             html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>Activities</h3></div></div>';
             html += '<div class="row"><div class="col-xs-12 col-sm-12">Activities are actions that Reactor will perform on its own when tripped or untripped.</div></div>';
-            
+
             html += '<div class="reactoractions fullwidth">';
 
             html += '<div id="tripactions" class="actionlist">';
