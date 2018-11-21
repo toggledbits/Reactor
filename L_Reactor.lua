@@ -34,6 +34,7 @@ local sceneData = {}
 local sceneWaiting = {}
 local sceneState = {}
 local hasBattery = true
+local luaEnv -- global state for all runLua actions
 
 local runStamp = 0
 local pluginDevice = 0
@@ -699,21 +700,82 @@ local function execLua( fname, luafragment, extarg, tdev )
     if luaFunc[fname] == nil then
         -- "Compile" it
         local err
-        fnc,err = loadstring( luafragment )
+        fnc,err = loadstring( luafragment, fname )
         if fnc == nil or err then
-            L({level=1,msg="%1 %(2) [%3] Lua failed"}, 
+            L({level=1,msg="%1 %(2) [%3] Lua load failed"}, 
                 luup.devices[tdev].description, tdev, fname)
             luup.log( "Reactor: " .. err .. "\n" .. luafragment, 1 )
             return false, err -- flag error
         end
         luaFunc[fname] = fnc
     end
+    -- We use a single environment for all Lua scripts, which allows modules loaded
+    -- to be shared among them. This, of course, has some inherent dangers, and
+    -- people's bad habits with globals may be exposed. Issue warnings to assist.
+    if luaEnv == nil then
+        luaEnv = shallowCopy(_G)
+        -- Clear what we don't need
+        luaEnv.json = nil
+        luaEnv.ltn12 = nil
+        luaEnv.http = nil
+        luaEnv.https = nil
+        luaEnv.luaxp = nil
+        -- Pre-declare these to keep metamethods from griping later
+        luaEnv.Reactor = {}
+        luaEnv.reactor_device = false
+        luaEnv.reactor_ext_arg = ""
+        -- These stubs are replaced per-run
+        luaEnv.__reactor_getdevice = function() end
+        luaEnv.__reactor_getscript = function() end
+        luaEnv.print =  function( ... )  -- luacheck: ignore 212
+                            local dev = luaEnv.__reactor_getdevice() or 0
+                            local msg = table.concat( arg or {}, " " ) or ""
+                            luup.log( ((luup.devices[dev] or {}).description or "?") .. 
+                                " (" .. tostring(dev) .. ") [" .. tostring(luaEnv.__reactor_getscript() or "?") ..
+                                "] " .. msg)
+                            addEvent{ dev=dev, event="lua", script=luaEnv.__reactor_getscript(), message=msg }
+                        end
+        -- Override next and pairs specifically so that variables proxy table can
+        -- iterate. This is a 5.1-ism. See http://lua-users.org/wiki/GeneralizedPairsAndIpairs
+        luaEnv.rawnxt = luaEnv.next
+        luaEnv.next =   function( t, k )
+                            local m = getmetatable(t)
+                            local n = m and m.__next or luaEnv.rawnxt
+                            return n( t, k )
+                        end
+        -- Redefining pairs() this way allows metamethod override for iteration.
+        luaEnv.pairs =  function( t ) return luaEnv.next, t, nil end
+        local mt = { }
+        mt.__newindex = function (t, n, v)
+            if rawget(t, n) == nil and debug.getinfo(2, "S").what ~= "C" then
+                local dev = t.__reactor_getdevice()
+                local fn = t.__reactor_getscript()
+                L({level=2,msg="%1 (%2) runLua action: %3 makes assignment to global %4 (missing 'local' declaration?)"},
+                    luup.devices[dev].description, dev, fn, n)
+                addEvent{ event="lua", dev=dev, script=fn, message="WARNING: Assignment to global "..n.." (missing 'local' declaration?)" }
+            end
+            rawset(t, n, v)
+        end
+        mt.__index = function(t, n) -- luacheck: ignore 212
+            local v = rawget(t, n)
+            if v == nil and debug.getinfo(2, "S").what ~= "C" then
+                local dev = t.__reactor_getdevice()
+                local fn = t.__reactor_getscript()
+                L({level=1,msg="%1 (%2) runLua action: %3 accesses undeclared/uninitialized global %4"},
+                    luup.devices[dev].description, dev, fn, n)
+                addEvent{ event="lua", dev=dev, script=fn, message="ERROR: Using uninitialized global variable "..n }
+            end
+            return v
+        end
+        mt.__metatable = false -- prevent client tampering
+        setmetatable( luaEnv, mt )
+    end
     -- Set up reactor context. This creates three important maps: groups, trip
     -- and untrip. The groups map contains the state and time of each group.
     -- The trip and untrip maps contain those groups that most-recently changed
     -- (i.e. those that would cause an overall state change of the ReactorSensor).
     -- They are maps, rather than just arrays, for quicker access.
-    local _R = { id=tdev, groups={}, trip={}, untrip={}, expressions={} }
+    local _R = { id=tdev, groups={}, trip={}, untrip={}, variables={}, script=fname }
     for _,grp in ipairs( sensorState[tostring(tdev)].configData.conditions or {} ) do
         local gs = sensorState[tostring(tdev)].condState[grp.groupid] or {}
         _R.groups[grp.groupid] = { state=gs.evalstate, since=gs.evalstamp }
@@ -722,19 +784,49 @@ local function execLua( fname, luafragment, extarg, tdev )
             else _R.untrip[grp.groupid] = _R.groups[grp.groupid] end
         end
     end
-    -- Add reactor_device and reactor_ext_arg for backwards compatibility
-    local newenv = { Reactor=_R, reactor_device=tdev, reactor_ext_arg=extarg }
-    newenv.print = function( ... ) local m = table.concat( arg, "\t" ) addEvent{ dev=tdev, event="diag", script=fname, message=m} L("%1 (%2) [%3]: " .. m, luup.devices[tdev].description, tdev, fname) end -- luacheck: ignore 212
-    for k,e in pairs( sensorState[tostring(tdev)].configData.variables or {} ) do
-        newenv[k] = luup.variable_get( VARSID, k, tdev ) -- also as global
-        _R.expressions[k] = { expression=e.expression, value=newenv[k] }
+    local vars = {}
+    for n,_ in pairs( sensorState[tostring(tdev)].configData.variables or {} ) do
+        D("execLua() presetting variable %1", n)
+        vars[n] = luup.variable_get( VARSID, n, tdev )
     end
-    setmetatable( newenv, {__index = _G} )
+    -- Special metatable for Reactor.variables table. Uses a proxy table to that
+    -- all access pass through __index/__newindex, but in 5.1 this makes the table
+    -- "un-iterable" without additional work. That's why next() and pairs() are
+    -- overriden above--they provide a way for this metatable to create its own
+    -- iterator.
+    local rmt = {}
+    rmt.__newindex =    function(t, n, v)
+                            -- Store locally and update state variable
+                            luup.variable_set( VARSID, n, tostring(v), tdev )
+                            rawset(getmetatable(t).__vars, n, v) -- store locally
+                        end
+    rmt.__index =   function(t, n) 
+                        -- Always fetch, because it could be changing dynamically
+                        local v = luup.variable_get( VARSID, n, tdev )
+                        if v == nil then 
+                            L({level=1,msg="%1 (%2) runLua action: your code accesses undeclared Reactor variable 'Reactor.variables."..n.."'"},
+                                luup.devices[tdev].description, tdev, n)
+                            addEvent{ dev=tdev, event="lua", script=fname, message="WARNING: Attempt to access undefined Reactor variable "..n }
+                        else
+                            rawset(getmetatable(t).__vars, n, v) -- store locally
+                        end
+                        return v
+                    end
+    rmt.__next =    function(t, k) return luaEnv.rawnxt( getmetatable(t).__vars, k ) end
+    rmt.__vars = vars
+    setmetatable( _R.variables, rmt )
+    -- Finally. Post our device environment and run the code.
+    -- Add reactor_device and reactor_ext_arg for backwards compatibility
+    luaEnv.Reactor = _R
+    luaEnv.reactor_device = tdev -- legacy ???unused?
+    luaEnv.reactor_ext_arg = extarg or "" -- legacy ???unused?
+    luaEnv.__reactor_getdevice = function() return tdev end
+    luaEnv.__reactor_getscript = function() return fname end
     local oldenv = getfenv(fnc)
-    setfenv(fnc, newenv)
-    D("execLua() env is %1", newenv)
+    setfenv(fnc, luaEnv)
     local success, ret = pcall( fnc ) -- protect from runtime errors within
     setfenv(fnc, oldenv)
+    luaEnv.Reactor = {} -- dispose of device context
     D("execLua() lua success=%3 return=(%2)%1", ret, type(ret), success)
     return ret, (not success) and ret or false
 end
@@ -887,8 +979,8 @@ local function execSceneGroups( tdev, taskid )
                     local more, err = execLua( fname, lua, nil, tdev )
                     if err then
                         addEvent{ dev=tdev, event="abortscene", scene=scd.id, sceneName=scd.name or scd.id, reason="Lua error: " .. tostring(err) }
-                        L({level=1,msg="%1 (%2) aborting scene %3 Lua execution at group step %4, Lua failed: %4"},
-                            luup.devices[tdev].description, tdev, scd.id, ix)
+                        L({level=1,msg="%1 (%2) aborting scene %3 Lua execution at group step %4, Lua run failed: %5"},
+                            luup.devices[tdev].description, tdev, scd.id, ix, err)
                         L{level=2,msg="Lua:\n"..lua} -- concat to avoid formatting
                         -- Throw on the brakes! (stop all scenes in context)
                         stopScene( tdev, nil, tdev )
@@ -960,7 +1052,7 @@ local function execScene( scd, tdev, options )
         local more,err = execLua( fname, luafragment, options.externalArgument, tdev )
         if err then
             addEvent{ dev=tdev, event="abortscene", scene=scd.id, sceneName=scd.name or scd.id, reason="Lua error: " .. tostring(err) }
-            L({level=1,msg="%1 (%2) scene %3 scene Lua failed: %4"},
+            L({level=1,msg="%1 (%2) scene %3 scene Lua run failed: %4"},
                 luup.devices[tdev].description, tdev, scd.id, err)
             L{level=2,msg="Lua:\n"..luafragment} -- concat to avoid formatting
             return
@@ -2199,7 +2291,8 @@ function startPlugin( pdev )
     luaFunc = {}
     sceneWaiting = {}
     sceneState = {}
-
+    luaEnv = nil
+    
     -- Debug?
     if getVarNumeric( "DebugMode", 0, pdev, MYSID ) ~= 0 then
         debugMode = true

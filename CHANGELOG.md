@@ -4,6 +4,7 @@
 
 betayymmdd01:
 * (feature) Add ability to enable or disable a condition group in the UI. A disabled condition group is not evaluated, and cannot contribute to the "tripped" state of its ReactorSensor. It is treated as if it didn't exist. The new ReactorSensor action SetGroupEnabled allows groups to be enabled and disabled by action.
+* (internal) The runLua action now uses a shared environment across all scripts, for the benefit of sharing loaded modules and being economical with memory. Make the ReactorSensor's variables more useful by allowing them to be set, which updates their persistent state.
 
 beta18112001:
 * (feature) Add service condition operators "is TRUE" and "is FALSE", which test a more general set of values to determine boolean state (some devices use 1/0, some the words true/false, etc.).
