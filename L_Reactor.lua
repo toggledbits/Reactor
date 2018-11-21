@@ -13,7 +13,7 @@ local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
 local _PLUGIN_VERSION = "2.0develop"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
-local _CONFIGVERSION = 00201
+local _CONFIGVERSION = 00202
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -34,6 +34,7 @@ local sceneData = {}
 local sceneWaiting = {}
 local sceneState = {}
 local hasBattery = true
+local maxEvents = 50
 local luaEnv -- global state for all runLua actions
 
 local runStamp = 0
@@ -109,7 +110,7 @@ end
 
 local function checkVersion(dev)
     local ui7Check = luup.variable_get(MYSID, "UI7Check", dev) or ""
-    if isOpenLuup then return true end
+    if isOpenLuup and not debugMode then return false end -- temporarily, pending support from akbooer
     if (luup.version_branch == 1 and luup.version_major >= 7) then
         if ui7Check == "" then
             -- One-time init for UI7 or better
@@ -344,8 +345,9 @@ local function addEvent( t )
     p.when = os.time()
     p.time = os.date("%Y%m%dT%H%M%S")
     local dev = p.dev or pluginDevice
+    sensorState[tostring(dev)] = sensorState[tostring(dev)] or { eventList={} }
     table.insert( sensorState[tostring(dev)].eventList, p )
-    if #sensorState[tostring(dev)].eventList > 50 then table.remove(sensorState[tostring(dev)].eventList, 1) end
+    if #sensorState[tostring(dev)].eventList > maxEvents then table.remove(sensorState[tostring(dev)].eventList, 1) end
 end
 
 -- Enabled?
@@ -531,6 +533,7 @@ local function plugin_runOnce( pdev )
         initVar( "Message", "", pdev, MYSID )
         initVar( "HouseMode", luup.attr_get( "Mode", 0 ) or "1", pdev, MYSID )
         initVar( "DebugMode", 0, pdev, MYSID )
+        initVar( "MaxEvents", "", pdev, MYSID )
 
         luup.attr_set('category_num', 1, pdev)
 
@@ -554,6 +557,10 @@ local function plugin_runOnce( pdev )
 
     if s < 00200 then
         initVar( "StateCacheExpiry", 600, pdev, MYSID )
+    end
+    
+    if s < 00202 then
+        initVar( "MaxEvents", "", pdev, MYSID )
     end
 
     -- Update version last.
@@ -2177,8 +2184,11 @@ local function startSensor( tdev, pdev )
     -- Device one-time initialization
     sensor_runOnce( tdev )
 
-    -- Initialize instance data
-    sensorState[tostring(tdev)] = { eventList={}, condState={}, configData={} }
+    -- Initialize instance data; take care not to scrub eventList
+    sensorState[tostring(tdev)] = sensorState[tostring(tdev)] or {}
+    sensorState[tostring(tdev)].eventList = sensorState[tostring(tdev)].eventList or {}
+    sensorState[tostring(tdev)].configData = {}
+    sensorState[tostring(tdev)].condState = {}
     sensorState[tostring(tdev)].updateRate = initRate( 60, 15 )
     sensorState[tostring(tdev)].updateThrottled = false
     sensorState[tostring(tdev)].changeRate = initRate( 60, 15 )
@@ -2190,7 +2200,7 @@ local function startSensor( tdev, pdev )
     -- Clean and restore our condition state.
     sensorState[tostring(tdev)].condState = loadCleanState( tdev )
 
-    addEvent{dev=tdev,event='start'}
+    addEvent{ dev=tdev, event='start' }
 
     -- Watch our own cdata; when it changes, re-evaluate.
     -- NOTE: MUST BE *AFTER* INITIAL LOAD OF CDATA
@@ -2241,6 +2251,7 @@ local function waitSystemReady( pdev )
             local status, err = pcall( startSensor, k, pdev )
             if not status then
                 L({level=2,msg="Failed to start %1 (%2): %3"}, k, luup.devices[k].description, err)
+                addEvent{ dev=k, event="error", message="Startup failed", reason=err }
                 setMessage( "Failed (see log)", k )
                 luup.set_failure( 1, k ) -- error on timer device
             else
@@ -2336,6 +2347,9 @@ function startPlugin( pdev )
 
     -- One-time stuff
     plugin_runOnce( pdev )
+
+    -- More inits
+    maxEvents = getVarNumeric( "MaxEvents", 50, pdev, MYSID )
     
     -- Initialize and start the plugin timer and master tick
     runStamp = 1
@@ -2369,6 +2383,23 @@ function actionAddSensor( pdev )
     -- Should cause reload immediately.
 end
 
+-- Remove all child devices.
+function actionMasterClear( dev )
+    local ptr = luup.chdev.start( dev )
+    luup.chdev.sync( dev, ptr )
+    -- Should cause reload immediately.
+end
+
+-- Enable or disable debug
+function actionSetDebug( state, tdev )
+    debugMode = state or false
+    addEvent{ event="debug", dev=tdev, debugMode=debugMode }
+    if debugMode then
+        D("Debug enabled")
+    end
+end
+
+-- Set enabled state of ReactorSensor
 function actionSetEnabled( enabled, tdev )
     D("setEnabled(%1,%2)", enabled, tdev)
     if type(enabled) == "string" then
@@ -2385,7 +2416,7 @@ function actionSetEnabled( enabled, tdev )
     local wasEnabled = isEnabled( tdev )
     if wasEnabled ~= enabled then
         -- changing
-        addEvent{ event="enable", dev=tdev, enabled=enabled }
+        addEvent{ dev=tdev, event="action", action="SetEnabled", state=enabled and 1 or 0 }
         luup.variable_set( RSSID, "Enabled", enabled and "1" or "0", tdev )
         -- If disabling, do nothing else, so current actions complete/expire.
         if enabled then
@@ -2398,29 +2429,37 @@ function actionSetEnabled( enabled, tdev )
     end
 end
 
+-- Force trip a ReactorSensor
 function actionTrip( dev )
     L("Sensor %1 (%2) trip action!", dev, luup.devices[dev].description)
+    addEvent{ dev=dev, event="action", action="Trip" }
     trip( true, dev )
     setMessage("Tripped", dev);
 end
 
+-- Force reset (untrip) a ReactorSensor
 function actionReset( dev )
     L("Sensor %1 (%2) reset action!", dev, luup.devices[dev].description)
+    addEvent{ dev=dev, event="action", action="Reset" }
     trip( false, dev )
     setMessage("Not tripped", dev)
 end
 
+-- Set arming state of ReactorSensor
 function actionSetArmed( armedVal, dev )
     L("Sensor %1 (%2) set armed to %4", dev, luup.devices[dev].description, armedVal)
     local armed = ( tonumber( armedVal ) or 0 ) ~= 0
     luup.variable_set( SENSOR_SID, "Armed", armed and "1" or "0", dev )
+    addEvent{ dev=dev, event="action", action="SetArmed", state=armed and 1 or 0 }
 end
 
+-- Restart a ReactorSensor (reload config and force re-evals)
 function actionRestart( dev )
     dev = tonumber( dev )
     assert( dev ~= nil )
     assert( luup.devices[dev] ~= nil and luup.devices[dev].device_type == RSTYPE )
     L("Restarting sensor %1 (%2)", dev, luup.devices[dev].description)
+    addEvent{ dev=dev, event="action", action="Restart" }
     local success, err = pcall( startSensor, dev, luup.devices[dev].device_num_parent )
     if not success then
         L({level=2,msg="Failed to start %1 (%2): %3"}, dev, luup.devices[dev].description, err)
@@ -2456,6 +2495,7 @@ function actionRunScene( scene, options, dev )
     options.forceReactorScenes = true -- If we use this action, this is how we do it
     if options.stopPriorScenes == nil then options.stopPriorScenes = false end
     if options.contextDevice == nil then options.contextDevice = 0 end
+    addEvent{ dev=dev, event="action", action="RunScene", scene=scene, options=options }
     runScene( scene, dev, options )
     return true
 end
@@ -2470,6 +2510,7 @@ function actionStopScene( ctx, scene, dev )
     if scene ~= nil and tostring(scene) ~= "0" then
         taskid = string.format("ctx%dscene%s", ctx, tostring(scene))
     end
+    addEvent{ dev=dev, event="action", action="RunScene", contextDevice=ctx, scene=scene }
     stopScene( ctx, taskid, dev )
 end
 
@@ -2490,28 +2531,14 @@ function actionSetGroupEnabled( grpid, enab, dev )
         grp.enabled = nil
         L("%1 (%2) SetGroupEnabled %3 now %4", luup.devices[dev].description, 
             dev, grp.groupid, grp.disabled and "disabled" or "enabled")
-        luup.variable_set( RSSID, "cdata", json.encode( cdata ), dev )
+        addEvent{ dev=dev, event="action", action="SetGroupEnabled", group=grpid, enabled=enab and 1 or 0 }
         -- No need to call updateSensor here, modifying cdata does it
+        luup.variable_set( RSSID, "cdata", json.encode( cdata ), dev )
         return 4,0
     end
     L({level=1,msg="%1 (%2) action SetGroupEnabled %3 failed, group not found in config"},
         luup.devices[dev].description, dev, grpid)
     return 2,0,"Invalid group"
-end
-
-function actionMasterClear( dev )
-    -- Remove all child devices.
-    local ptr = luup.chdev.start( dev )
-    luup.chdev.sync( dev, ptr )
-    -- Should cause reload immediately.
-end
-
-function actionSetDebug( state, tdev )
-    debugMode = state or false
-    addEvent{ event="debug", dev=tdev, debugMode=debugMode }
-    if debugMode then
-        D("Debug enabled")
-    end
 end
 
 -- Plugin timer tick. Using the tickTasks table, we keep track of
@@ -2554,6 +2581,7 @@ function tick(p)
         local success, err = pcall( v.func, v.owner, v.id, v.args )
         if not success then
             L({level=1,msg="Reactor device %1 (%2) tick failed: %3"}, v.owner, (luup.devices[v.owner] or {}).description, err)
+            addEvent{ dev=v.owner, event="error", message="tick failed", reason=err }
         else
             D("tick() successful return from %2(%1)", v.owner, functions[tostring(v.func)] or tostring(v.func))
         end
