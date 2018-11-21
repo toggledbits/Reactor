@@ -74,7 +74,7 @@ local function dump(t, seen)
     return str
 end
 
-local function L(msg, ...)
+local function L(msg, ...) -- luacheck: ignore 212
     local str
     local level = 50
     if type(msg) == "table" then
@@ -296,12 +296,12 @@ function sun( lon, lat, elev, t )
     local Jt = 2451545.0 + N + 0.0053 * math.sin( M ) - 
         0.0069 * math.sin( 2 * lam )
     local decl = math.asin( math.sin( lam ) * math.sin( 0.409105 ) )
-    function w0( rlat, elev, decl, wid )
+    function w0( rl, elvm, dang, wid )
         if not wid then wid = 0.0144862 end
         return math.acos( ( math.sin( (-wid) + 
-            ( -0.0362330 * math.sqrt( elev ) / 1.0472 ) ) - 
-                math.sin( rlat ) * math.sin( decl ) ) / 
-        ( math.cos( rlat ) * math.cos( decl ) ) ) end
+            ( -0.0362330 * math.sqrt( elvm ) / 1.0472 ) ) - 
+                math.sin( rl ) * math.sin( dang ) ) / 
+        ( math.cos( rl ) * math.cos( dang ) ) ) end
     local tw = 0.104719755 -- 6 deg in rad; each twilight step is 6 deg
     local function JE(j) return math.floor( ( j - 2440587.5 ) * 86400 ) end
     return { sunrise=JE(Jt-w0(rlat,elev,decl)/tau), sunset=JE(Jt+w0(rlat,elev,decl)/tau),
@@ -724,7 +724,7 @@ local function execLua( fname, luafragment, extarg, tdev )
     end
     -- Add reactor_device and reactor_ext_arg for backwards compatibility
     local newenv = { Reactor=_R, reactor_device=tdev, reactor_ext_arg=extarg }
-    newenv.print = function( ... ) local m = table.concat( arg, "\t" ) addEvent{ dev=tdev, event="diag", script=fname, message=m} L("%1 (%2) [%3]: " .. m, luup.devices[tdev].description, tdev, fname) end
+    newenv.print = function( ... ) local m = table.concat( arg, "\t" ) addEvent{ dev=tdev, event="diag", script=fname, message=m} L("%1 (%2) [%3]: " .. m, luup.devices[tdev].description, tdev, fname) end -- luacheck: ignore 212
     for k,e in pairs( sensorState[tostring(tdev)].configData.variables or {} ) do
         newenv[k] = luup.variable_get( VARSID, k, tdev ) -- also as global
         _R.expressions[k] = { expression=e.expression, value=newenv[k] }
@@ -1312,7 +1312,8 @@ local function getValue( val, ctx, tdev )
         end
         local result,err = luaxp.evaluate( mp, ctx )
         if err then
-            L({level=2,msg="Error evaluating %1: %2"}, mp, err)
+            L({level=2,msg="%1 (%2) Error evaluating %1: %2"}, luup.devices[tdev].description,
+                tdev, mp, err)
             val = ""
         else
             val = result
@@ -1388,7 +1389,6 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         elseif op == "isfalse" then
             if (vn or 0) ~= 0 or TRUESTRINGS:find( ":" .. vv:lower() .. ":" ) then return false end
         elseif op == "change" then
-            local changed = false
             local cs = sensorState[tostring(tdev)].condState[cond.id]
             local changed = cs == nil or cs.lastvalue ~= vv
             D("evaluateCondition() change op, condstate %1, val %2, changed %3", cs, vv, changed)
@@ -1937,7 +1937,7 @@ local function updateSensor( tdev )
     end
 
     -- Check throttling for update rate
-    local hasTimer = false
+    local hasTimer = false -- luacheck: ignore 311/hasTimer
     local maxUpdate = getVarNumeric( "MaxUpdateRate", 30, tdev, RSSID )
     local _, _, rate60 = rateLimit( sensorState[tostring(tdev)].updateRate, maxUpdate, false )
     if maxUpdate == 0 or rate60 <= maxUpdate then
