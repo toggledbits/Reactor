@@ -453,7 +453,7 @@ local function sensor_runOnce( tdev )
         initVar( "Invert", "0", tdev, RSSID )
         initVar( "Retrigger", "0", tdev, RSSID )
         initVar( "Message", "", tdev, RSSID )
-        initVar( "cdata", "", tdev, RSSID )
+        initVar( "cdata", "{}", tdev, RSSID )
         initVar( "cstate", "", tdev, RSSID )
         initVar( "Runtime", 0, tdev, RSSID )
         initVar( "TripCount", 0, tdev, RSSID )
@@ -1047,6 +1047,14 @@ local function trip( state, tdev )
     end
 end
 
+-- Find a group in array
+local function findConditionGroup( grpid, cdata )
+    for ix,g in ipairs( cdata.conditions or {} ) do
+        if g.groupid == grpid then return g,ix end
+    end
+    return nil
+end
+
 -- Find a condition hiding in a group (or is it?)
 local function findCondition( condid, cdata )
     for _,g in ipairs( cdata.conditions or {} ) do
@@ -1108,6 +1116,7 @@ local function loadSensorConfig( tdev )
         if #st > 1 and st[2] ~= "" then
             cdata.untripactions = { groups={ { delay=0, actions={ ['type']="runscene", scene=st[2] } } } }
         end
+        cdata.timestamp = os.time()
         luup.variable_set( RSSID, "cdata", json.encode( cdata ), tdev )
         luup.variable_set( RSSID, "Scenes", "", tdev )
     end
@@ -1116,6 +1125,7 @@ local function loadSensorConfig( tdev )
     -- When loading sensor config, dump luaFunc so that any changes to code
     -- in actions or scenes are honored immediately.
     luaFunc = {}
+    return cdata
 end
 
 -- Clean cstate
@@ -1704,7 +1714,7 @@ local function evaluateGroup( grp, cdata, tdev )
     sensorState[skey].condState[grp.groupid] = sensorState[skey].condState[grp.groupid] or {}
     local gs = sensorState[skey].condState[grp.groupid]
     local latched = {}
-    for _,cond in ipairs( grp.groupconditions ) do
+    for _,cond in ipairs( grp.groupconditions or {} ) do
         if cond.type ~= "comment" then
             local state, condTimer = evaluateCondition( cond, grp, cdata, tdev )
             D("evaluateGroup() eval group %1 cond %2 result is state %3 timer %4", grp.groupid,
@@ -1893,13 +1903,17 @@ local function evaluateConditions( cdata, tdev )
     local hasTimer = false
     local passed = false
     local changed = {}
-    for _,grp in ipairs( cdata.conditions ) do
-        local match, t = evaluateGroup( grp, cdata, tdev )
-        passed = match or passed
-        hasTimer = t or hasTimer
-        D("evaluateConditions() group %1 eval %2, timer %3, overall state %4 timer %5, continuing",
-            grp.groupid, match, t, passed, hasTimer)
-        -- can't shortcut until we've gotten rid of hasTimer -- if pass then break end
+    for _,grp in ipairs( cdata.conditions or {}) do
+        if not grp.disabled then
+            local match, t = evaluateGroup( grp, cdata, tdev )
+            passed = match or passed
+            hasTimer = t or hasTimer
+            D("evaluateConditions() group %1 eval %2, timer %3, overall state %4 timer %5, continuing",
+                grp.groupid, match, t, passed, hasTimer)
+            -- can't shortcut until we've gotten rid of hasTimer -- if pass then break end
+        else
+            D("evaluateConditions() group %1 disabled, skipped", grp.groupid)
+        end
     end
 
     D("evaluateConditions() sensor %1 overall state now %1, hasTimer %2", passed, hasTimer)
@@ -2087,6 +2101,7 @@ local function startSensor( tdev, pdev )
     addEvent{dev=tdev,event='start'}
 
     -- Watch our own cdata; when it changes, re-evaluate.
+    -- NOTE: MUST BE *AFTER* INITIAL LOAD OF CDATA
     luup.variable_watch( "reactorWatch", RSSID, "cdata", tdev )
 
     setMessage("Starting...", tdev)
@@ -2363,6 +2378,32 @@ function actionStopScene( ctx, scene, dev )
         taskid = string.format("ctx%dscene%s", ctx, tostring(scene))
     end
     stopScene( ctx, taskid, dev )
+end
+
+-- Set group enabled state (job).
+function actionSetGroupEnabled( grpid, enab, dev )
+    D("actionSetGroupEnabled(%1,%2,%3)", grpid, enab, dev)
+    -- Load a clean copy of the configuration.
+    local cdata = loadSensorConfig( dev )
+    local grp = findConditionGroup( grpid, cdata )
+    if grp then
+        if type(enab) == "string" then
+            -- Lean towards enabled; only small set of strings disables.
+            enab = string.find( ":no:n:false:f:0:", ":" .. enab:lower() .. ":" ) == nil
+        else
+            enab = ( tonumber(enab) or 1 ) ~= 0
+        end
+        grp.disabled = (not enab) and 1 or nil
+        grp.enabled = nil
+        L("%1 (%2) SetGroupEnabled %3 now %4", luup.devices[dev].description, 
+            dev, grp.groupid, grp.disabled and "disabled" or "enabled")
+        luup.variable_set( RSSID, "cdata", json.encode( cdata ), dev )
+        -- No need to call updateSensor here, modifying cdata does it
+        return 4,0
+    end
+    L({level=1,msg="%1 (%2) action SetGroupEnabled %3 failed, group not found in config"},
+        luup.devices[dev].description, dev, grpid)
+    return 2,0,"Invalid group"
 end
 
 function actionMasterClear( dev )
@@ -2671,7 +2712,8 @@ function request( lul_request, lul_parameters, lul_outputformat )
                 local ng=0
                 for _,gc in ipairs( cdata.conditions or {} ) do
                     ng = ng + 1
-                    r = r .. "    Group #" .. ng .. " <" .. gc.groupid .. ">" .. EOL
+                    r = r .. "    Group #" .. ng .. " <" .. gc.groupid .. ">" .. 
+                        ( gc.disabled and " (disabled)" or "" ) .. EOL
                     for _,cond in ipairs( gc.groupconditions or {} ) do
                         -- ??? TO DO: Add cstate
                         r = r .. "        (" .. ( cond.type or "?type?" ) .. ") "

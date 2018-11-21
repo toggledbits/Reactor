@@ -254,6 +254,11 @@ var ReactorSensor = (function(api, $) {
     function isEmpty( s ) {
         return s === undefined || s === "";
     }
+    
+    function quot( s ) {
+        if ( typeof(s) != "string" ) s = String(s);
+        return '"' + s.replace( /"/g, "\\\"" ) + '"';
+    }
 
     function textDateTime( y, m, d, hh, mm, isEnd ) {
         hh = parseInt( hh || "0" );
@@ -754,7 +759,7 @@ var ReactorSensor = (function(api, $) {
     /**
      * Handler for row change (generic)
      */
-    function handleRowChange( ev ) {
+    function handleConditionRowChange( ev ) {
         var el = ev.currentTarget;
         var row = jQuery( el ).closest('div.conditionrow');
         configModified = true;
@@ -981,7 +986,7 @@ var ReactorSensor = (function(api, $) {
 
             case 'comment':
                 container.append('<input class="form-control form-control-sm type="text" style="width: 100%">');
-                jQuery('input', container).on( 'change.reactor', handleRowChange ).val( cond.comment || "" );
+                jQuery('input', container).on( 'change.reactor', handleConditionRowChange ).val( cond.comment || "" );
                 break;
 
             case 'service':
@@ -1004,9 +1009,9 @@ var ReactorSensor = (function(api, $) {
                 var op = serviceOpsIndex[cond.operator || ""];
                 jQuery( "input#value", container).val( cond.value || "" )
                     .css( "visibility", ( undefined !== op && 0 === op.args ) ? "hidden" : "visible" )
-                    .on( 'change.reactor', handleRowChange );
-                jQuery("select.varmenu", container).on( 'change.reactor', handleRowChange );
-                jQuery("select.opmenu", container).on( 'change.reactor', handleRowChange );
+                    .on( 'change.reactor', handleConditionRowChange );
+                jQuery("select.varmenu", container).on( 'change.reactor', handleConditionRowChange );
+                jQuery("select.opmenu", container).on( 'change.reactor', handleConditionRowChange );
                 jQuery("select.devicemenu", container).on( 'change.reactor', handleDeviceChange );
                 jQuery("i.condmore", container).on( 'click.reactor', handleExpandOptionsClick );
                 break;
@@ -1018,7 +1023,7 @@ var ReactorSensor = (function(api, $) {
                     '<label class="checkbox-inline"><input type="checkbox" id="opts" value="3">Night</label>' +
                     '<label class="checkbox-inline"><input type="checkbox" id="opts" value="4">Vacation</label>'
                 );
-                jQuery("input", container).on( 'change.reactor', handleRowChange );
+                jQuery("input", container).on( 'change.reactor', handleConditionRowChange );
                 (cond.value || "").split(',').forEach( function( val ) {
                     jQuery('input#opts[value="' + val + '"]', container).prop('checked', true);
                 });
@@ -1035,8 +1040,8 @@ var ReactorSensor = (function(api, $) {
                     '<label class="checkbox-inline"><input type="checkbox" id="opts" value="6">Fri</label>' +
                     '<label class="checkbox-inline"><input type="checkbox" id="opts" value="7">Sat</label>'
                 );
-                jQuery("input", container).on( 'change.reactor', handleRowChange );
-                jQuery("select.wdcond", container).on( 'change.reactor', handleRowChange ).val( cond.operator || "" );
+                jQuery("input", container).on( 'change.reactor', handleConditionRowChange );
+                jQuery("select.wdcond", container).on( 'change.reactor', handleConditionRowChange ).val( cond.operator || "" );
                 (cond.value || "").split(',').forEach( function( val ) {
                     jQuery('input#opts[value="' + val + '"]', container).prop('checked', true);
                 });
@@ -1067,7 +1072,7 @@ var ReactorSensor = (function(api, $) {
                 jQuery('select#sunstart', container).replaceWith( mm.attr( 'id', 'sunstart' ) );
                 /* Restore. Condition first... */
                 var cp = cond.operator || "after";
-                jQuery("select.opmenu", container).on( 'change.reactor', handleRowChange ).val( cp );
+                jQuery("select.opmenu", container).on( 'change.reactor', handleConditionRowChange ).val( cp );
                 if ( cp === "before" || cp === "after" ) {
                     jQuery("div.end", container).hide();
                 } else {
@@ -1080,16 +1085,16 @@ var ReactorSensor = (function(api, $) {
                     k = [ "", "sunrise", "0" ];
                     configModified = true;
                 }
-                jQuery("select#sunstart", container).on( 'change.reactor', handleRowChange ).val( k[1] );
-                jQuery("input#startoffset", container).on( 'change.reactor', handleRowChange ).val( k[2] );
+                jQuery("select#sunstart", container).on( 'change.reactor', handleConditionRowChange ).val( k[1] );
+                jQuery("input#startoffset", container).on( 'change.reactor', handleConditionRowChange ).val( k[2] );
                 /* End */
                 k = ( vals[1] || "sunset+0" ).match( /^([^+-]+)(.*)/ );
                 if ( k === null || k.length !== 3 ) {
                     k = [ "", "sunset", "0" ];
                     configModified = true;
                 }
-                jQuery("select#sunend", container).on( 'change.reactor', handleRowChange ).val( k[1] );
-                jQuery("input#endoffset", container).on( 'change.reactor', handleRowChange ).val( k[2] );
+                jQuery("select#sunend", container).on( 'change.reactor', handleConditionRowChange ).val( k[1] );
+                jQuery("input#endoffset", container).on( 'change.reactor', handleConditionRowChange ).val( k[2] );
                 break;
 
             case 'trange':
@@ -1158,8 +1163,8 @@ var ReactorSensor = (function(api, $) {
                 }
                 /* Enable date fields if month spec present */
                 jQuery('.datespec', container).prop('disabled', vals[1]==="");
-                jQuery("select", container).on( 'change.reactor', handleRowChange );
-                jQuery("input", container).on( 'change.reactor', handleRowChange );
+                jQuery("select", container).on( 'change.reactor', handleConditionRowChange );
+                jQuery("input", container).on( 'change.reactor', handleConditionRowChange );
                 break;
 
             case 'interval':
@@ -1204,7 +1209,7 @@ var ReactorSensor = (function(api, $) {
                     jQuery( '#relhour', container ).val( mm[0] || '00' );
                     jQuery( '#relmin', container ).val( mm[1] || '00' );
                 }
-                jQuery("select,input", container).on( 'change.reactor', handleRowChange );
+                jQuery("select,input", container).on( 'change.reactor', handleConditionRowChange );
                 break;
 
             case 'reload':
@@ -1459,8 +1464,29 @@ var ReactorSensor = (function(api, $) {
 
             /* Create div.conditiongroup and add conditions */
             var gel = jQuery('<div class="conditiongroup"></div>').attr("id", grp.groupid);
-            gel.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span id="titletext"></span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>');
+            gel.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6 form-inline"><span id="titletext"></span> <label for="grpdisable"><input id="grpdisable" type="checkbox" class="form-check">&nbsp;Disabled</form></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>');
             jQuery( 'span#titletext', gel ).text( "Group: " + grp.groupid );
+            jQuery( 'input#grpdisable', gel ).prop( 'checked', grp.disabled )
+                .on( 'change.reactor', function( ev ) {
+                    var el = jQuery( ev.currentTarget );
+                    var grpel = el.closest( 'div.conditiongroup' );
+                    var grpid = grpel.attr( 'id' );
+                    var grpconfig = iData[api.getCpanelDeviceId()].ixGroup[grpid];
+                    if ( el.prop( 'checked' ) ) {
+                        grpconfig.disabled = 1;
+                        grpel.addClass( 'groupdisabled' );
+                    } else {
+                        delete grpconfig.disabled;
+                        grpel.removeClass( 'groupdisabled' );
+                    }
+                    configModified = true;
+                    updateSaveControls();
+                });
+            if ( grp.disabled ) {
+                gel.addClass('groupdisabled');
+            } else {
+                gel.removeClass('groupdisabled');
+            }
             for (var nc=0; nc<grp.groupconditions.length; ++nc) {
                 var cond = grp.groupconditions[nc];
                 var row = getConditionRow();
@@ -2018,6 +2044,11 @@ var ReactorSensor = (function(api, $) {
             }
 
             grpel = jQuery('<div class="reactorgroup" id="' + grp.groupid + '">');
+            if ( grp.disabled ) {
+                grpel.addClass( 'groupdisabled' );
+            } else {
+                grpel.removeClass( 'groupdisabled' );
+            }
             stel.append( grpel );
             var groupstate = true;
             for ( var j=0; j<grp.groupconditions.length; j++ ) {
@@ -2147,6 +2178,7 @@ var ReactorSensor = (function(api, $) {
         /* Our styles. */
         var html = "<style>";
         html += 'div.reactorgroup { border-radius: 8px; border: 2px solid #006040; padding: 8px; }';
+        html += 'div.reactorgroup.groupdisabled { background-color: #ccc !important; color: #000 !important }';
         html += '.truestate { background-color: #ccffcc; }';
         html += '.row.cond { min-height: 2em; }';
         html += '.row.var { min-height: 2em; color: #003399; }';
@@ -2342,7 +2374,8 @@ var ReactorSensor = (function(api, $) {
             html += 'i.md-btn[disabled] { color: #cccccc; cursor: auto; }';
             html += 'i.md-btn { color: #006040; font-size: 14pt; cursor: pointer; }';
             html += 'input.tbinvert { min-width: 16px; min-height: 16px; }';
-            html += 'div.tblisttitle { background-color: #444444; color: #fff; font-size: 16px; font-weight: bold; padding: 8px; min-height: 42px; }';
+            html += 'div.tblisttitle { background-color: #444444; color: #fff; padding: 8px; min-height: 42px; }';
+            html += 'div.tblisttitle span#titletext { font-size: 16px; font-weight: bold; margin-right: 4em; }';
             html += 'input.narrow { max-width: 6em; }';
             html += 'div.vargroup { border-radius: 8px; border: 2px solid #444444; margin-bottom: 8px; }';
             html += 'div.vargroup .row { margin-right: 0px; margin-left: 0px; }';
@@ -2398,10 +2431,13 @@ var ReactorSensor = (function(api, $) {
             html += 'i.md-btn { color: #004020; font-size: 14pt; cursor: pointer; }';
             html += 'input.tbinvert { min-width: 16px; min-height: 16px; }';
             html += 'div.conditions { width: 100%; }';
-            html += 'div.tblisttitle { background-color: #006040; color: #fff; font-size: 16px; font-weight: bold; padding: 8px; min-height: 42px; }';
+            html += 'div.tblisttitle { background-color: #006040; color: #fff; padding: 8px; min-height: 42px; }';
+            html += 'div.tblisttitle span#titletext { font-size: 16px; font-weight: bold; margin-right: 4em; }';
             html += 'input.narrow { max-width: 8em; }';
             html += 'input.tiny { max-width: 3em; }';
             html += 'div.conditiongroup { border-radius: 8px; border: 2px solid #006040; margin-bottom: 8px; }';
+            html += 'div.conditiongroup.groupdisabled { background-color: #ccc !important; color: #000 !important }';
+            html += 'label[for="grpdisable"] { font-size: 0.9em; }';
             html += 'div.conditiongroup .row { margin-right: 0px; margin-left: 0px; }';
             html += 'div.conditiongroup div.conditionrow:nth-child(odd) { background-color: #e6ffe6; }';
             html += 'div.conditionrow,div.buttonrow { padding: 8px; }';
@@ -2925,11 +2961,11 @@ var ReactorSensor = (function(api, $) {
                 inp.on( 'change.reactor', handleActionValueChange );
                 /* If there are more than one parameters, wrap each in a label. */
                 if ( action.parameters.length > 1 ) {
-                    var label = jQuery("<label class='argument foo1'/>");
+                    var label = jQuery("<label/>");
                     label.attr("for", parm.name );
                     label.text( ( parm.label || parm.name ) + ": " );
-                    if ( parm.optional ) label.addClass("optarg");
                     label.append( inp );
+                    if ( parm.optional ) inp.addClass("optarg");
                     ct.append(" ");
                     ct.append( label );
                 } else {
@@ -3320,24 +3356,34 @@ var ReactorSensor = (function(api, $) {
                 var s = jQuery( 'select#actionmenu', row ).val() || "";
                 var pt = s.split( /\//, 2 );
                 var act = deviceInfo.services[pt[0]].actions[pt[1]];
-                if ( act.deviceOverride[d] ) {
+                if ( act && act.deviceOverride[d] ) {
                     act = act.deviceOverride[d];
                 }
                 var param = {};
                 var actionText = s + "(";
-                for ( var k=0; k<(act.parameters || {}).length; ++k ) {
-                    var p = act.parameters[k];
-                    if ( undefined !== p.value ) {
-                        /* Fixed value */
-                        param[p.name] = p.value;
-                        actionText += "{"+p.name+"="+String(p.value)+"}, ";
-                    } else {
-                        var v = jQuery( '#' + p.name, row ).val() || "";
-                        if ( "" === v && undefined !== p.default ) v = p.default;
-                        if ( "" === v && p.optional ) continue;
-                        param[p.name] = v;
-                        actionText += "{"+p.name+"="+String(v)+"}, ";
+                if ( act ) {
+                    for ( var k=0; k<(act.parameters || {}).length; ++k ) {
+                        var p = act.parameters[k];
+                        if ( undefined !== p.value ) {
+                            /* Fixed value */
+                            param[p.name] = p.value;
+                            actionText += "{"+p.name+"="+String(p.value)+"}, ";
+                        } else {
+                            var v = jQuery( '#' + p.name, row ).val() || "";
+                            if ( "" === v && undefined !== p.default ) v = p.default;
+                            if ( "" === v && p.optional ) continue;
+                            param[p.name] = v;
+                            actionText += p.name + "=" + quot(v) + ", ";
+                        }
                     }
+                } else {
+                    /* No action info whatsoever, build from fields */
+                    jQuery( '.argument', row ).each( function() {
+                        var val = jQuery( this ).val();
+                        var vname = jQuery( this ).attr('id');
+                        param[ vname ] = val;
+                        actionText += vname + "=" + quot(val) + ", ";
+                    });
                 }
                 actionText += '): ';
 
@@ -3430,7 +3476,7 @@ var ReactorSensor = (function(api, $) {
                                     var a = action.arguments[j];
                                     if ( 0 === jQuery( '#' + a.name, row ).length ) {
                                         var inp = jQuery( '<input class="argument form-control form-control-sm">' ).attr('id', a.name);
-                                        var lbl = jQuery( '<label class="foo2"/>' ).attr('for', a.name).text(a.name).addClass('tbrequired').append(inp);
+                                        var lbl = jQuery( '<label/>' ).attr('for', a.name).text(a.name).addClass('tbrequired').append(inp);
                                         jQuery( 'div.actiondata', row ).append( lbl );
                                     }
                                     jQuery( '#' + a.name, row ).val( a.value || "" );
@@ -3530,7 +3576,7 @@ var ReactorSensor = (function(api, $) {
                         for ( var j=0; j<(action.parameters || []).length; j++ ) {
                             if ( false && 0 === jQuery( '#' + action.parameters[j].name, row ).length ) {
                                 var inp = jQuery( '<input class="argument form-control form-control-sm">' ).attr('id', action.parameters[j].name);
-                                var lbl = jQuery( '<label class="foo3"/>' ).attr('for', action.parameters[j].name).text(action.parameters[j].name).addClass('tbrequired').append(inp);
+                                var lbl = jQuery( '<label/>' ).attr('for', action.parameters[j].name).text(action.parameters[j].name).addClass('tbrequired').append(inp);
                                 jQuery( 'div.actiondata', row ).append( lbl );
                             }
                             jQuery( '#' + action.parameters[j].name, row ).val( action.parameters[j].value || "" );
@@ -3648,7 +3694,8 @@ var ReactorSensor = (function(api, $) {
         html += 'input.narrow { max-width: 8em; }';
         html += 'div.actionlist { border-radius: 8px; border: 2px solid #428BCA; margin-bottom: 16px; }';
         html += 'div.actionlist .row { margin-right: 0px; margin-left: 0px; }';
-        html += 'div.tblisttitle { background-color: #428BCA; color: #fff; font-size: 16px; font-weight: bold; padding: 8px; min-height: 42px; }';
+        html += 'div.tblisttitle { background-color: #428BCA; color: #fff; padding: 8px; min-height: 42px; }';
+        html += 'div.tblisttitle span#titletext { font-size: 16px; font-weight: bold; margin-right: 4em; }';
         html += 'div.actionlist label:not(.required) { font-weight: normal; }';
         html += 'div.actionlist label.required { font-weight: bold; }';
         html += 'div.actionlist.tbmodified div.tblisttitle span#titletext:after { content: " (unsaved)" }';
@@ -3688,7 +3735,7 @@ var ReactorSensor = (function(api, $) {
                 "ms), timestamp=" + String(data.timestamp) + ", serial=" +
                 String(data.serial));
             if ( (data.serial || 0) < DEVINFO_MINSERIAL ) {
-                jQuery("div#loading").empty().append( '<h3>Update Required</h3>Your D_ReactorDeviceInfo.json file needs to be at least serial 0.323. Please <a href="/port_3480/data_request?id=lr_Reactor&action=infoupdate" target="_blank">click here to update the file</a>, then go back to the Control tab and come back here.<p><em>PRIVACY NOTICE:</em> Clicking this link will send the firmware version information and plugin version to the server. This information is used to select the correct file for your configuration, and is not used for tracking, authentication, or access control.</p>' );
+                jQuery("div#loading").empty().append( '<h3>Update Required</h3>Your D_ReactorDeviceInfo.json file needs to be at least serial 0.323. Please <a href="/port_3480/data_request?id=lr_Reactor&action=infoupdate" target="_blank">click here to update the file</a>, then go back to the Status tab and then come back here.<p><em>PRIVACY NOTICE:</em> Clicking this link will send the firmware version information and plugin version to the server. This information is used to select the correct file for your configuration, and is not used for tracking, authentication, or access control.</p>' );
                 return;
             }
 
@@ -3722,7 +3769,7 @@ var ReactorSensor = (function(api, $) {
             console.log(jqXHR.responseText);
             deviceInfo = { services: {}, devices: {} };
             if ( jqXHR.status == 500 ) {
-                jQuery('div#loading').html("<b>Sorry, not able to load data at this moment!</b> Vera may be busy or reloading. Don't panic! Wait a moment, switch back to the Control tab, and then back here to try again.");
+                jQuery('div#loading').html("<b>Sorry, not able to load data at this moment!</b> Vera may be busy or reloading. Don't panic! Wait a moment, switch to the Status tab, and then back here to retry loading.");
             } else {
                 jQuery('div#loading').html('<h1>Hmmm...</h1>Well, that didn\'t go well. Try waiting a few moments, and then switching back to the Control tab and then back to this tab. If that doesn\'t work, please <a href="mailto:reactor@toggledbits.com?subject=Reactor+Activities+Load+Problem">send email to reactor@toggledbits.com</a> with the following text: <pre id="diag"></pre>');
                 var str = String(errorThrown) + "\n" + String(textStatus);

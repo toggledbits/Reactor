@@ -2,7 +2,10 @@
 
 ## Version 2.0develop (development) ##
 
-beta181120:
+betayymmdd01:
+* (feature) Add ability to enable or disable a condition group in the UI. A disabled condition group is not evaluated, and cannot contribute to the "tripped" state of its ReactorSensor. It is treated as if it didn't exist. The new ReactorSensor action SetGroupEnabled allows groups to be enabled and disabled by action.
+
+beta18112001:
 * (feature) Add service condition operators "is TRUE" and "is FALSE", which test a more general set of values to determine boolean state (some devices use 1/0, some the words true/false, etc.).
 * (feature) Add service condition operator "changes" to pulse true for a short period when the value changes (regardless of value--pulse if it's different from the prior value). The default pulse length is 2 seconds, but is configurable per ReactorSensor via ValueChangeHoldTime (seconds). The 2-second default generally changes faster than the Vera UI7 dashboard display updates, so the rapid change may not be visible on the dashboard card, but the ReactorSensor "Status" tab updates more quickly and exposes/confirms the activity.
 * (bug) Fix a Y2K38 issue (!) where a user can enter a year for a date/time condition that would produce an out-of-range value for Vera's 32-bit OS; restrict year values to a compliant subset (1970-2037).
@@ -10,7 +13,7 @@ beta181120:
 * (internal) Improve validation of device fields by checking type, value range, etc. against definition.
 * (internal) Improve default selection on initial display of new rows.
 
-beta181118:
+beta18111801:
 * Reactor now supports its own activities, and no longer requires that the user create scenes separately outside of Reactor. You asked for a "scene builder," so here's my first attempt (well, the first one that you seeing :) ).
 * New condition type "Interval" is true for a brief period at the specified interval (days, hours, minutes). A "relative to" time specification allows adjustment of the reference time for the cycle; for example, a 4 hour interval with a relative time of 15:00 (3pm) will fire at 03:00, 07:00, 11:00, 15:00, 19:00, and 23:00.
 * Expire cached state for conditions; use is only upon update, and between updates, which may be a large span of time, the memory used is held by the reference; expiring the entry after a short period balances memory use with performance. The expiry is tunable via the master device's StateCacheExpiry parameter (0 disables expiry).
