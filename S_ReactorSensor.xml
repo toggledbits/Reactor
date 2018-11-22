@@ -56,6 +56,10 @@
             <name>str_arg</name>
             <dataType>string</dataType>
         </stateVariable>
+        <stateVariable sendEvents="no">
+            <name>bool_arg</name>
+            <dataType>boolean</dataType>
+        </stateVariable>
     </serviceStateTable>
     <actionList>
         <action>
@@ -80,6 +84,19 @@
                     <name>newEnabledValue</name>
                     <direction>in</direction>
                     <relatedStateVariable>Enabled</relatedStateVariable>
+                </argument>
+            </argumentList>
+        </action>
+        <action>
+            <name>SetGroupEnabled</name>
+            <argumentList>
+                <argument>
+                    <name>GroupId</name>
+                    <relatedStateVariable>str_arg</relatedStateVariable>
+                </argument>
+                <argument>
+                    <name>newEnabledValue</name>
+                    <relatedStateVariable>bool_arg</relatedStateVariable>
                 </argument>
             </argumentList>
         </action>

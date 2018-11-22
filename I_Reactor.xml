@@ -154,6 +154,14 @@
             </run>
         </action>
         <action>
+            <serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
+            <name>SetGroupEnabled</name>
+            <job>
+                -- Set group enabled state.
+                return Reactor.actionSetGroupEnabled( lul_settings.GroupId, lul_settings.newEnabledValue, lul_device )
+            </job>
+        </action>
+        <action>
             <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
             <name>MasterClear</name>
             <job>
