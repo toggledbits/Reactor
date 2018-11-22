@@ -3,8 +3,7 @@
 ## Version 2.0develop (development) ##
 
 TO-DO:
-* Set group names (UI).
-
+( Nothing -- all planned items for this release have been completed )
 At this point, if it's not on the above TO-DO list, it's probably not going into 2.0. Time to button it up and ship it!
 
 betayymmdd01:
