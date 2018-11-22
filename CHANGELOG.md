@@ -5,7 +5,10 @@
 TO-DO:
 * Set group names (UI).
 
+At this point, if it's not on the above TO-DO list, it's probably not going into 2.0. Time to button it up and ship it!
+
 betayymmdd01:
+* (feature) Allow renaming of groups, so you can give them functional names rather than the unique IDs automatically assigned. Valid group names must start with a letter with alphanumeric (and underscore) allowed to follow.
 * (feature) Make sure each action logs a message to ReactorSensor's event log, and preserve the log across sensor restarts. Also add a new MaxEvents start variable on the master device to override the default of 50 events (per sensor, applies to all).
 * (feature) Add ability to enable or disable a condition group in the UI. A disabled condition group is not evaluated, and cannot contribute to the "tripped" state of its ReactorSensor. It is treated as if it didn't exist. The new ReactorSensor action SetGroupEnabled allows groups to be enabled and disabled by action.
 * (internal) The runLua action now uses a shared environment across all scripts, for the benefit of sharing loaded modules and being economical with memory. Make the ReactorSensor's variables more useful by allowing them to be set, which updates their persistent state. The environment also logs (luup log and device event log) creation of global variables (which should be avoided) and accesses to undeclared variables.

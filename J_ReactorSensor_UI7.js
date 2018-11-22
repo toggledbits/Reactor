@@ -592,7 +592,7 @@ var ReactorSensor = (function(api, $) {
     function updateConditionRow( row, target ) {
         var condId = row.attr("id");
         var cond = iData[api.getCpanelDeviceId()].ixCond[ condId ];
-        var typ = jQuery("div.condtype select", row).val();
+        var typ = jQuery("div.condtype select", row).val() || "";
         cond.type = typ;
         jQuery('.tberror', row).removeClass('tberror');
         row.removeClass('tberror');
@@ -1269,6 +1269,57 @@ var ReactorSensor = (function(api, $) {
         configModified = true;
         updateConditionRow( condel );
     }
+    
+    function handleTitleChange( ev ) {
+        var input = jQuery( ev.currentTarget );
+        var newid = (input.val() || "").trim();
+        var span = input.closest( 'span' );
+        var grpid = span.closest( 'div.conditiongroup' ).attr( 'id' );
+        input.removeClass( 'tberror' );
+        if ( newid == grpid ) {
+            /* No change */
+            span.empty().text( 'Group: ' + grpid ).on( 'click.reactor', handleTitleClick )
+                .addClass( 'titletext' );
+            return;
+        }
+        /* Group name check */
+        if ( ! newid.match( /^[a-z][a-z0-9_]+$/i ) ) {
+            input.addClass( 'tberror' );
+            input.focus();
+            return;
+
+        }
+        /* Don't allow duplicate group Id */
+        var myid = api.getCpanelDeviceId();
+        for ( v in iData[myid].ixGroup ) {
+            if ( iData[myid].ixGroup.hasOwnProperty( v ) ) {
+                if ( v != grpid && v == newid ) {
+                    input.addClass( 'tberror' );
+                    input.focus();
+                    return;
+                }
+            }
+        }
+        /* Update config */
+        iData[myid].ixGroup[newid] = iData[myid].ixGroup[grpid];
+        iData[myid].ixGroup[newid].groupid = newid;
+        delete iData[myid].ixGroup[grpid];
+        configModified = true;
+        /* Remove input field and replace text */
+        span.closest( 'div.conditiongroup' ).attr( 'id', newid );
+        span.empty().text( 'Group: ' + newid ).on( 'click.reactor', handleTitleClick )
+            .addClass( 'titletext' );
+        updateSaveControls();
+    }
+    
+    function handleTitleClick( ev ) {
+        var span = jQuery( ev.currentTarget );
+        span.off( 'click.reactor' ).removeClass( 'titletext' );
+        var grpid = span.closest( 'div.conditiongroup' ).attr( 'id' );
+        span.empty().append( jQuery( '<input class="titleedit form-control form-control-sm" title="Enter new group ID">' ).val( grpid ) );
+        jQuery( 'input', span ).on( 'change.reactor', handleTitleChange )
+            .on( 'blur.reactor', handleTitleChange );
+    }
 
     /**
      * Handle click on Add Group button.
@@ -1280,10 +1331,9 @@ var ReactorSensor = (function(api, $) {
 
         /* Create a new condition group div, assign a group ID */
         var newId = getUID("grp");
-        var condgroup = jQuery('<div class="conditiongroup"></div>');
-        condgroup.attr('id', newId);
-        condgroup.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span id="titletext"></span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>');
-        jQuery( 'span#titletext', condgroup ).text( "Group " + newId );
+        var condgroup = jQuery('<div class="conditiongroup"/>').attr('id', newId);
+        condgroup.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span class="titletext"></span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>');
+        jQuery( 'span.titletext', condgroup ).text( "Group: " + newId ).on( 'click.reactor', handleTitleClick );
         jQuery("button#addgroup", condgroup).on( 'click.reactor', handleAddGroupClick );
         jQuery("button#saveconf", condgroup).on( 'click.reactor', handleSaveClick );
 
@@ -1298,11 +1348,10 @@ var ReactorSensor = (function(api, $) {
         condgroup.append(cel); /* Add it to the conditiongroup */
 
         /* Add an "Add Condition" button for the new group */
-        cel = jQuery('<div class="row buttonrow"><div class="col-xs-12 col-sm-12"><button class="addcond btn btn-sm btn-primary">Add Condition</button></div></div>');
-        jQuery("button.addcond", cel).prop('disabled',true); /* Add Cond is disabled to start */
-        jQuery("button.addcond", cel).on( 'click.reactor', handleAddConditionClick );
-
-        condgroup.append(cel); /* Add it to the conditiongroup */
+        var b = jQuery('<div class="row buttonrow"><div class="col-xs-12 col-sm-12"><button class="addcond btn btn-sm btn-primary">Add Condition</button></div></div>');
+        jQuery("button.addcond", b).prop('disabled',true); /* Add Cond is disabled to start */
+        jQuery("button.addcond", b).on( 'click.reactor', handleAddConditionClick );
+        condgroup.append(b); /* Add it to the conditiongroup */
 
         condgroup.insertBefore(row); /* Insert new conditiongroup */
 
@@ -1464,8 +1513,8 @@ var ReactorSensor = (function(api, $) {
 
             /* Create div.conditiongroup and add conditions */
             var gel = jQuery('<div class="conditiongroup"></div>').attr("id", grp.groupid);
-            gel.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6 form-inline"><span id="titletext"></span> <label for="grpdisable"><input id="grpdisable" type="checkbox" class="form-check">&nbsp;Disabled</form></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>');
-            jQuery( 'span#titletext', gel ).text( "Group: " + grp.groupid );
+            gel.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6 form-inline"><span class="titletext"></span> <label for="grpdisable"><input id="grpdisable" type="checkbox" class="form-check">&nbsp;Disabled</form></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>');
+            jQuery( 'span.titletext', gel ).text( "Group: " + grp.groupid ).on( 'click.reactor', handleTitleClick );
             jQuery( 'input#grpdisable', gel ).prop( 'checked', grp.disabled )
                 .on( 'change.reactor', function( ev ) {
                     var el = jQuery( ev.currentTarget );
@@ -2323,7 +2372,7 @@ var ReactorSensor = (function(api, $) {
         var container = jQuery('div#variables');
         container.empty();
         var gel = jQuery('<div class="vargroup"></div>');
-        gel.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span id="titletext">Defined Variables</span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>');
+        gel.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span class="titletext">Defined Variables</span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>');
         var cdata = iData[api.getCpanelDeviceId()].cdata;
         for ( var vn in cdata.variables ) {
             if ( cdata.variables.hasOwnProperty( vn ) ) {
@@ -2338,7 +2387,7 @@ var ReactorSensor = (function(api, $) {
 
         /* Add "Add" button */
         gel.append('<div class="row buttonrow">' +
-            '<div class="col-xs-12 col-sm-12"><button id="addvar" class="btn btn-sm btn-primary">Add Variable/Expression</button></div>' +
+            '<div class="col-xs-12 col-sm-12"><button id="addvar" class="btn btn-sm btn-primary">Add Variable/Expression</button> Need help? Check out the <a href="https://www.toggledbits.com/reactor" target="_blank">documentation</a> or ask in the <a href="http://forum.micasaverde.com/index.php/board,93.0.html" target="_blank">Vera forums</a>.</div>' +
             '</div>');
 
         /* Append the group */
@@ -2375,7 +2424,7 @@ var ReactorSensor = (function(api, $) {
             html += 'i.md-btn { color: #006040; font-size: 14pt; cursor: pointer; }';
             html += 'input.tbinvert { min-width: 16px; min-height: 16px; }';
             html += 'div.tblisttitle { background-color: #444444; color: #fff; padding: 8px; min-height: 42px; }';
-            html += 'div.tblisttitle span#titletext { font-size: 16px; font-weight: bold; margin-right: 4em; }';
+            html += 'div.tblisttitle span.titletext { font-size: 16px; font-weight: bold; margin-right: 4em; }';
             html += 'input.narrow { max-width: 6em; }';
             html += 'div.vargroup { border-radius: 8px; border: 2px solid #444444; margin-bottom: 8px; }';
             html += 'div.vargroup .row { margin-right: 0px; margin-left: 0px; }';
@@ -2432,9 +2481,10 @@ var ReactorSensor = (function(api, $) {
             html += 'input.tbinvert { min-width: 16px; min-height: 16px; }';
             html += 'div.conditions { width: 100%; }';
             html += 'div.tblisttitle { background-color: #006040; color: #fff; padding: 8px; min-height: 42px; }';
-            html += 'div.tblisttitle span#titletext { font-size: 16px; font-weight: bold; margin-right: 4em; }';
+            html += 'div.tblisttitle span.titletext { font-size: 16px; font-weight: bold; margin-right: 4em; }';
             html += 'input.narrow { max-width: 8em; }';
             html += 'input.tiny { max-width: 3em; }';
+            html += 'input.titleedit { font-size: 12px; height: 24px; }';
             html += 'div.conditiongroup { border-radius: 8px; border: 2px solid #006040; margin-bottom: 8px; }';
             html += 'div.conditiongroup.groupdisabled { background-color: #ccc !important; color: #000 !important }';
             html += 'label[for="grpdisable"] { font-size: 0.9em; }';
@@ -3695,10 +3745,10 @@ var ReactorSensor = (function(api, $) {
         html += 'div.actionlist { border-radius: 8px; border: 2px solid #428BCA; margin-bottom: 16px; }';
         html += 'div.actionlist .row { margin-right: 0px; margin-left: 0px; }';
         html += 'div.tblisttitle { background-color: #428BCA; color: #fff; padding: 8px; min-height: 42px; }';
-        html += 'div.tblisttitle span#titletext { font-size: 16px; font-weight: bold; margin-right: 4em; }';
+        html += 'div.tblisttitle span.titletext { font-size: 16px; font-weight: bold; margin-right: 4em; }';
         html += 'div.actionlist label:not(.required) { font-weight: normal; }';
         html += 'div.actionlist label.required { font-weight: bold; }';
-        html += 'div.actionlist.tbmodified div.tblisttitle span#titletext:after { content: " (unsaved)" }';
+        html += 'div.actionlist.tbmodified div.tblisttitle span.titletext:after { content: " (unsaved)" }';
         html += 'div.actionrow,div.buttonrow { padding: 8px; }';
         html += 'div.actionlist div.actionrow:nth-child(odd) { background-color: #EFF6FF; }';
         html += 'div.actionrow.tbmodified:not(.tberror) { border-left: 4px solid green; }';
@@ -3748,11 +3798,11 @@ var ReactorSensor = (function(api, $) {
             html += '<div class="reactoractions fullwidth">';
 
             html += '<div id="tripactions" class="actionlist">';
-            html += '<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span id="titletext">Trip Actions</span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>';
+            html += '<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span class="titletext">Trip Actions</span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>';
             html += '<div class="row buttonrow"><div class="col-sm-1"><button id="addtripaction" class="addaction btn btn-sm btn-primary">Add Trip Action</button></div></div>';
             html += '</div>'; // #tripactions
             html += '<div id="untripactions" class="actionlist">';
-            html += '<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span id="titletext">Untrip Actions</span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>';
+            html += '<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span class="titletext">Untrip Actions</span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>';
             html += '<div class="row buttonrow"><div class="col-sm-1"><button id="adduntripaction" class="addaction btn btn-sm btn-primary">Add Untrip Action</button></div></div>';
             html += '</div>'; // untripactions
 
