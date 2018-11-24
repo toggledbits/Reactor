@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 
     /* unique identifier for this plugin... */
     var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
-    
+
     var DEVINFO_MINSERIAL = 2.88;
 
     var myModule = {};
@@ -45,7 +45,7 @@ var ReactorSensor = (function(api, $) {
         "ui2": { min: 0, max: 65535 }, "i2": { min: -32768, max: 32767 },
         "ui4": { min: 0, max: 4294967295 }, "i4": { min: -2147483648, max:2147483647 } };
     var serviceOps = [ { op: '=', desc: 'equals', args: 1 }, { op: '<>', desc: 'not equals', args: 1 },
-        { op: '<', desc: '<', args: 1 }, { op: '<=', desc: '<=', args: 1 }, 
+        { op: '<', desc: '<', args: 1 }, { op: '<=', desc: '<=', args: 1 },
         { op: '>', desc: '>', args: 1 }, { op: '>=', desc: '>=', args: 1 },
         { op: 'starts', desc: 'starts with', args: 1 }, { op: 'ends', desc: 'ends with', args: 1 },
         { op: 'contains', desc: 'contains', args: 1 }, { op: 'in', desc: 'in', args: 1 },
@@ -214,7 +214,7 @@ var ReactorSensor = (function(api, $) {
                 return a.name.toLowerCase() > b.name.toLowerCase() ? 1 : -1;
             }
         );
-        
+
         serviceOpsIndex = {};
         for ( var ix=0; ix<serviceOps.length; ix++ ) {
             serviceOpsIndex[serviceOps[ix].op] = serviceOps[ix];
@@ -258,7 +258,7 @@ var ReactorSensor = (function(api, $) {
     function isEmpty( s ) {
         return s === undefined || s === "";
     }
-    
+
     function quot( s ) {
         if ( typeof(s) != "string" ) s = String(s);
         return '"' + s.replace( /"/g, "\\\"" ) + '"';
@@ -1273,7 +1273,7 @@ var ReactorSensor = (function(api, $) {
         configModified = true;
         updateConditionRow( condel );
     }
-    
+
     function handleTitleChange( ev ) {
         var input = jQuery( ev.currentTarget );
         var newid = (input.val() || "").trim();
@@ -1295,7 +1295,7 @@ var ReactorSensor = (function(api, $) {
         }
         /* Don't allow duplicate group Id */
         var myid = api.getCpanelDeviceId();
-        for ( v in iData[myid].ixGroup ) {
+        for ( var v in iData[myid].ixGroup ) {
             if ( iData[myid].ixGroup.hasOwnProperty( v ) ) {
                 if ( v != grpid && v == newid ) {
                     input.addClass( 'tberror' );
@@ -1315,7 +1315,7 @@ var ReactorSensor = (function(api, $) {
             .addClass( 'titletext' );
         updateSaveControls();
     }
-    
+
     function handleTitleClick( ev ) {
         var span = jQuery( ev.currentTarget );
         span.off( 'click.reactor' ).removeClass( 'titletext' );
@@ -1615,6 +1615,41 @@ var ReactorSensor = (function(api, $) {
             }
         }
     }
+    
+    function clearUnusedVariables() {
+        var myid = api.getCpanelDeviceId();
+        var ud = api.getUserData();
+        var dx = api.getDeviceIndex( myid );
+        var deleted = {};
+        var configVars = iData[myid].cdata.variables || {};
+        for ( var k=0; k<ud.devices[dx].states.length; ++k) {
+            var state = ud.devices[dx].states[k];
+            if ( state.service.match( /:ReactorValues$/i ) ) {
+                if ( state.variable.match( /_Error$/i ) ) {
+                    if ( undefined === configVars[ state.variable.replace( /_Error$/i, "" ) ] ) {
+                        deleted[state.variable] = state;
+                    }
+                } else if ( undefined === configVars[state.variable] ) {
+                    deleted[state.variable] = state;
+                }
+            }
+        }
+        for ( var vn in deleted ) {
+            if ( deleted.hasOwnProperty( vn ) ) {
+                console.log("Removing unused state variable for delete expression " + vn);
+                $.ajax({
+                    url: api.getDataRequestURL(),
+                    data: {
+                        id: "variableset",
+                        DeviceNum: myid,
+                        serviceId: deleted.service,
+                        Variable: deleted.variable,
+                        Value: ""
+                    }
+                });
+            }
+        }
+    }
 
     /**
      * Handle save click: save the current configuration.
@@ -1669,6 +1704,7 @@ var ReactorSensor = (function(api, $) {
                     fnext.apply( null, fargs );
                 }
                 updateSaveControls();
+                clearUnusedVariables();
             },
             'onFailure' : function() {
                 alert('There was a problem saving the configuration. Vera/Luup may have been restarting. Please try hitting the "Save" button again.');
@@ -1748,7 +1784,7 @@ var ReactorSensor = (function(api, $) {
             dataType: "xml",
             timeout: 5000
         });
-        
+
         jqXHR.done( function( serviceData, statusText ) {
             console.log("Got service data for " + serviceId);
             var sd = { service: serviceId, stateVariables: {}, actions: {} };
@@ -1801,14 +1837,14 @@ var ReactorSensor = (function(api, $) {
             });
             dd.services[ sd.service ] = sd;
         });
-        
+
         jqXHR.fail( function( jqXHR, textStatus, err ) {
             console.log(String(err));
         });
-        
+
         return jqXHR.promise();
     }
-    
+
     function sendDeviceData( ev ) {
         var ct = jQuery( ev.currentTarget ).closest( 'div' );
         var device = jQuery( 'select#devices', ct ).val() || "";
@@ -1830,9 +1866,9 @@ var ReactorSensor = (function(api, $) {
             devs.each( function() {
                 var devid = $(this).children('Device_Num').text();
                 if ( devid == device ) {
-                    
+
                     // https://stackoverflow.com/questions/13651243/how-do-i-chain-a-sequence-of-deferred-functions-in-jquery-1-8-x#24041521
-                    var copy = function(a) { return Array.prototype.slice.call(a); }; 
+                    var copy = function(a) { return Array.prototype.slice.call(a); };
                     $.sequence = function( chain, continueOnFailure ) {
                         var handleStep, handleResult,
                             steps = copy(chain),
@@ -1871,10 +1907,10 @@ var ReactorSensor = (function(api, $) {
                         handleStep();
                         return def.promise();
                     };
-                        
+
                     var typ = $('deviceType', this).text();
                     var chain = [];
-                    
+
                     /* Send device data */
                     var dd = { version: 1, timestamp: Date.now(), devicetype: typ, services: {} };
                     dd.manufacturer = $( 'manufacturer', this ).text();
@@ -1883,7 +1919,7 @@ var ReactorSensor = (function(api, $) {
                     dd.modeldesc = $( 'modelDescription', this ).text();
                     dd.category = $( 'Category_Num', this).text();
                     dd.subcat = $( 'Subcategory_Num', this).text();
-                    
+
                     /* Handle services */
                     var rp = api.getDataRequestURL().replace( /\/data_request.*$/i, "" );
                     var sl = $(this).find('serviceList');
@@ -1894,7 +1930,7 @@ var ReactorSensor = (function(api, $) {
                         var scpdurl = $("SCPDURL", this).text();
                         chain.push( function() { return processServiceFile( dd, serviceId, rp + scpdurl ); } );
                     });
-                    
+
                     chain.push( function() {
                         var jd = JSON.stringify( dd );
                         console.log("Sending " + jd);
@@ -1909,7 +1945,7 @@ var ReactorSensor = (function(api, $) {
                             dataType: 'json'
                         }).promise();
                     });
-                                
+
                     $.sequence( chain ).done( function() {
                         alert("Thank you! Your data has been submitted.");
                     }).fail( function() {
@@ -1928,7 +1964,7 @@ var ReactorSensor = (function(api, $) {
     function doTools()
     {
         console.log("doTools()");
-        
+
         if ( configModified && confirm( "You have unsaved changes. Press OK to save them, or Cancel to discard them." ) ) {
             handleSaveClick( undefined );
         }
@@ -1946,17 +1982,17 @@ var ReactorSensor = (function(api, $) {
 
         html = '<div id="reactortools" class="reactortab">';
         html += '<h3>Test Tools</h3>';
-        
+
         html += '<div class="row">';
         html += '<div class="col-sm-2 col-md-2"><label for="testdateenable"><input type="checkbox" value="1" id="testdateenable">&nbsp;Test&nbsp;Date:</label></div>';
         html += '<div class="col-sm-10 col-md-10 form-inline"><select id="testyear" class="form-control form-control-sm"></select><select id="testmonth" class="form-control form-control-sm"></select><select class="form-control form-control-sm" id="testday"></select><input class="narrow form-control form-control-sm" id="testtime"></div>';
         html += '</div>'; /* row */
-        
+
         html += '<div class="row">';
         html += '<div class="col-sm-2 col-md-2"><label for="testhousemode"><input type="checkbox" value="1" id="testhousemode">&nbsp;Test&nbsp;House&nbsp;Mode</label></div>';
         html += '<div class="col-sm-10 col-md-10 form-inline"><select class="form-control form-control-sm" id="mode"><option value="1">Home</option><option value="2">Away</option><option value="3">Night</option><option value="4">Vacation</option></select></div>';
         html += '</div>'; /* row */
-        
+
         html += '<div class="row">';
         html += '<div class="col-sm-12 col-md-12">' +
             'These settings do not change system configuration.' +
@@ -1965,7 +2001,7 @@ var ReactorSensor = (function(api, $) {
             ' and use the controls to set a date, then go back to the "Control" tab and press the "Restart" button to force a re-evaluation of the sensor state' +
             ' using your selected date/time. <b>Remember to turn these settings off when you have finished testing!</b></div>';
         html += '</div>'; /* row */
-        
+
         html += '</div>'; /* .reactortab */
 
         try {
@@ -1982,7 +2018,7 @@ var ReactorSensor = (function(api, $) {
         } catch (exc) {
             html += "<div>Can't display sun data: " + exc.toString() + "</div>";
         }
-        
+
         html += '<div id="enhancement" class="form-inline"><h3>Submit Device Data</h3>If you have a device that is missing "Common Actions" or warns you about missing enhancement data in the Activities tab, you can submit the device data to rigpapa for evaluation. This process sends the relevant data about the device. It does not send any identifying information about you or your Vera, and the data is used only for enhancement of the device database. <label>Select Device: <select id="devices"></select> <button id="submitdata">Submit Device Data</button></div>';
 
         html += footer();
@@ -2038,7 +2074,7 @@ var ReactorSensor = (function(api, $) {
             }
         }
         jQuery('input#testhousemode,select#mode', container).on( 'change.reactor', handleTestChange );
-        
+
         var deviceMenu = makeDeviceMenu( "", "" );
         deviceMenu.attr('id', 'devices');
         deviceMenu.prepend( '<option value="" selected>--choose device--</option>' );
@@ -2779,7 +2815,7 @@ var ReactorSensor = (function(api, $) {
                             console.log("buildActionList: " + s + " required parameter " + ai.parameters[k].name + " has no value");
                             scene = false;
                             return false;
-                        } 
+                        }
                         p.value = v;
                     }
                     action.parameters.push( p );
@@ -2898,7 +2934,7 @@ var ReactorSensor = (function(api, $) {
         var row = jQuery( ev.currentTarget ).closest( 'div.actionrow' );
         changeActionRow( row );
     }
-    
+
     function appendVariables( menu ) {
         var cd = iData[ api.getCpanelDeviceId() ].cdata;
         var first = true;
@@ -3185,7 +3221,7 @@ var ReactorSensor = (function(api, $) {
                                 " end of conditions stack len expected 1 got " + stack.length );
                         }
                         var result = stack.pop() || null;
-                        console.log("getDeviceOverride: eval of " + cond[ic] + " yields (" + 
+                        console.log("getDeviceOverride: eval of " + cond[ic] + " yields (" +
                             typeof(result) + ")" + String(result));
                         if ( ! ( typeof(result)==="boolean" && result ) ) {
                             match = false;
@@ -3205,7 +3241,7 @@ var ReactorSensor = (function(api, $) {
         }
         return false;
     }
-    
+
     function changeActionDevice( row, newVal, fnext, fargs ) {
         var ct = jQuery( 'div.actiondata', row );
         var actionMenu = jQuery( 'select#actionmenu', ct );
@@ -3348,30 +3384,34 @@ var ReactorSensor = (function(api, $) {
     function doEditor( field ) {
         var ediv = jQuery( '<div class="editor"/>' );
         ediv.insertAfter( field );
-		var editor = ace.edit( ediv.get(0), {
-			minLines: 8,
-			maxLines: 32,
-			theme: "ace/theme/xcode",
-			mode: "ace/mode/lua",
-			fontSize: "16px",
-			tabSize: 4
-		});
-        /* Apply options from state if set -- ??? get from master/parent ??? */
-		var exopts = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "AceOptions" ) || "";
-		if ( exopts !== "" ) {
-			try {
-				var opts = JSON.parse( exopts );
-				if ( opts !== undefined ) {
-					editor.setOptions( opts );
-				}
-			} catch( e ) {
-				alert("Can't apply your custom AceOptions: " + String(e));
-			}
-		}
-		var session = editor.session;
-		session.setValue( field.val() || "" );
-		editor.on( 'change', function( delta ) { field.val( session.getValue() ) } );
-		editor.on( 'blur', handleActionValueChange );
+        var editor = ace.edit( ediv.get(0), {
+            minLines: 8,
+            maxLines: 32,
+            theme: "ace/theme/xcode",
+            mode: "ace/mode/lua",
+            fontSize: "16px",
+            tabSize: 4
+        });
+        /* Apply options from state if set */
+        var myid = api.getCpanelDeviceId();
+        var exopts = api.getDeviceState( myid, serviceId, "AceOptions" ) || "";
+        if ( "" == exopts ) {
+            exopts = api.getDeviceState( deviceByNumber[myid].parent_id, "urn:toggledbits-com:serviceId:Reactor", "AceOptions" ) || "";
+        }
+        if ( exopts !== "" ) {
+            try {
+                var opts = JSON.parse( exopts );
+                if ( opts !== undefined ) {
+                    editor.setOptions( opts );
+                }
+            } catch( e ) {
+                alert("Can't apply your custom AceOptions: " + String(e));
+            }
+        }
+        var session = editor.session;
+        session.setValue( field.val() || "" );
+        editor.on( 'change', function( delta ) { field.val( session.getValue() ); } );
+        editor.on( 'blur', handleActionValueChange );
         /* Finally, hide our field, remove any change action, and add a custom action
            to reload ACE from the field. */
         field.off( 'change.reactor' ).hide();
@@ -3862,7 +3902,7 @@ var ReactorSensor = (function(api, $) {
 
             /* Body content */
             html += '<div id="reactoractions" class="reactortab">';
-            
+
             html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>Activities</h3></div></div>';
             html += '<div class="row"><div class="col-xs-12 col-sm-12">Activities are actions that Reactor will perform on its own when tripped or untripped.</div></div>';
 
@@ -3902,7 +3942,7 @@ var ReactorSensor = (function(api, $) {
             }
         });
     }
-    
+
     console.log("Initializing ReactorSensor module");
 
     myModule = {
