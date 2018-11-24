@@ -1636,16 +1636,18 @@ var ReactorSensor = (function(api, $) {
         }
         for ( var vn in deleted ) {
             if ( deleted.hasOwnProperty( vn ) ) {
-                console.log("Removing unused state variable for delete expression " + vn);
+                console.log("Removing unused state variable for deleted expression " + vn);
                 $.ajax({
                     url: api.getDataRequestURL(),
                     data: {
                         id: "variableset",
                         DeviceNum: myid,
-                        serviceId: deleted.service,
-                        Variable: deleted.variable,
+                        serviceId: deleted[vn].service,
+                        Variable: vn,
                         Value: ""
                     }
+                }).done( function( data, statusText, jqXHR ) {
+                    /* nothing */
                 });
             }
         }
@@ -2376,7 +2378,7 @@ var ReactorSensor = (function(api, $) {
         editrow.append( '<div id="varname" class="col-xs-12 col-sm-12 col-md-2"></div>' );
         editrow.append( '<div class="col-xs-11 col-sm-11 col-md-9"><textarea class="expr form-control form-control-sm" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="off"/></div>' );
         editrow.append( '<div class="col-xs-1 col-sm-1 col-md-1 text-right"><i id="tryexpr" class="material-icons md-btn" title="Try this expression">directions_run</i><i id="deletevar" class="material-icons md-btn">clear</i></div>' );
-        jQuery( 'textarea.expr', editrow );
+        jQuery( 'textarea.expr', editrow ).on( 'change.reactor', handleVariableChange );
         jQuery( 'i#tryexpr', editrow ).prop('disabled', true).on('click.reactor', handleTryExprClick);
         jQuery( 'i#deletevar', editrow ).prop('disabled', true).on('click.reactor', handleDeleteVariableClick);
         return editrow;
@@ -2406,7 +2408,6 @@ var ReactorSensor = (function(api, $) {
                 /* Re-enable fields and add button */
                 jQuery( 'div.varexp textarea.expr,i.md-btn', container ).prop('disabled', false);
                 jQuery( 'button#addvar', container ).prop( 'disabled', false );
-                jQuery( 'textarea.expr', container).on('change.reactor', handleVariableChange).focus();
                 /* Do the regular stuff */
                 handleVariableChange( null );
             }
@@ -3823,6 +3824,11 @@ var ReactorSensor = (function(api, $) {
             jQuery("button.addaction").on( 'click.reactor', handleAddActionClick );
             jQuery("button#saveconf").on( 'click.reactor', handleActionsSaveClick ).prop( "disabled", true );
             jQuery("button#revertconf").on( 'click.reactor', handleActionsRevertClick ).prop( "disabled", true );
+            
+            if ( undefined !== deviceInfo ) {
+                var uc = jQuery( '<iframe sandbox src="https://www.toggledbits.com/deviceinfo/checkupdate.php?v=' + deviceInfo.serial + '" style="border: 0; height: 24px; width: 100%" />' );
+                uc.insertBefore( jQuery( 'div#tripactions' ) );
+            }
 
             api.registerEventHandler('on_ui_cpanel_before_close', ReactorSensor, 'onBeforeCpanelClose');
         }
