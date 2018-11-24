@@ -1847,13 +1847,7 @@ var ReactorSensor = (function(api, $) {
         return jqXHR.promise();
     }
 
-    function sendDeviceData( ev ) {
-        var ct = jQuery( ev.currentTarget ).closest( 'div' );
-        var device = jQuery( 'select#devices', ct ).val() || "";
-        if ( "" === device ) {
-            alert("Please select a device first.");
-            return;
-        }
+    function sendDeviceData( device ) {
         /* Fetch the device file */
         jQuery.ajax({
             url: api.getDataRequestURL(),
@@ -1910,7 +1904,7 @@ var ReactorSensor = (function(api, $) {
                         return def.promise();
                     };
 
-                    var typ = $('deviceType', this).text();
+                    var typ = $('deviceType', this).first().text();
                     var chain = [];
 
                     /* Send device data */
@@ -1961,6 +1955,28 @@ var ReactorSensor = (function(api, $) {
             console.log("Failed to load lu_device data: " + textStatus + " " + String(errorThrown));
             console.log(jqXHR.responseText);
         });
+    }
+
+    function handleSendDeviceDataClick( ev ) {
+        var ct = jQuery( ev.currentTarget ).closest( 'div' );
+        var device = jQuery( 'select#devices', ct ).val() || "";
+        if ( "" === device ) {
+            alert("Please select a device first.");
+            return;
+        }
+        sendDeviceData( device );
+        /* If device has a parent, or has children, send them as well */
+        if ( (deviceByNumber[device] || {}).id_parent != 0 ) {
+            sendDeviceData( deviceByNumber[device].id_parent ); /* parent */
+        }
+        var typs = {};
+        /* ??? only one level deep */
+        for ( var dn in deviceByNumber ) {
+            if ( deviceByNumber[dn].id_parent == device && undefined === typs[ deviceByNumber[dn].device_type ] ) {
+                sendDeviceData( dn );
+                typs[ deviceByNumber[dn].device_type ] = true;
+            }
+        }
     }
 
     function doTools()
@@ -2020,14 +2036,16 @@ var ReactorSensor = (function(api, $) {
         } catch (exc) {
             html += "<div>Can't display sun data: " + exc.toString() + "</div>";
         }
+        
+        html += '<div><h3>Update Device Information Database</h3>The device information database contains information to help smooth out the user interface for device actions. It is recommended that you keep this database up to date by updating it periodically. The "Activities" tab will notify you when your database is out of date. You update by clicking the button below. Updates apply to all ReactorSensors, so you only need to do them on one. This process sends information about the versions of your Vera firmware, this plugin, and the current database, but no personally-identifying information. This information is used to select the correct database for your configuration only; it is not used for other analysis or any tracking. <p><button id="updateinfo" class="btn btn-sm btn-success">Update Device Info</button> <span id="status"/></p>';
 
-        html += '<div id="enhancement" class="form-inline"><h3>Submit Device Data</h3>If you have a device that is missing "Common Actions" or warns you about missing enhancement data in the Activities tab, you can submit the device data to rigpapa for evaluation. This process sends the relevant data about the device. It does not send any identifying information about you or your Vera, and the data is used only for enhancement of the device database. <label>Select Device: <select id="devices"></select> <button id="submitdata">Submit Device Data</button></div>';
+        html += '<div id="enhancement" class="form-inline"><h3>Submit Device Data</h3>If you have a device that is missing "Common Actions" or warns you about missing enhancement data in the Activities tab (actions in <i>italics</i>), you can submit the device data to rigpapa for evaluation. This process sends the relevant data about the device. It does not send any identifying information about you or your Vera, and the data is used only for enhancement of the device information database. <p><select id="devices"></select> <button id="submitdata" class="btn btn-sm btn-info">Submit Device Data</button></p></div>';
 
         html += footer();
 
         api.setCpanelContent( html );
 
-        var container = jQuery('div.testfields');
+        var container = jQuery('div#reactortools.reactortab');
         var el = jQuery('select#testyear', container);
         var i, vv;
         var now = new Date();
@@ -2081,7 +2099,25 @@ var ReactorSensor = (function(api, $) {
         deviceMenu.attr('id', 'devices');
         deviceMenu.prepend( '<option value="" selected>--choose device--</option>' );
         jQuery( 'div#enhancement select#devices' ).replaceWith( deviceMenu );
-        jQuery( 'div#enhancement button#submitdata' ).on( 'click.reactor', sendDeviceData );
+        jQuery( 'div#enhancement button#submitdata' ).on( 'click.reactor', handleSendDeviceDataClick );
+        
+        jQuery( 'button#updateinfo' ).on( 'click.reactor', function( ) {
+            var msg = jQuery( 'button#updateinfo' ).parent().find('span#status');
+            msg.text("Please wait, downloading update...");
+            $.ajax({
+                url: api.getDataRequestURL(),
+                data: {
+                    id: "lr_Reactor",
+                    action: "infoupdate",
+                    infov: deviceInfo.serial || 0
+                },
+                dataType: 'json'
+            }).done( function( respData, respText, jqXHR ) {
+                msg.text( "Update successful! The changes take effect immediately; no restart necessary." );
+            }).fail( function( x, y, z ) {
+                msg.text( "The update failed; Vera busy/restarting. Try again in a moment." );
+            });
+        });
     }
 
     function updateStatus( pdev ) {
@@ -3279,6 +3315,7 @@ var ReactorSensor = (function(api, $) {
                     } else {
                         /* No extended data; copy what we got from lu_actions */
                         nodata = true;
+                        jQuery( 'div.supportlinks p#noenh' ).show();
                         ai = { service: service.serviceId, action: actname, parameters: service.actionList[j].arguments };
                         for ( var ip=0; ip < (service.actionList[j].arguments || []).length; ++ip ) {
                             var p = service.actionList[j].arguments[ip];
@@ -3397,7 +3434,7 @@ var ReactorSensor = (function(api, $) {
         var myid = api.getCpanelDeviceId();
         var exopts = api.getDeviceState( myid, serviceId, "AceOptions" ) || "";
         if ( "" == exopts ) {
-            exopts = api.getDeviceState( deviceByNumber[myid].parent_id, "urn:toggledbits-com:serviceId:Reactor", "AceOptions" ) || "";
+            exopts = getParentState( "AceOptions" ) || "";
         }
         if ( exopts !== "" ) {
             try {
@@ -3773,8 +3810,8 @@ var ReactorSensor = (function(api, $) {
             }
 
             jQuery( 'div#tbcopyright' ).append( ' <span id="deviceinfoinfo">Device Info serial ' + deviceInfo.serial + '</span>' );
-            jQuery( 'div#supportlinks' ).append( ' &#0149; <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=infoupdate" target="_blank">Update DeviceInfo</a>');
-            jQuery( 'div.supportlinks' ).append( '<p>[1] This device/action does not have enhancement data available. Please report this device in the Reactor forum thread for device reports.</p>' );
+            jQuery( 'div.supportlinks' ).append( '<p id="noenh">[1] This device/action does not have enhancement data available. Please report this device in the Reactor forum thread for device reports.</p>' );
+            jQuery( 'div.supportlinks p#noenh' ).hide();
 
             var cd = iData[myid].cdata;
 
@@ -3854,6 +3891,7 @@ var ReactorSensor = (function(api, $) {
         html += 'div#reactoractions.reactortab i.md-btn:disabled { color: #cccccc; cursor: auto; }';
         html += 'div#reactoractions.reactortab i.md-btn[disabled] { color: #cccccc; cursor: auto; }';
         html += 'div#reactoractions.reactortab i.md-btn { color: #2d6a9f; font-size: 14pt; cursor: pointer; }';
+        html += "div#reactoractions.reactortab p#noenh { font-weight: bold; color: #996600; }";
         html += 'div#reactoractions.reactortab input.tbinvert { min-width: 16px; min-height: 16px; }';
         html += 'div#reactoractions.reactortab input.narrow { max-width: 8em; }';
         html += 'div#reactoractions.reactortab div.actionlist { border-radius: 8px; border: 2px solid #428BCA; margin-bottom: 16px; }';
