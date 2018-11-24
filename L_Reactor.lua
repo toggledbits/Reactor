@@ -110,7 +110,9 @@ end
 
 local function checkVersion(dev)
     local ui7Check = luup.variable_get(MYSID, "UI7Check", dev) or ""
-    if isOpenLuup and not debugMode then return false end -- temporarily, pending support from akbooer
+    if isOpenLuup then 
+        return true 
+    end
     if (luup.version_branch == 1 and luup.version_major >= 7) then
         if ui7Check == "" then
             -- One-time init for UI7 or better
@@ -1608,15 +1610,15 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         local tparam = split( cond.value, ',' )
         for ix = #tparam+1, 10 do tparam[ix] = "" end -- pad
         local tpart = {}
-        tpart[1] = ( tparam[1] == "" ) and ndt.year or tparam[1]
-        tpart[2] = ( tparam[2] == "" ) and ndt.month or tparam[2]
-        tpart[3] = ( tparam[3] == "" ) and ndt.day or tparam[3]
-        tpart[4] = ( tparam[4] == "" ) and ndt.hour or tparam[4]
-        tpart[5] = ( tparam[5] == "" ) and ndt.min or tparam[5]
-        tpart[6] = ( tparam[6] == "" ) and tpart[1] or tparam[6]
-        tpart[7] = ( tparam[7] == "" ) and tpart[2] or tparam[7]
-        tpart[8] = ( tparam[8] == "" ) and tpart[3] or tparam[8]
-        tpart[9] = ( tparam[9] == "" ) and tpart[4] or tparam[9]
+        tpart[1] = ( tparam[1] == "" ) and ndt.year or tonumber( tparam[1] )
+        tpart[2] = ( tparam[2] == "" ) and ndt.month or tonumber( tparam[2] )
+        tpart[3] = ( tparam[3] == "" ) and ndt.day or tonumber( tparam[3] )
+        tpart[4] = ( tparam[4] == "" ) and ndt.hour or tonumber( tparam[4] )
+        tpart[5] = ( tparam[5] == "" ) and ndt.min or tonumber( tparam[5] )
+        tpart[6] = ( tparam[6] == "" ) and tpart[1] or tonumber( tparam[6] )
+        tpart[7] = ( tparam[7] == "" ) and tpart[2] or tonumber( tparam[7] )
+        tpart[8] = ( tparam[8] == "" ) and tpart[3] or tonumber( tparam[8] )
+        tpart[9] = ( tparam[9] == "" ) and tpart[4] or tonumber( tparam[9] )
         tpart[10] = ( tparam[10] == "" ) and tpart[5] or tparam[10]
         -- Sanity check year to avoid nil dates coming from os.time()
         if tpart[1] < 1970 then tpart[1] = 1970 elseif tpart[1] > 2037 then tpart[1] = 2037 end
@@ -1626,7 +1628,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
             -- No date specified, only time components. Magnitude comparison.
             D("evaluateCondition() time-only comparison, now is %1, ndt is %2", now, ndt)
             local nowMSM = ndt.hour * 60 + ndt.min
-            local startMSM = tonumber( tpart[4] ) * 60 + tonumber( tpart[5] )
+            local startMSM = tpart[4] * 60 + tpart[5] 
             if op == "after" then
                 D("evaluateCondition() time-only comparison %1 after %2", nowMSM, startMSM)
                 doNextCondCheck( { id=tdev,info="trangeHM "..cond.id }, nowMSM, startMSM )
@@ -1637,7 +1639,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
                 if nowMSM >= startMSM then return false,false end
             else
                 -- Between, or not
-                local endMSM = tonumber( tpart[9] ) * 60 + tonumber( tpart[10] )
+                local endMSM = tpart[9] * 60 + tpart[10]
                 local between
                 if endMSM <= startMSM then
                     between = nowMSM >= startMSM or nowMSM < endMSM
@@ -1655,8 +1657,8 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         elseif tparam[1] == "" then
             -- No-year given, just M/D H:M. We can do comparison by magnitude,
             -- which works better for year-spanning ranges.
-            local nowz = tonumber( ndt.month ) * 100 + tonumber( ndt.day )
-            local stz = tonumber( tpart[2] ) * 100 + tonumber( tpart[3] )
+            local nowz = ndt.month * 100 + ndt.day
+            local stz = tpart[2] * 100 + tpart[3]
             nowz = nowz * 1440 + ndt.hour * 60 + ndt.min
             stz = stz * 1440 + tpart[4] * 60 + tpart[5]
             if op == "before" then
@@ -1668,7 +1670,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
                 doNextCondCheck( { id=tdev,info="trangeMDHM " .. cond.id }, nowz % 1440, stz % 1440 )
                 if nowz < stz then return false,false end
             else
-                local enz = tonumber( tpart[7] ) * 100 + tonumber( tpart[8] )
+                local enz = tpart[7] * 100 + tpart[8]
                 enz = enz * 1440 + tpart[9] * 60 + tpart[10]
                 D("evaluateCondition() M/D H:M test %1 %2 %3 and %4", nowz, op, stz, enz)
                 doNextCondCheck( { id=tdev,info="trangeMDHM " .. cond.id }, nowz % 1440, stz % 1440, enz % 1440 )
@@ -2897,12 +2899,19 @@ function request( lul_request, lul_parameters, lul_outputformat )
         -- sent to my server to ensure that the correct file is received (if per-version exceptions are 
         -- needed). The version info and any other data collected by the process are not stored except 
         -- in temporary logs that are periodically purged, and not for any analytical purpose.
+        local targetPath = "/etc/cmh-ludl/D_ReactorDeviceInfo.json"
+        local tmpPath = "/tmp/D_ReactorDeviceInfo.tmp"
+        if isOpenLuup then
+            local loader = require "openLuup.loader"
+            if loader.find_file == nil then return json.encode{ status=false, message="Your openLuup is out of update; please update." } end
+            targetPath = loader.find_file( "D_ReactorDeviceInfo.json" )
+            tmpPath = targetPath:gsub( ".json.*$", ".tmp" )
+        end
         local http = require("socket.http")
         local https = require("ssl.https")
         local ltn12 = require("ltn12")
-        if isOpenLuup then return json.encode( { status=false, message="This method of update is not supported on openLuup (yet)" } ), "application/json" end
-        local f = io.open( "/tmp/D_ReactorDeviceInfo.tmp", "w" )
-        if not f then return json.encode( { status=false, message="A temporary file could not be opened" } ), "application/json" end
+        local f = io.open( tmpPath , "w" )
+        if not f then return json.encode{ status=false, message="A temporary file could not be opened", path=tmpPath }, "application/json" end
         local body = "action=fetch&fv=" .. luup.version .. "&pv=" .. _PLUGIN_VERSION
         local req =  {
             method = "POST",
@@ -2925,11 +2934,19 @@ function request( lul_request, lul_parameters, lul_outputformat )
             httpStatus = 500
         end
         if httpStatus == 200 then
-            os.execute( "rm -f /etc/cmh-ludl/D_ReactorDeviceInfo.json.lzo" )
-            os.execute( "mv -f /tmp/D_ReactorDeviceInfo.tmp /etc/cmh-ludl/D_ReactorDeviceInfo.json" )
-            return json.encode( { status=true, message="Device info updated" } ), "application/json" 
+            os.execute( "rm -f -- " .. targetPath .. ".lzo" )
+            local es = os.execute( "mv -f " .. tmpPath .. " " .. targetPath )
+            if es ~= 0 then
+                return json.encode{ status=false, exitStatus=es,
+                    message="The download was successful but the updated file could not be installed;" ..
+                    " please move " .. tmpPath .. " to " .. targetPath }, 
+                    "application/json"
+            end
+            return json.encode{ status=true, message="Device info updated" }, "application/json" 
+        else
+            return json.encode{ status=false, message="Download failed (" .. tostring(httpStatus) .. ")" }
         end
-        return json.encode( { status=false, message="Can't update device info, status " .. httpStatus } ), "application/json"
+        return json.encode{ status=false, message="Can't update device info, status " .. httpStatus }, "application/json"
         
     elseif action == "submitdevice" then
     

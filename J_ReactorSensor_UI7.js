@@ -33,6 +33,7 @@ var ReactorSensor = (function(api, $) {
     var deviceInfo = {};
     var configModified = false;
     var inStatusPanel = false;
+    var isOpenLuup = false;
     var lastx = 0;
     var condTypeName = { "service": "Service/Variable", "housemode": "House Mode", "comment": "Comment", "weekday": "Weekday",
         "sun": "Sunrise/Sunset", "trange": "Date/Time", "interval": "Interval", "reload": "Luup Reloaded" };
@@ -191,6 +192,9 @@ var ReactorSensor = (function(api, $) {
                 devobj.friendlyName = "#" + devobj.id + " " + devobj.name;
             }
             deviceByNumber[devobj.id] = devobj;
+            if ( "openLuup" === devobj.device_type ) {
+                isOpenLuup = true;
+            }
 
             var roomid = devobj.room || 0;
             var roomObj = rooms[roomid];
@@ -1566,7 +1570,7 @@ var ReactorSensor = (function(api, $) {
         }
 
         /* Insert add group button row (not a divider) */
-        jQuery("div#conditions").append('<div class="row"><div class="col-sm-2"><hr></div>' +
+        jQuery("div#conditions.reactortab").append('<div class="row"><div class="col-sm-2"><hr></div>' +
             '<div class="col-sm-2"><button id="addgroup" class="btn btn-sm btn-primary">Add Group</button></div>' +
             '<div class="col-sm-4"><hr></div>' +
             '<div class="col-sm-4"><button id="saveconf" class="btn btn-sm btn-success">Save</button><button id="revertconf" class="btn btn-sm btn-danger">Revert</button></div>' +
@@ -1586,8 +1590,8 @@ var ReactorSensor = (function(api, $) {
         configModified = false;
 
         /* Be careful about which tab we're on here. */
-        var ctx = jQuery( ev.currentTarget ).closest('div.row').parent().attr('id');
-        if ( ctx === "variables" ) {
+        var ctx = jQuery( ev.currentTarget ).closest('div.reactortab').attr('id');
+        if ( ctx === "reactorvars" ) {
             redrawVariables();
         } else if ( ctx === "conditions" ) {
             redrawConditions();
@@ -1921,8 +1925,10 @@ var ReactorSensor = (function(api, $) {
         });
     }
 
-    function doTest()
+    function doTools()
     {
+        console.log("doTools()");
+        
         if ( configModified && confirm( "You have unsaved changes. Press OK to save them, or Cancel to discard them." ) ) {
             handleSaveClick( undefined );
         }
@@ -1932,30 +1938,35 @@ var ReactorSensor = (function(api, $) {
         var html = "";
 
         html = '<style>';
-        html += 'input.narrow { max-width: 8em; }';
+        html += 'div#reactortools.reactortab input.narrow { max-width: 8em; }';
         html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
         html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
         html += '</style>';
         jQuery('head').append( html );
 
-        html = '<div class="testfields">';
+        html = '<div id="reactortools" class="reactortab">';
         html += '<h3>Test Tools</h3>';
+        
         html += '<div class="row">';
         html += '<div class="col-sm-2 col-md-2"><label for="testdateenable"><input type="checkbox" value="1" id="testdateenable">&nbsp;Test&nbsp;Date:</label></div>';
         html += '<div class="col-sm-10 col-md-10 form-inline"><select id="testyear" class="form-control form-control-sm"></select><select id="testmonth" class="form-control form-control-sm"></select><select class="form-control form-control-sm" id="testday"></select><input class="narrow form-control form-control-sm" id="testtime"></div>';
         html += '</div>'; /* row */
+        
         html += '<div class="row">';
         html += '<div class="col-sm-2 col-md-2"><label for="testhousemode"><input type="checkbox" value="1" id="testhousemode">&nbsp;Test&nbsp;House&nbsp;Mode</label></div>';
         html += '<div class="col-sm-10 col-md-10 form-inline"><select class="form-control form-control-sm" id="mode"><option value="1">Home</option><option value="2">Away</option><option value="3">Night</option><option value="4">Vacation</option></select></div>';
         html += '</div>'; /* row */
-        html += '<div class="row"><div class="col-sm-12 col-md-12">';
-        html += 'These settings do not change system configuration.' +
+        
+        html += '<div class="row">';
+        html += '<div class="col-sm-12 col-md-12">' +
+            'These settings do not change system configuration.' +
             ' They override the system values when your ReactorSensor requests them, allowing you to more easily test your conditions.' +
             ' For example, turn on the "Test Date" checkbox above' +
             ' and use the controls to set a date, then go back to the "Control" tab and press the "Restart" button to force a re-evaluation of the sensor state' +
-            ' using your selected date/time. <b>Remember to turn these settings off when you have finished testing!</b>';
-        html += '</div></div>';
-        html += '</div>'; /* .testfields */
+            ' using your selected date/time. <b>Remember to turn these settings off when you have finished testing!</b></div>';
+        html += '</div>'; /* row */
+        
+        html += '</div>'; /* .reactortab */
 
         try {
             html += '<div id="sundata">';
@@ -2217,6 +2228,7 @@ var ReactorSensor = (function(api, $) {
 
     function doStatusPanel()
     {
+        console.log("doStatusPanel()");
         /* Make sure changes are saved. */
         if ( configModified && confirm( "You have unsaved changes! Press OK to save them, or Cancel to discard them." ) ) {
             handleSaveClick( undefined );
@@ -2237,7 +2249,7 @@ var ReactorSensor = (function(api, $) {
         html += "</style>";
         jQuery("head").append( html );
 
-        api.setCpanelContent( '<div id="reactorstatus"></div>' );
+        api.setCpanelContent( '<div id="reactorstatus" class="reactortab"></div>' );
 
         api.registerEventHandler('on_ui_deviceStatusChanged', ReactorSensor, 'onUIDeviceStatusChanged');
         inStatusPanel = true; /* Tell the event handler it's OK */
@@ -2246,14 +2258,14 @@ var ReactorSensor = (function(api, $) {
     }
 
     function updateVariableControls() {
-        var container = jQuery('div#variables');
+        var container = jQuery('div#reactorvars');
         var errors = jQuery('.tberror', container);
         jQuery("button#saveconf", container).prop('disabled', ! ( configModified && errors.length === 0 ) );
         jQuery("button#revertconf", container).prop('disabled', !configModified);
     }
 
     function handleVariableChange( ev ) {
-        var container = jQuery('div#variables');
+        var container = jQuery('div#reactorvars');
         var myid = api.getCpanelDeviceId();
         var cd = iData[myid].cdata;
         /* JSON may save and restore an empty object as an array; fix type. */
@@ -2262,9 +2274,10 @@ var ReactorSensor = (function(api, $) {
         }
 
         jQuery('.tberror', container).removeClass( 'tberror' );
-        jQuery('div.var', container).each( function( ix, obj ) {
+        jQuery('div.varexp', container).each( function( ix, obj ) {
             var row = jQuery(obj);
             var vname = row.attr("id");
+            if ( undefined === vname ) return;
             var expr = jQuery('textarea.expr', row).val();
             if ( expr === "" ) {
                 jQuery('textarea.expr', row).addClass('tberror');
@@ -2282,7 +2295,7 @@ var ReactorSensor = (function(api, $) {
     }
 
     function handleTryExprClick( ev ) {
-        var row = jQuery( ev.currentTarget ).closest( "div.var" );
+        var row = jQuery( ev.currentTarget ).closest( "div.varexp" );
         jQuery.ajax({
             url: api.getDataRequestURL(),
             data: {
@@ -2312,7 +2325,7 @@ var ReactorSensor = (function(api, $) {
     }
 
     function handleDeleteVariableClick( ev ) {
-        var row = jQuery( ev.currentTarget ).closest( 'div.row.var' );
+        var row = jQuery( ev.currentTarget ).closest( 'div.varexp' );
         var vname = row.attr('id');
         if ( confirm( 'Deleting "' + vname + '" will break conditions, actions, or other expressions that use it.' ) ) {
             delete iData[api.getCpanelDeviceId()].cdata.variables[vname];
@@ -2323,40 +2336,41 @@ var ReactorSensor = (function(api, $) {
     }
 
     function getVariableRow() {
-        var editrow = jQuery('<div class="row var"></div>');
+        var editrow = jQuery('<div class="row varexp"></div>');
         editrow.append( '<div id="varname" class="col-xs-12 col-sm-12 col-md-2"></div>' );
-        editrow.append( '<div class="col-xs-11 col-sm-11 col-md-9"><textarea class="expr form-control form-control-sm"/></div>' );
+        editrow.append( '<div class="col-xs-11 col-sm-11 col-md-9"><textarea class="expr form-control form-control-sm" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="off"/></div>' );
         editrow.append( '<div class="col-xs-1 col-sm-1 col-md-1 text-right"><i id="tryexpr" class="material-icons md-btn" title="Try this expression">directions_run</i><i id="deletevar" class="material-icons md-btn">clear</i></div>' );
-        jQuery( 'textarea.expr', editrow ).on('change.reactor', handleVariableChange);
-        jQuery( 'i#tryexpr', editrow ).on('click.reactor', handleTryExprClick);
-        jQuery( 'i#deletevar', editrow ).on('click.reactor', handleDeleteVariableClick);
+        jQuery( 'textarea.expr', editrow );
+        jQuery( 'i#tryexpr', editrow ).prop('disabled', true).on('click.reactor', handleTryExprClick);
+        jQuery( 'i#deletevar', editrow ).prop('disabled', true).on('click.reactor', handleDeleteVariableClick);
         return editrow;
     }
 
     function handleAddVariableClick() {
-        var container = jQuery('div#variables');
+        var container = jQuery('div#reactorvars');
 
         var editrow = getVariableRow();
-        jQuery( 'div.var textarea,i.md-btn', container ).prop( 'disabled', true );
+        jQuery( 'div.varexp textarea.expr,i.md-btn', container ).prop( 'disabled', true );
         jQuery( 'button#addvar', container ).prop( 'disabled', true );
         jQuery( 'textarea.expr', editrow ).prop('disabled', true);
         jQuery( 'div#varname', editrow ).empty().append( '<input class="form-control form-control-sm" title="Enter a variable name and then TAB out of the field.">' );
         jQuery( 'div#varname input', editrow ).on('change.reactor', function( ev ) {
             /* Convert to regular row */
             var f = jQuery( ev.currentTarget );
-            var vname = f.val();
-            if ( vname === "" || jQuery( 'div.row.var#' + vname ).length > 0 || !vname.match( /^[A-Z][A-Z0-9_]*$/i ) ) {
+            var vname = f.val() || "";
+            if ( vname === "" || jQuery( 'div.varexp#' + vname ).length > 0 || !vname.match( /^[A-Z][A-Z0-9_]*$/i ) ) {
                 f.addClass('tberror');
                 f.closest('.row').addClass( 'tberror' );
                 f.focus();
             } else {
-                var row = f.closest( '.row' ).attr('id', vname).removeClass('editrow').removeClass('tberror');
+                var row = f.closest( 'div.varexp' ).attr('id', vname).removeClass('editrow').removeClass('tberror');
                 jQuery( '.tberror', row ).removeClass('editrow');
                 /* Remove the name input field and swap in the name (text) */
                 f.parent().empty().text(vname);
                 /* Re-enable fields and add button */
-                jQuery( 'div.var textarea,i.md-btn', container ).prop('disabled', false);
+                jQuery( 'div.varexp textarea.expr,i.md-btn', container ).prop('disabled', false);
                 jQuery( 'button#addvar', container ).prop( 'disabled', false );
+                jQuery( 'textarea.expr', container).on('change.reactor', handleVariableChange).focus();
                 /* Do the regular stuff */
                 handleVariableChange( null );
             }
@@ -2369,7 +2383,7 @@ var ReactorSensor = (function(api, $) {
      * Redraw variables and expressions.
     */
     function redrawVariables() {
-        var container = jQuery('div#variables');
+        var container = jQuery('div#reactorvars');
         container.empty();
         var gel = jQuery('<div class="vargroup"></div>');
         gel.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span class="titletext">Defined Variables</span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>');
@@ -2402,6 +2416,7 @@ var ReactorSensor = (function(api, $) {
 
     function doVariables()
     {
+        console.log("doVariables()");
         try {
             /* Make sure changes are saved. */
             if ( configModified && confirm( "You have unsaved changes. Press OK to save them, or Cancel to discard them." ) ) {
@@ -2415,34 +2430,34 @@ var ReactorSensor = (function(api, $) {
 
             /* Our styles. */
             var html = "<style>";
-            html += ".tb-about { margin-top: 24px; }";
-            html += ".color-green { color: #006040; }";
-            html += '.tberror { border: 1px solid red; }';
-            html += '.tbwarn { border: 1px solid yellow; background-color: yellow; }';
-            html += 'i.md-btn:disabled { color: #cccccc; cursor: auto; }';
-            html += 'i.md-btn[disabled] { color: #cccccc; cursor: auto; }';
-            html += 'i.md-btn { color: #006040; font-size: 14pt; cursor: pointer; }';
-            html += 'input.tbinvert { min-width: 16px; min-height: 16px; }';
-            html += 'div.tblisttitle { background-color: #444444; color: #fff; padding: 8px; min-height: 42px; }';
-            html += 'div.tblisttitle span.titletext { font-size: 16px; font-weight: bold; margin-right: 4em; }';
-            html += 'input.narrow { max-width: 6em; }';
-            html += 'div.vargroup { border-radius: 8px; border: 2px solid #444444; margin-bottom: 8px; }';
-            html += 'div.vargroup .row { margin-right: 0px; margin-left: 0px; }';
-            html += 'div.vargroup div.var:nth-child(odd) { background-color: #efefef; }';
-            html += 'div.var,div.buttonrow { padding: 8px; }';
-            html += 'div.var.tbmodified:not(.tberror) { border-left: 4px solid green; }';
-            html += 'div.var.tberror { border-left: 4px solid red; }';
-            html += 'textarea.expr { font-family: monospace; resize: vertical; width: 100% !important; }';
+            html += "div#reactorvars.reactortab .tb-about { margin-top: 24px; }";
+            html += "div#reactorvars.reactortab .color-green { color: #006040; }";
+            html += 'div#reactorvars.reactortab .tberror { border: 1px solid red; }';
+            html += 'div#reactorvars.reactortab .tbwarn { border: 1px solid yellow; background-color: yellow; }';
+            html += 'div#reactorvars.reactortab i.md-btn:disabled { color: #cccccc; cursor: auto; }';
+            html += 'div#reactorvars.reactortab i.md-btn[disabled] { color: #cccccc; cursor: auto; }';
+            html += 'div#reactorvars.reactortab i.md-btn { color: #006040; font-size: 14pt; cursor: pointer; }';
+            html += 'div#reactorvars.reactortab input.tbinvert { min-width: 16px; min-height: 16px; }';
+            html += 'div#reactorvars.reactortab div.tblisttitle { background-color: #444444; color: #fff; padding: 8px; min-height: 42px; }';
+            html += 'div#reactorvars.reactortab div.tblisttitle span.titletext { font-size: 16px; font-weight: bold; margin-right: 4em; }';
+            html += 'div#reactorvars.reactortab input.narrow { max-width: 6em; }';
+            html += 'div#reactorvars.reactortab div.vargroup { border-radius: 8px; border: 2px solid #444444; margin-bottom: 8px; }';
+            html += 'div#reactorvars.reactortab div.vargroup .row { margin-right: 0px; margin-left: 0px; }';
+            html += 'div#reactorvars.reactortab div.vargroup div.var:nth-child(odd) { background-color: #efefef; }';
+            html += 'div#reactorvars.reactortab div.varexp,div.buttonrow { padding: 8px; }';
+            html += 'div#reactorvars.reactortab div.varexp.tbmodified:not(.tberror) { border-left: 4px solid green; }';
+            html += 'div#reactorvars.reactortab div.varexp.tberror { border-left: 4px solid red; }';
+            html += 'div#reactorvars.reactortab textarea.expr { font-family: monospace; resize: vertical; width: 100% !important; }';
             html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
             html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
             html += "</style>";
             jQuery("head").append( html );
 
             /* Body content */
-            html = '';
+            html = '<div id="reactorvars" class="reactortab">';
             html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>Expressions/Variables</h3></div></div>';
             html += '<div class="row"><div class="col-xs-12 col-sm-12">Expressions allow you to do complex arithmetic, string, and other operations that otherwise cannot be done in the Conditions editor. When you create an expression, you specify a variable name into which its result is stored. You can then use that variable name in your conditions and activities.</div></div>';
-            html += '<div id="variables"></div>';
+            html += '</div>'; //.reactortab
 
             html += footer();
 
@@ -2459,6 +2474,7 @@ var ReactorSensor = (function(api, $) {
 
     function doConditions()
     {
+        console.log("doConditions()");
         try {
             if ( configModified && confirm( "You have unsaved changes. Press OK to save them, or Cancel to discard them." ) ) {
                 handleSaveClick( undefined );
@@ -2471,36 +2487,36 @@ var ReactorSensor = (function(api, $) {
 
             /* Our styles. */
             var html = "<style>";
-            html += ".tb-about { margin-top: 24px; }";
-            html += ".color-green { color: #006040; }";
-            html += '.tberror { border: 1px solid red; }';
-            html += '.tbwarn { border: 1px solid yellow; background-color: yellow; }';
-            html += 'i.md-btn:disabled { color: #cccccc; cursor: auto; }';
-            html += 'i.md-btn[disabled] { color: #cccccc; cursor: auto; }';
-            html += 'i.md-btn { color: #004020; font-size: 14pt; cursor: pointer; }';
-            html += 'input.tbinvert { min-width: 16px; min-height: 16px; }';
-            html += 'div.conditions { width: 100%; }';
-            html += 'div.tblisttitle { background-color: #006040; color: #fff; padding: 8px; min-height: 42px; }';
-            html += 'div.tblisttitle span.titletext { font-size: 16px; font-weight: bold; margin-right: 4em; }';
-            html += 'input.narrow { max-width: 8em; }';
-            html += 'input.tiny { max-width: 3em; }';
-            html += 'input.titleedit { font-size: 12px; height: 24px; }';
-            html += 'div.conditiongroup { border-radius: 8px; border: 2px solid #006040; margin-bottom: 8px; }';
-            html += 'div.conditiongroup.groupdisabled { background-color: #ccc !important; color: #000 !important }';
-            html += 'label[for="grpdisable"] { font-size: 0.9em; }';
-            html += 'div.conditiongroup .row { margin-right: 0px; margin-left: 0px; }';
-            html += 'div.conditiongroup div.conditionrow:nth-child(odd) { background-color: #e6ffe6; }';
-            html += 'div.conditionrow,div.buttonrow { padding: 8px; }';
-            html += 'div.conditionrow.tbmodified:not(.tberror) { border-left: 4px solid green; }';
-            html += 'div.conditionrow.tberror { border-left: 4px solid red; }';
+            html += "div#conditions.reactortab .tb-about { margin-top: 24px; }";
+            html += "div#conditions.reactortab .color-green { color: #006040; }";
+            html += 'div#conditions.reactortab .tberror { border: 1px solid red; }';
+            html += 'div#conditions.reactortab .tbwarn { border: 1px solid yellow; background-color: yellow; }';
+            html += 'div#conditions.reactortab div.warning { color: red; }';
+            html += 'div#conditions.reactortab i.md-btn:disabled { color: #cccccc; cursor: auto; }';
+            html += 'div#conditions.reactortab i.md-btn[disabled] { color: #cccccc; cursor: auto; }';
+            html += 'div#conditions.reactortab i.md-btn { color: #004020; font-size: 14pt; cursor: pointer; }';
+            html += 'div#conditions.reactortab input.tbinvert { min-width: 16px; min-height: 16px; }';
+            html += 'div#conditions.reactortab div.conditions { width: 100%; }';
+            html += 'div#conditions.reactortab div.tblisttitle { background-color: #006040; color: #fff; padding: 8px; min-height: 42px; }';
+            html += 'div#conditions.reactortab div.tblisttitle span.titletext { font-size: 16px; font-weight: bold; margin-right: 4em; }';
+            html += 'div#conditions.reactortab input.narrow { max-width: 8em; }';
+            html += 'div#conditions.reactortab input.tiny { max-width: 3em; }';
+            html += 'div#conditions.reactortab input.titleedit { font-size: 12px; height: 24px; }';
+            html += 'div#conditions.reactortab div.conditiongroup { border-radius: 8px; border: 2px solid #006040; margin-bottom: 8px; }';
+            html += 'div#conditions.reactortab div.conditiongroup.groupdisabled { background-color: #ccc !important; color: #000 !important }';
+            html += 'div#conditions.reactortab label[for="grpdisable"] { font-size: 0.9em; }';
+            html += 'div#conditions.reactortab div.conditiongroup .row { margin-right: 0px; margin-left: 0px; }';
+            html += 'div#conditions.reactortab div.conditiongroup div.conditionrow:nth-child(odd) { background-color: #e6ffe6; }';
+            html += 'div#conditions.reactortab div.conditionrow,div.buttonrow { padding: 8px; }';
+            html += 'div#conditions.reactortab div.conditionrow.tbmodified:not(.tberror) { border-left: 4px solid green; }';
+            html += 'div#conditions.reactortab div.conditionrow.tberror { border-left: 4px solid red; }';
             html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
             html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
-            html += 'div.warning { color: red; }';
             html += "</style>";
             jQuery("head").append( html );
 
             /* Body content */
-            html = '';
+            html = '<div id="conditions" class="reactortab">';
             html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>Conditions</h3></div></div>';
             html += '<div class="row"><div class="col-xs-12 col-sm-12">Conditions within a group are "AND", and groups are "OR". That is, the sensor will trip when any group succeeds, and for a group to succeed, all conditions in the group must be met.</div></div>';
 
@@ -2509,7 +2525,7 @@ var ReactorSensor = (function(api, $) {
                 html += '<div class="row"><div class="warning col-xs-12 col-sm-12">WARNING! Retrigger is on! You should avoid using time-related conditions in this ReactorSensor, as they may cause retriggers frequent retriggers!</div></div>';
             }
 
-            html += '<div id="conditions"></div>';
+            html += '</div>';
 
             html += footer();
 
@@ -2675,10 +2691,10 @@ var ReactorSensor = (function(api, $) {
                 jQuery( 'select#scene' ).addClass( "tberror" );
             }
         } else if ( "runlua" === actionType ) {
-            var lua = jQuery( 'textarea', row ).val() || "";
+            var lua = jQuery( 'textarea.luacode', row ).val() || "";
             // check Lua?
             if ( lua.match( /^[\r\n\s]*$/ ) ) {
-                jQuery( 'textarea', row ).addClass( "tberror" );
+                jQuery( 'textarea.luacode', row ).addClass( "tberror" );
             }
         } else {
             row.addClass( "tberror" );
@@ -2794,7 +2810,7 @@ var ReactorSensor = (function(api, $) {
                 });
                 firstScene = false;
             } else if ( "runlua" === actionType ) {
-                var lua = jQuery( 'textarea', row ).val() || "";
+                var lua = jQuery( 'textarea.luacode', row ).val() || "";
                 lua = lua.replace( /\r\n/g, "\n" );
                 lua = lua.replace( /\r/, "\n" );
                 lua = lua.replace( /\s+\n/g, "\n" );
@@ -3084,7 +3100,19 @@ var ReactorSensor = (function(api, $) {
                         var refdev = devnum;
                         while ( pt.length > 0 ) {
                             var seg = decodeURIComponent( pt.shift() || "" ).trim();
-                            if ( "parent" === seg ) {
+                            if ( "openluup" === seg ) {
+                                /* Fail immediately if not running on openLuup */
+                                if ( ! isOpenLuup ) {
+                                    stack.push( false );
+                                    break;
+                                }
+                            } else if ( "vera" === seg ) {
+                                /* Fail immediately if not running on genuine Vera */
+                                if ( isOpenLuup ) {
+                                    stack.push( false );
+                                    break;
+                                }
+                            } else if ( "parent" === seg ) {
                                 /* Does not change stack, but switches reference device to parent */
                                 if ( 0 !== devobj.id_parent ) {
                                     refdev = devobj.id_parent;
@@ -3275,10 +3303,9 @@ var ReactorSensor = (function(api, $) {
                     hasAction = true;
                     if ( undefined === actions[key] ) {
                         actions[key] = deviceInfo.services[devact.service].actions[devact.action];
-                        actions[key].deviceOverride = { newVal: act };
-                    } else {
-                        actions[key].deviceOverride[newVal] = act;
+                        actions[key].deviceOverride = {};
                     }
+                    actions[key].deviceOverride[newVal] = act;
                 }
                 known.append("<option disabled/>");
                 actionMenu.prepend( known.children() );
@@ -3316,6 +3343,41 @@ var ReactorSensor = (function(api, $) {
         changeActionDevice( row, newVal, changeActionRow, [ row ] );
     }
 
+    /* Convert plain textarea to ACE. Keep the textarea as shadow field for content
+     * that's synced with ACE content--it's easier to read from that (and consistent) */
+    function doEditor( field ) {
+        var ediv = jQuery( '<div class="editor"/>' );
+        ediv.insertAfter( field );
+		var editor = ace.edit( ediv.get(0), {
+			minLines: 8,
+			maxLines: 32,
+			theme: "ace/theme/xcode",
+			mode: "ace/mode/lua",
+			fontSize: "16px",
+			tabSize: 4
+		});
+        /* Apply options from state if set -- ??? get from master/parent ??? */
+		var exopts = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "AceOptions" ) || "";
+		if ( exopts !== "" ) {
+			try {
+				var opts = JSON.parse( exopts );
+				if ( opts !== undefined ) {
+					editor.setOptions( opts );
+				}
+			} catch( e ) {
+				alert("Can't apply your custom AceOptions: " + String(e));
+			}
+		}
+		var session = editor.session;
+		session.setValue( field.val() || "" );
+		editor.on( 'change', function( delta ) { field.val( session.getValue() ) } );
+		editor.on( 'blur', handleActionValueChange );
+        /* Finally, hide our field, remove any change action, and add a custom action
+           to reload ACE from the field. */
+        field.off( 'change.reactor' ).hide();
+        field.on( 'reactorinit', function() { session.setValue( field.val() || "" ); } );
+    }
+
     function changeActionType( row, newVal ) {
         var ct = jQuery('div.actiondata', row);
         ct.empty();
@@ -3348,9 +3410,13 @@ var ReactorSensor = (function(api, $) {
             ct.append( m );
             jQuery( 'i#action-import', row ).show();
         } else if ( "runlua" === newVal ) {
-            var txt = jQuery( '<textarea id="lua" wrap="off" class="luacode form-control form-control-sm" rows="6"/>' );
-            ct.append( txt );
-            txt.on( 'change.reactor', handleActionValueChange );
+            /* Handle upgrade to ACE separately */
+            ct.append( '<textarea id="lua" wrap="off" autocorrect="off" autocomplete="off" autocapitalize="off" spellcheck="off" class="luacode form-control form-control-sm" rows="6"/>' );
+            if ( typeof(ace) != "undefined" ) {
+                doEditor( jQuery( 'textarea.luacode', ct ) );
+            } else {
+                jQuery( 'textarea.luacode', ct ).on( 'change.reactor', handleActionValueChange );
+            }
             ct.append('<div class="tbhint">Your Lua code must return boolean <em>true</em> or <em>false</em>. Action execution will stop if anything other than boolean true, or nothing, is returned by your code (this is a feature). It is also recommended that the first line of your Lua be a comment with text to help you identify the code--if there\'s an error logged, the first line of the script is almost always shown. Also, you can use the <tt>print()</tt> function to write to Reactor\'s event log, which is shown in the Logic Summary and easier/quicker to get at than the Vera logs.</div>');
         } else {
             ct.append('<div class="tberror">Type ' + newVal + '???</div>');
@@ -3635,9 +3701,10 @@ var ReactorSensor = (function(api, $) {
                 } else if ( "housemode" === act.type ) {
                     jQuery( 'select#housemode', newRow ).val( act.housemode || 1 );
                 } else if ( "runlua" === act.type ) {
+                    var el = jQuery( 'textarea.luacode', newRow );
                     if ( act.lua ) {
                         var lua = act.encoded_lua ? atob( act.lua ) : act.lua;
-                        jQuery( 'textarea', newRow ).val( lua );
+                        el.val( lua ).trigger( 'reactorinit' );
                     }
                 } else {
                     console.log("loadActions: what's a " + act.type + "? Skipping it!");
@@ -3656,6 +3723,7 @@ var ReactorSensor = (function(api, $) {
 
     function doActivities()
     {
+        console.log("doActivities()");
         var myid = api.getCpanelDeviceId();
 
         try {
@@ -3710,7 +3778,7 @@ var ReactorSensor = (function(api, $) {
                     }
                 }
             }
-            jQuery( 'div.reactoractions' ).append( dl );
+            jQuery( 'div#reactoractions.reactortab' ).append( dl );
 
             jQuery("button.addaction").on( 'click.reactor', handleAddActionClick );
             jQuery("button#saveconf").on( 'click.reactor', handleActionsSaveClick ).prop( "disabled", true );
@@ -3733,38 +3801,39 @@ var ReactorSensor = (function(api, $) {
 
         /* Our styles. */
         var html = "<style>";
-        html += ".tb-about { margin-top: 24px; }";
-        html += ".color-green { color: #428BCA; }";
-        html += '.tberror { border: 1px solid red; }';
-        html += '.tbwarn { border: 1px solid yellow; background-color: yellow; }';
-        html += 'i.md-btn:disabled { color: #cccccc; cursor: auto; }';
-        html += 'i.md-btn[disabled] { color: #cccccc; cursor: auto; }';
-        html += 'i.md-btn { color: #2d6a9f; font-size: 14pt; cursor: pointer; }';
-        html += 'input.tbinvert { min-width: 16px; min-height: 16px; }';
-        html += 'input.narrow { max-width: 8em; }';
-        html += 'div.actionlist { border-radius: 8px; border: 2px solid #428BCA; margin-bottom: 16px; }';
-        html += 'div.actionlist .row { margin-right: 0px; margin-left: 0px; }';
-        html += 'div.tblisttitle { background-color: #428BCA; color: #fff; padding: 8px; min-height: 42px; }';
-        html += 'div.tblisttitle span.titletext { font-size: 16px; font-weight: bold; margin-right: 4em; }';
-        html += 'div.actionlist label:not(.required) { font-weight: normal; }';
-        html += 'div.actionlist label.required { font-weight: bold; }';
-        html += 'div.actionlist.tbmodified div.tblisttitle span.titletext:after { content: " (unsaved)" }';
-        html += 'div.actionrow,div.buttonrow { padding: 8px; }';
-        html += 'div.actionlist div.actionrow:nth-child(odd) { background-color: #EFF6FF; }';
-        html += 'div.actionrow.tbmodified:not(.tberror) { border-left: 4px solid green; }';
-        html += 'div.actionrow.tberror { border-left: 4px solid red; }';
-        html += 'input#comment { width: 100% !important; }';
-        html += 'textarea.luacode { font-family: monospace; resize: vertical; width: 100% !important; }';
-        html += 'div.tbhint { font-size: 90%; font-weight: normal; }';
+        html += "div#reactoractions.reactortab .tb-about { margin-top: 24px; }";
+        html += "div#reactoractions.reactortab .color-green { color: #428BCA; }";
+        html += 'div#reactoractions.reactortab .tberror { border: 1px solid red; }';
+        html += 'div#reactoractions.reactortab .tbwarn { border: 1px solid yellow; background-color: yellow; }';
+        html += 'div#reactoractions.reactortab i.md-btn:disabled { color: #cccccc; cursor: auto; }';
+        html += 'div#reactoractions.reactortab i.md-btn[disabled] { color: #cccccc; cursor: auto; }';
+        html += 'div#reactoractions.reactortab i.md-btn { color: #2d6a9f; font-size: 14pt; cursor: pointer; }';
+        html += 'div#reactoractions.reactortab input.tbinvert { min-width: 16px; min-height: 16px; }';
+        html += 'div#reactoractions.reactortab input.narrow { max-width: 8em; }';
+        html += 'div#reactoractions.reactortab div.actionlist { border-radius: 8px; border: 2px solid #428BCA; margin-bottom: 16px; }';
+        html += 'div#reactoractions.reactortab div.actionlist .row { margin-right: 0px; margin-left: 0px; }';
+        html += 'div#reactoractions.reactortab div.tblisttitle { background-color: #428BCA; color: #fff; padding: 8px; min-height: 42px; }';
+        html += 'div#reactoractions.reactortab div.tblisttitle span.titletext { font-size: 16px; font-weight: bold; margin-right: 4em; }';
+        html += 'div#reactoractions.reactortab div.actionlist label:not(.required) { font-weight: normal; }';
+        html += 'div#reactoractions.reactortab div.actionlist label.required { font-weight: bold; }';
+        html += 'div#reactoractions.reactortab div.actionlist.tbmodified div.tblisttitle span.titletext:after { content: " (unsaved)" }';
+        html += 'div#reactoractions.reactortab div.actionrow,div.buttonrow { padding: 8px; }';
+        html += 'div#reactoractions.reactortab div.actionlist div.actionrow:nth-child(odd) { background-color: #EFF6FF; }';
+        html += 'div#reactoractions.reactortab div.actionrow.tbmodified:not(.tberror) { border-left: 4px solid green; }';
+        html += 'div#reactoractions.reactortab div.actionrow.tberror { border-left: 4px solid red; }';
+        html += 'div#reactoractions.reactortab input#comment { width: 100% !important; }';
+        html += 'div#reactoractions.reactortab textarea.luacode { font-family: monospace; resize: vertical; width: 100% !important; }';
+        html += 'div#reactoractions.reactortab div.editor { width: 100%; min-height: 240px; }';
+        html += 'div#reactoractions.reactortab div.tbhint { font-size: 90%; font-weight: normal; }';
         html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
         html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
-        html += 'div.warning { color: red; }';
-        html += 'option.optheading { font-weight: bold; }';
-        html += 'option.nodata { font-style: italic; }';
-        html += 'option.nodata:after { content: "[1] see footer"; }';
-        html += '.tbslider { display: inline-block; width: 200px; height: 1em; border-radius: 8px; }';
-        html += '.tbslider .ui-slider-handle { background: url("/cmh/skins/default/img/other/slider_horizontal_cursor_24.png?") no-repeat scroll left center rgba(0,0,0,0); cursor: pointer !important; height: 24px !important; width: 24px !important; margin-top: 6px; font-size: 12px; text-align: center; padding-top: 4px; text-decoration: none; }';
-        html += '.tbslider .ui-slider-range-min { background-color: #12805b !important; }';
+        html += 'div#reactoractions.reactortab div.warning { color: red; }';
+        html += 'div#reactoractions.reactortab option.optheading { font-weight: bold; }';
+        html += 'div#reactoractions.reactortab option.nodata { font-style: italic; }';
+        html += 'div#reactoractions.reactortab option.nodata:after { content: "[1] see footer"; }';
+        html += 'div#reactoractions.reactortab .tbslider { display: inline-block; width: 200px; height: 1em; border-radius: 8px; }';
+        html += 'div#reactoractions.reactortab .tbslider .ui-slider-handle { background: url("/cmh/skins/default/img/other/slider_horizontal_cursor_24.png?") no-repeat scroll left center rgba(0,0,0,0); cursor: pointer !important; height: 24px !important; width: 24px !important; margin-top: 6px; font-size: 12px; text-align: center; padding-top: 4px; text-decoration: none; }';
+        html += 'div#reactoractions.reactortab .tbslider .ui-slider-range-min { background-color: #12805b !important; }';
         html += "</style>";
         jQuery("head").append( html );
 
@@ -3792,10 +3861,11 @@ var ReactorSensor = (function(api, $) {
             deviceInfo = data;
 
             /* Body content */
+            html += '<div id="reactoractions" class="reactortab">';
+            
             html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>Activities</h3></div></div>';
             html += '<div class="row"><div class="col-xs-12 col-sm-12">Activities are actions that Reactor will perform on its own when tripped or untripped.</div></div>';
 
-            html += '<div class="reactoractions fullwidth">';
 
             html += '<div id="tripactions" class="actionlist">';
             html += '<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span class="titletext">Trip Actions</span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>';
@@ -3832,13 +3902,15 @@ var ReactorSensor = (function(api, $) {
             }
         });
     }
+    
+    console.log("Initializing ReactorSensor module");
 
     myModule = {
         uuid: uuid,
         initModule: initModule,
         onBeforeCpanelClose: onBeforeCpanelClose,
         onUIDeviceStatusChanged: onUIDeviceStatusChanged,
-        doTest: doTest,
+        doTools: doTools,
         doSettings: doSettings,
         doActivities: preloadActivities,
         doConditions: doConditions,
