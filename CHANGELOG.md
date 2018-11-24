@@ -6,6 +6,10 @@ TO-DO:
 ( Nothing -- all planned items for this release have been completed )
 At this point, if it's not on the above TO-DO list, it's probably not going into 2.0. Time to button it up and ship it!
 
+beta1811xx01:
+* (internal) Smooth out updating of device database and submission of device data.
+* (internal) Finalize support for openLuup. This requires users to upgrade to development version 2018.11.21 or higher (Github "development" branch).
+
 beta18112201:
 * (feature) Allow renaming of groups, so you can give them functional names rather than the unique IDs automatically assigned. Valid group names must start with a letter with alphanumeric (and underscore) allowed to follow.
 * (feature) Make sure each action logs a message to ReactorSensor's event log, and preserve the log across sensor restarts. Also add a new MaxEvents start variable on the master device to override the default of 50 events (per sensor, applies to all).
