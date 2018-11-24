@@ -1569,11 +1569,10 @@ var ReactorSensor = (function(api, $) {
             jQuery("button.addcond", gel).on( 'click.reactor', handleAddConditionClick );
         }
 
-        /* Insert add group button row (not a divider) */
-        jQuery("div#conditions.reactortab").append('<div class="row"><div class="col-sm-2"><hr></div>' +
-            '<div class="col-sm-2"><button id="addgroup" class="btn btn-sm btn-primary">Add Group</button></div>' +
-            '<div class="col-sm-4"><hr></div>' +
-            '<div class="col-sm-4"><button id="saveconf" class="btn btn-sm btn-success">Save</button><button id="revertconf" class="btn btn-sm btn-danger">Revert</button></div>' +
+        /* Insert add group button row (not a divider but looks similar) */
+        jQuery("div#conditions.reactortab").append('<div class="row"><div class="col-sm-5"><hr></div>' +
+            '<div class="col-sm-2 text-center"><button id="addgroup" class="btn btn-sm btn-primary">Add Group</button></div>' +
+            '<div class="col-sm-5"><hr></div>' +
             '</div>');
         jQuery("button#addgroup").on( 'click.reactor', handleAddGroupClick );
         jQuery("button#saveconf").on( 'click.reactor', handleSaveClick );
