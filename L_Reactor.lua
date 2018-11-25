@@ -2223,9 +2223,9 @@ local function waitSystemReady( pdev )
         if d.device_type == "urn:schemas-micasaverde-com:device:ZWaveNetwork:1" then
             local sysStatus = luup.variable_get( "urn:micasaverde-com:serviceId:ZWaveNetwork1", "NetStatusID", n )
             if sysStatus ~= nil and sysStatus ~= "1" then
-                -- Z-wave not yet ready
-                D("Waiting for Z-wave ready, status %1", sysStatus)
-                luup.variable_set( MYSID, "Message", "Waiting for Z-wave ready", pdev )
+                -- Z-Wave not yet ready
+                D("Waiting for Z-Wave ready, status %1", sysStatus)
+                luup.variable_set( MYSID, "Message", "Waiting for Z-Wave ready", pdev )
                 scheduleDelay( { id=tostring(pdev), func=waitSystemReady, owner=pluginDevice }, 5 )
                 return
             end
