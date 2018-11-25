@@ -113,7 +113,7 @@ local function checkVersion(dev)
     if isOpenLuup then 
         return true 
     end
-    if (luup.version_branch == 1 and luup.version_major >= 7) then
+    if luup.version_branch == 1 and luup.version_major == 7 then
         if ui7Check == "" then
             -- One-time init for UI7 or better
             luup.variable_set( MYSID, "UI7Check", "true", dev )
@@ -2313,6 +2313,7 @@ function startPlugin( pdev )
     end
 
     -- Check for ALTUI and OpenLuup
+    local failmsg = false
     for k,v in pairs(luup.devices) do
         if v.device_type == "urn:schemas-upnp-org:device:altui:1" then
             D("start() detected ALTUI at %1", k)
@@ -2337,12 +2338,25 @@ function startPlugin( pdev )
         elseif v.device_type == "openLuup" then
             D("start() detected openLuup")
             isOpenLuup = true
+            local vv = getVarNumeric( "Vnumber", 0, k, v.device_type )
+            if vv < 181121 then
+                L({level=1,msg="OpenLuup version must be at least 181121; you have %1. Can't continue."}, vv)
+                luup.variable_set( MYSID, "Message", "Unsupported firmware " .. tostring(vv), pdev )
+                luup.set_failure( 1, pdev )
+                failmsg = "Incompatible openLuup ver " .. tostring(vv)
+            end
+        elseif v.device_type == RSTYPE then
+            luup.variable_set( RSSID, "Message", "Stopped", k )
         end
+    end
+    if failmsg then
+        return false, failmsg, _PLUGIN_NAME
     end
 
     -- Check UI version
     if not checkVersion( pdev ) then
         L({level=1,msg="This plugin does not run on this firmware."})
+        luup.variable_set( MYSID, "Message", "Unsupported firmware "..tostring(luup.version), pdev )
         luup.set_failure( 1, pdev )
         return false, "Incompatible firmware " .. luup.version, _PLUGIN_NAME
     end
