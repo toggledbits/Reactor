@@ -1212,10 +1212,10 @@ local function loadSensorConfig( tdev )
         
         local st = split( s, "," )
         if st[1] ~= "" then
-            cdata.tripactions = { groups={ { delay=0, actions={ ['type']="runscene", scene=st[1] } } } }
+            cdata.tripactions = { groups={ { delay=0, actions={ { ['type']="runscene", scene=st[1] } } } } }
         end
         if #st > 1 and st[2] ~= "" then
-            cdata.untripactions = { groups={ { delay=0, actions={ ['type']="runscene", scene=st[2] } } } }
+            cdata.untripactions = { groups={ { delay=0, actions={ { ['type']="runscene", scene=st[2] } } } } }
         end
         cdata.timestamp = os.time()
         luup.variable_set( RSSID, "cdata", json.encode( cdata ), tdev )

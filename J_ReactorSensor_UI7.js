@@ -2889,8 +2889,8 @@ var ReactorSensor = (function(api, $) {
                 lua = lua.replace( /[\r\n\s]+$/m, "" ); // rtrim
                 lua = unescape( encodeURIComponent( lua ) ); // Fanciness to keep UTF-8 chars well
                 if ( "" === lua ) {
-                    action.encoded_lua = false;
-                    delete action.lua;
+                    delete action.encoded_lua;
+                    action.lua = "";
                 } else {
                     action.encoded_lua = true;
                     action.lua = btoa( lua );
@@ -3634,15 +3634,28 @@ var ReactorSensor = (function(api, $) {
                     timeout: 5000
                 }).done( function( data, statusText, jqXHR ) {
                     var pred = row;
+                    /* Sort groups by delay ascending */
+                    data.groups = data.groups || [];
+                    data.groups.sort( function( a, b ) { return (a.delay||0) - (b.delay||0); });
                     for ( var ig=0; ig<(data.groups || []).length; ig++ ) {
                         var newRow;
                         var gr = data.groups[ig];
-                        if ( 0 !== (gr.delay || 0) ) {
+                        if ( 0 === ig && "" !== (data.lua || "") ) {
+                            /* First action in first group is scene Lua if it's there */
+                            var lua = (data.encoded_lua || 0) != 0 ? atob(data.lua) : data.lua;
+                            newRow = getActionRow();
+                            jQuery( "select#actiontype", newRow).val( "runlua" );
+                            changeActionType( newRow, "runlua" );
+                            jQuery( "textarea.luacode", newRow ).val( lua ).trigger( "reactorinit" );
+                            pred = newRow.addClass( "tbmodified" ).insertAfter( pred );
+                        }
+                        if ( 0 != (gr.delay || 0) ) {
+                            /* Delayed group -- insert delay action */
                             newRow = getActionRow();
                             jQuery( "select#actiontype", newRow).val( "delay" );
                             changeActionType( newRow, "delay" );
                             jQuery( "input#delay", newRow ).val( gr.delay );
-                            jQuery( "select#delaytype", newRow ).val( "inline" );
+                            jQuery( "select#delaytype", newRow ).val( "start" );
                             pred = newRow.addClass( "tbmodified" ).insertAfter( pred );
                         }
                         for ( var k=0; k < (gr.actions || []).length; k++ ) {
