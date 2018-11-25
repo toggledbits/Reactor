@@ -86,9 +86,9 @@
                         "Left": 50,
                         "Width": 75,
                         "Height": 20,
-                        "Service": "urn:toggledbits-com:serviceId:ReactorSensor",
-                        "Variable": "Status",
-                        "Value": "idle"
+                        "Service": "urn:micasaverde-com:serviceId:SecuritySensor1",
+                        "Variable": "Tripped",
+                        "Value": "0"
                     },
                     "Command": {
                         "Service": "urn:toggledbits-com:serviceId:ReactorSensor",
@@ -110,7 +110,10 @@
                         "Top": 30,
                         "Left": 150,
                         "Width": 75,
-                        "Height": 20
+                        "Height": 20,
+                        "Service": "urn:micasaverde-com:serviceId:SecuritySensor1",
+                        "Variable": "Tripped",
+                        "Value": "1"
                     },
                     "Command": {
                         "Service": "urn:toggledbits-com:serviceId:ReactorSensor",
@@ -302,14 +305,14 @@
         },
         {
             "Label": {
-                "lang_tag": "tb_reactorsensor_doTest",
+                "lang_tag": "tb_reactorsensor_doTools",
                 "text": "Tools"
             },
             "Position": 4,
             "TabType": "javascript",
             "TopNavigationTab": 1,
             "ScriptName": "J_ReactorSensor_UI7.js",
-            "Function": "ReactorSensor.doTest"
+            "Function": "ReactorSensor.doTools"
         },
         {
             "Label": {
