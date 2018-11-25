@@ -7,8 +7,10 @@ TO-DO:
 At this point, if it's not on the above TO-DO list, it's probably not going into 2.0. Time to button it up and ship it!
 
 beta1811xx01:
+
+beta18112501:
 * (internal) Fix bug/omission reported by Forzaalfa where scene Lua wasn't coming over with "scene import" function.
-* (internal) Fix bug reported by Forzaalfa where initial run of 2.0 wasn't correctly upgrading trip/untrip scenes to actions. Not enough indirection creating array of actions; fixed!
+* (internal) Fix bug reported by Forzaalfa where initial run of 2.0 wasn't correctly upgrading 1.x trip/untrip scene assignments to actions.
 * (internal) Smooth out updating of device database and submission of device data.
 * (internal) Finalize support for openLuup. This requires users to upgrade to development version 2018.11.21 or higher (Github "development" branch).
 
