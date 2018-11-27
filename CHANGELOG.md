@@ -7,6 +7,7 @@ TO-DO:
 At this point, if it's not on the above TO-DO list, it's probably not going into 2.0. Time to button it up and ship it!
 
 beta1811xx01:
+* (internal) Clean up backup/restore function, which removes much code from the Lua side, as the restore can be done from the JS side and offer a much better UI.
 
 beta18112501:
 * (internal) Fix bug/omission reported by Forzaalfa where scene Lua wasn't coming over with "scene import" function.

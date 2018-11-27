@@ -3011,63 +3011,24 @@ function request( lul_request, lul_parameters, lul_outputformat )
         end
         local bdata = json.encode( st )
         if action == "backup" then
-            local bfile = lul_parameters.path or ( ( isOpenLuup and "." or "/etc/cmh-ludl" ) .. "/reactor-config-backup.json" )
+            local bfile = "/etc/cmh-ludl/reactor-config-backup.json"
+            if isOpenLuup then
+                local loader = require "openLuup.loader"
+                if loader.find_file == nil then return json.encode{ status=false, message="Your openLuup is out of update; please update." } end
+                bfile = loader.find_file( "L_Reactor.lua" ).gsub( "L_Reactor.lua$", "" ) .. "reactor-config-backup.json"
+            end
             local f = io.open( bfile, "w" )
             if f then
                 f:write( bdata )
                 f:close()
             else
-                return "ERROR can't write " .. bfile, "text/plain"
+                error("ERROR can't write " .. bfile)
             end
         end
-        return bdata, "application/json"
-
-    elseif action == "restore" then
-        local bfile =  lul_parameters.path or ( ( isOpenLuup and "." or "/etc/cmh-ludl" ) .. "/reactor-config-backup.json" )
-        return "<h1>WARNING</h1>Restoring will WIPE OUT the configuration of any existing ReactorSensor with a name matching that in the configuration backup! Close this tab/window to abort the restore, or <a href=\"/port_3480/data_request?id=lr_Reactor&action=restoreconfirmed&path="
-            .. urlencode( bfile ) .. "\">Click here to restore configuration over the existing</a>.", "text/html"
-            
-    elseif action == "restoreconfirmed" then
-        -- Default file path or user-provided override
-        local bfile = lul_parameters.path
-        if (bfile or "") == "" then return "ERROR missing path", "text/plain" end
-        local f = io.open( bfile, "r" )
-        if not f then return "ERROR can't open restore file " .. bfile, "text/plain" end
-        local bdata = f:read("*a")
-        f:close()
-        local data = json.decode( bdata )
-        if not data then return "ERROR can't decode restore file " .. bfile, "text/plain" end
-        local html = "<h1>Restoring</h1>Backup data from " .. os.date("%x %X", data.timestamp or 0)
-        local good = 0
-        local found = 0
-        for _,c in pairs( data.sensors or {} ) do
-            found = found + 1
-            local k,v = findDeviceByName( c.name )
-            if k ~= nil then
-                if v.device_type ~= RSTYPE then
-                    html = html .. "<br>" .. c.name .. " SKIPPED; current device with that name is not a ReactorSensor"
-                elseif c.config ~= nil then
-                    luup.variable_set( RSSID, "cdata", json.encode( c.config ), k )
-                    luup.variable_set( RSSID, "cstate", "{}", k )
-                    html = html .. "<br>" .. c.name .. " restored!"
-                    good = good + 1
-                end
-            else
-                html = html .. "<br>" .. c.name .. " SKIPPED; device not found"
-            end
-        end
-        if good > 0 then
-            luup.variable_set( MYSID, "scenedata", "{}", pluginDevice )
-            luup.variable_set( MYSID, "runscene", "{}", pluginDevice )
-            html = html .. "<br>&nbsp;<br><b>DONE!</b> Restored " .. good .. " of " .. found .. " in backup. You must <a href=\"/port_3480/data_request?id=reload\">reload Luup</a> now."
-        else
-            html = html .. "<br>&nbsp;<br><b>DONE!</b> Restored NONE of " .. found .. " in backup."
-        end
-        return html, "text/html"
-        
+        return json.encode( { status=true, message="Done!", file=bfile } ), "application/json"
+      
     elseif action == "purge" then
         luup.variable_set( MYSID, "scenedata", "{}", pluginDevice )
-        luup.variable_set( MYSID, "runscene", "{}", pluginDevice )
         scheduleDelay( { id="reload", func=luup.reload, owner=pluginDevice }, 2 )
         return  "Purged; reloading Luup.", "text/plain"
         
