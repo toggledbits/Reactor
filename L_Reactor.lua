@@ -1204,6 +1204,11 @@ local function loadSensorConfig( tdev )
         L("Unable to parse JSON data at %2, %1 in %3", pos, err, s)
         return error("Unable to load configuration")
     end
+    -- Special meta to control encode rendering when needed.
+    local mt = { __jsontype="object" } -- empty tables render as object
+    mt.__index = function(t, n) if debugMode then L({level=1,msg="access to %1 in cdata, which is undefined!"},n) end return rawget(t,n) end
+    mt.__newindex = function(t, n, v) rawset(t,n,v) if debugMode then L({level=2,msg="setting %1=%2 in cdata"}, n, v) end end
+    setmetatable( cdata, mt )
     -- Check old-style scene runners, fix.
     s = luup.variable_get( RSSID, "Scenes", tdev ) or ""
     if s ~= "" then
@@ -1312,6 +1317,7 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
         ctx[vname] = luaxp.NULL
         local msg = (err or {}).message or "Failed"
         if (err or {}).location ~= nil then msg = msg .. " at " .. tostring(err.location) end
+        luup.variable_set( VARSID, vname, "", tdev )
         luup.variable_set( VARSID, vname .. "_Error", msg, tdev )
         return nil, err
     end
@@ -1370,8 +1376,6 @@ local function updateVariables( cdata, tdev )
     for n,_ in pairs(cdata.variables or {}) do table.insert( vars, n ) end
     D("updateVariables() updating vars=%1", vars)
     local ctx = getExpressionContext( cdata, tdev )
-    -- Save context on cdata
-    cdata.ctx = ctx
     -- Perform evaluations.
     for _,n in ipairs( vars ) do
         if not ctx[n] then -- not yet evaluated this run?
@@ -1425,8 +1429,8 @@ end
 
 local function evaluateCondition( cond, grp, cdata, tdev )
     D("evaluateCondition(%1,%2,cdata,%3)", cond, grp.groupid, tdev)
-    local now = cdata.timebase
-    local ndt = cdata.timeparts
+    local now = sensorState[tostring(tdev)].timebase
+    local ndt = sensorState[tostring(tdev)].timeparts
     local hasTimer = false
     if cond.type == "service" then
         -- Can't succeed if referenced device doesn't exist.
@@ -1446,7 +1450,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         cond.lastvalue = { value=vv, timestamp=now }
 
         -- Get condition value
-        local cv,cn = getValue( cond.value, cdata.ctx, tdev )
+        local cv,cn = getValue( cond.value, sensorState[tostring(tdev)].ctx, tdev )
 
         -- If case-insensitive, canonify to lowercase.
         if cond.nocase then
@@ -1810,8 +1814,8 @@ local function evaluateGroup( grp, cdata, tdev )
     if grp.groupconditions == nil or #grp.groupconditions == 0 then return false end -- empty group always false
     local hasTimer = false;
     local passed = true; -- innocent until proven guilty
-    local now = cdata.timebase
     local skey = tostring(tdev)
+    local now = sensorState[skey].timebase
     sensorState[skey].condState[grp.groupid] = sensorState[skey].condState[grp.groupid] or {}
     local gs = sensorState[skey].condState[grp.groupid]
     local latched = {}
@@ -2024,7 +2028,7 @@ end
 -- Perform update tasks
 local function updateSensor( tdev )
     D("updateSensor(%1) %2", tdev, luup.devices[tdev].description)
-
+    
     -- If not enabled, no work to do.
     if not isEnabled( tdev ) then
         D("updateSensor() disabled; no action")
@@ -2032,29 +2036,29 @@ local function updateSensor( tdev )
     end
     
     -- Reload sensor state if cache purged
-    if sensorState[tostring(tdev)].condState == nil then
-        sensorState[tostring(tdev)].condState = loadCleanState( tdev )
-        sensorState[tostring(tdev)].condState.lastSaved = nil -- flag no expiry during use
+    local skey = tostring(tdev)
+    if sensorState[skey].condState == nil then
+        sensorState[skey].condState = loadCleanState( tdev )
+        sensorState[skey].condState.lastSaved = nil -- flag no expiry during use
     end
 
     -- Check throttling for update rate
     local hasTimer = false -- luacheck: ignore 311/hasTimer
     local maxUpdate = getVarNumeric( "MaxUpdateRate", 30, tdev, RSSID )
-    local _, _, rate60 = rateLimit( sensorState[tostring(tdev)].updateRate, maxUpdate, false )
+    local _, _, rate60 = rateLimit( sensorState[skey].updateRate, maxUpdate, false )
     if maxUpdate == 0 or rate60 <= maxUpdate then
-        rateBump( sensorState[tostring(tdev)].updateRate )
-        sensorState[tostring(tdev)].updateThrottled = false
+        rateBump( sensorState[skey].updateRate )
+        sensorState[skey].updateThrottled = false
 
         -- Fetch the condition data.
-        local cdata = sensorState[tostring(tdev)].configData
+        local cdata = sensorState[skey].configData
 
         -- Mark a stable base of time
-        cdata.timebase = getVarNumeric( "TestTime", 0, tdev, RSSID )
-        if cdata.timebase == 0 then
-            cdata.timebase = os.time()
-        end
-        cdata.timeparts = os.date("*t", cdata.timebase)
-        D("updateSensor() base time is %1 (%2)", cdata.timebase, cdata.timeparts)
+        local tt = getVarNumeric( "TestTime", 0, tdev, RSSID )
+        sensorState[skey].timebase = tt == 0 and os.time() or tt
+        sensorState[skey].timeparts = os.date("*t", tt)
+        D("updateSensor() base time is %1 (%2)", sensorState[skey].timebase, 
+            sensorState[skey].timeparts)
 
         -- Update state (if changed)
         updateVariables( cdata, tdev )
@@ -2080,35 +2084,35 @@ local function updateSensor( tdev )
         if currTrip ~= newTrip or ( newTrip and retrig ) then
             -- Changed, or retriggerable.
             local maxTrip = getVarNumeric( "MaxChangeRate", 5, tdev, RSSID )
-            _, _, rate60 = rateLimit( sensorState[tostring(tdev)].changeRate, maxTrip, false )
+            _, _, rate60 = rateLimit( sensorState[skey].changeRate, maxTrip, false )
             if maxTrip == 0 or rate60 <= maxTrip then
-                rateBump( sensorState[tostring(tdev)].changeRate )
-                sensorState[tostring(tdev)].changeThrottled = false
+                rateBump( sensorState[skey].changeRate )
+                sensorState[skey].changeThrottled = false
                 trip( newTrip, tdev )
             else
-                if not sensorState[tostring(tdev)].changeThrottled then
+                if not sensorState[skey].changeThrottled then
                     L({level=2,msg="%2 (#%1) trip state changing too fast (%4 > %3/min)! Throttling..."},
                         tdev, luup.devices[tdev].description, maxTrip, rate60)
-                    sensorState[tostring(tdev)].changeThrottled = true
+                    sensorState[skey].changeThrottled = true
                     addEvent{dev=tdev,event='throttle',['type']='change',rate=rate60,limit=maxTrip}
                     setMessage( "Throttled! (high change rate)", tdev )
                 end
                 hasTimer = true -- force, so sensor gets checked later
             end
         end
-        if not sensorState[tostring(tdev)].changeThrottled then
+        if not sensorState[skey].changeThrottled then
             setMessage( newTrip and "Tripped" or "Not tripped", tdev )
         end
 
         -- Save the condition state.
-        sensorState[tostring(tdev)].condState.lastSaved = os.time()
-        luup.variable_set( RSSID, "cstate", json.encode(sensorState[tostring(tdev)].condState), tdev )
+        sensorState[skey].condState.lastSaved = os.time()
+        luup.variable_set( RSSID, "cstate", json.encode(sensorState[skey].condState), tdev )
     else
-        if not sensorState[tostring(tdev)].updateThrottled then
+        if not sensorState[skey].updateThrottled then
             L({level=2,msg="%2 (#%1) updating too fast (%4 > %3/min)! Throttling..."},
                 tdev, luup.devices[tdev].description, maxUpdate, rate60)
             setMessage( "Throttled! (high update rate)", tdev )
-            sensorState[tostring(tdev)].updateThrottled = true
+            sensorState[skey].updateThrottled = true
             addEvent{dev=tdev,event='throttle',['type']='update',rate=rate60,limit=maxUpdate}
         end
         hasTimer = true -- force, so sensor gets checked later.
@@ -2120,7 +2124,7 @@ local function updateSensor( tdev )
     if hasTimer or getVarNumeric( "ContinuousTimer", 0, tdev, RSSID ) ~= 0 then
         D("updateSensor() hasTimer or ContinuousTimer, scheduling update")
         local v = ( 60 - ( os.time() % 60 ) ) + TICKOFFS
-        scheduleDelay( {id=tostring(tdev),info="hasTimer"}, v )
+        scheduleDelay( {id=skey,info="hasTimer"}, v )
     end
 end
 
@@ -2187,14 +2191,15 @@ local function startSensor( tdev, pdev )
     sensor_runOnce( tdev )
 
     -- Initialize instance data; take care not to scrub eventList
-    sensorState[tostring(tdev)] = sensorState[tostring(tdev)] or {}
-    sensorState[tostring(tdev)].eventList = sensorState[tostring(tdev)].eventList or {}
-    sensorState[tostring(tdev)].configData = {}
-    sensorState[tostring(tdev)].condState = {}
-    sensorState[tostring(tdev)].updateRate = initRate( 60, 15 )
-    sensorState[tostring(tdev)].updateThrottled = false
-    sensorState[tostring(tdev)].changeRate = initRate( 60, 15 )
-    sensorState[tostring(tdev)].changeThrottled = false
+    local skey = tostring( tdev )
+    sensorState[skey] = sensorState[skey] or {}
+    sensorState[skey].eventList = sensorState[skey].eventList or {}
+    sensorState[skey].configData = {}
+    sensorState[skey].condState = {}
+    sensorState[skey].updateRate = initRate( 60, 15 )
+    sensorState[skey].updateThrottled = false
+    sensorState[skey].changeRate = initRate( 60, 15 )
+    sensorState[skey].changeThrottled = false
 
     -- Load the config data.
     loadSensorConfig( tdev )
@@ -2898,13 +2903,16 @@ function request( lul_request, lul_parameters, lul_outputformat )
         return r, "text/plain"
 
     elseif action == "tryexpression" then
+        if luup.devices[deviceNum] == nil or luup.devices[deviceNum].device_type ~= RSTYPE then
+            return json.encode{ status=false, message="Invalid device number" }, "application/json"
+        end
         local expr = lul_parameters['expr'] or "?"
         local ctx = getExpressionContext( sensorState[tostring(deviceNum)].configData, deviceNum )
         if luaxp == nil then luaxp = require("L_LuaXP_Reactor") end
         -- if debugMode then luaxp._DEBUG = D end
         ctx.NULL = luaxp.NULL
         local result, err = luaxp.evaluate( expr, ctx )
-        local ret = { resultValue=result, err=err or false, expression=expr }
+        local ret = { status=true, resultValue=result, err=err or false, expression=expr }
         return json.encode( ret ), "application/json"
         
     elseif action == "infoupdate" then
