@@ -1570,6 +1570,10 @@ var ReactorSensor = (function(api, $) {
      * Handle revert button click: restore setting to last saved and redisplay.
      */
     function handleRevertClick( ev ) {
+        if ( ! confirm( "Discard changes and revert to last saved configuration?" ) ) {
+            return;
+        }
+        
         loadConfigData( api.getCpanelDeviceId() );
         configModified = false;
 
@@ -1580,9 +1584,9 @@ var ReactorSensor = (function(api, $) {
         } else if ( ctx === "tab-conds" ) {
             redrawConditions();
         } else if ( ctx === "tab-actions" ) {
-            alert("Please go the Tools tab, then come back here.");
+            redrawActivities();
         } else {
-            alert("OK, I did the revert, but now I'm lost. Go back to the dashboard and come back in.");
+            alert("OK, I did the revert, but now I'm lost. Go to the Status tab, and then come back to this tab.");
         }
     }
 
@@ -3868,10 +3872,17 @@ var ReactorSensor = (function(api, $) {
         }
     }
 
-    function handleActionsRevertClick( ev ) {
-        alert("not yet implemented");
+    /* Redraw the activities lists within the existing tab structure. */
+    function redrawActivities() {
+        var cd = iData[api.getCpanelDeviceId()].cdata;
+        jQuery( 'div#tripactions div.actionrow' ).remove();
+        loadActions( 'tripactions', cd.tripactions || {} );
+        jQuery( 'div#untripactions div.actionrow' ).remove();
+        loadActions( 'untripactions', cd.untripactions || {} );
+        updateActionControls();
     }
 
+    /* Set up the Activities tab */
     function doActivities()
     {
         console.log("doActivities()");
@@ -3914,11 +3925,6 @@ var ReactorSensor = (function(api, $) {
                 }
             }
 
-            /* Load existing configuration (if any) */
-            loadActions( 'tripactions', cd.tripactions || {} );
-            loadActions( 'untripactions', cd.untripactions || {} );
-            updateActionControls();
-
             /* Set up a data list with our variables */
             var dl = jQuery('<datalist id="reactorvars"></datalist>');
             if ( cd.variables ) {
@@ -3930,11 +3936,13 @@ var ReactorSensor = (function(api, $) {
                 }
             }
             jQuery( 'div#tab-actions.reactortab' ).append( dl );
+            
+            redrawActivities();
 
-            jQuery("button.addaction").on( 'click.reactor', handleAddActionClick );
-            jQuery("button#saveconf").on( 'click.reactor', handleActionsSaveClick ).prop( "disabled", true );
-            jQuery("button#revertconf").on( 'click.reactor', handleActionsRevertClick ).prop( "disabled", true );
-
+            jQuery("div#tab-actions.reactortab button.addaction").on( 'click.reactor', handleAddActionClick );
+            jQuery("div#tab-actions.reactortab button#saveconf").on( 'click.reactor', handleActionsSaveClick ).prop( "disabled", true );
+            jQuery("div#tab-actions.reactortab button#revertconf").on( 'click.reactor', handleRevertClick ).prop( "disabled", true );
+            
             if ( undefined !== deviceInfo ) {
                 var uc = jQuery( '<iframe sandbox src="https://www.toggledbits.com/deviceinfo/checkupdate.php?v=' + deviceInfo.serial + '" style="border: 0; height: 24px; width: 100%" />' );
                 uc.insertBefore( jQuery( 'div#tripactions' ) );
