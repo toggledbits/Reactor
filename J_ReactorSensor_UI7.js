@@ -621,9 +621,9 @@ var ReactorSensor = (function(api, $) {
                 /* Pre-sanity check */
                 if ( typ === "trange" && target !== undefined && target.hasClass('year') ) {
                     var pdiv = target.closest('div');
-                    var newval = target.val();
+                    var newval = target.val().trim();
                     /* Vera's a 32-bit system, so date range is bound to MAXINT32 (2038-Jan-19 03:14:07 aka Y2K38) */
-                    if ( newval < 1970 || newval > 2037 ) {
+                    if ( newval != "" && ( (!newval.match( /^[0-9]+$/ )) || newval < 1970 || newval > 2037 ) ) {
                         target.addClass( 'tberror' );
                     } else {
                         var losOtros;
@@ -1115,7 +1115,7 @@ var ReactorSensor = (function(api, $) {
                 container.append('<div class="start"></div>').append('<div class="end"> and </div>');
                 jQuery("div.start", container).append( months.clone() )
                     .append( days.clone() )
-                    .append('<input type="text" placeholder="yyyy" class="year narrow datespec form-control form-control-sm">')
+                    .append('<input type="text" placeholder="yyyy or blank" title="Leave blank for any year" class="year narrow datespec form-control form-control-sm">')
                     .append( hours.clone() )
                     .append( mins.clone() );
                 jQuery("div.end", container).append( months )
