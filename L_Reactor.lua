@@ -2056,7 +2056,7 @@ local function updateSensor( tdev )
         -- Mark a stable base of time
         local tt = getVarNumeric( "TestTime", 0, tdev, RSSID )
         sensorState[skey].timebase = tt == 0 and os.time() or tt
-        sensorState[skey].timeparts = os.date("*t", tt)
+        sensorState[skey].timeparts = os.date("*t", sensorState[skey].timebase)
         D("updateSensor() base time is %1 (%2)", sensorState[skey].timebase, 
             sensorState[skey].timeparts)
 
