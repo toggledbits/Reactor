@@ -2,6 +2,7 @@
 
 ## Version 1.9 (stable branch) ##
 
+* Fix year check on date/time type to prevent Y2K38 problems on 32-bit Veras.
 * Add Interval condition type, which becomes *true* for a short period on the specified interval (days, hours, minutes). An optional relative time spec anchors the cycle reference time; for example, a 4 hour interval with a relative time of 15:00 (3pm) will fire at 03:00, 07:00, 11:00, 15:00, 19:00, and 23:00.
 
 ## Version 1.8 (released) ##
