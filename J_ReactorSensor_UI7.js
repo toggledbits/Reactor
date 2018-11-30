@@ -29,7 +29,7 @@ var ReactorSensor = (function(api) {
     var inStatusPanel = false;
     var lastx = 0;
     var condTypeName = { "service": "Service/Variable", "housemode": "House Mode", "comment": "Comment", "weekday": "Weekday",
-        "sun": "Sunrise/Sunset", "trange": "Date/Time", "reload": "Luup Reloaded" };
+        "sun": "Sunrise/Sunset", "trange": "Date/Time", "interval": "Interval", "reload": "Luup Reloaded" };
     var weekDayName = [ '?', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat' ];
     var monthName = [ '?', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec' ];
     var opName = { "bet": "between", "nob": "not between", "after": "after", "before": "before" };
@@ -40,7 +40,7 @@ var ReactorSensor = (function(api) {
         var html = '';
         html += '<div class="clearfix">';
         html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
-        html += '<div id="tbcopyright">Reactor ver 1.8 &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
+        html += '<div id="tbcopyright">Reactor ver 1.9-stable181118 &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
             ' All Rights Reserved. Please check out the <a href="https://www.toggledbits.com/reactor" target="_blank">online documentation</a>' +
             ' and <a href="http://forum.micasaverde.com/index.php/board,93.0.html" target="_blank">forum board</a> for support.</div>';
         html += '<div id="supportlinks">Support links: ' +
@@ -69,6 +69,14 @@ var ReactorSensor = (function(api) {
             return parseInt( s );
         }
         return NaN;
+    }
+    
+    /* Like getInteger(), but returns dflt if no value provided (blank/all whitespace) */
+    function getOptionalInteger( s, dflt ) {
+        if ( String(s).match( /^\s*$/ ) ) {
+            return dflt;
+        }
+        return getInteger( s );
     }
 
     /* Load configuration data. */
@@ -353,6 +361,25 @@ var ReactorSensor = (function(api) {
                 }
                 break;
                 
+            case 'interval':
+                str += "every";
+                if ( cond.days > 0 ) {
+                    str += " " + String(cond.days) + " days";
+                }
+                if ( cond.hours > 0 ) {
+                    str += " " + String(cond.hours) + " hours";
+                }
+                if ( cond.mins > 0 ) {
+                    str += " " + String(cond.mins) + " minutes";
+                }
+                if ( "" != (cond.basetime || "") ) {
+                    var t = cond.basetime.split(/,/);
+                    str += " (relative to ";
+                    str += t[0] + ":" + t[1];
+                    str += ")";
+                }
+                break;
+
             case 'reload':
                 break; /* no additional information */
 
@@ -568,17 +595,22 @@ var ReactorSensor = (function(api) {
                 /* Pre-sanity check */
                 if ( typ === "trange" && target !== undefined && target.hasClass('year') ) {
                     var pdiv = target.closest('div');
-                    var newval = target.val();
-                    var losOtros;
-                    if ( pdiv.hasClass('start') ) {
-                        losOtros = jQuery('div.end input.year', row);
+                    var newval = target.val().trim();
+                    /* Vera's a 32-bit system, so date range is bound to MAXINT32 (2038-Jan-19 03:14:07 aka Y2K38) */
+                    if ( newval != "" && ( (!newval.match( /^[0-9]+$/ )) || newval < 1970 || newval > 2037 ) ) {
+                        target.addClass( 'tberror' );
                     } else {
-                        losOtros = jQuery('div.start input.year', row);
-                    }
-                    if ( newval === "" && losOtros.val() !== "" ) {
-                        losOtros.val("");
-                    } else if ( newval !== "" && losOtros.val() === "" ) {
-                        losOtros.val(newval);
+                        var losOtros;
+                        if ( pdiv.hasClass('start') ) {
+                            losOtros = jQuery('div.end input.year', row);
+                        } else {
+                            losOtros = jQuery('div.start input.year', row);
+                        }
+                        if ( newval === "" && losOtros.val() !== "" ) {
+                            losOtros.val("");
+                        } else if ( newval !== "" && losOtros.val() === "" ) {
+                            losOtros.val(newval);
+                        }
                     }
                 }
                 /* Fetch and load */
@@ -607,10 +639,6 @@ var ReactorSensor = (function(api) {
                     }
                     res.push( jQuery("div.end select.hourmenu", row).val() || "0" );
                     res.push( jQuery("div.end select.minmenu", row).val() || "0" );
-                }
-                if ( res[5] === "" && res[0] !== "" ) {
-                    res[5] = res[0];
-                    jQuery("div.end input.year", row).val( res[0] );
                 }
                 cond.value = res.join(',');
                 if ( typ === "trange" ) {
@@ -650,6 +678,38 @@ var ReactorSensor = (function(api) {
                 cond.value = res.join(',');
                 break;
             
+            case 'interval':
+                var v = getOptionalInteger( jQuery('div.params #days', row).val(), 0 );
+                if ( isNaN(v) || v < 0 ) {
+                    jQuery( 'div.params #days', row ).addClass( 'tberror' );
+                } else {
+                    cond.days = v;
+                }
+                v = getOptionalInteger( jQuery('div.params #hours', row).val(), 0 );
+                if ( isNaN(v) || v < 0 ) {
+                    jQuery( 'div.params #hours', row ).addClass( 'tberror' );
+                } else {
+                    cond.hours = v;
+                }
+                var v = getOptionalInteger( jQuery('div.params #mins', row).val(), 0 );
+                if ( isNaN(v) || v < 0 ) {
+                    jQuery( 'div.params #mins', row ).addClass( 'tberror' );
+                } else {
+                    cond.mins = v;
+                }
+                var t = cond.days * 1440 + cond.hours * 60 + cond.mins;
+                if ( 0 == t ) {
+                    jQuery( 'div.params select', row ).addClass( 'tberror' );
+                }
+                var rh = jQuery( 'div.params select#relhour' ).val() || "00";
+                var rm = jQuery( 'div.params select#relmin' ).val() || "00";
+                if ( rh == "00" && rm == "00" ) {
+                    cond.basetime = "";
+                } else {
+                    cond.basetime = rh + "," + rm;
+                }
+                break;
+
             case 'reload':
                 /* No parameters */
                 break;
@@ -1070,6 +1130,51 @@ var ReactorSensor = (function(api) {
                 jQuery("input", container).on( 'change.reactor', handleRowChange );
                 break;
 
+            case 'interval':
+                var el = jQuery( '<label for="days">every </label>' );
+                el.append( '<input id="days" title="Enter an integer >= 0" value="0" class="tiny text-center form-control form-control-sm">' );
+                el.append( ' days ' );
+                container.append( el );
+                container.append( " " );
+                el = jQuery( '<label for="hours"> </label>' );
+                el.append( '<input id="hours" title="Enter an integer >= 0" class="tiny text-center form-control form-control-sm">' );
+                el.append( ' hours ' );
+                container.append( el );
+                container.append( " " );
+                el = jQuery( '<label for="mins"> </label> ');
+                el.append( '<input id="mins" title="Enter an integer >= 0" value="0" class="tiny text-center form-control form-control-sm">' );
+                el.append( ' minutes ');
+                container.append( el );
+                container.append( " " );
+                el = jQuery( '<label/>' ).text( " relative to ");
+                var mm = jQuery('<select id="relhour" class="form-control form-control-sm"/>');
+                for ( var hh=0; hh<24; hh++ ) {
+                    var v = ( hh < 10 ? "0" : "" ) + String(hh);
+                    var opt = jQuery('<option/>').val( v ).text( v );
+                    mm.append( opt );
+                }
+                el.append( mm );
+                el.append(" : ");
+                mm = jQuery('<select id="relmin" class="form-control form-control-sm"/>');
+                for ( var m=0; m<60; m+=5 ) {
+                    var v = ( m < 10 ? "0" : "" ) + String(m);
+                    var opt = jQuery('<option/>').val( v ).text( v );
+                    mm.append( opt );
+                }
+                el.append(mm);
+                container.append(el);
+                container.append( " " );
+                jQuery( "#days", container ).val( cond.days || 0 );
+                jQuery( "#hours", container ).val( cond.hours===undefined ? 1 : cond.hours );
+                jQuery( "#mins", container ).val( cond.mins || 0 );
+                if ( "" != ( cond.basetime || "" ) ) {
+                    mm = cond.basetime.split(/,/);
+                    jQuery( '#relhour', container ).val( mm[0] || '00' );
+                    jQuery( '#relmin', container ).val( mm[1] || '00' );
+                }
+                jQuery("select,input", container).on( 'change.reactor', handleRowChange );
+                break;
+
             case 'reload': 
                 /* falls through */
             default:
@@ -1280,7 +1385,7 @@ var ReactorSensor = (function(api) {
         jQuery("div.controls", el).append('<i class="material-icons md-btn action-down">arrow_downward</i>');
         jQuery("div.controls", el).append('<i class="material-icons md-btn action-delete">clear</i>');
 
-        [ "comment", "service", "housemode", "sun", "weekday", "trange", "reload" ].forEach( function( k ) {
+        [ "comment", "service", "housemode", "sun", "weekday", "trange", "interval", "reload" ].forEach( function( k ) {
             jQuery( "div.condtype select", el ).append( jQuery( "<option/>" ).val( k ).text( condTypeName[k] ) );
         });
 
@@ -1416,6 +1521,9 @@ var ReactorSensor = (function(api) {
                         break;
                     case 'trange':
                         removeConditionProperties( cond, 'operator,value' );
+                        break;
+                    case 'interval':
+                        removeConditionProperties( cond, 'days,hours,mins,basetime,duty' );
                         break;
                     case 'reload':
                         removeConditionProperties( cond, "" );
@@ -1706,6 +1814,10 @@ var ReactorSensor = (function(api) {
                         }
                         break;
 
+                    case 'interval':
+                        currentValue = new Date( currentValue * 1000 ).toLocaleString();
+                        break;
+
                     default:
                         /* Nada */
                 }
@@ -1938,7 +2050,7 @@ var ReactorSensor = (function(api) {
             html += 'i.md-btn { color: #006040; font-size: 13pt; cursor: pointer; }';
             html += 'input.tbinvert { min-width: 16px; min-height: 16px; }';
             html += 'div.conditions { width: 100%; }';
-            html += 'input.narrow { max-width: 6em; }';
+            html += 'input.narrow { max-width: 8em; }';
             html += 'div.conditiongroup { border-radius: 8px; border: 2px solid #006040; padding: 8px; }';
             html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
             html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
@@ -1986,7 +2098,8 @@ var ReactorSensor = (function(api) {
             html += 'i.md-btn { color: #006040; font-size: 12pt; cursor: pointer; }';
             html += 'input.tbinvert { min-width: 16px; min-height: 16px; }';
             html += 'div.conditions { width: 100%; }';
-            html += 'input.narrow { max-width: 6em; }';
+            html += 'input.narrow { max-width: 8em; }';
+            html += 'input.tiny { max-width: 3em; }';
             html += 'div.conditiongroup { border-radius: 8px; border: 2px solid #006040; padding: 8px; }';
             html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
             html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
