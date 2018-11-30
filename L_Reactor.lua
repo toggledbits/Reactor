@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "2.0develop"
+local _PLUGIN_VERSION = "beta2.0-18113001"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _CONFIGVERSION = 00202
 
@@ -3023,7 +3023,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
             if isOpenLuup then
                 local loader = require "openLuup.loader"
                 if loader.find_file == nil then return json.encode{ status=false, message="Your openLuup is out of update; please update." } end
-                bfile = loader.find_file( "L_Reactor.lua" ).gsub( "L_Reactor.lua$", "" ) .. "reactor-config-backup.json"
+                bfile = loader.find_file( "L_Reactor.lua" ):gsub( "L_Reactor.lua$", "" ) .. "reactor-config-backup.json"
             end
             local f = io.open( bfile, "w" )
             if f then
