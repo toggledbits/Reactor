@@ -1,6 +1,6 @@
 # Change Log #
 
-## Version 2.0beta (Github beta2.0 branch) ##
+## Version 2.0develop (Github dev2.0 branch) ##
 
 TO-DO:
 ( Nothing -- all planned items for this release have been completed )
