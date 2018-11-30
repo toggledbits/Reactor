@@ -6,9 +6,14 @@ TO-DO:
 ( Nothing -- all planned items for this release have been completed )
 At this point, if it's not on the above TO-DO list, it's probably not going into 2.0. Time to button it up and ship it!
 
+beta18113001:
+* (internal) Clean up backup/restore function, which removes much code from the Lua side, as the restore can be done from the JS side and offer a much better UI. This now lives as a tab on the master device.
+* (internal) Lots of cleanup of code on the JS/UI side. No known fixes or features, but removal of a lot of redundant stuff that results from feature accretion over time.
+* (feature) Move all documentation to the project wiki; lots of doc improvements (and still work to do, particularly on the Activities page). Contributes are welcome. Wiki: https://github.com/toggledbits/Reactor/wiki
+
 beta18112501:
 * (internal) Fix bug/omission reported by Forzaalfa where scene Lua wasn't coming over with "scene import" function.
-* (internal) Fix bug reported by Forzaalfa where initial run of 2.0 wasn't correctly upgrading trip/untrip scenes to actions. Not enough indirection creating array of actions; fixed!
+* (internal) Fix bug reported by Forzaalfa where initial run of 2.0 wasn't correctly upgrading 1.x trip/untrip scene assignments to actions.
 * (internal) Smooth out updating of device database and submission of device data.
 * (internal) Finalize support for openLuup. This requires users to upgrade to development version 2018.11.21 or higher (Github "development" branch).
 
