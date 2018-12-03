@@ -462,7 +462,7 @@ var ReactorSensor = (function(api, $) {
         var el = jQuery('<select class="varmenu form-control form-control-sm"></select>');
         var myid = api.getCpanelDeviceId();
         var devobj = getDeviceObject( device );
-        if ( undefined !== devobj ) {
+        if ( devobj ) {
             var mm = {}, ms = [];
             for ( var k=0; k<( devobj.states || []).length; ++k ) {
                 /* For self-reference, only allow variables created from configured expressions */
