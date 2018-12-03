@@ -6,6 +6,7 @@
  * Copyright 2018 Patrick H. Rigney, All Rights Reserved.
  * This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
  *
+ * Patch level: 4
  */
 /* globals api,jQuery,$,unescape,MultiBox,ace */
 
@@ -55,7 +56,7 @@ var ReactorSensor = (function(api, $) {
         var html = '';
         html += '<div class="clearfix">';
         html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
-        html += '<div id="tbcopyright">Reactor ver 2.0-beta18113001 &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
+        html += '<div id="tbcopyright">Reactor ver 2.0develop &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
             ' All Rights Reserved. Please check out the <a href="https://www.toggledbits.com/reactor" target="_blank">online documentation</a>' +
             ' and <a href="http://forum.micasaverde.com/index.php/board,93.0.html" target="_blank">forum board</a> for support.</div>';
         html += '<div id="supportlinks">Support links: ' +
@@ -96,11 +97,12 @@ var ReactorSensor = (function(api, $) {
 
     /* Get device object from userdata by device number */
     function getDeviceObject( devnum ) {
-        if ( undefined === devnum || false === devnum ) {
+        if ( undefined === devnum || false === devnum || isNaN( devnum ) ) {
             return false;
         }
-        var ix = api.getDeviceIndex( devnum );
+        var ix = api.getDeviceIndex( parseInt( devnum ) );
         if ( ix < 0 ) {
+            console.log( "getDeviceObject() API returned < 0, ix=" + String(ix) );
             return false;
         }
         var ud = api.getUserData();
@@ -108,13 +110,9 @@ var ReactorSensor = (function(api, $) {
     }
 
     function getDeviceFriendlyName( dev ) {
-        var devobj = dev;
-        if ( "number" === typeof(dev) ) {
-            devobj = getDeviceObject( dev );
-        } else if ( "object" !== typeof(dev) ) {
-            return false;
-        }
+        var devobj = getDeviceObject( dev );
         if ( undefined === devobj || false === devobj ) {
+            console.log( "getDeviceFriendlyName() dev=(" + typeof(dev) + ")" + String(dev) + ", devobj=(" + typeof(devobj) + ")" + String(devobj) + ", returning false" );
             return false;
         }
         return String(devobj.name) + " (#" + String(devobj.id) + ")";
@@ -149,10 +147,10 @@ var ReactorSensor = (function(api, $) {
         /* Set up our indices. */
         var ixGroup = {};
         var ixCond = {};
-        for ( var ig=0; ig<(cdata.conditions || {}).length; ig++ ) {
+        for ( var ig=0; ig<(cdata.conditions || []).length; ig++ ) {
             var grp = cdata.conditions[ig];
             ixGroup[ grp.groupid ] = grp;
-            for ( var ic=0; ic<(grp.groupconditions || {}).length; ic++ ) {
+            for ( var ic=0; ic<(grp.groupconditions || []).length; ic++ ) {
                 ixCond[ grp.groupconditions[ic].id ] = grp.groupconditions[ic];
             }
         }
@@ -242,7 +240,7 @@ var ReactorSensor = (function(api, $) {
      */
     function findCdataGroupIndex( grpid ) {
         var cdata = iData[ api.getCpanelDeviceId() ].cdata;
-        for ( var ix=0; ix<cdata.conditions.length; ++ix ) {
+        for ( var ix=0; ix<(cdata.conditions || []).length; ++ix ) {
             if ( cdata.conditions[ix].groupid === grpid ) {
                 return ix;
             }
@@ -256,7 +254,7 @@ var ReactorSensor = (function(api, $) {
     function findCdataConditionIndex( condid, grpid ) {
         var grp = iData[api.getCpanelDeviceId()].ixGroup[ grpid ];
         if ( undefined !== grp ) {
-            for ( var ix=0; ix<grp.groupconditions.length; ++ix ) {
+            for ( var ix=0; ix<(grp.groupconditions || []).length; ++ix ) {
                 if ( grp.groupconditions[ix].id === condid ) {
                     return ix;
                 }
@@ -436,6 +434,7 @@ var ReactorSensor = (function(api, $) {
                     first = false;
                 }
                 var fn = getDeviceFriendlyName( devid );
+                if ( !fn ) console.log( "makeDeviceMenu() friendly name for (" + typeof(devid) + ")" + String(devid) + "=" + String(fn));
                 el.append( jQuery( '<option/>' ).val( devid ).text( fn ? fn : '#' + String(devid) + '?' ) );
             }
         });
@@ -464,9 +463,9 @@ var ReactorSensor = (function(api, $) {
         var el = jQuery('<select class="varmenu form-control form-control-sm"></select>');
         var myid = api.getCpanelDeviceId();
         var devobj = getDeviceObject( device );
-        if ( undefined !== devobj ) {
+        if ( devobj ) {
             var mm = {}, ms = [];
-            for ( var k=0; k<devobj.states.length; ++k ) {
+            for ( var k=0; k<( devobj.states || []).length; ++k ) {
                 /* For self-reference, only allow variables created from configured expressions */
                 if ( device == myid && devobj.states[k].service != "urn:toggledbits-com:serviceId:ReactorValues" ) {
                     continue;
@@ -922,7 +921,7 @@ var ReactorSensor = (function(api, $) {
         var container = jQuery('<div class="condopts"></div>');
         /* Predecessor */
         var preds = jQuery('<select class="pred form-control form-control-sm"><option value="">(any time/no sequence)</option></select>');
-        for ( var ic=0; ic<grp.groupconditions.length; ic++) {
+        for ( var ic=0; ic<(grp.groupconditions || []).length; ic++) {
             var gc = grp.groupconditions[ic];
             /* Must be service, not this condition, and not the predecessor to this condition (recursive) */
             if ( cond.id !== gc.id && ( gc.after === undefined || gc.after !== cond.id ) ) {
@@ -1489,7 +1488,7 @@ var ReactorSensor = (function(api, $) {
         jQuery('div#conditions').empty();
 
         var myid = api.getCpanelDeviceId();
-        for (var ng=0; ng<iData[myid].cdata.conditions.length; ++ng) {
+        for (var ng=0; ng<(iData[myid].cdata.conditions || []).length; ++ng) {
             if ( ng > 0 ) {
                 /* Insert divider */
                 jQuery("div#conditions").append('<div class="row divider"><div class="col-sm-5"><hr></div><div class="col-sm-2 text-center"><h5>OR</h5></div><div class="col-sm-5"><hr></div></div>');
@@ -1525,7 +1524,7 @@ var ReactorSensor = (function(api, $) {
             } else {
                 gel.removeClass('groupdisabled');
             }
-            for (var nc=0; nc<grp.groupconditions.length; ++nc) {
+            for (var nc=0; nc<(grp.groupconditions || []).length; ++nc) {
                 var cond = grp.groupconditions[nc];
                 var row = getConditionRow();
                 if ( cond.id === undefined )
@@ -1612,7 +1611,7 @@ var ReactorSensor = (function(api, $) {
         var dx = api.getDeviceIndex( myid );
         var deleted = {};
         var configVars = iData[myid].cdata.variables || {};
-        for ( var k=0; k<ud.devices[dx].states.length; ++k) {
+        for ( var k=0; k<(ud.devices[dx].states || []).length; ++k) {
             var state = ud.devices[dx].states[k];
             if ( state.service.match( /:ReactorValues$/i ) ) {
                 if ( state.variable.match( /_Error$/i ) ) {
@@ -2164,7 +2163,7 @@ var ReactorSensor = (function(api, $) {
             stel.append( grpel );
         }
 
-        for ( var i=0; i<cdata.conditions.length; i++ ) {
+        for ( var i=0; i<(cdata.conditions || []).length; i++ ) {
             var grp = cdata.conditions[i];
 
             if ( i > 0 ) {
@@ -2180,7 +2179,7 @@ var ReactorSensor = (function(api, $) {
             }
             stel.append( grpel );
             var groupstate = true;
-            for ( var j=0; j<grp.groupconditions.length; j++ ) {
+            for ( var j=0; j<(grp.groupconditions || []).length; j++ ) {
                 var cond = grp.groupconditions[j];
                 el = jQuery('<div class="row cond" id="' + cond.id + '"></div>');
                 var currentValue = cstate[cond.id] === undefined ? cstate[cond.id] : cstate[cond.id].lastvalue;
@@ -2281,7 +2280,7 @@ var ReactorSensor = (function(api, $) {
         var pdev = api.getCpanelDeviceId();
         var doUpdate = false;
         if ( args.id == pdev ) {
-            for ( var k=0; k<args.states.length; ++k ) {
+            for ( var k=0; k<(args.states || []).length; ++k ) {
                 if ( args.states[k].variable.match( /^(cdata|cstate|Tripped|Armed)$/ ) ||
                         args.states[k].service == "urn:toggledbits-com:serviceId:ReactorValues" ) {
                     doUpdate = true;
@@ -3341,11 +3340,11 @@ var ReactorSensor = (function(api, $) {
         }).done( function( data, statusText, jqXHR ) {
             var hasAction = false;
             var i, j, key;
-            for ( i=0; i<data.serviceList.length; i++ ) {
+            for ( i=0; i<(data.serviceList || []).length; i++ ) {
                 var section = jQuery( "<select/>" );
                 var service = data.serviceList[i];
                 var opt;
-                for ( j=0; j<service.actionList.length; j++ ) {
+                for ( j=0; j<(service.actionList || []).length; j++ ) {
                     var nodata = false;
                     var actname = service.actionList[j].name;
                     var ai;
@@ -3606,7 +3605,7 @@ var ReactorSensor = (function(api, $) {
                     var param = {};
                     var actionText = s + "(";
                     if ( act ) {
-                        for ( var k=0; k<(act.parameters || {}).length; ++k ) {
+                        for ( var k=0; k<(act.parameters || []).length; ++k ) {
                             var p = act.parameters[k];
                             if ( undefined !== p.value ) {
                                 /* Fixed value */
@@ -3911,14 +3910,14 @@ var ReactorSensor = (function(api, $) {
                 if ( !isNaN(ts) ) {
                     if ( undefined === cd.tripactions )
                         cd.tripactions = { isReactorScene: true, groups: [ { actions:[] } ] };
-                    if ( 0 === cd.tripactions.groups.length )
+                    if ( 0 === (cd.tripactions.groups || []).length )
                         cd.tripactions.groups = [ { actions: [] } ];
                     cd.tripactions.groups[0].actions.unshift( { type: "runscene", scene: ts } );
                 }
                 if ( !isNaN(us) ) {
                     if ( undefined === cd.untripactions )
                         cd.untripactions = { isReactorScene: true, groups: [ { actions:[] } ] };
-                    if ( 0 === cd.untripactions.groups.length )
+                    if ( 0 === (cd.untripactions.groups || []).length )
                         cd.untripactions.groups = [ { actions: [] } ];
                     cd.untripactions.groups[0].actions.unshift( { type: "runscene", scene: us } );
                 }

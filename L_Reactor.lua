@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "beta2.0-18113001"
+local _PLUGIN_VERSION = "2.0develop"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _CONFIGVERSION = 00202
 
@@ -722,6 +722,7 @@ local function execLua( fname, luafragment, extarg, tdev )
     -- to be shared among them. This, of course, has some inherent dangers, and
     -- people's bad habits with globals may be exposed. Issue warnings to assist.
     if luaEnv == nil then
+        D("execLua() creating new Lua environment")
         luaEnv = shallowCopy(_G)
         -- Clear what we don't need
         luaEnv.json = nil
@@ -805,9 +806,7 @@ local function execLua( fname, luafragment, extarg, tdev )
     -- iterator.
     local rmt = {}
     rmt.__newindex =    function(t, n, v)
-                            -- Store locally and update state variable
-                            luup.variable_set( VARSID, n, tostring(v), tdev )
-                            rawset(getmetatable(t).__vars, n, v) -- store locally
+                            error("Cannot set " .. tostring(n) .. " in Reactor.variables -- this is a read-only data structure")
                         end
     rmt.__index =   function(t, n) 
                         -- Always fetch, because it could be changing dynamically
@@ -1331,22 +1330,22 @@ local function getExpressionContext( cdata, tdev )
         local selector = unpack( args )
         D("findDevice(%1) selector=%2", args, selector)
         local n = finddevice( selector )
-        if n == nil then
-            return luaxp.NULL
-        end
+        if n == nil then return luaxp.NULL end
         return n
     end
     ctx.__functions.getstate = function( args )
         local dev, svc, var = unpack( args )
         local vn = finddevice( dev )
         D("getstate(%1), dev=%2, svc=%3, var=%4, vn=%5", args, dev, svc, var, vn)
-        if vn == nil or luup.devices[vn] == nil then
+        if vn == luaxp.NULL or vn == nil or luup.devices[vn] == nil then
             return luaxp.NULL
         end
         -- Create a watch if we don't have one.
         addServiceWatch( vn, svc, var, tdev )
         -- Get and return value
-        return luup.variable_get( svc, var, vn ) or luaxp.NULL
+        local val = luup.variable_get( svc, var, vn )
+        if val == nil then return luaxp.NULL end
+        return val
     end
     -- Implement LuaXP extension resolver as recursive evaluation. This allows expressions
     -- to reference other variables, makes working order of evaluation.
@@ -2950,6 +2949,8 @@ function request( lul_request, lul_parameters, lul_outputformat )
         https.TIMEOUT = 30
         local cond, httpStatus, httpHeaders = https.request( req )
         D("doMatchQuery() returned from request(), cond=%1, httpStatus=%2, httpHeaders=%3", cond, httpStatus, httpHeaders)
+        -- Make sure we close the file!
+        f:close()
         -- Handle special errors from socket library
         if tonumber(httpStatus) == nil then
             respBody = httpStatus
@@ -3022,7 +3023,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
             local bfile = "/etc/cmh-ludl/reactor-config-backup.json"
             if isOpenLuup then
                 local loader = require "openLuup.loader"
-                if loader.find_file == nil then return json.encode{ status=false, message="Your openLuup is out of update; please update." } end
+                if loader.find_file == nil then return json.encode{ status=false, message="Your openLuup is out of date; please update to 2018.11.21 or higher." } end
                 bfile = loader.find_file( "L_Reactor.lua" ):gsub( "L_Reactor.lua$", "" ) .. "reactor-config-backup.json"
             end
             local f = io.open( bfile, "w" )
