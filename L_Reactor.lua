@@ -2949,8 +2949,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
         https.TIMEOUT = 30
         local cond, httpStatus, httpHeaders = https.request( req )
         D("doMatchQuery() returned from request(), cond=%1, httpStatus=%2, httpHeaders=%3", cond, httpStatus, httpHeaders)
-        -- Make sure we close the file!
-        f:close()
+        -- No need to close f, the sink does it for us.
         -- Handle special errors from socket library
         if tonumber(httpStatus) == nil then
             respBody = httpStatus
