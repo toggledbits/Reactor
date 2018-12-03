@@ -96,11 +96,13 @@ var ReactorSensor = (function(api, $) {
 
     /* Get device object from userdata by device number */
     function getDeviceObject( devnum ) {
+        console.log( "getDeviceObject( (" + typeof(devnum) + ")" + String(devnum) + " )" );
         if ( undefined === devnum || false === devnum ) {
             return false;
         }
         var ix = api.getDeviceIndex( devnum );
         if ( ix < 0 ) {
+            console.log( "getDeviceObject() API returned < 0, ix=" + String(ix) );
             return false;
         }
         var ud = api.getUserData();
@@ -112,9 +114,11 @@ var ReactorSensor = (function(api, $) {
         if ( "number" === typeof(dev) ) {
             devobj = getDeviceObject( dev );
         } else if ( "object" !== typeof(dev) ) {
+            console.log( "getDeviceFriendlyName() dev=(" + typeof(dev) + ")" + String(dev) + ", invalid type" );
             return false;
         }
         if ( undefined === devobj || false === devobj ) {
+            console.log( "getDeviceFriendlyName() devobj=(" + typeof(devobj) + ")" + String(devobj) + ", returning false" );
             return false;
         }
         return String(devobj.name) + " (#" + String(devobj.id) + ")";
@@ -436,6 +440,7 @@ var ReactorSensor = (function(api, $) {
                     first = false;
                 }
                 var fn = getDeviceFriendlyName( devid );
+                if ( !fn ) console.log( "makeDeviceMenu() friendly name for (" + typeof(devid) + ")" + String(devid) + "=" + String(fn));
                 el.append( jQuery( '<option/>' ).val( devid ).text( fn ? fn : '#' + String(devid) + '?' ) );
             }
         });
