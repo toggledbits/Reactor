@@ -6,6 +6,7 @@
  * Copyright 2018 Patrick H. Rigney, All Rights Reserved.
  * This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
  *
+ * Patch level: 4
  */
 /* globals api,jQuery,$,unescape,MultiBox,ace */
 
