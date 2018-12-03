@@ -109,15 +109,9 @@ var ReactorSensor = (function(api, $) {
     }
 
     function getDeviceFriendlyName( dev ) {
-        var devobj = dev;
-        if ( "number" === typeof(dev) ) {
-            devobj = getDeviceObject( dev );
-        } else if ( "object" !== typeof(dev) ) {
-            console.log( "getDeviceFriendlyName() dev=(" + typeof(dev) + ")" + String(dev) + ", invalid type" );
-            return false;
-        }
+        var devobj = getDeviceObject( dev );
         if ( undefined === devobj || false === devobj ) {
-            console.log( "getDeviceFriendlyName() devobj=(" + typeof(devobj) + ")" + String(devobj) + ", returning false" );
+            console.log( "getDeviceFriendlyName() dev=(" + typeof(dev) + ")" + String(dev) + ", devobj=(" + typeof(devobj) + ")" + String(devobj) + ", returning false" );
             return false;
         }
         return String(devobj.name) + " (#" + String(devobj.id) + ")";
