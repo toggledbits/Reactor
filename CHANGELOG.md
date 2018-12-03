@@ -2,6 +2,7 @@
 
 ## Version 2.0develop (Github dev2.0 branch) ##
 
+beta18120301:
 * (internal) Apparently it's possible for a device NUMBER to be stored as a string in userdata. This isn't the norm, and never seen it before today, but it happened (reported by sebby). Easy enough to fix, but surprise #1 for today.
 * (internal) Add more mitigation/checks for missing arrays in data structures, in particular, userdata may not have a "states" array on a device (presumably such a device has no services at all--that this can be is surprise #2 for today).
 
