@@ -2,6 +2,9 @@
 
 ## Version 2.0beta (Github beta2.0 branch) ##
 
+beta18121701:
+* (internal) One user has a device for which an enumerated state in userdata is missing either the variable name or service name (hmmm... an errant plugin or UI operation that left the variable name==nil?). I'm already pretty defensive in my handling of userdata, but this is yet another surprise, [read with Finnish accent] it could attack at any time, so we must deal with it.
+
 beta18120301:
 * (internal) Apparently it's possible for a device NUMBER to be stored as a string in userdata. This isn't the norm, and never seen it before today, but it happened (reported by sebby). Easy enough to fix, but surprise #1 for today.
 * (internal) Add more mitigation/checks for missing arrays in data structures, in particular, userdata may not have a "states" array on a device (presumably such a device has no services at all--that this can be is surprise #2 for today).

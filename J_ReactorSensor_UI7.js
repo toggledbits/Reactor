@@ -56,7 +56,7 @@ var ReactorSensor = (function(api, $) {
         var html = '';
         html += '<div class="clearfix">';
         html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
-        html += '<div id="tbcopyright">Reactor ver 2.0beta-18120301 &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
+        html += '<div id="tbcopyright">Reactor ver 2.0beta-18121701 &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
             ' All Rights Reserved. Please check out the <a href="https://www.toggledbits.com/reactor" target="_blank">online documentation</a>' +
             ' and <a href="http://forum.micasaverde.com/index.php/board,93.0.html" target="_blank">forum board</a> for support.</div>';
         html += '<div id="supportlinks">Support links: ' +
@@ -466,27 +466,26 @@ var ReactorSensor = (function(api, $) {
         if ( devobj ) {
             var mm = {}, ms = [];
             for ( var k=0; k<( devobj.states || []).length; ++k ) {
+                var st = devobj.states[k];
+                if ( undefined === st.variable || undefined === st.service ) continue;
                 /* For self-reference, only allow variables created from configured expressions */
-                if ( device == myid && devobj.states[k].service != "urn:toggledbits-com:serviceId:ReactorValues" ) {
-                    continue;
-                }
-                if ( mm[devobj.states[k].variable.toLowerCase()] === undefined ) {
+                if ( device == myid && st.service != "urn:toggledbits-com:serviceId:ReactorValues" ) continue;
+                var vnm = st.variable.toLowerCase();
+                if ( undefined === mm[vnm] ) {
                     /* Just use variable name as menu text, unless multiple with same name (collision) */
-                    mm[devobj.states[k].variable.toLowerCase()] = ms.length;
-                    ms[ms.length] = { text: devobj.states[k].variable, service: devobj.states[k].service,
-                        variable: devobj.states[k].variable };
+                    mm[vnm] = ms.length;
+                    ms.push( { text: st.variable, service: st.service,
+                        variable: st.variable } );
                 } else {
                     /* Collision. Modify existing element to include service name. */
-                    var n = mm[devobj.states[k].variable.toLowerCase()];
-                    ms[n].text = ms[n].variable + ' (' +
-                        ms[n].service.replace(/^([^:]+:)+/, "") + ')';
+                    var n = mm[vnm];
+                    ms[n].text = ms[n].variable + ' (' + ms[n].service.replace(/^([^:]+:)+/, "") + ')';
                     /* Append new entry (text includes service name) */
-                    n = ms.length;
-                    ms[n] = { text: devobj.states[k].variable + ' (' +
-                        devobj.states[k].service.replace(/^([^:]+:)+/, "") + ')',
-                        service: devobj.states[k].service,
-                        variable: devobj.states[k].variable
-                    };
+                    ms.push( { text: st.variable + ' (' +
+                        st.service.replace(/^([^:]+:)+/, "") + ')',
+                        service: st.service,
+                        variable: st.variable
+                    } );
                 }
             }
             var r = ms.sort( function( a, b ) {
