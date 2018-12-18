@@ -909,6 +909,7 @@ local function execSceneGroups( tdev, taskid )
                 if devnum == nil or luup.devices[devnum] == nil then
                     L({level=2,msg="%5 (%6): invalid device number (%4) in scene %1 (%2) group %3; skipping action."},
                         scd.id, scd.name, nextGroup, action.device, tdev, luup.devices[tdev].description)
+                    D("execSceneGroups() action=%1, all group %2 actions=%3", action, nextGroup, scd.groups[nextGroup].actions)
                 else
                     local param = {}
                     for k,p in ipairs( action.arguments or {} ) do
@@ -1216,10 +1217,10 @@ local function loadSensorConfig( tdev )
         
         local st = split( s, "," )
         if st[1] ~= "" then
-            cdata.tripactions = { groups={ { delay=0, actions={ { ['type']="runscene", scene=st[1] } } } } }
+            cdata.tripactions = { isReactorScene=true, groups={ { delay=0, actions={ { ['type']="runscene", scene=st[1] } } } } }
         end
         if #st > 1 and st[2] ~= "" then
-            cdata.untripactions = { groups={ { delay=0, actions={ { ['type']="runscene", scene=st[2] } } } } }
+            cdata.untripactions = { isReactorScene=true, groups={ { delay=0, actions={ { ['type']="runscene", scene=st[2] } } } } }
         end
         cdata.timestamp = os.time()
         luup.variable_set( RSSID, "cdata", json.encode( cdata ), tdev )
