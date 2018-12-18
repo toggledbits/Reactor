@@ -1,6 +1,6 @@
 # Change Log #
 
-## Version 2.0develop (Github dev2.0 branch) ##
+## Version 2.0beta (Github beta2.0 branch) ##
 
 beta18121701:
 * (internal) One user has a device for which an enumerated state in userdata is missing either the variable name or service name (hmmm... an errant plugin or UI operation that left the variable name==nil?). I'm already pretty defensive in my handling of userdata, but this is yet another surprise, [read with Finnish accent] it could attack at any time, so we must deal with it.
