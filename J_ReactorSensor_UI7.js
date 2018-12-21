@@ -3021,7 +3021,7 @@ var ReactorSensor = (function(api, $) {
 
     function changeActionAction( row, newVal ) {
         var ct = jQuery( 'div.actiondata', row );
-        jQuery( '.argument', ct ).remove();
+        jQuery( 'label,.argument', ct ).remove();
         if ( ( newVal || "" ) === "" ) {
             return;
         }
@@ -3321,7 +3321,7 @@ var ReactorSensor = (function(api, $) {
 
         // Clear the action menu and remove all arguments.
         actionMenu.empty().attr( 'disabled', true );
-        jQuery('.argument', ct).remove();
+        jQuery('label,.argument', ct).remove();
         if ( newVal == "" ) { return; }
 
         /* Use actions/lu_actions to get list of services/actions for this device. We could
