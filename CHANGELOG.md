@@ -1,40 +1,16 @@
 # Change Log #
 
-## Version 2.0beta (Github beta2.0 branch) ##
+## Version 2.0 (released) ##
 
-beta18121701:
-* (internal) One user has a device for which an enumerated state in userdata is missing either the variable name or service name (hmmm... an errant plugin or UI operation that left the variable name==nil?). I'm already pretty defensive in my handling of userdata, but this is yet another surprise, [read with Finnish accent] it could attack at any time, so we must deal with it.
+Note to OpenLuup Users: openLuup 2018.11.21 is required to run this version.
 
-beta18120301:
-* (internal) Apparently it's possible for a device NUMBER to be stored as a string in userdata. This isn't the norm, and never seen it before today, but it happened (reported by sebby). Easy enough to fix, but surprise #1 for today.
-* (internal) Add more mitigation/checks for missing arrays in data structures, in particular, userdata may not have a "states" array on a device (presumably such a device has no services at all--that this can be is surprise #2 for today).
-
-beta18113001:
-* (internal) Clean up backup/restore function, which removes much code from the Lua side, as the restore can be done from the JS side and offer a much better UI. This now lives as a tab on the master device.
-* (internal) Lots of cleanup of code on the JS/UI side. No known fixes or features, but removal of a lot of redundant stuff that results from feature accretion over time.
-* (feature) Move all documentation to the project wiki; lots of doc improvements (and still work to do, particularly on the Activities page). Contributes are welcome. Wiki: https://github.com/toggledbits/Reactor/wiki
-
-beta18112501:
-* (internal) Fix bug/omission reported by Forzaalfa where scene Lua wasn't coming over with "scene import" function.
-* (internal) Fix bug reported by Forzaalfa where initial run of 2.0 wasn't correctly upgrading 1.x trip/untrip scene assignments to actions.
-* (internal) Smooth out updating of device database and submission of device data.
-* (internal) Finalize support for openLuup. This requires users to upgrade to development version 2018.11.21 or higher (Github "development" branch).
-
-beta18112201:
-* (feature) Allow renaming of groups, so you can give them functional names rather than the unique IDs automatically assigned. Valid group names must start with a letter with alphanumeric (and underscore) allowed to follow.
-* (feature) Make sure each action logs a message to ReactorSensor's event log, and preserve the log across sensor restarts. Also add a new MaxEvents start variable on the master device to override the default of 50 events (per sensor, applies to all).
-* (feature) Add ability to enable or disable a condition group in the UI. A disabled condition group is not evaluated, and cannot contribute to the "tripped" state of its ReactorSensor. It is treated as if it didn't exist. The new ReactorSensor action SetGroupEnabled allows groups to be enabled and disabled by action.
-* (internal) The runLua action now uses a shared environment across all scripts, for the benefit of sharing loaded modules and being economical with memory. Make the ReactorSensor's variables more useful by allowing them to be set, which updates their persistent state. The environment also logs (luup log and device event log) creation of global variables (which should be avoided) and accesses to undeclared variables.
-
-beta18112001:
-* (feature) Add service condition operators "is TRUE" and "is FALSE", which test a more general set of values to determine boolean state (some devices use 1/0, some the words true/false, etc.).
-* (feature) Add service condition operator "changes" to pulse true for a short period when the value changes (regardless of value--pulse if it's different from the prior value). The default pulse length is 2 seconds, but is configurable per ReactorSensor via ValueChangeHoldTime (seconds). The 2-second default generally changes faster than the Vera UI7 dashboard display updates, so the rapid change may not be visible on the dashboard card, but the ReactorSensor "Status" tab updates more quickly and exposes/confirms the activity.
-* (bug) Fix a Y2K38 issue (!) where a user can enter a year for a date/time condition that would produce an out-of-range value for Vera's 32-bit OS; restrict year values to a compliant subset (1970-2037).
-* (internal) Enhance exception syntax in deviceinfo with reach into state variables and attributes.
-* (internal) Improve validation of device fields by checking type, value range, etc. against definition.
-* (internal) Improve default selection on initial display of new rows.
-
-beta18111801:
+* Move all documentation to the project wiki; lots of doc improvements (and still work to do, particularly on the Activities page). Contributers are welcome. Wiki: https://github.com/toggledbits/Reactor/wiki
+* Allow renaming of condition groups, so you can give them functional names rather than the unique IDs automatically assigned. Valid group names must start with a letter with alphanumeric (and underscore) allowed to follow.
+* Make sure each action logs a message to ReactorSensor's event log, and preserve the log across sensor restarts. Also add a new MaxEvents start variable on the master device to override the default of 50 events (per sensor, applies to all).
+* Add ability to enable or disable a condition group in the UI. A disabled condition group is not evaluated, and cannot contribute to the "tripped" state of its ReactorSensor. It is treated as if it didn't exist. The new ReactorSensor action SetGroupEnabled allows groups to be enabled and disabled by action.
+* Add service condition operators "is TRUE" and "is FALSE", which test a more general set of values to determine boolean state (some devices use 1/0, some the words true/false, etc.).
+* Add service condition operator "changes" to pulse true for a short period when the value changes (regardless of value--pulse if it's different from the prior value). The default pulse length is 2 seconds, but is configurable per ReactorSensor via ValueChangeHoldTime (seconds). The 2-second default generally changes faster than the Vera UI7 dashboard display updates, so the rapid change may not be visible on the dashboard card, but the ReactorSensor "Status" tab updates more quickly and exposes/confirms the activity.
+* Fix a Y2K38 issue (!) where a user can enter a year for a date/time condition that would produce an out-of-range value for Vera's 32-bit OS; restrict year values to a compliant subset (1970-2037).
 * Reactor now supports its own activities, and no longer requires that the user create scenes separately outside of Reactor. You asked for a "scene builder," so here's my first attempt (well, the first one that you seeing :) ).
 * New condition type "Interval" is true for a brief period at the specified interval (days, hours, minutes). A "relative to" time specification allows adjustment of the reference time for the cycle; for example, a 4 hour interval with a relative time of 15:00 (3pm) will fire at 03:00, 07:00, 11:00, 15:00, 19:00, and 23:00.
 * Expire cached state for conditions; use is only upon update, and between updates, which may be a large span of time, the memory used is held by the reference; expiring the entry after a short period balances memory use with performance. The expiry is tunable via the master device's StateCacheExpiry parameter (0 disables expiry).
