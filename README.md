@@ -1,10 +1,11 @@
 # Reactor #
-A plugin for Vera home automation systems to enhance the built-in trigger logic
+A programmable logic plugin for Vera home automation systems to enhance the built-in trigger logic
 for scenes and other actions.
 
 * Single-instance plugin that's efficient with system resources;
 * Survives reloads/reboots;
 * Easy to configure (no Lua or expression syntax to learn);
+* Powerful features for testing conditions and performing actions.
 
 ## Background ##
 I developed another plugin called DelayLight to address a common use case that
@@ -17,54 +18,25 @@ trigger standard Vera scenes, Lua, other plugins, etc.).
 
 ## Features and Operation ##
 
-Reactor is the parent of a set of a ReactorSensors. Each ReactorSensor contains a set
-of logic conditions that when met, cause the sensor to trip (so, a ReactorSensor
-implements the SecuritySensor1 semantics). When the conditions are not met, the
-sensor is untripped. This basic binary output can be used to trigger scenes and
-other logic.
+Reactor is the parent of a set of a ReactorSensors. Each ReactorSensor contains 
+one or more condition groups, which cause the sensor to trip when all of the 
+conditions in any group are met. So conditions within a group are "AND", and
+groups are "OR". When no group's conditions are met, the
+sensor is untripped. This basic binary output can be used to trigger actions
+internally (Reactor has a robust set of actions it can perform), or trigger
+external scenes, notifications, and other logic.
 
 Reactor itself is a single-instance plugin, meaning all ReactorSensors in the system
 run from a single copy of the Reactor code, making it light on system resources even
 for large numbers of sensors and logic conditions.
 
-Reactor is currently in its infancy. I've only just released the first version in June 2018.
-It can currently respond to:
+## Installation, Configuration, etc. ##
 
-* The change of almost any defined state variable on a device (including other Reactor sensors);
-* Changes in house mode (home, away, night, vacation);
-* Time/date changes (specific days of the week, dates and times; or time and date ranges);
-* Sequences of events (e.g. *this* must happen before *that* for the condition to be true).
-
-More conditions are expected as the user community makes its needs clear.
-
-## Installing ##
-
-Reactor can be installed via the Vera Plugin Marketplace (released versions only),
-the Alternate App Store (aka AltAppStore under ALTUI, released versions and current
-stable development version available), or by installing from Github.
-
-To install from Github, download a branch, or a release ZIP file
-from the Github repository "releases" tab and unzip it. Then upload each of the
-files to your Vera or openLuup. Then, use the "Create Device" command (under
-*Apps > Develop apps* on Vera)
-to create the base Reactor device. You only need to provide a device name (use "Reactor"),
-the device filename (must be `D_Reactor.xml`) and the implementation filename (must be
-`I_Reactor.xml`).
-
-Then, reload Luup (on Vera, I like to enter `luup.reload()` under *Apps > Develop apps > Test Luup code*),
-and then hard-refresh your browser (Ctrl-F5 on Windows, whatever similar on Mac).
-
-You should then see the Reactor master device on your devices list (dashboard).
-Refer to the online documentation for instructions on creating your first sensor and
-configuring it (see *Using Reactor* below).
-
-## Using Reactor ##
-
-Documentation for Reactor can be found on my web site at https://www.toggledbits.com/reactor
+Documentation for Reactor can be found in the wiki for the project: https://github.com/toggledbits/Reactor/wiki
 
 ## Revision History ##
 
-Please see the CHANGELOG file for release notes.
+Please see the CHANGELOG.md file for release notes.
 
 ## License ##
 

@@ -27,11 +27,15 @@ var ReactorSensor_ALTUI = ( function( window, undefined ) {
             html += ALTUI_PluginDisplays.createOnOffButton( enab, "reactor-enabled-" + device.altuiid, _T("Disabled,Enabled"), "pull-right");
             html += ALTUI_PluginDisplays.createOnOffButton( armed, "reactor-armed-" + device.altuiid, _T("Disarmed,Armed"), "pull-right");
             html += '</div>';
-            html += '<div class="clearfix"></div>';
-            html += ('<div><button class="btn-sm btn-default reactor-cpbutton" id="reactor-reset-{0}">'+_T("Reset")+'</button>').format(device.altuiid);
-            html += ('<button class="btn-sm btn-default reactor-cpbutton" id="reactor-trip-{0}">'+_T("Trip")+'</button></div>').format(device.altuiid);
             html += '<div>' + message + '</div>';
+            html += '<div class="clearfix"></div>';
+            html += '<div>';
+            html += ('<button class="btn-xs btn-default reactor-cpbutton" id="reactor-restart-{0}">'+_T("Restart")+'</button>').format(device.altuiid);
+            html += ('<button class="btn-xs btn-default reactor-cpbutton" id="reactor-reset-{0}">'+_T("Reset")+'</button>').format(device.altuiid);
+            html += ('<button class="btn-xs btn-default reactor-cpbutton" id="reactor-trip-{0}">'+_T("Trip")+'</button>').format(device.altuiid);
+            html += '</div>';
             html += '<script type="text/javascript">';
+            html += '$("button#reactor-restart-{0}").on("click", function() { ReactorSensor_ALTUI._deviceAction("{0}", "Restart"); } );'.format(device.altuiid);
             html += '$("button#reactor-reset-{0}").on("click", function() { ReactorSensor_ALTUI._deviceAction("{0}", "Reset"); } );'.format(device.altuiid);
             html += '$("button#reactor-trip-{0}").on("click", function() { ReactorSensor_ALTUI._deviceAction("{0}", "Trip"); } );'.format(device.altuiid);
             html += "$('div#reactor-enabled-{0}').on('click', function() { ReactorSensor_ALTUI.toggleEnabled('{0}','div#reactor-enabled-{0}'); } );".format(device.altuiid);

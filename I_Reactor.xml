@@ -81,8 +81,40 @@
             <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
             <name>RunScene</name>
             <job>
+                -- Run scene in Reactor master device context.
                 -- See https://www.toggledbits.com/reactor for explanation of Options
-                Reactor.actionRunScene( lul_settings.SceneNum, lul_settings.Options or {}, lul_device )
+                local opt = lul_settings.Options or {}
+                opt.contextDevice = opt.contextDevice or lul_device
+                Reactor.actionRunScene( lul_settings.SceneNum, opt, lul_device )
+                return 4,0
+            </job>
+        </action>
+        <action>
+            <serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
+            <name>RunScene</name>
+            <job>
+                -- Run scene in ReactorSensor context.
+                -- See https://www.toggledbits.com/reactor for explanation of Options
+                -- The ReactorSensor version of RunScene forces the context device to be the
+                -- ReactorSensor on which the call was made.
+                local opt = lul_settings.Options or {}
+                opt.contextDevice = opt.contextDevice or lul_device
+                Reactor.actionRunScene( lul_settings.SceneNum, opt, lul_device )
+                return 4,0
+            </job>
+        </action>
+        <action>
+            <serviceId>urn:micasaverde-com:serviceId:HomeAutomationGateway1</serviceId>
+            <name>RunScene</name>
+            <job>
+                -- Run scene in "global" context.
+                -- See https://www.toggledbits.com/reactor for explanation of Options
+                -- This is a convenience/shortcut version of RunScene that allows
+                -- users to use ReactorScenes with only a change to the device number in
+                -- their action calls.
+                local opt = lul_settings.Options or {}
+                opt.contextDevice = opt.contextDevice or 0
+                Reactor.actionRunScene( lul_settings.SceneNum, opt, lul_device )
                 return 4,0
             </job>
         </action>
@@ -90,11 +122,44 @@
             <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
             <name>StopScene</name>
             <run>
+                -- Stop scene running in Reactor master device context.
                 -- contextDevice is normally the device that originally called for the scene run
                 -- in the Options table. If SceneNum is nil or 0, all scenes for the context device
                 -- will be stopped.
-                Reactor.actionStopScene( lul_settings.contextDevice, lul_settings.SceneNum, lul_device )
+                Reactor.actionStopScene( lul_settings.contextDevice or lul_device, lul_settings.SceneNum, lul_device )
             </run>
+        </action>
+        <action>
+            <serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
+            <name>StopScene</name>
+            <run>
+                -- Stop scene running in ReactorSensor context.
+                -- contextDevice is normally the device that originally called for the scene run
+                -- in the Options table. If SceneNum is nil or 0, all scenes for the context device
+                -- will be stopped.
+                Reactor.actionStopScene( lul_settings.contextDevice or lul_device, lul_settings.SceneNum, lul_device )
+            </run>
+        </action>
+        <action>
+            <serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
+            <name>SetVariable</name>
+            <run>
+                -- Set a variable value (overwrite/create).
+                if string.match( lul_settings.VariableName or "", "^[a-zA-Z][a-zA-Z0-9_]*$" ) then
+                    luup.variable_set( "urn:toggledbits-com:serviceId:ReactorValues", lul_settings.VariableName, lul_settings.NewValue or "", lul_device )
+                    luup.log("Reactor: variable '" .. tostring(lul_settings.VariableName) .. "' set to '" .. tostring(lul_settings.NewValue or "") .. "' by action")
+                else
+                    luup.log("Reactor: action attempt to set variable '" .. tostring(lul_settings.VariableName or "") .. "' failed, invalid name", 2)
+                end
+            </run>
+        </action>
+        <action>
+            <serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
+            <name>SetGroupEnabled</name>
+            <job>
+                -- Set group enabled state.
+                return Reactor.actionSetGroupEnabled( lul_settings.GroupId, lul_settings.newEnabledValue, lul_device )
+            </job>
         </action>
         <action>
             <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
