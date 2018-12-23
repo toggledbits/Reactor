@@ -96,7 +96,7 @@
                     },
                     "Label": {
                         "lang_tag": "tb_reactor_about",
-                        "text": "Reactor ver 1.9-stable181118 &#169; 2018 Patrick H. Rigney, All Rights Reserved.<br/><a href=\"http://forum.micasaverde.com/index.php/board,93.0.html\" target=\"_blank\">Forum board</a> &#149; <a href=\"http://www.toggledbits.com/reactor\" target=\"_blank\">Documentation and license information</a>.<br>&nbsp;<br>Support links: <a href=\"/port_3480/data_request?id=lr_Reactor&action=summary\" target=\"_blank\">Summary</a> &#149; <a href=\"/port_3480/data_request?id=lr_Reactor&action=status\" target=\"_blank\">Plugin&nbsp;Status</a> &#149; <a href=\"/port_3480/data_request?id=lr_Reactor&action=config\" target=\"_blank\">Show&nbsp;Config</a> &#149; <a href=\"/port_3480/data_request?id=lr_Reactor&action=purge\" target=\"_blank\">Purge/Reload</a><br><a href=\"/port_3480/data_request?id=lr_Reactor&action=debug\" target=\"_blank\">Toggle&nbsp;Debug</a> &#149; <a href=\"/cgi-bin/cmh/log.sh?Device=LuaUPnP\" target=\"_blank\">Show&nbsp;Log</a> &#149; <a href=\"/port_3480/data_request?id=lr_Reactor&action=backup\" target=\"_blank\">Back&nbsp;Up&nbsp;Config</a> &#149; <a href=\"/port_3480/data_request?id=lr_Reactor&action=restore\" target=\"_blank\">Restore&nbsp;Config</a>"
+                        "text": "Reactor ver 2.0 &#169; 2018 Patrick H. Rigney, All Rights Reserved.<br/><a href=\"http://forum.micasaverde.com/index.php/board,93.0.html\" target=\"_blank\">Forum board</a> &#149; <a href=\"http://www.toggledbits.com/reactor\" target=\"_blank\">Documentation and license information</a>.<br>&nbsp;<br>Support links: <a href=\"/port_3480/data_request?id=lr_Reactor&action=summary\" target=\"_blank\">Summary</a> &#149; <a href=\"/port_3480/data_request?id=lr_Reactor&action=status\" target=\"_blank\">Plugin&nbsp;Status</a> &#149; <a href=\"/port_3480/data_request?id=lr_Reactor&action=config\" target=\"_blank\">Show&nbsp;Config</a> &#149; <a href=\"/port_3480/data_request?id=lr_Reactor&action=purge\" target=\"_blank\">Purge/Reload</a><br><a href=\"/port_3480/data_request?id=lr_Reactor&action=debug\" target=\"_blank\">Toggle&nbsp;Debug</a> &#149; <a href=\"/cgi-bin/cmh/log.sh?Device=LuaUPnP\" target=\"_blank\">Show&nbsp;Log</a>"
                     }
                 }
             ],
@@ -104,10 +104,21 @@
         },
         {
             "Label": {
+                "lang_tag": "tb_reactorsensor_doBackupRestore",
+                "text": "Backup and Restore"
+            },
+            "Position": 1,
+            "TabType": "javascript",
+            "TopNavigationTab": 1,
+            "ScriptName": "J_Reactor_UI7.js",
+            "Function": "Reactor.doBackupRestore"
+        },
+        {
+            "Label": {
                 "lang_tag": "ui7_advanced",
                 "text": "Advanced"
             },
-            "Position": 1,
+            "Position": 2,
             "TabType": "javascript",
             "ScriptName": "shared.js",
             "Function": "advanced_device"
@@ -117,7 +128,7 @@
                 "lang_tag": "ui7_logs",
                 "text": "Logs"
             },
-            "Position": 2,
+            "Position": 3,
             "TabType": "javascript",
             "ScriptName": "shared.js",
             "Function": "device_logs"
