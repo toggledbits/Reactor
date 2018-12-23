@@ -3597,7 +3597,7 @@ var ReactorSensor = (function(api, $) {
                     var d = parseInt( jQuery( 'select.devicemenu', row ).val() );
                     var s = jQuery( 'select#actionmenu', row ).val() || "";
                     var pt = s.split( /\//, 2 );
-                    var act = deviceInfo.services[pt[0]].actions[pt[1]];
+                    var act = (deviceInfo.services[pt[0]] || { actions: {} }).actions[pt[1]];
                     if ( act && act.deviceOverride[d] ) {
                         act = act.deviceOverride[d];
                     }
