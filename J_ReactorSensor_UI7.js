@@ -2851,33 +2851,39 @@ var ReactorSensor = (function(api, $) {
                     if ( ai && ai.deviceOverride && ai.deviceOverride[action.device] ) {
                         ai = ai.deviceOverride[action.device];
                     }
-                    if ( ! ai ) {
-                        console.log( "Can't find actioninfo for " + t );
-                        scene = false;
-                        return false;
-                    }
                     action.parameters = [];
-                    for ( k=0; k < (ai.parameters || [] ).length; k++ ) {
-                        pt = { name: ai.parameters[k].name };
-                        if ( undefined !== ai.parameters[k].value ) {
-                            // Fixed value
-                            pt.value = ai.parameters[k].value;
-                        } else {
-                            t = jQuery( '#' + ai.parameters[k].name, row ).val() || "";
-                            if ( "" === t && undefined !== ai.parameters[k].default ) t = ai.parameters[k].default;
-                            if ( "" === t ) {
-                                if ( ai.parameters[k].optional ) {
-                                    continue; /* skip it, not even on the list */
+                    if ( ai ) {
+                        for ( k=0; k < (ai.parameters || [] ).length; k++ ) {
+                            pt = { name: ai.parameters[k].name };
+                            if ( undefined !== ai.parameters[k].value ) {
+                                // Fixed value
+                                pt.value = ai.parameters[k].value;
+                            } else {
+                                /* Ignore default here, it's assumed to be valid when needed */
+                                t = jQuery( '#' + ai.parameters[k].name, row ).val() || "";
+                                if ( "" === t ) {
+                                    if ( ai.parameters[k].optional ) {
+                                        continue; /* skip it, not even on the list */
+                                    }
+                                    console.log("buildActionList: " + action.service + "/" +
+                                        action.action + " required parameter " +
+                                        ai.parameters[k].name + " has no value");
+                                    scene = false;
+                                    return false;
                                 }
-                                console.log("buildActionList: " + action.service + "/" +
-                                    action.action + " required parameter " +
-                                    ai.parameters[k].name + " has no value");
-                                scene = false;
-                                return false;
+                                pt.value = t;
                             }
-                            pt.value = t;
+                            action.parameters.push( pt );
                         }
-                        action.parameters.push( pt );
+                    } else {
+                        /* No action info; build using fields directly */
+                        console.log( "Can't find actioninfo for " + t );
+                        jQuery( '.argument', row ).each( function() {
+                            var val = jQuery( this ).val() || "";
+                            if ( val !== "" ) {
+                                action.parameters.push( { name: jQuery( this ).attr('id'), value: val } );
+                            }
+                        });
                     }
                     break;
 
@@ -3047,6 +3053,9 @@ var ReactorSensor = (function(api, $) {
                 if ( undefined !== parm.values && Array.isArray( parm.values ) ) {
                     /* Menu, can be array of strings or objects */
                     inp = jQuery('<select class="argument form-control form-control-sm"/>');
+                    if ( parm.optional ) {
+                        inp.append( '<option value="">(unspecified)</option>' );
+                    }
                     for ( j=0; j<parm.values.length; j++ ) {
                         opt = jQuery( '<option/>' );
                         if ( "object" === typeof(parm.values[j]) ) {
@@ -3072,7 +3081,11 @@ var ReactorSensor = (function(api, $) {
                     }
                 } else if ( parm.type == "scene" ) {
                     inp = makeSceneMenu();
-                    inp.prepend( '<option value="" selected>--choose--</option>' );
+                    if ( parm.optional ) {
+                        inp.append( '<option value="" selected>(unspecified)</option>' );
+                    } else {
+                        inp.append( '<option value="" selected>--choose--</option>' );
+                    }
                     if ( undefined !== parm.extraValues ) {
                         if ( Array.isArray( parm.extraValues ) ) {
                             for ( j=0; j<parm.extraValues.length; j++ ) {
@@ -3095,11 +3108,17 @@ var ReactorSensor = (function(api, $) {
                 } else if ( parm.type == "boolean" ) {
                     /* Menu */
                     inp = jQuery('<select class="argument form-control form-control-sm"/>');
+                    if ( parm.optional ) {
+                        inp.prepend( '<option value="">not specified</option>' );
+                    }
                     inp.append('<option value="0">0/off/false</option>');
                     inp.append('<option value="1">1/on/true</option>');
                     /* Add variables */
                     appendVariables( inp );
-                    /* Don't set default, let default default */
+                    /* Don't set default, let default default -- WHY???? */
+                    if ( parm.default ) {
+                        inp.val( parm.default );
+                    }
                 } else if ( false && parm.type == "ui1" && parm.min !== undefined && parm.max !== undefined ) {
                     inp = jQuery('<div class="argument tbslider"/>');
                     inp.slider({
@@ -3120,7 +3139,7 @@ var ReactorSensor = (function(api, $) {
                 } else if ( (parm.type || "").match(/^(r|u?i)[124]$/i ) ) {
                     inp = jQuery( '<input class="argument narrow form-control form-control-sm" list="reactorvars">' );
                     inp.attr( 'placeholder', action.parameters[k].name );
-                    inp.val( undefined==parm.default ? (undefined==parm.min ? 0 : parm.min ) : parm.default );
+                    inp.val( undefined==parm.default ? (undefined==parm.min ? (undefined==parm.optional ? 0 : "") : parm.min ) : parm.default );
                 } else {
                     console.log("J_ReactorSensor_UI7.js: using default field presentation for type " + String(parm.type));
                     inp = jQuery( '<input class="argument form-control form-control-sm" list="reactorvars">' );
@@ -3358,6 +3377,11 @@ var ReactorSensor = (function(api, $) {
                         for ( var ip=0; ip < (service.actionList[j].arguments || []).length; ++ip ) {
                             var p = service.actionList[j].arguments[ip];
                             p.type = p.dataType || "string";
+                            if ( ! p.defaultValue ) {
+                                p.optional = 1;
+                            } else {
+                                p.default = p.defaultValue;
+                            }
                         }
                     }
                     key = service.serviceId + "/" + actname;
