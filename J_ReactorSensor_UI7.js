@@ -1713,6 +1713,7 @@ var ReactorSensor = (function(api, $) {
         if ( configModified && confirm( "You have unsaved changes! Press OK to save them, or Cancel to discard them." ) ) {
             handleSaveClick( undefined );
         }
+        configModified = false;
     }
 
     function relativeTime( dt ) {
