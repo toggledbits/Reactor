@@ -1,8 +1,13 @@
 # Change Log #
 
+## Version 2.1 (develop branch)
+
+* Enhancement: Use datalist on browsers that support it for entry of allowed value list (menu) fields, which creates more flexibility for the user in that the defined values are shown (and autocomplete), but other values can be entered (in case they are absent from enhancement data).
+* Enhancement: cleaner handling of optional parameters in enhanced services; handle all parameters in un-enhanced services as optional unless a default is known.
+
 ## Version 2.0 (released) ##
 
-Note to OpenLuup Users: openLuup 2018.11.21 is required to run this version.
+Note to OpenLuup Users: openLuup 2018.11.21 is required to run this version and higher.
 
 * Move all documentation to the project wiki; lots of doc improvements (and still work to do, particularly on the Activities page). Contributers are welcome. Wiki: https://github.com/toggledbits/Reactor/wiki
 * Allow renaming of condition groups, so you can give them functional names rather than the unique IDs automatically assigned. Valid group names must start with a letter with alphanumeric (and underscore) allowed to follow.

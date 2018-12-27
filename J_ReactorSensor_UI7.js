@@ -3052,32 +3052,62 @@ var ReactorSensor = (function(api, $) {
                 }
                 if ( undefined !== parm.values && Array.isArray( parm.values ) ) {
                     /* Menu, can be array of strings or objects */
-                    inp = jQuery('<select class="argument form-control form-control-sm"/>');
-                    if ( parm.optional ) {
-                        inp.append( '<option value="">(unspecified)</option>' );
-                    }
-                    for ( j=0; j<parm.values.length; j++ ) {
-                        opt = jQuery( '<option/>' );
-                        if ( "object" === typeof(parm.values[j]) ) {
-                            for ( var z in parm.values[j] ) {
-                                if ( parm.values[j].hasOwnProperty( z ) ) {
-                                    opt.val( String(z) );
-                                    opt.text( String( parm.values[j][z] ) );
+                    if ( undefined !== window.HTMLDataListElement ) {
+                        /* Use datalist when supported (allows more flexible entry) */
+                        var dlid = (action.service + '-' + action.name + '-' + parm.name).replace( /[^a-z0-9-]/ig, "-" );
+                        if ( 0 == jQuery( 'datalist#'+dlid ).length ) {
+                            /* Datalist doesn't exist yet, create it */
+                            inp = jQuery('<datalist class="argdata" id="' + dlid + '"/>');
+                            for ( j=0; j<parm.values.length; j++ ) {
+                                opt = jQuery( '<option/>' );
+                                if ( "object" === typeof(parm.values[j]) ) {
+                                    for ( var z in parm.values[j] ) {
+                                        if ( parm.values[j].hasOwnProperty( z ) ) {
+                                            opt.val( String(z) );
+                                            opt.text( String( parm.values[j][z] ) );
+                                        }
+                                    }
+                                } else {
+                                    opt.val( String( parm.values[j] ) );
+                                    opt.text( String( parm.values[j] ) );
                                 }
+                                inp.append( opt );
                             }
-                        } else {
-                            opt.val( String( parm.values[j] ) );
-                            opt.text( String( parm.values[j] ) );
+                            /* Add variables and append to tab (datalists are global to tab) */
+                            appendVariables( inp );
+                            jQuery( 'div#tab-actions.reactortab' ).append( inp );
                         }
-                        inp.append( opt );
-                    }
-                    /* Add variables */
-                    appendVariables( inp );
-                    /* As a default, just choose the first option, unless specified */
-                    if ( undefined !== parm.default ) {
-                        inp.val( parm.default );
+                        /* Now pass on the input field */
+                        inp = jQuery( '<input class="argument form-control form-control-sm" list="' + dlid + '">' );
                     } else {
-                        jQuery( 'option:first' ).prop( 'selected', true );
+                        /* Standard select menu */
+                        inp = jQuery( '<select class="argument form-control form-control-sm"/>' );
+                        if ( parm.optional ) {
+                            inp.append( '<option value="">(unspecified)</option>' );
+                        }
+                        for ( j=0; j<parm.values.length; j++ ) {
+                            opt = jQuery( '<option/>' );
+                            if ( "object" === typeof(parm.values[j]) ) {
+                                for ( var z in parm.values[j] ) {
+                                    if ( parm.values[j].hasOwnProperty( z ) ) {
+                                        opt.val( String(z) );
+                                        opt.text( String( parm.values[j][z] ) );
+                                    }
+                                }
+                            } else {
+                                opt.val( String( parm.values[j] ) );
+                                opt.text( String( parm.values[j] ) );
+                            }
+                            inp.append( opt );
+                        }
+                        /* Add variables */
+                        appendVariables( inp );
+                        /* As a default, just choose the first option, unless specified */
+                        if ( undefined !== parm.default ) {
+                            inp.val( parm.default );
+                        } else {
+                            jQuery( 'option:first' ).prop( 'selected', true );
+                        }
                     }
                 } else if ( parm.type == "scene" ) {
                     inp = makeSceneMenu();
@@ -3137,12 +3167,12 @@ var ReactorSensor = (function(api, $) {
                     inp.slider("option", "disabled", false);
                     inp.slider("option", "value", undefined === parm.default ? parm.min : parm.default ); //??? fixme: clobbered later
                 } else if ( (parm.type || "").match(/^(r|u?i)[124]$/i ) ) {
-                    inp = jQuery( '<input class="argument narrow form-control form-control-sm" list="reactorvars">' );
+                    inp = jQuery( '<input class="argument narrow form-control form-control-sm" list="reactorvarlist">' );
                     inp.attr( 'placeholder', action.parameters[k].name );
                     inp.val( undefined==parm.default ? (undefined==parm.min ? (undefined==parm.optional ? 0 : "") : parm.min ) : parm.default );
                 } else {
                     console.log("J_ReactorSensor_UI7.js: using default field presentation for type " + String(parm.type));
-                    inp = jQuery( '<input class="argument form-control form-control-sm" list="reactorvars">' );
+                    inp = jQuery( '<input class="argument form-control form-control-sm" list="reactorvarlist">' );
                     inp.attr( 'placeholder', action.parameters[k].name );
                     inp.val( undefined===parm.default ? "" : parm.default );
                 }
@@ -3388,6 +3418,7 @@ var ReactorSensor = (function(api, $) {
                     if ( actions[key] === undefined ) {
                         // Save action data as we use it.
                         ai.deviceOverride = {};
+                        ai.service = service.serviceId;
                         actions[key] = ai;
                     }
                     if ( ai.hidden ) {
@@ -3540,7 +3571,7 @@ var ReactorSensor = (function(api, $) {
                 break;
                 
             case "delay": 
-                ct.append('<label for="delay">for <input id="delay" type="text" class="argument narrow form-control form-control-sm" title="Enter delay time as seconds, MM:SS, or HH:MM:SS" placeholder="delay time" list="reactorvars"></label>');
+                ct.append('<label for="delay">for <input id="delay" type="text" class="argument narrow form-control form-control-sm" title="Enter delay time as seconds, MM:SS, or HH:MM:SS" placeholder="delay time" list="reactorvarlist"></label>');
                 ct.append('<select id="delaytype" class="form-control form-control-sm"><option value="inline">from this point</option><option value="start">from start of actions</option></select>');
                 jQuery( 'input', ct ).on( 'change.reactor', handleActionValueChange );
                 jQuery( 'select', ct ).on( 'change.reactor', handleActionValueChange );
@@ -3951,7 +3982,7 @@ var ReactorSensor = (function(api, $) {
             }
 
             /* Set up a data list with our variables */
-            var dl = jQuery('<datalist id="reactorvars"></datalist>');
+            var dl = jQuery('<datalist id="reactorvarlist"></datalist>');
             if ( cd.variables ) {
                 for ( var vname in cd.variables ) {
                     if ( cd.variables.hasOwnProperty( vname ) ) {
@@ -3990,6 +4021,7 @@ var ReactorSensor = (function(api, $) {
 
         /* Our styles. */
         var html = "<style>";
+        html += "div#tab-actions datalist { display: none; }";
         html += "div#tab-actions.reactortab .tb-about { margin-top: 24px; }";
         html += "div#tab-actions.reactortab .color-green { color: #428BCA; }";
         html += 'div#tab-actions.reactortab .tberror { border: 1px solid red; }';
