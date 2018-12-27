@@ -3080,6 +3080,9 @@ var ReactorSensor = (function(api, $) {
                         }
                         /* Now pass on the input field */
                         inp = jQuery( '<input class="argument form-control form-control-sm" list="' + dlid + '">' );
+                        if ( undefined !== parm.default ) {
+                            inp.val( parm.default );
+                        }
                     } else {
                         /* Standard select menu */
                         inp = jQuery( '<select class="argument form-control form-control-sm"/>' );
