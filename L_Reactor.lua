@@ -2893,6 +2893,10 @@ function request( lul_request, lul_parameters, lul_outputformat )
                         else
                             r = r .. json.encode(cond)
                         end
+                        local cs = (sensorState[tostring(n)].condState or {})[cond.id] or {}
+                        r = r .. " ["
+                        if cs.priorvalue then r = r .. tostring(cs.priorvalue) .. " => " end
+                        r = r .. tostring(cs.lastvalue) .. " at " .. os.date("%x %X", cs.valuestamp or 0) .. "]"
                         r = r .. " <" .. cond.id .. ">"
                         r = r .. EOL
                     end
