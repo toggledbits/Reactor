@@ -613,6 +613,7 @@ var ReactorSensor = (function(api, $) {
         cond.type = typ;
         jQuery('.tberror', row).removeClass('tberror');
         row.removeClass('tberror');
+        var val, res;
         switch (typ) {
             case 'comment':
                 cond.comment = jQuery("div.params input", row).val();
@@ -628,7 +629,12 @@ var ReactorSensor = (function(api, $) {
                 jQuery( "input#value", row ).css( "visibility", ( undefined !== op && 0 === op.args ) ? "hidden" : "visible" );
                 // use op.args???
                 if ( "change" == cond.operator ) {
-                    cond.value = ( jQuery( 'input#val1', row ).val() || "" ) + "," + ( jQuery( 'input#val2', row ).val() || "" );
+                    // Join simple two value list, but don't save "," on its own.
+                    cond.value = jQuery( 'input#val1', row ).val() || "";
+                    val = jQuery( 'input#val2', row ).val() || "";
+                    if ( "" !== val ) {
+                        cond.value += "," + val;
+                    }
                 } else {
                     cond.value = jQuery("input#value", row).val() || "";
                 }
@@ -641,15 +647,18 @@ var ReactorSensor = (function(api, $) {
             case 'housemode':
                 cond.operator = jQuery("div.params select.opmenu", row).val() || "is";
                 if ( "change" === cond.operator ) {
-                    cond.value = ( jQuery( 'select#frommode', row ).val() || "" ) +
-                        "," +
-                        ( jQuery( 'select#tomode', row ).val() || "" );
+                    // Join simple two value list, but don't save "," on its own.
+                    cond.value = jQuery( 'select#frommode', row ).val() || "";
+                    val = jQuery( 'select#tomode', row ).val() || "";
+                    if ( "" !== val ) {
+                        cond.value += "," + val;
+                    }
                 } else {
-                    var res = [];
+                    res = [];
                     jQuery("input#opts:checked", row).each( function( ix, control ) {
                         res.push( control.value /* DOM element */ );
                     });
-                    cond.value = res.join(',');
+                    cond.value = res.join( ',' );
                 }
                 break;
 
@@ -3159,7 +3168,7 @@ var ReactorSensor = (function(api, $) {
         if ( undefined !== action ) {
             /* Info assist from our enhancement data */
             for ( var k=0; k<( action.parameters || [] ).length; ++k ) {
-                var opt, j;
+                var opt, j, z;
                 var parm = action.parameters[k];
                 if ( ( parm.direction || "in" ) == "out" ) continue; /* Don't display output params */
                 if ( parm.hidden ) continue; /* or hidden parameters */
@@ -3179,7 +3188,7 @@ var ReactorSensor = (function(api, $) {
                             for ( j=0; j<parm.values.length; j++ ) {
                                 opt = jQuery( '<option/>' );
                                 if ( "object" === typeof(parm.values[j]) ) {
-                                    for ( var z in parm.values[j] ) {
+                                    for ( z in parm.values[j] ) {
                                         if ( parm.values[j].hasOwnProperty( z ) ) {
                                             opt.val( String(z) );
                                             opt.text( String( parm.values[j][z] ) );
@@ -3209,7 +3218,7 @@ var ReactorSensor = (function(api, $) {
                         for ( j=0; j<parm.values.length; j++ ) {
                             opt = jQuery( '<option/>' );
                             if ( "object" === typeof(parm.values[j]) ) {
-                                for ( var z in parm.values[j] ) {
+                                for ( z in parm.values[j] ) {
                                     if ( parm.values[j].hasOwnProperty( z ) ) {
                                         opt.val( String(z) );
                                         opt.text( String( parm.values[j][z] ) );
