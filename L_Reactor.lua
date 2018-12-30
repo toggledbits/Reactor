@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "2.0"
+local _PLUGIN_VERSION = "2.1develop"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _CONFIGVERSION = 00202
 
@@ -2891,6 +2891,10 @@ function request( lul_request, lul_parameters, lul_outputformat )
                         else
                             r = r .. json.encode(cond)
                         end
+                        local cs = (sensorState[tostring(n)].condState or {})[cond.id] or {}
+                        r = r .. " ["
+                        if cs.priorvalue then r = r .. tostring(cs.priorvalue) .. " => " end
+                        r = r .. tostring(cs.lastvalue) .. " at " .. os.date("%x %X", cs.valuestamp or 0) .. "]"
                         r = r .. " <" .. cond.id .. ">"
                         r = r .. EOL
                     end
