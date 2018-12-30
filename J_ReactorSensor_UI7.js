@@ -592,10 +592,10 @@ var ReactorSensor = (function(api, $) {
 
             case 'service':
                 cond.device = parseInt( jQuery("div.params select.devicemenu", row).val() );
-                cond.service = jQuery("div.params select.varmenu", row).val();
+                cond.service = jQuery("div.params select.varmenu", row).val() || "";
                 cond.variable = cond.service.replace( /^[^\/]+\//, "" );
                 cond.service = cond.service.replace( /\/.*$/, "" );
-                cond.operator = jQuery("div.params select.opmenu", row).val();
+                cond.operator = jQuery("div.params select.opmenu", row).val() || "=";
                 var op = serviceOpsIndex[cond.operator || ""];
                 jQuery( "input#value", row ).css( "visibility", ( undefined !== op && 0 === op.args ) ? "hidden" : "visible" );
                 cond.value = jQuery("input#value", row).val() || "";
@@ -636,7 +636,7 @@ var ReactorSensor = (function(api, $) {
                     }
                 }
                 /* Fetch and load */
-                cond.operator = jQuery("div.params select.opmenu", row).val();
+                cond.operator = jQuery("div.params select.opmenu", row).val() || "bet";
                 res = [];
                 var mon = jQuery("div.start select.monthmenu", row).val() || "";
                 if ( mon !== "" ) {
