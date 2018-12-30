@@ -2182,7 +2182,7 @@ var ReactorSensor = (function(api, $) {
             for ( var j=0; j<(grp.groupconditions || []).length; j++ ) {
                 var cond = grp.groupconditions[j];
                 el = jQuery('<div class="row cond" id="' + cond.id + '"></div>');
-                var currentValue = cstate[cond.id] === undefined ? cstate[cond.id] : cstate[cond.id].lastvalue;
+                var currentValue = ( cstate[cond.id] || {} ).lastvalue;
 
                 el.append('<div class="col-sm-6 col-md-2">' +
                     ( condTypeName[ cond.type ] !== undefined ? condTypeName[ cond.type ] : cond.type ) +
@@ -2241,7 +2241,8 @@ var ReactorSensor = (function(api, $) {
                 if ( cond.type !== "comment" ) {
                     if ( currentValue !== undefined ) {
                         var cs = cstate[cond.id];
-                        el.append('<div class="currentvalue col-sm-6 col-md-4">(' + currentValue + ') ' +
+                        el.append('<div class="currentvalue col-sm-6 col-md-4">(' +
+                            currentValue + ') ' +
                             ( cs.laststate ? "true" : "false" ) +
                             ' as of ' + relativeTime( cs.statestamp ) +
                             ( ( cond.latch || false ) && cs.evalstate && !cs.laststate ? " (latched true)" : "" ) +

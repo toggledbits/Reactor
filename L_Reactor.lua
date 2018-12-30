@@ -1434,12 +1434,15 @@ local function evaluateCondition( cond, grp, cdata, tdev )
     local now = sensorState[tostring(tdev)].timebase
     local ndt = sensorState[tostring(tdev)].timeparts
     local hasTimer = false
+    
+    assert( cond.laststate )
+
     if cond.type == "service" then
         -- Can't succeed if referenced device doesn't exist.
         if luup.devices[cond.device or -1] == nil then
             L({level=2,msg="%1 (%2) condition %3 refers to device %4 (%5), does not exist, skipped"},
                 luup.devices[tdev].description, tdev, cond.id, cond.device, cond.devicename or "unknown")
-            return false,false
+            return nil,false,false
         end
 
         -- Add service watch if we don't have one
@@ -1448,8 +1451,6 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         -- Get state variable value.
         local vv = luup.variable_get( cond.service or "", cond.variable or "", cond.device or -1 ) or ""
         local vn = tonumber( vv )
-
-        cond.lastvalue = { value=vv, timestamp=now }
 
         -- Get condition value
         local cv,cn = getValue( cond.value, sensorState[tostring(tdev)].ctx, tdev )
@@ -1464,23 +1465,23 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         local op = cond.operator
         D("evaluateCondition() %1: %2/%3 %4%5%6?", cond.type, cond.service, cond.variable, vv, op, cv)
         if op == "=" then
-            if vv ~= cv then return false end
+            if vv ~= cv then return vv,false end
         elseif op == "<>" then
-            if vv == cv then return false end
+            if vv == cv then return vv,false end
         elseif op == ">" then
-            if vn == nil or cn == nil or vn <= cn then return false end
+            if vn == nil or cn == nil or vn <= cn then return vv,false end
         elseif op == "<" then
-            if vn == nil or cn == nil or vn >= cn then return false end
+            if vn == nil or cn == nil or vn >= cn then return vv,false end
         elseif op == ">=" then
-            if vn == nil or cn == nil or vn < cn then return false end
+            if vn == nil or cn == nil or vn < cn then return vv,false end
         elseif op == "<=" then
-            if vn == nil or cn == nil or vn > cn then return false end
+            if vn == nil or cn == nil or vn > cn then return vv,false end
         elseif op == "contains" then
-            if not string.find( vv, cv ) then return false end
+            if not string.find( vv, cv ) then return vv,false end
         elseif op == "starts" then
-            if not string.find( vv, "^" .. cv ) then return false end
+            if not string.find( vv, "^" .. cv ) then return vv,false end
         elseif op == "ends" then
-            if not string.find( vv, cv .. "$" ) then return false end
+            if not string.find( vv, cv .. "$" ) then return vv,false end
         elseif op == "in" then
             local lst = split( cv )
             local found = false
@@ -1490,52 +1491,62 @@ local function evaluateCondition( cond, grp, cdata, tdev )
                     break
                 end
             end
-            if not found then return false end
+            if not found then return vv,false end
         elseif op == "istrue" then
-            if (vn or 0) == 0 and not TRUESTRINGS:find( ":" .. vv:lower() .. ":" ) then return false end
+            if (vn or 0) == 0 and not TRUESTRINGS:find( ":" .. vv:lower() .. ":" ) then return vv,false end
         elseif op == "isfalse" then
-            if (vn or 0) ~= 0 or TRUESTRINGS:find( ":" .. vv:lower() .. ":" ) then return false end
+            if (vn or 0) ~= 0 or TRUESTRINGS:find( ":" .. vv:lower() .. ":" ) then return vv,false end
         elseif op == "change" then
-            local cs = sensorState[tostring(tdev)].condState[cond.id]
-            local changed = cs == nil or cs.lastvalue ~= vv
-            D("evaluateCondition() change op, condstate %1, val %2, changed %3", cs, vv, changed)
-            if not changed then return false end
+            D("evaluateCondition() change op, currval=%1, prior=%2, cond=%3", vv, cond.laststate.lastvalue, cond)
+            if (cond.changefrom or "") ~= "" and cond.laststate.lastvalue ~= cond.changefrom then return vv,false end
+            if (cond.changeto or "") ~= "" and vv ~= cond.changeto then return vv,false end
+            if cond.laststate.lastvalue == vv then return vv,false end
             -- Changed, go true and re-eval in 2 seconds (will go false unless changed again)
             scheduleDelay( { id=tdev,info="change "..cond.id }, 
                 getVarNumeric( "ValueChangeHoldTime", 2, tdev, RSSID ) )
             -- drop through to true return
         else
             L({level=1,msg="evaluateCondition() unknown op %1 in cond %2"}, op, cv)
-            return false
+            return vv,false
         end
+        return vv,true
     elseif cond.type == "housemode" then
         -- Add watch on parent if we don't already have one.
         addServiceWatch( pluginDevice, MYSID, "HouseMode", tdev )
         local modes = split( cond.value )
         local mode = getHouseMode( tdev )
-        cond.lastvalue = { value=mode, timestamp=now }
-        D("evaluateCondition() housemode %1 among %2?", mode, modes)
-        if not isOnList( modes, mode ) then return false,false end
+        if cond.op == "change" then
+            if (cond.changefrom or "") ~= "" and tostring(cond.laststate.lastvalue) ~= cond.changefrom then return mode,false end
+            if (cond.changeto or "") ~= "" and tostring(mode) ~= cond.changeto then return mode,false end
+            if mode == cond.laststate.lastvalue then return mode,false end
+            scheduleDelay( { id=tdev,info="change "..cond.id }, 
+                getVarNumeric( "ValueChangeHoldTime", 2, tdev, RSSID ) )
+        else
+            -- Default "is"
+            D("evaluateCondition() housemode %1 among %2?", mode, modes)
+            if not isOnList( modes, mode ) then return mode,false end
+        end
+        return mode,true
     elseif cond.type == "weekday" then
+        local val = ndt.wday
         -- Weekday; Lua 1=Sunday, 2=Monday, ..., 7=Saturday
         local nextDay = os.time{year=ndt.year,month=ndt.month,day=ndt.day+1,hour=0,['min']=0,sec=0}
         D("evaluateCondition() weekday condition, setting next check for %1", nextDay)
         scheduleTick( { id=tdev, info="weekday "..cond.id }, nextDay )
-        cond.lastvalue = { value=ndt.wday, timestamp=now }
         local wd = split( cond.value )
         local op = cond.operator
-        D("evaluateCondition() weekday %1 among %2", ndt.wday, wd)
-        if not isOnList( wd, tostring( ndt.wday ) ) then return false,false end
+        D("evaluateCondition() weekday %1 among %2", val, wd)
+        if not isOnList( wd, tostring( ndt.wday ) ) then return val,false end
         -- OK, we're on the right day of the week. Which week?
         if ( op or "" ) ~= "" then -- blank means "every"
-            D("evaluateCondition() is today %1 %2-%3 the %4th?", ndt.wday, ndt.month,
+            D("evaluateCondition() is today %1 %2-%3 the %4th?", val, ndt.month,
                 ndt.day, op)
             if op == "last" then
                 -- Must be last of this day of the week. If we add a week
                 -- to current date, the new date should be next month.
                 local nt = os.date( "*t", now + ( 7 * 86400 ) )
-                D("evaluateCondition() weekday %1 %2? today=%3, nextweek=%4", ndt.wday, op, ndt, nt)
-                if nt.month == ndt.month then return false,false end -- same
+                D("evaluateCondition() weekday %1 %2? today=%3, nextweek=%4", val, op, ndt, nt)
+                if nt.month == ndt.month then return val,false end -- same
             else
                 local nth = tonumber( op )
                 -- Move back N-1 weeks; we should still be in same month. Then
@@ -1545,17 +1556,17 @@ local function evaluateCondition( cond, grp, cdata, tdev )
                 if nth > 1 then
                     ref = ref - ( (nth-1) * 7 * 86400 )
                     pt = os.date( "*t", ref )
-                    if pt.month ~= ndt.month then return false,false end
+                    if pt.month ~= ndt.month then return val,false end
                 end
                 pt = os.date( "*t", ref - ( 7 * 86400 ) )
-                if pt.month == ndt.month then return false,false end
+                if pt.month == ndt.month then return val,false end
             end
-            D("evaluateCondition() yes, today %1 %2-%3 IS #%4 in month", ndt.wday,
+            D("evaluateCondition() yes, today %1 %2-%3 IS #%4 in month", val,
                 ndt.month, ndt.day, op)
         end
+        return val, true
     elseif cond.type == "sun" then
         -- Sun condition (sunrise/set)
-        cond.lastvalue = { value=now, timestamp=now }
         -- Figure out sunrise/sunset. Keep cached to reduce load.
         local stamp = ndt.year * 10000 + ndt.month * 100 + ndt.day
         local sundata = json.decode( luup.variable_get( MYSID, "sundata", pluginDevice ) or "{}" ) or {}
@@ -1596,20 +1607,20 @@ local function evaluateCondition( cond, grp, cdata, tdev )
             end
             if ( op == "bet" and not between ) or
                 ( op == "nob" and between ) then
-                return false,false
+                return now,false
             end
         elseif cond.operator == "before" then
             D("evaluateCondition() cond %1 check %2 before %3", cond.id, nowMSM, startMSM)
             doNextCondCheck( { id=tdev,info="sun "..cond.id }, nowMSM, startMSM )
-            if nowMSM >= startMSM then return false,false end
+            if nowMSM >= startMSM then return now,false end
         else
             D("evaluateCondition() cond %1 check %2 after %3", cond.id, nowMSM, startMSM)
             doNextCondCheck( { id=tdev,info="sun "..cond.id }, nowMSM, startMSM )
-            if nowMSM < startMSM then return false,false end -- after
+            if nowMSM < startMSM then return now,false end -- after
         end
+        return now,true
     elseif cond.type == "trange" then
         -- Time, with various components specified, or not.
-        cond.lastvalue = { value=now, timestamp=now }
         local op = cond.operator or "bet"
         -- Split, pad, and complete date. Any missing parts are filled in with the
         -- current date/time's corresponding part.
@@ -1638,11 +1649,11 @@ local function evaluateCondition( cond, grp, cdata, tdev )
             if op == "after" then
                 D("evaluateCondition() time-only comparison %1 after %2", nowMSM, startMSM)
                 doNextCondCheck( { id=tdev,info="trangeHM "..cond.id }, nowMSM, startMSM )
-                if nowMSM < startMSM then return false,false end
+                if nowMSM < startMSM then return now,false end
             elseif op == "before" then
                 D("evaluateCondition() time-only comparison %1 before %2", nowMSM, startMSM)
                 doNextCondCheck( { id=tdev,info="trangeHM "..cond.id }, nowMSM, startMSM )
-                if nowMSM >= startMSM then return false,false end
+                if nowMSM >= startMSM then return now,false end
             else
                 -- Between, or not
                 local endMSM = tpart[9] * 60 + tpart[10]
@@ -1657,7 +1668,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
                 doNextCondCheck( { id=tdev,info="trangeHM "..cond.id }, nowMSM, startMSM, endMSM )
                 if ( op == "nob" and between ) or
                     ( op == "bet" and not between ) then
-                    return false,false
+                    return now,false
                 end
             end
         elseif tparam[1] == "" then
@@ -1670,11 +1681,11 @@ local function evaluateCondition( cond, grp, cdata, tdev )
             if op == "before" then
                 D("evaluateCondition() M/D H:M test %1 %2 %3", nowz, op, stz)
                 doNextCondCheck( { id=tdev,info="trangeMDHM " .. cond.id }, nowz % 1440, stz % 1440 )
-                if nowz >= stz then return false,false end
+                if nowz >= stz then return now,false end
             elseif op == "after" then
                 D("evaluateCondition() M/D H:M test %1 %2 %3", nowz, op, stz)
                 doNextCondCheck( { id=tdev,info="trangeMDHM " .. cond.id }, nowz % 1440, stz % 1440 )
-                if nowz < stz then return false,false end
+                if nowz < stz then return now,false end
             else
                 local enz = tpart[7] * 100 + tpart[8]
                 enz = enz * 1440 + tpart[9] * 60 + tpart[10]
@@ -1688,12 +1699,12 @@ local function evaluateCondition( cond, grp, cdata, tdev )
                 end
                 if ( op == "bet" and not between ) or
                     ( op == "nob" and between ) then
-                    return false,false
+                    return now,false
                 end
             end
         else
             -- Full spec (Y-M-D H:M). Compare actual times (minute resolution).
-            now = math.floor( now / 60 ) * 60
+            local tmnow = math.floor( now / 60 ) * 60
             local stt, ett
             stt = os.time{ year=tpart[1], month=tpart[2], day=tpart[3], hour=tpart[4], min=tpart[5] }
             stt = math.floor( stt / 60 ) * 60
@@ -1702,9 +1713,9 @@ local function evaluateCondition( cond, grp, cdata, tdev )
             ett = math.floor( ett / 60 ) * 60
             D("evaluateCondition() time end %1", os.date( "%x.%X", ett ))
             if stt == ett then ett = ett + 60 end -- special case
-            D("evaluateCondition() compare now %1 %2 %3 and %4", now, op, stt, ett)
+            D("evaluateCondition() compare tmnow %1 %2 %3 and %4", tmnow, op, stt, ett)
             -- Before doing condition check, schedule next time for condition check
-            local edge = ( now < stt ) and stt or ( ( now < ett ) and ett or nil )
+            local edge = ( tmnow < stt ) and stt or ( ( tmnow < ett ) and ett or nil )
             if edge ~= nil then
                 scheduleTick( { id=tdev,info="trangeFULL "..cond.id }, edge )
             else
@@ -1712,35 +1723,33 @@ local function evaluateCondition( cond, grp, cdata, tdev )
             end
             local cp = op
             if cp == "bet" then
-                if now < stt or now >= ett then return false,false end
+                if tmnow < stt or tmnow >= ett then return now,false end
             elseif cp == "nob" then
-                if now >= stt and now < ett then return false,false end
+                if tmnow >= stt and tmnow < ett then return now,false end
             elseif cp == "before" then
-                if now >= stt then return false,false end
+                if tmnow >= stt then return now,false end
             elseif cp == "after" then
-                if now < stt then return false,false end
+                if tmnow < stt then return now,false end
             else
                 L({level=1,msg="Unrecognized condition %1 in time spec for cond %2 of %3 (%4)"},
                     cp, cond.id, tdev, luup.devices[tdev].description)
-                return false,false
+                return now,false
             end
         end
+        return now,true
     elseif cond.type == "comment" then
         -- Shortcut. Comments are always true.
-        cond.lastvalue = { value=cond.comment, timestamp=now }
-        return true,false
+        return cond.comment,true
     elseif cond.type == "reload" then
         -- True when loadtime changes. Self-resetting.
         local loadtime = tonumber( ( luup.attr_get("LoadTime", 0) ) ) or 0
         local lastload = getVarNumeric( "LastLoad", 0, tdev, RSSID )
         local reloaded = loadtime ~= lastload
         D("evaluateCondition() loadtime %1 lastload %2 reloaded %3", loadtime, lastload, reloaded)
-        cond.lastvalue = { value=reloaded, timestamp=now }
         luup.variable_set( RSSID, "LastLoad", loadtime, tdev )
         -- Return timer flag true when reloaded is true, so we get a reset shortly after.
-        return reloaded,reloaded
+        return reloaded,reloaded,reloaded
     elseif cond.type == "interval" then
-        cond.lastvalue = { value=now, timestamp=now }
         local interval = 60 * (cond.days * 1440 + cond.hours * 60 + cond.mins)
         if interval < 60 then interval = 60 end -- "can never happen" (yeah, hold my beer)
         -- Get our base time and make it a real time
@@ -1772,8 +1781,8 @@ local function evaluateCondition( cond, grp, cdata, tdev )
                 while nextTrue <= now do nextTrue = nextTrue + interval end -- ??? use maths
                 D("evaluateCondition() resetting, next %1", nextTrue)
                 scheduleTick( { id=tdev,info="interval "..cond.id }, nextTrue )
-                cond.lastvalue.value = lastTrue -- preserve reference point
-                return false,false
+                cs.lastvalue = lastTrue -- preserve reference point
+                return now,false
             else
                 -- Check to see if we've missed an interval
                 if nextTrue > ( lastTrue + interval ) then 
@@ -1786,28 +1795,26 @@ local function evaluateCondition( cond, grp, cdata, tdev )
                     local delay = nextTrue - now
                     D("evaluateCondition() too early, delaying %1 seconds", delay)
                     scheduleDelay( { id=tdev,info="interval "..cond.id }, delay )
-                    cond.lastvalue.value = lastTrue -- preserve reference point
-                    return false,false
+                    cs.lastvalue = lastTrue -- preserve reference point
+                    return now,false
                 end
                 D("evaluationCondition() interval edge met or exceeded!")
             end
         else
             -- First run. Delay until the first interval.
-            
         end
         -- Go true.
         D("evaluateConditions() triggering interval condition %1", cond.id)
         -- On time greater of 15 seconds or duty cycle as % of interval, but never more than interval-5 seconds.
         scheduleDelay( { id=tdev,info="interval "..cond.id }, math.min( math.max( 15, interval * (cond.duty or 0) / 100 ), interval-5 ) )
-        return true,false
+        return now,true
     else
         L({level=2,msg="Sensor %1 (%2) unknown condition type %3 for cond %4 in group %5; fails."},
             tdev, luup.devices[tdev].description, cond.type, cond.id, grp.groupid)
-        cond.lastvalue = { value="", timestamp=now }
-        return false, false
+        return "",false
     end
 
-    return true, hasTimer
+    return cond.laststate.lastvalue, cond.laststate.state
 end
 
 -- Evaluate conditions within group. Return overall group state (all conditions met).
@@ -1823,7 +1830,18 @@ local function evaluateGroup( grp, cdata, tdev )
     local latched = {}
     for _,cond in ipairs( grp.groupconditions or {} ) do
         if cond.type ~= "comment" then
-            local state, condTimer = evaluateCondition( cond, grp, cdata, tdev )
+            -- Fetch prior state/value
+            local cs = sensorState[skey].condState[cond.id]
+            if cs == nil then
+                -- First time this condition is being evaluated.
+                D("evaluateGroup() new condition state for %1", cond.id)
+                cs = { id=cond.id, statestamp=0, stateedge={}, valuestamp=0 }
+                sensorState[skey].condState[cond.id] = cs
+            end
+            cond.laststate = cs
+
+            -- Evaluate for state and value
+            local newvalue, state, condTimer = evaluateCondition( cond, grp, cdata, tdev )
             D("evaluateGroup() eval group %1 cond %2 result is state %3 timer %4", grp.groupid,
                 cond.id, state, condTimer)
 
@@ -1831,18 +1849,7 @@ local function evaluateGroup( grp, cdata, tdev )
 
             -- Preserve the result of the condition eval. We are edge-triggered,
             -- so only save changes, with timestamp.
-            local cs = sensorState[skey].condState[cond.id]
-            if cs == nil then
-                D("evaluateGroup() new condition state for %1=%2", cond.id, state)
-                cs = { id=cond.id, laststate=state, statestamp=now, stateedge={} }
-                cs.stateedge[state and 1 or 0] = now
-                sensorState[skey].condState[cond.id] = cs
-                if state and ( cond.repeatcount or 0 ) > 1 then
-                    -- If true, store the first timestamp for repeat counter
-                    cs.repeats = { now }
-                end
-                addEvent{dev=tdev,event='condchange',cond=cond.id,newState=state}
-            elseif state ~= cs.laststate then
+            if state ~= cs.laststate then
                 D("evaluateGroup() condition %1 value state changed from %1 to %2", cs.laststate, state)
                 -- ??? At certain times, Vera gets a time that is in the future, or so it appears. It looks like the TZ offset isn't applied, randomly.
                 -- Maybe if call is during ntp update, don't know. Investigating... This log message helps detection and analysis.
@@ -1861,20 +1868,11 @@ local function evaluateGroup( grp, cdata, tdev )
             end
 
             -- Save actual current value if changed (for status display), and when it changed.
-            if cond.lastvalue ~= nil then
-                cond.lastvalue.value = cond.lastvalue.value or ""
-                if cond.lastvalue.value ~= cs.lastvalue then
-                    cs.lastvalue = cond.lastvalue.value
-                    cs.valuestamp = now
-                end
-            else
-                cs.lastvalue = nil
-                cs.valuestamp = nil
+            if newvalue ~= cs.lastvalue then
+                cs.priorvalue = cs.lastvalue
+                cs.lastvalue = newvalue
+                cs.valuestamp = now
             end
-
-            -- TODO??? Sort conditions by sequence/predecessor, so they are evaluated in the
-            -- order needed, and use evalstamp rather than statestamp for all work below.
-            -- That sort should also be able to detect loops.
 
             -- Check for predecessor/sequence
             if state and ( cond.after or "" ) ~= "" then
