@@ -685,7 +685,7 @@ var ReactorSensor = (function(api, $) {
                     }
                 }
                 /* Fetch and load */
-                cond.operator = jQuery("div.params select.opmenu", row).val();
+                cond.operator = jQuery("div.params select.opmenu", row).val() || "bet";
                 res = [];
                 var mon = jQuery("div.start select.monthmenu", row).val() || "";
                 if ( mon !== "" ) {
