@@ -1497,20 +1497,21 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         elseif op == "isfalse" then
             if (vn or 0) ~= 0 or TRUESTRINGS:find( ":" .. vv:lower() .. ":" ) then return vv,false end
         elseif op == "change" then
-            local ar = split( cv, "," )
-            D("evaluateCondition() service change op, currval=%1, prior=%2, ar=%3", vv, cond.laststate.lastvalue, ar)
-            if #ar > 0 and ar[1] ~= "" and cond.laststate.lastvalue ~= ar[1] then return vv,false end
-            if #ar > 1 and ar[2] ~= "" and vv ~= ar[2] then return vv,false end
-            if cond.laststate.lastvalue == vv then return vv,false end
-            -- Changed, go true and re-eval in 2 seconds (will go false unless changed again)
-            if cv == "" then
-                -- We only schedule a delay to re-evaluate and reset if the from
-                -- and to values aren't set. This particularly allows the to value
-                -- to be an analog to equals (i.e. "from any to val" is same as 
-                -- "equals val" and works the same way.
-                scheduleDelay( { id=tdev, info="change "..cond.id },
-                    getVarNumeric( "ValueChangeHoldTime", 2, tdev, RSSID ) )
+            if cv ~= "" and cv ~= "," then
+                local ar = split( cv, "," )
+                -- With terminal values. If value hasn't changed, consider as 
+                -- re-eval, go back further in history for prior value.
+                local prior = ( cond.laststate.lastvalue == mode ) and cond.laststate.priorvalue or cond.laststate.lastvalue
+                D("evaluateCondition() service change op, currval=%1, prior=%2, term=%3", vv, cond.laststate.lastvalue, ar)
+                if #ar > 0 and ar[1] ~= "" and prior ~= ar[1] then return vv,false end
+                if #ar > 1 and ar[2] ~= "" and vv ~= ar[2] then return vv,false end
+                return vv,true
             end
+            D("evaluateCondition() service change op, currval=%1, prior=%2, term=%3", vv, cond.laststate.lastvalue, ar)
+            if vv == cond.laststate.lastvalue then return vv,false end
+            -- Changed without terminal values, pulse.
+            scheduleDelay( { id=tdev, info="change "..cond.id },
+                getVarNumeric( "ValueChangeHoldTime", 2, tdev, RSSID ) )
         else
             L({level=1,msg="evaluateCondition() unknown op %1 in cond %2"}, op, cv)
             return vv,false
@@ -1523,16 +1524,21 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         local modes = split( val )
         local mode = getHouseMode( tdev )
         if cond.operator == "change" then
-            D("evaluateCondition() housemode change op, currval=%1, prior=%2, ar=%3", mode, cond.laststate.lastvalue, ar)
-            if #modes > 0 and modes[1] ~= "" and cond.laststate.lastvalue ~= modes[1] then return mode,false end
-            if #modes > 1 and modes[2] ~= "" and mode ~= modes[2] then return mode,false end
-            if mode == cond.laststate.lastvalue then return mode,false end
-            -- Changed, short true as in service condition. See note on delay
-            -- conditions above in service condition change op implementation.
-            if val == "" then
-                scheduleDelay( { id=tdev,info="change "..cond.id },
-                    getVarNumeric( "ValueChangeHoldTime", 2, tdev, RSSID ) )
+            if val ~= "" and val ~= "," then
+                -- With terminal values. If value hasn't changed, consider as 
+                -- re-eval, go back further in history for prior value.
+                local prior = ( cond.laststate.lastvalue == mode ) and cond.laststate.priorvalue or cond.laststate.lastvalue
+                D("evaluateCondition() housemode change op, currval=%1, prior=%2, term=%3", mode, prior, modes)
+                if #modes > 0 and modes[1] ~= "" and prior ~= modes[1] then return mode,false end
+                if #modes > 1 and modes[2] ~= "" and mode ~= modes[2] then return mode,false end
+                return mode,true
             end
+            -- Simple change (any to any).
+            D("evaluateCondition() housemode change op, currval=%1, prior=%2 (no term)", mode, cond.laststate.lastvalue)
+            if mode == cond.laststate.lastvalue then return mode,false end
+            -- Changed without terminal values, pulse.
+            scheduleDelay( { id=tdev,info="change "..cond.id },
+                getVarNumeric( "ValueChangeHoldTime", 2, tdev, RSSID ) )
         else
             -- Default "is" operator
             D("evaluateCondition() housemode %1 among %2?", mode, modes)
