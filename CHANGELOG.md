@@ -1,11 +1,12 @@
 # Change Log #
 
-## Version 2.0stable-181230 (stable branch)
+## Version 2.0stable-181231 (stable branch)
 
 * Enhancement: Use datalist on browsers that support it for entry of allowed value list (menu) fields, which creates more flexibility for the user in that the defined values are shown (and autocomplete), but other values can be entered (in case they are absent from enhancement data).
 * Enhancement: cleaner handling of optional parameters in enhanced services; handle all parameters in un-enhanced services as optional unless a default is known.
-* Enhancement: add values to Logic Summary condition display.
-* Fix: fix bug where exiting from control panel with unsaved changed, which are then declined/abandoned, causes re-entry to control panel to notify of unsaved changes.
+* Enhancement: add values to logic summary display for conditions.
+* Fix: test tools not enabling when checked (reported by pukka).
+* Fix: Fix problem with "unsaved changes" prompt coming up again on re-entry to cpanel after prior cpanel exit when save is declined.
 
 ## Version 2.0 (released) ##
 
