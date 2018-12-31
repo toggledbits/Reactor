@@ -1853,7 +1853,7 @@ var ReactorSensor = (function(api, $) {
     }
 
     function handleTestChange( ev ) {
-        var container = jQuery('div.testfields');
+        var container = jQuery('div#reactortools.reactortab');
         var el = jQuery('input#testdateenable', container);
         var vv = "";
         if ( el.prop('checked') ) {
@@ -1884,10 +1884,10 @@ var ReactorSensor = (function(api, $) {
 
         el = jQuery('input#testhousemode', container);
         if ( el.prop('checked') ) {
-            jQuery('select', el.closest('div.row')).prop('disabled', false);
+            jQuery('select', container).prop('disabled', false);
             vv = jQuery('select#mode').val();
         } else {
-            jQuery('select', el.closest('div.row')).prop('disabled', true);
+            jQuery('select#mode', container).prop('disabled', true);
             vv = "";
         }
         api.setDeviceStateVariablePersistent( api.getCpanelDeviceId(), serviceId, "TestHouseMode", vv );
