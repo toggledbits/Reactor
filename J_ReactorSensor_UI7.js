@@ -56,7 +56,7 @@ var ReactorSensor = (function(api, $) {
         var html = '';
         html += '<div class="clearfix">';
         html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
-        html += '<div id="tbcopyright">Reactor ver 2.0 &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
+        html += '<div id="tbcopyright">Reactor ver 2.1ace &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
             ' All Rights Reserved. Please check out the <a href="https://www.toggledbits.com/reactor" target="_blank">online documentation</a>' +
             ' and <a href="http://forum.micasaverde.com/index.php/board,93.0.html" target="_blank">forum board</a> for support.</div>';
         html += '<div id="supportlinks">Support links: ' +
@@ -172,6 +172,12 @@ var ReactorSensor = (function(api, $) {
     function initModule() {
         var myid = api.getCpanelDeviceId();
         console.log("initModule() for device " + myid);
+
+        /* Load ace */
+        if ( ! window.ace ) {
+            jQuery( "head" ).append( '<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.2/ace.js"></script>' );
+            jQuery( "head" ).append( '<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.2/mode-lua.js"></script>' );
+        }
 
         actions = {};
 
@@ -3666,7 +3672,7 @@ var ReactorSensor = (function(api, $) {
         session.setValue( field.val() || "" );
         editor.on( 'change', function( delta ) { field.val( session.getValue() ); } );
         editor.on( 'blur', handleActionValueChange );
-        /* Finally, hide our field, remove any change action, and add a custom action
+            /* Finally, hide our field, remove any change action, and add a custom action
            to reload ACE from the field. */
         field.off( 'change.reactor' ).hide();
         field.on( 'reactorinit', function() { session.setValue( field.val() || "" ); } );
@@ -3718,7 +3724,7 @@ var ReactorSensor = (function(api, $) {
             case "runlua":
                 /* Handle upgrade to ACE separately */
                 ct.append( '<textarea id="lua" wrap="off" autocorrect="off" autocomplete="off" autocapitalize="off" spellcheck="off" class="luacode form-control form-control-sm" rows="6"/>' );
-                if ( typeof(ace) != "undefined" ) {
+                if ( window.ace ) {
                     doEditor( jQuery( 'textarea.luacode', ct ) );
                 } else {
                     jQuery( 'textarea.luacode', ct ).on( 'change.reactor', handleActionValueChange );
