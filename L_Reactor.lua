@@ -13,7 +13,7 @@ local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
 local _PLUGIN_VERSION = "2.1develop"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
-local _CONFIGVERSION = 00203
+local _CONFIGVERSION = 00204
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -538,6 +538,7 @@ local function plugin_runOnce( pdev )
         initVar( "DebugMode", 0, pdev, MYSID )
         initVar( "MaxEvents", "", pdev, MYSID )
         initVar( "UseACE", "", tdev, RSSID )
+        initVar( "ACEURL", "", pdev, MYSID )
 
         luup.attr_set('category_num', 1, pdev)
 
@@ -565,6 +566,11 @@ local function plugin_runOnce( pdev )
 
     if s < 00202 then
         initVar( "MaxEvents", "", pdev, MYSID )
+    end
+    
+    if s < 00204 then
+        initVar( "UseACE", "", pdev, MYSID )
+        initVar( "ACEURL", "", pdev, MYSID )
     end
 
     -- Update version last.
