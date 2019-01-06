@@ -167,7 +167,6 @@ local function setVar( sid, name, val, dev )
     -- D("setVar(%1,%2,%3,%4) old value %5", sid, name, val, dev, s )
     if s ~= val then
         luup.variable_set( sid, name, val, dev )
-        return val
     end
     return s
 end
