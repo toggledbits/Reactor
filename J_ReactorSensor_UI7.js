@@ -166,15 +166,26 @@ var ReactorSensor = (function(api, $) {
         return cdata;
     }
 
+    /* Get parent state */
+    function getParentState( varName ) {
+        var me = getDeviceObject( api.getCpanelDeviceId() );
+        return api.getDeviceState( me.id_parent || me.id, "urn:toggledbits-com:serviceId:Reactor", varName );
+    }
+
     /* Initialize the module */
     function initModule() {
         var myid = api.getCpanelDeviceId();
         console.log("initModule() for device " + myid);
+        var devices = api.cloneObject( api.getListOfDevices() );
 
-        /* Load ace */
-        if ( ! window.ace ) {
-            jQuery( "head" ).append( '<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.2/ace.js"></script>' );
-            jQuery( "head" ).append( '<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.2/mode-lua.js"></script>' );
+        /* Load ACE. Since the jury is still out with LuaView on this, default is no
+           ACE for now. As of 2019-01-06, one user has reported that ACE does not function
+           on Chrome Mac (unknown version, but does function with Safari and Firefox on Mac).
+           That's just one browser, but still... */
+        var s = getParentState( "UseACE" ) || "";
+        if ( "1" === s && ! window.ace ) {
+            s = getParentState( "ACEURL" ) || "https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.2/ace.js";
+            jQuery( "head" ).append( '<script src="' + s + '"></script>' );
         }
 
         actions = {};
@@ -189,7 +200,6 @@ var ReactorSensor = (function(api, $) {
         loadConfigData( myid );
 
         /* Make our own list of devices, sorted by room, and alpha within room. */
-        var devices = api.cloneObject( api.getListOfDevices() );
         var rooms = [];
         var noroom = { "id": 0, "name": "No Room", "devices": [] };
         rooms[noroom.id] = noroom;
@@ -231,12 +241,6 @@ var ReactorSensor = (function(api, $) {
         for ( var ix=0; ix<serviceOps.length; ix++ ) {
             serviceOpsIndex[serviceOps[ix].op] = serviceOps[ix];
         }
-    }
-
-    /* Get parent state */
-    function getParentState( varName ) {
-        var me = getDeviceObject( api.getCpanelDeviceId() );
-        return api.getDeviceState( me.id_parent || me.id, "urn:toggledbits-com:serviceId:Reactor", varName );
     }
 
     /**
