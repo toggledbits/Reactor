@@ -7,7 +7,8 @@
 * Enhancement: Use datalist on browsers that support it for entry of allowed value list (menu) fields, which creates more flexibility for the user in that the defined values are shown (and autocomplete), but other values can be entered (in case they are absent from enhancement data).
 * Enhancement: cleaner handling of optional parameters in enhanced services; handle all parameters in un-enhanced services as optional unless a default is known.
 * Enhancement: add values to logic summary display for conditions.
-* Fix: apparently notification_only scenes can have null room IDs, which breaks sorting (fixed).
+* Fix/workaround: Apparently some versions of Chrome believe that a label tag with the word "State" in it means "U.S. State" and applies special bonus behaviors (autocomplete with state names) that we actually don't want, especially for the affected fields, which are supposed to be numeric. Change the word "State" to "Condition" where we use it to shortcut this odd implementation choice on Google's part. This didn't prevent the user from entering a number as expected, but looked odd enough to keep some users from trying.
+* Fix: notification_only scenes can have null room IDs, which breaks sorting (fixed).
 * Fix: test tools not enabling when checked (reported by pukka).
 * Fix: Fix problem with "unsaved changes" prompt coming up again on re-entry to cpanel after prior cpanel exit when save is declined.
 
