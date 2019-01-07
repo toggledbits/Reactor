@@ -624,10 +624,12 @@ var ReactorSensor = (function(api, $) {
         var val, res;
         switch (typ) {
             case 'comment':
+                removeConditionProperties( cond, "comment" );
                 cond.comment = jQuery("div.params input", row).val();
                 break;
 
             case 'service':
+                removeConditionProperties( cond, "device,service,variable,operator,value" );
                 cond.device = parseInt( jQuery("div.params select.devicemenu", row).val() );
                 cond.service = jQuery("div.params select.varmenu", row).val() || "";
                 cond.variable = cond.service.replace( /^[^\/]+\//, "" );
@@ -649,6 +651,7 @@ var ReactorSensor = (function(api, $) {
                 break;
 
             case 'weekday':
+                removeConditionProperties( cond, "operator,value" );
                 cond.operator = jQuery("div.params select.wdcond", row).val() || "";
                 res = [];
                 jQuery("input#opts:checked", row).each( function( ix, control ) {
@@ -658,6 +661,7 @@ var ReactorSensor = (function(api, $) {
                 break;
                 
             case 'housemode':
+                removeConditionProperties( cond, "operator,value" );
                 cond.operator = jQuery("div.params select.opmenu", row).val() || "is";
                 if ( "change" === cond.operator ) {
                     // Join simple two value list, but don't save "," on its own.
@@ -698,6 +702,7 @@ var ReactorSensor = (function(api, $) {
                     }
                 }
                 /* Fetch and load */
+                removeConditionProperties( cond, "operator,value" );
                 cond.operator = jQuery("div.params select.opmenu", row).val() || "bet";
                 res = [];
                 var mon = jQuery("div.start select.monthmenu", row).val() || "";
@@ -736,6 +741,7 @@ var ReactorSensor = (function(api, $) {
                 break;
 
             case 'sun':
+                removeConditionProperties( cond, "operator,value" );
                 cond.operator = jQuery('div.params select.opmenu', row).val() || "after";
                 res = [];
                 var whence = jQuery('div.params select#sunstart', row).val() || "sunrise";
@@ -763,6 +769,7 @@ var ReactorSensor = (function(api, $) {
                 break;
 
             case 'interval':
+                removeConditionProperties( cond, "days,hours,mins,basetime" );
                 var v = getOptionalInteger( jQuery('div.params #days', row).val(), 0 );
                 if ( isNaN(v) || v < 0 ) {
                     jQuery( 'div.params #days', row ).addClass( 'tberror' );
@@ -788,7 +795,7 @@ var ReactorSensor = (function(api, $) {
                 var rh = jQuery( 'div.params select#relhour' ).val() || "00";
                 var rm = jQuery( 'div.params select#relmin' ).val() || "00";
                 if ( rh == "00" && rm == "00" ) {
-                    cond.basetime = "";
+                    delete cond.basetime;
                 } else {
                     cond.basetime = rh + "," + rm;
                 }
@@ -796,6 +803,7 @@ var ReactorSensor = (function(api, $) {
 
             case 'reload':
                 /* No parameters */
+                removeConditionProperties( cond, "" );
                 break;
 
             default:
@@ -1728,6 +1736,7 @@ var ReactorSensor = (function(api, $) {
 
     /**
      * Remove all properies on condition except those in the exclusion list.
+     * The id and type properties are always preserved.
      */
     function removeConditionProperties( cond, excl ) {
         var elist = (excl || "").split(/,/);
@@ -1784,43 +1793,6 @@ var ReactorSensor = (function(api, $) {
      */
     function handleSaveClick( ev, fnext, fargs ) {
         var myid = api.getCpanelDeviceId();
-
-        /* Rip through conditions and clean up before saving */
-        var ixCond = iData[myid].ixCond;
-        for ( var condid in ixCond ) {
-            if ( ixCond.hasOwnProperty( condid ) ) {
-                var cond = ixCond[condid];
-                switch ( cond.type ) {
-                    case 'comment':
-                        removeConditionProperties( cond, 'comment' );
-                        break;
-                    case 'service':
-                        delete cond.comment;
-                        cond.device = parseInt( cond.device );
-                        break;
-                    case 'housemode':
-                        removeConditionProperties( cond, 'operator,value' );
-                        break;
-                    case 'weekday':
-                        removeConditionProperties( cond, 'operator,value' );
-                        break;
-                    case 'sun':
-                        removeConditionProperties( cond, 'operator,value' );
-                        break;
-                    case 'trange':
-                        removeConditionProperties( cond, 'operator,value' );
-                        break;
-                    case 'interval':
-                        removeConditionProperties( cond, 'days,hours,mins,basetime,duty' );
-                        break;
-                    case 'reload':
-                        removeConditionProperties( cond, "" );
-                        break;
-                    default:
-                        /* Don't do anything */
-                }
-            }
-        }
 
         /* Save to persistent state */
         iData[myid].cdata.timestamp = Math.floor( Date.now() / 1000 );
