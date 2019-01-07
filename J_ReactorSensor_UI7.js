@@ -54,7 +54,7 @@ var ReactorSensor = (function(api, $) {
         var html = '';
         html += '<div class="clearfix">';
         html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
-        html += '<div id="tbcopyright">Reactor ver 2.1ace &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
+        html += '<div id="tbcopyright">Reactor ver 2.1develop &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
             ' All Rights Reserved. Please check out the <a href="https://www.toggledbits.com/reactor" target="_blank">online documentation</a>' +
             ' and <a href="http://forum.micasaverde.com/index.php/board,93.0.html" target="_blank">forum board</a> for support.</div>';
         html += '<div id="supportlinks">Support links: ' +
@@ -702,7 +702,6 @@ var ReactorSensor = (function(api, $) {
                     }
                 }
                 /* Fetch and load */
-                removeConditionProperties( cond, "operator,value" );
                 cond.operator = jQuery("div.params select.opmenu", row).val() || "bet";
                 res = [];
                 var mon = jQuery("div.start select.monthmenu", row).val() || "";
@@ -1870,7 +1869,7 @@ var ReactorSensor = (function(api, $) {
 
         el = jQuery('input#testhousemode', container);
         if ( el.prop('checked') ) {
-            jQuery('select', container).prop('disabled', false);
+            jQuery('select#mode', container).prop('disabled', false);
             vv = jQuery('select#mode').val();
         } else {
             jQuery('select#mode', container).prop('disabled', true);
@@ -2743,15 +2742,16 @@ var ReactorSensor = (function(api, $) {
             }
             rid[0] = { id: 0, name: "(no room)" };
             scenes.sort( function( a, b ) {
-                if ( rid[a.room].name == rid[b.room].name ) {
-                    /* Same room */
-                    return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1;
-                }
-                return rid[a.room].name.toLowerCase() < rid[b.room].name.toLowerCase() ? -1 : 1;
+                var ra = ( rid[a.room || 0] || {} ).name || "";
+                var rb = ( rid[b.room || 0] || {} ).name || "";
+                return ra.toLowerCase() < rb.toLowerCase() ? -1 : 1;
             });
             var lastRoom = -1;
             var el;
             for ( i=0; i<scenes.length; i++ ) {
+                if ( scenes[i].notification_only || scenes[i].hidden ) {
+                    continue;
+                }
                 if ( scenes[i].room != lastRoom ) {
                     menu.append('<option value="" class="optheading" disabled>' + "--" + rid[scenes[i].room].name + "--</option>");
                     lastRoom = scenes[i].room;
@@ -2763,7 +2763,7 @@ var ReactorSensor = (function(api, $) {
             }
         } else {
             /* Simple alpha list */
-            scenes.sort( function(a, b) { return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1; } );
+            scenes.sort( function(a, b) { return ( a.name || "" ).toLowerCase() < ( b.name || "" ).toLowerCase() ? -1 : 1; } );
             for ( i=0; i<scenes.length; i++ ) {
                 if ( scenes[i].notification_only || scenes[i].hidden ) {
                     continue;
