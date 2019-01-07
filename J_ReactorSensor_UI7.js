@@ -2651,7 +2651,7 @@ var ReactorSensor = (function(api, $) {
             }
         } else {
             /* Simple alpha list */
-            scenes.sort( function(a, b) { return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1; } );
+            scenes.sort( function(a, b) { return ( a.name || {} ).toLowerCase() < ( b.name || {} ).toLowerCase() ? -1 : 1; } );
             for ( i=0; i<scenes.length; i++ ) {
                 if ( scenes[i].notification_only || scenes[i].hidden ) {
                     continue;
