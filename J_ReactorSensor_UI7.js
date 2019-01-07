@@ -2630,15 +2630,16 @@ var ReactorSensor = (function(api, $) {
             }
             rid[0] = { id: 0, name: "(no room)" };
             scenes.sort( function( a, b ) {
-                if ( rid[a.room].name == rid[b.room].name ) {
-                    /* Same room */
-                    return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1;
-                }
-                return rid[a.room].name.toLowerCase() < rid[b.room].name.toLowerCase() ? -1 : 1;
+                var ra = ( rid[a.room || 0] || {} ).name || "";
+                var rb = ( rid[b.room || 0] || {} ).name || "";
+                return ra.toLowerCase() < rb.toLowerCase() ? -1 : 1;
             });
             var lastRoom = -1;
             var el;
             for ( i=0; i<scenes.length; i++ ) {
+                if ( scenes[i].notification_only || scenes[i].hidden ) {
+                    continue;
+                }
                 if ( scenes[i].room != lastRoom ) {
                     menu.append('<option value="" class="optheading" disabled>' + "--" + rid[scenes[i].room].name + "--</option>");
                     lastRoom = scenes[i].room;
