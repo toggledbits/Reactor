@@ -650,8 +650,13 @@ var ReactorSensor = (function(api, $) {
 
             case 'weekday':
                 cond.operator = jQuery("div.params select.wdcond", row).val() || "";
-                /* fall through */
-
+                res = [];
+                jQuery("input#opts:checked", row).each( function( ix, control ) {
+                    res.push( control.value /* DOM element */ );
+                });
+                cond.value = res.join( ',' );
+                break;
+                
             case 'housemode':
                 cond.operator = jQuery("div.params select.opmenu", row).val() || "is";
                 if ( "change" === cond.operator ) {
@@ -1356,6 +1361,7 @@ var ReactorSensor = (function(api, $) {
         } else {
             iData[myid].ixCond[condId].type = newType;
         }
+
         configModified = true;
         setConditionForType( iData[myid].ixCond[condId], row );
         updateConditionRow( row );

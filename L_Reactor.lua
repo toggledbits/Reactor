@@ -1558,11 +1558,11 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         D("evaluateCondition() weekday condition, setting next check for %1", nextDay)
         scheduleTick( { id=tdev, info="weekday "..cond.id }, nextDay )
         local wd = split( cond.value )
-        local op = cond.operator
+        local op = cond.operator or ""
         D("evaluateCondition() weekday %1 among %2", val, wd)
         if not isOnList( wd, tostring( ndt.wday ) ) then return val,false end
         -- OK, we're on the right day of the week. Which week?
-        if ( op or "" ) ~= "" then -- blank means "every"
+        if op ~= "" then -- blank means "every"
             D("evaluateCondition() is today %1 %2-%3 the %4th?", val, ndt.month,
                 ndt.day, op)
             if op == "last" then
@@ -1573,6 +1573,11 @@ local function evaluateCondition( cond, grp, cdata, tdev )
                 if nt.month == ndt.month then return val,false end -- same
             else
                 local nth = tonumber( op )
+                if nth == nil then
+                    L({level=2,msg="Invalid op %1 in weekday condition %2 for %3 (%4)"},
+                        op, cond.id, (luup.devices[tdev] or {}).description, tdev)
+                    return val,false -- never met
+                end
                 -- Move back N-1 weeks; we should still be in same month. Then
                 -- move back one more week, should be in prior month.
                 local pt, ref
