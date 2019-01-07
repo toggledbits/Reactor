@@ -918,11 +918,11 @@ var ReactorSensor = (function(api, $) {
             }
         }
 
-        var rc = jQuery('input.rcount', row);
+        var rc = jQuery('input#rcount', row);
         if ( "" === rc.val() || rc.prop('disabled') ) {
-            jQuery('input.duration', row).prop('disabled', false);
-            jQuery('select.durop', row).prop('disabled', false);
-            jQuery('input.rspan', row).val("").prop('disabled', true);
+            jQuery('input#duration', row).prop('disabled', false);
+            jQuery('select#durop', row).prop('disabled', false);
+            jQuery('input#rspan', row).val("").prop('disabled', true);
             if ( undefined !== cond.repeatcount ) {
                 delete cond.repeatcount;
                 delete cond.repeatwithin;
@@ -940,11 +940,11 @@ var ReactorSensor = (function(api, $) {
                     delete cond.duration_op;
                     configModified = true;
                 }
-                jQuery('input.duration', row).val("").prop('disabled', true);
-                jQuery('select.durop', row).val("ge").prop('disabled', true);
-                jQuery('input.rspan', row).prop('disabled', false);
-                if ( jQuery('input.rspan', row).val() === "" ) {
-                    jQuery('input.rspan', row).val("60");
+                jQuery('input#duration', row).val("").prop('disabled', true);
+                jQuery('select#durop', row).val("ge").prop('disabled', true);
+                jQuery('input#rspan', row).prop('disabled', false);
+                if ( jQuery('input#rspan', row).val() === "" ) {
+                    jQuery('input#rspan', row).val("60");
                     cond.repeatwithin = 60;
                     configModified = true;
                 }
@@ -957,7 +957,7 @@ var ReactorSensor = (function(api, $) {
             configModified = true;
         }
 
-        var rs = jQuery('input.rspan', row);
+        var rs = jQuery('input#rspan', row);
         if ( ! rs.prop('disabled') ) {
             var rspan = getInteger( rs.val() );
             if ( isNaN( rspan ) || rspan < 1 ) {
@@ -971,10 +971,10 @@ var ReactorSensor = (function(api, $) {
             }
         }
 
-        var dd = jQuery('input.duration', row);
+        var dd = jQuery('input#duration', row);
         if ( "" === dd.val() || dd.prop('disabled') ) {
-            jQuery('input.rcount', row).prop('disabled', false);
-            // jQuery('input.rspan', row).prop('disabled', false);
+            jQuery('input#rcount', row).prop('disabled', false);
+            // jQuery('input#rspan', row).prop('disabled', false);
             if ( undefined !== cond.duration ) {
                 delete cond.duration;
                 delete cond.duration_op;
@@ -986,8 +986,8 @@ var ReactorSensor = (function(api, $) {
                 dd.addClass('tberror');
             } else {
                 dd.removeClass('tberror');
-                jQuery('input.rcount', row).val("").prop('disabled', true);
-                // jQuery('input.rspan', row).val("").prop('disabled', true);
+                jQuery('input#rcount', row).val("").prop('disabled', true);
+                // jQuery('input#rspan', row).val("").prop('disabled', true);
                 delete cond.repeatwithin;
                 delete cond.repeatcount;
                 if ( (cond.duration||0) !== dur ) {
@@ -995,11 +995,11 @@ var ReactorSensor = (function(api, $) {
                     if ( dur === 0 ) {
                         delete cond.duration;
                         delete cond.duration_op;
-                        jQuery('input.rcount', row).prop('disabled', false);
-                        // jQuery('input.rspan', row).prop('disabled', false);
+                        jQuery('input#rcount', row).prop('disabled', false);
+                        // jQuery('input#rspan', row).prop('disabled', false);
                     } else {
                         cond.duration = dur;
-                        cond.duration_op = jQuery('select.durop', row).val();
+                        cond.duration_op = jQuery('select#durop', row).val();
                     }
                     configModified = true;
                 }
@@ -1053,23 +1053,23 @@ var ReactorSensor = (function(api, $) {
         jQuery('select.pred', container).val( cond.after );
         jQuery('input.predtime', container).val( cond.aftertime || 0 );
         /* Duration */
-        container.append('<div class="duropt form-inline"><label>State is sustained for&nbsp;<select class="durop form-control form-control-sm"><option value="ge">at least</option><option value="lt">less than</option></select>&nbsp;<input type="text" class="duration form-control form-control-sm narrow"> seconds</label></div>');
+        container.append('<div class="duropt form-inline"><label>Condition is sustained for&nbsp;<select id="durop" class="form-control form-control-sm"><option value="ge">at least</option><option value="lt">less than</option></select>&nbsp;<input type="text" id="duration" class="form-control form-control-sm narrow"> seconds</label></div>');
         /* Repeat */
-        container.append('<div class="duropt form-inline"><label>State repeats <input type="text" class="rcount form-control form-control-sm narrow"> times within <input type="text" class="rspan form-control form-control-sm narrow"> seconds</label></div>');
+        container.append('<div class="duropt form-inline"><label>Condition repeats <input type="text" id="rcount" class="form-control form-control-sm narrow"> times within <input type="text" id="rspan" class="form-control form-control-sm narrow"> seconds</label></div>');
         container.append('<div class="latchopt form-inline"><label><input type="checkbox" class="latchcond form-control form-control-sm">&nbsp;Latch (once met, condition remains true until group resets)<label></div>');
         container.append('<i class="material-icons closeopts" title="Close Options">expand_less</i>');
         jQuery('input,select', container).on( 'change.reactor', handleOptionChange );
         jQuery('i.closeopts', container).on( 'click.reactor', handleCloseOptionsClick );
         if ( ( cond.duration || 0 ) > 0 ) {
-            jQuery('input.rcount,input.rspan', container).prop('disabled', true);
-            jQuery('input.duration', container).val( cond.duration );
-            jQuery('select.durop', container).val( cond.duration_op || "ge" );
+            jQuery('input#rcount,input#rspan', container).prop('disabled', true);
+            jQuery('input#duration', container).val( cond.duration );
+            jQuery('select#durop', container).val( cond.duration_op || "ge" );
         } else {
             var rc = cond.repeatcount || "";
-            jQuery('input.duration', container).prop('disabled', rc != "");
-            jQuery('select.durop', container).prop('disabled', rc != "");
-            jQuery('input.rcount', container).val( rc );
-            jQuery('input.rspan', container).val( rc == "" ? "" : ( cond.repeatwithin || "60" ) );
+            jQuery('input#duration', container).prop('disabled', rc != "");
+            jQuery('select#durop', container).prop('disabled', rc != "");
+            jQuery('input#rcount', container).val( rc );
+            jQuery('input#rspan', container).val( rc == "" ? "" : ( cond.repeatwithin || "60" ) );
         }
         jQuery('input.latchcond', container).prop('checked', ( cond.latch || 0 ) != 0 );
 
@@ -3167,7 +3167,7 @@ var ReactorSensor = (function(api, $) {
                     /* Menu, can be array of strings or objects */
                     if ( undefined !== window.HTMLDataListElement ) {
                         /* Use datalist when supported (allows more flexible entry) */
-                        var dlid = (action.service + '-' + action.name + '-' + parm.name).replace( /[^a-z0-9-]/ig, "-" );
+                        var dlid = ("data-" + action.service + '-' + action.name + '-' + parm.name).replace( /[^a-z0-9-]/ig, "-" );
                         if ( 0 == jQuery( 'datalist#'+dlid ).length ) {
                             /* Datalist doesn't exist yet, create it */
                             inp = jQuery('<datalist class="argdata" id="' + dlid + '"/>');
