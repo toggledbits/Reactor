@@ -1784,8 +1784,8 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         -- Get our base time and make it a real time
         local pt = split( cond.basetime or "" )
         if #pt == 2 then
-            ndt.hour = tonumber(pt[1])
-            ndt.min = tonumber(pt[2])
+            ndt.hour = tonumber(pt[1]) || 0
+            ndt.min = tonumber(pt[2]) || 0
         else
             ndt.hour = 0
             ndt.min = 0
