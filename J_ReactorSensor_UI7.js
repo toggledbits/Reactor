@@ -26,13 +26,14 @@ var ReactorSensor = (function(api, $) {
     var roomsByName = [];
     var actions = {};
     var deviceInfo = {};
+    var userIx = {};
     var configModified = false;
     var inStatusPanel = false;
     var isOpenLuup = false;
     // unused: isALTUI = undefined !== MultiBox;
     var lastx = 0;
     var condTypeName = { "service": "Service/Variable", "housemode": "House Mode", "comment": "Comment", "weekday": "Weekday",
-        "sun": "Sunrise/Sunset", "trange": "Date/Time", "interval": "Interval", "reload": "Luup Reloaded" };
+        "sun": "Sunrise/Sunset", "trange": "Date/Time", "interval": "Interval", "ishome": "Geofence", "reload": "Luup Reloaded" };
     var weekDayName = [ '?', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat' ];
     var monthName = [ '?', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec' ];
     var opName = { "bet": "between", "nob": "not between", "after": "after", "before": "before" };
@@ -241,6 +242,12 @@ var ReactorSensor = (function(api, $) {
         for ( var ix=0; ix<serviceOps.length; ix++ ) {
             serviceOpsIndex[serviceOps[ix].op] = serviceOps[ix];
         }
+        
+        var ud = api.getUserData();
+        userIx = {};
+        for ( ix=0; ix<(ud.users || {}).length; ++ix ) {
+            userIx[ud.users[ix].id] = ud.users[ix].Name;
+        }
     }
 
     /**
@@ -441,6 +448,24 @@ var ReactorSensor = (function(api, $) {
                     str += ")";
                 }
                 break;
+            
+            case 'ishome':
+                t = ( cond.value || "" ).split(/,/);
+                if ( t.length < 1 || t[0] == "" ) {
+                    str += "any user";
+                } else {
+                    /* Replace IDs with names for display */
+                    for ( k=0; k<t.length; ++k ) {
+                        t[k] = userIx[t[k]] ? userIx[t[k]] : ( t[k] + '?' );
+                    }
+                    if ( t.length == 1 ) {
+                        str += t[0];
+                    } else {
+                        str += " any of " + t.join(', ');
+                    }
+                }
+                str += " " + ( cond.operator || "is" ) + " home";
+                break;
 
             case 'reload':
                 break; /* no additional information */
@@ -472,6 +497,10 @@ var ReactorSensor = (function(api, $) {
                 el.append( jQuery( '<option/>' ).val( devid ).text( fn ? fn : '#' + String(devid) + '?' ) );
             }
         });
+
+        if ( false && jQuery( 'option[value="0"]', el).length == 0 ) {
+            el.prepend( jQuery( '<option/>' ).val( "0" ).text( "Gateway/Controller" ) );
+        }
 
         el.prepend( jQuery( '<option/>' ).val( "" ).text( "--choose device--" ) );
 
@@ -800,6 +829,16 @@ var ReactorSensor = (function(api, $) {
                 }
                 break;
 
+            case 'ishome':
+                removeConditionProperties( cond, "operator,value" );
+                cond.operator = jQuery("div.params select.geofencecond", row).val() || "is";
+                res = [];
+                jQuery("input#opts:checked", row).each( function( ix, control ) {
+                    res.push( control.value /* DOM element */ );
+                });
+                cond.value = res.join( ',' );
+                break;
+                
             case 'reload':
                 /* No parameters */
                 removeConditionProperties( cond, "" );
@@ -1341,6 +1380,24 @@ var ReactorSensor = (function(api, $) {
                 }
                 jQuery("select,input", container).on( 'change.reactor', handleConditionRowChange );
                 break;
+                
+            case 'ishome':
+                container.append(
+                    '<select class="geofencecond form-control form-control-sm"><option value="is">Any selected user is home</option><option value="is not">Any selected user is NOT home</option></select>');
+                for ( k in userIx ) {
+                    if ( userIx.hasOwnProperty( k ) ) {
+                        el = jQuery( '<label class="checkbox-inline"/>' ).text( userIx[k] || k );
+                        el.append( jQuery( '<input type="checkbox" id="opts" value="' + k + '">' ) );
+                        container.append( el );
+                    }
+                }
+                jQuery("input#opts", container).on( 'change.reactor', handleConditionRowChange );
+                jQuery("select.geofencecond", container).on( 'change.reactor', handleConditionRowChange )
+                    .val( cond.operator || "" );
+                (cond.value || "").split(',').forEach( function( val ) {
+                    jQuery('input#opts[value="' + val + '"]', container).prop('checked', true);
+                });
+                break;
 
             case 'reload':
                 /* no fields */
@@ -1614,7 +1671,7 @@ var ReactorSensor = (function(api, $) {
         jQuery("div.controls", el).append('<i class="material-icons md-btn action-down">arrow_downward</i>');
         jQuery("div.controls", el).append('<i class="material-icons md-btn action-delete">clear</i>');
 
-        [ "comment", "service", "housemode", "sun", "weekday", "trange", "interval", "reload" ].forEach( function( k ) {
+        [ "comment", "service", "housemode", "sun", "weekday", "trange", "interval", "ishome", "reload" ].forEach( function( k ) {
             jQuery( "div.condtype select", el ).append( jQuery( "<option/>" ).val( k ).text( condTypeName[k] ) );
         });
 
@@ -2333,6 +2390,19 @@ var ReactorSensor = (function(api, $) {
 
                     case 'interval':
                         currentValue = new Date( currentValue * 1000 ).toLocaleString();
+                        break;
+                        
+                    case 'ishome':
+                        var t = (currentValue || "").split( /,/ );
+                        /* Replace IDs with names for display */
+                        if ( t.length > 0 && t[0] !== "" ) {
+                            for ( var k=0; k<t.length; ++k ) {
+                                t[k] = userIx[t[k]] ? userIx[t[k]] : ( t[k] + '?' );
+                            }
+                            currentValue = t.join(', ');
+                        } else {
+                            currentValue = "";
+                        }
                         break;
 
                     default:

@@ -34,6 +34,7 @@ local sceneData = {}
 local sceneWaiting = {}
 local sceneState = {}
 local hasBattery = true
+local usingGeofence = false
 local maxEvents = 50
 local luaEnv -- global state for all runLua actions
 
@@ -139,6 +140,20 @@ local function split( str, sep )
     return arr, #arr
 end
 
+-- Array to map, where f(elem) returns key[,value]
+local function map( arr, f, res )
+    res = res or {}
+    for _,x in ipairs( arr ) do
+        if f then
+            local k,v = f( x )
+            res[k] = (v == nil) and x or v
+        else
+            res[x] = x
+        end
+    end
+    return res
+end
+
 -- Shallow copy
 local function shallowCopy( t )
     local r = {}
@@ -181,6 +196,22 @@ local function getVarNumeric( name, dflt, dev, sid )
     s = tonumber(s, 10)
     if (s == nil) then return dflt end
     return s
+end
+
+-- Fetch JSON from a URL
+local function getJSON( uri, pdev )
+    D("getJSON(%1,%2)", uri, pdev)
+    pdev = pdev or pluginDevice
+    local rc,t,httpStatus = luup.inet.wget(uri, 15)
+    D("getJSON() request returned %1,t,%2", rc, httpStatus)
+    if tostring(httpStatus) ~= "200" or rc ~= 0 then
+        return nil, httpStatus, "request failed rc=" .. tostring(rc)
+    end
+    local d,pos,err = json.decode( t )
+    if err then 
+        return nil, "500", "JSON decode failed at " .. tostring(pos) .. ": " .. tostring(err)
+    end
+    return d, "200", nil
 end
 
 -- Check system battery (VeraSecure)
@@ -1837,6 +1868,37 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         -- On time greater of 15 seconds or duty cycle as % of interval, but never more than interval-5 seconds.
         scheduleDelay( { id=tdev,info="interval "..cond.id }, math.min( math.max( 15, interval * (cond.duty or 0) / 100 ), interval-5 ) )
         return now,true
+    elseif cond.type == "ishome" then
+        -- Geofence, is user home?
+        -- Add watch on parent if we don't already have one.
+        addServiceWatch( pluginDevice, MYSID, "IsHome", tdev )
+        usingGeofence = true -- flag to masterTick
+        local op = cond.operator or "is"
+        local ishome = luup.variable_get( MYSID, "IsHome", pluginDevice ) or ""
+        -- ??? should the value we return for display give user names rather than ids? friendlier...
+        local homelist = split( ishome )
+        -- If condition's matching user list is empty, return op-dependent/shortcut exit.
+        local userlist = split( cond.value or "" )
+        D("evaluateCondition() ishome op=%1, home=%2, cond=%3", op, homelist, userlist)
+        if #userlist < 1 or userlist[1] == "" then 
+            -- Empty userlist. If op is "is not" and somebody is home, return false.
+            if op == "is not" then 
+                return ishome,#homelist > 0 and homelist[1] ~= ""
+            end
+            -- Default "is"; if anybody is home, return true.
+            return ishome,#homelist == 0 or homelist[1] == ""
+        end
+        -- Convert to map and scan.
+        homelist = map( homelist )
+        for _,v in ipairs( userlist ) do
+            if op == "is not" and homelist[v] == nil then 
+                return ishome,true
+            elseif homelist[v] ~= nil then 
+                return ishome,true 
+            end
+        end
+        -- Condition not met
+        return ishome,false
     else
         L({level=2,msg="Sensor %1 (%2) unknown condition type %3 for cond %4 in group %5; fails."},
             tdev, luup.devices[tdev].description, cond.type, cond.id, grp.groupid)
@@ -2194,6 +2256,46 @@ local function masterTick(pdev)
                 luup.call_action( RSSID, "Restart", {}, k ) -- runs as job
             end
         end
+    end
+    
+    -- Geofencing. If flag on, at least one sensor is using geofencing.
+    if usingGeofence then
+        -- Holy crap. We have to get userdata to get access to this? Where's the supporting API, Vera?
+        local url
+        if isOpenLuup then
+            -- Does openLuup support geofencing?
+            url = "http://127.0.0.1:3480/data_request?id=user_data&output_format=JSON"
+        else
+            url = "http://127.0.0.1/port_3480/data_request?id=user_data&output_format=JSON"
+        end
+        local ud,httpstat,err = getJSON( url )
+        if ud then
+            -- ud.users is array of { id, Name, Level, IsGuest }
+            -- ud.usergeofences is array of { iduser, geotags } and geotags is
+            --     { PK_User (same as id), id (of geotag), accuracy, ishome, notify, radius, address, color (hex6), latitude, longitude, name (of geotag), status, and poss others? }
+            local ishome = {}
+            D("masterTick() evaluating %1", ud.usergeofences)
+            for _,v in ipairs( ud.usergeofences or {} ) do
+                for _,g in ipairs( v.geotags or {} ) do
+                    D("masterTick() user %1 geofence %2 ishome=%3", v.iduser, g.id, g.ishome)
+                    if ( g.ishome or 0 ) ~= 0 then
+                        ishome[v.iduser] = true
+                    end
+                end
+            end
+            local keys = {}
+            for k,_ in pairs( ishome ) do
+                table.insert( keys, k )
+            end
+            table.sort( keys )
+            D("masterTick() users at home=%1", keys)
+            -- setVar( MYSID, "Users", json.encode( ud.users or {} ), pdev )
+            setVar( MYSID, "IsHome", table.concat( keys, "," ), pdev )
+        else
+            L({level=2,msg="No geofence data! Unable to fetch userdata! HTTP status %1, %2"}, httpstat, err)
+        end
+    else
+        D("masterTick() skipping geofence check")
     end
 
     -- See if any cached state has expired
