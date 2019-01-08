@@ -2256,9 +2256,10 @@ local function masterTick(pdev)
         end
         local ud,httpstat,err = getJSON( url )
         if ud then
-            -- ud.users is array of { id, Name, Level, IsGuest }
+            -- ud.users is array of usergeofence, which is { id, Name, Level, IsGuest }
             -- ud.usergeofences is array of { iduser, geotags } and geotags is
             --     { PK_User (same as id), id (of geotag), accuracy, ishome, notify, radius, address, color (hex6), latitude, longitude, name (of geotag), status, and poss others? }
+            -- My geotag status="**((NULL))**" (literally that string), haven't noticed that it changes, but fence seems to work. Hmmm.
             local ishome = {}
             D("masterTick() evaluating %1", ud.usergeofences)
             for _,v in ipairs( ud.usergeofences or {} ) do
