@@ -452,7 +452,7 @@ var ReactorSensor = (function(api, $) {
             case 'ishome':
                 t = ( cond.value || "" ).split(/,/);
                 if ( t.length < 1 || t[0] == "" ) {
-                    str += "any user";
+                    str += cond.operator === "is not" ? "no user is home" : "any user is home";
                 } else {
                     /* Replace IDs with names for display */
                     for ( k=0; k<t.length; ++k ) {
@@ -463,8 +463,8 @@ var ReactorSensor = (function(api, $) {
                     } else {
                         str += " any of " + t.join(', ');
                     }
+                    str += " " + ( cond.operator || "is" ) + " home";
                 }
-                str += " " + ( cond.operator || "is" ) + " home";
                 break;
 
             case 'reload':

@@ -1867,11 +1867,12 @@ local function evaluateCondition( cond, grp, tdev )
         D("evaluateCondition() ishome op=%1, home=%2, cond=%3", op, homelist, userlist)
         if #userlist < 1 or userlist[1] == "" then 
             -- Empty userlist. If op is "is not" and somebody is home, return false.
+            local anyhome = #homelist > 0 and homelist[1] ~= ""
             if op == "is not" then 
-                return ishome,#homelist > 0 and homelist[1] ~= ""
+                return ishome,not anyhome
             end
             -- Default "is"; if anybody is home, return true.
-            return ishome,#homelist == 0 or homelist[1] == ""
+            return ishome,anyhome
         end
         -- Convert to map and scan.
         homelist = map( homelist )
