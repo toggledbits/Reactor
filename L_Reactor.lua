@@ -126,11 +126,6 @@ local function checkVersion(dev)
     return false
 end
 
-local function urlencode( str )
-    str = tostring(str):gsub( "([^A-Za-z0-9_ -])", function( ch ) return string.format("%%%02x", string.byte( ch ) ) end )
-    return str:gsub( " ", "+" )
-end
-
 local function split( str, sep )
     if sep == nil then sep = "," end
     local arr = {}
@@ -201,7 +196,7 @@ end
 -- Fetch JSON from a URL
 local function getJSON( uri, pdev )
     D("getJSON(%1,%2)", uri, pdev)
-    pdev = pdev or pluginDevice
+    pdev = pdev or pluginDevice -- luacheck: ignore 311
     local rc,t,httpStatus = luup.inet.wget(uri, 15)
     D("getJSON() request returned %1,t,%2", rc, httpStatus)
     if tostring(httpStatus) ~= "200" or rc ~= 0 then
@@ -345,17 +340,6 @@ function sun( lon, lat, elev, t )
         nautdawn=JE(Jt-w0(rlat,elev,decl,2*tw)/tau), nautdusk=JE(Jt+w0(rlat,elev,decl,2*tw)/tau),
         astrodawn=JE(Jt-w0(rlat,elev,decl,3*tw)/tau), astrodusk=JE(Jt+w0(rlat,elev,decl,3*tw)/tau) },
         JE(Jt), 24*w0(rlat,elev,decl)/pi
-end
-
--- Find device by name
-local function findDeviceByName( n )
-    n = tostring(n):lower()
-    for k,v in pairs( luup.devices ) do
-        if tostring(v.description):lower() == n then
-            return k,v
-        end
-    end
-    return nil
 end
 
 -- Add, if not already set, a watch on a device and service
@@ -568,7 +552,7 @@ local function plugin_runOnce( pdev )
         initVar( "HouseMode", luup.attr_get( "Mode", 0 ) or "1", pdev, MYSID )
         initVar( "DebugMode", 0, pdev, MYSID )
         initVar( "MaxEvents", "", pdev, MYSID )
-        initVar( "UseACE", "", tdev, RSSID )
+        initVar( "UseACE", "", pdev, RSSID )
         initVar( "ACEURL", "", pdev, MYSID )
 
         luup.attr_set('category_num', 1, pdev)
@@ -844,7 +828,7 @@ local function execLua( fname, luafragment, extarg, tdev )
     -- overriden above--they provide a way for this metatable to create its own
     -- iterator.
     local rmt = {}
-    rmt.__newindex =    function(t, n, v)
+    rmt.__newindex =    function(t, n, v) -- luacheck: ignore 212
                             error("Cannot set " .. tostring(n) .. " in Reactor.variables -- this is a read-only data structure")
                         end
     rmt.__index =   function(t, n)
@@ -1466,11 +1450,10 @@ local function getValue( val, ctx, tdev )
     return tostring(val), tonumber(val)
 end
 
-local function evaluateCondition( cond, grp, cdata, tdev )
-    D("evaluateCondition(%1,%2,cdata,%3)", cond, grp.groupid, tdev)
+local function evaluateCondition( cond, grp, tdev )
+    D("evaluateCondition(%1,%2,%3)", cond, grp.groupid, tdev)
     local now = sensorState[tostring(tdev)].timebase
     local ndt = sensorState[tostring(tdev)].timeparts
-    local hasTimer = false
 
     assert( cond.laststate )
 
@@ -1538,13 +1521,15 @@ local function evaluateCondition( cond, grp, cdata, tdev )
                 local ar = split( cv, "," )
                 -- With terminal values. If value hasn't changed, consider as 
                 -- re-eval, go back further in history for prior value.
-                local prior = ( cond.laststate.lastvalue == mode ) and cond.laststate.priorvalue or cond.laststate.lastvalue
-                D("evaluateCondition() service change op, currval=%1, prior=%2, term=%3", vv, cond.laststate.lastvalue, ar)
+                local prior = ( cond.laststate.lastvalue == vv ) and 
+                    cond.laststate.priorvalue or cond.laststate.lastvalue
+                D("evaluateCondition() service change op, currval=%1, prior=%2, term=%3", vv, prior, ar)
                 if #ar > 0 and ar[1] ~= "" and prior ~= ar[1] then return vv,false end
                 if #ar > 1 and ar[2] ~= "" and vv ~= ar[2] then return vv,false end
                 return vv,true
             end
-            D("evaluateCondition() service change op, currval=%1, prior=%2, term=%3", vv, cond.laststate.lastvalue, ar)
+            D("evaluateCondition() service change op, currval=%1, prior=%2, term=%3", 
+                vv, cond.laststate.lastvalue, cv)
             if vv == cond.laststate.lastvalue then return vv,false end
             -- Changed without terminal values, pulse.
             scheduleDelay( { id=tdev, info="change "..cond.id },
@@ -1905,7 +1890,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
         return "",false
     end
 
-    return cond.laststate.lastvalue, cond.laststate.state
+    return cond.laststate.lastvalue, cond.laststate.state -- luacheck: ignore 511
 end
 
 -- Evaluate conditions within group. Return overall group state (all conditions met).
@@ -1932,7 +1917,7 @@ local function evaluateGroup( grp, cdata, tdev )
             cond.laststate = cs
 
             -- Evaluate for state and value
-            local newvalue, state, condTimer = evaluateCondition( cond, grp, cdata, tdev )
+            local newvalue, state, condTimer = evaluateCondition( cond, grp, tdev )
             D("evaluateGroup() eval group %1 cond %2 result is state %3 timer %4", grp.groupid,
                 cond.id, state, condTimer)
 
@@ -3116,10 +3101,8 @@ function request( lul_request, lul_parameters, lul_outputformat )
                     "application/json"
             end
             return json.encode{ status=true, message="Device info updated" }, "application/json"
-        else
-            return json.encode{ status=false, message="Download failed (" .. tostring(httpStatus) .. ")" }
         end
-        return json.encode{ status=false, message="Can't update device info, status " .. httpStatus }, "application/json"
+        return json.encode{ status=false, message="Download failed (" .. tostring(httpStatus) .. ")" }, "application/json"
 
     elseif action == "submitdevice" then
 
@@ -3170,11 +3153,13 @@ function request( lul_request, lul_parameters, lul_outputformat )
         end
         local bdata = json.encode( st )
         if action == "backup" then
-            local bfile = "/etc/cmh-ludl/reactor-config-backup.json"
+            local bfile
             if isOpenLuup then
                 local loader = require "openLuup.loader"
                 if loader.find_file == nil then return json.encode{ status=false, message="Your openLuup is out of date; please update to 2018.11.21 or higher." } end
                 bfile = loader.find_file( "L_Reactor.lua" ):gsub( "L_Reactor.lua$", "" ) .. "reactor-config-backup.json"
+            else
+                bfile = "/etc/cmh-ludl/reactor-config-backup.json"
             end
             local f = io.open( bfile, "w" )
             if f then
@@ -3183,8 +3168,9 @@ function request( lul_request, lul_parameters, lul_outputformat )
             else
                 error("ERROR can't write " .. bfile)
             end
+            return json.encode( { status=true, message="Done!", file=bfile } ), "application/json"
         end
-        return json.encode( { status=true, message="Done!", file=bfile } ), "application/json"
+        return bdata, "application/json"
 
     elseif action == "purge" then
         luup.variable_set( MYSID, "scenedata", "{}", pluginDevice )
