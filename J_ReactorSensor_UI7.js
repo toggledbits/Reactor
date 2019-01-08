@@ -1393,7 +1393,7 @@ var ReactorSensor = (function(api, $) {
                 }
                 jQuery("input#opts", container).on( 'change.reactor', handleConditionRowChange );
                 jQuery("select.geofencecond", container).on( 'change.reactor', handleConditionRowChange )
-                    .val( cond.operator || "" );
+                    .val( cond.operator || "is" );
                 (cond.value || "").split(',').forEach( function( val ) {
                     jQuery('input#opts[value="' + val + '"]', container).prop('checked', true);
                 });
