@@ -2734,7 +2734,7 @@ var ReactorSensor = (function(api, $) {
         var menu = jQuery( '<select class="form-control form-control-sm" />' );
         /* If lots of scenes, sort by room; otherwise, use straight as-is */
         var i;
-        if ( scenes.length > 10 ) {
+        if ( true || scenes.length > 10 ) {
             var rooms = api.cloneObject( ud.rooms );
             var rid = {};
             for ( i=0; i<rooms.length; ++i ) {
@@ -2744,6 +2744,9 @@ var ReactorSensor = (function(api, $) {
             scenes.sort( function( a, b ) {
                 var ra = ( rid[a.room || 0] || {} ).name || "";
                 var rb = ( rid[b.room || 0] || {} ).name || "";
+                if ( ra.toLowerCase() == rb.toLowerCase() ) {
+                    return (a.name || "").toLowerCase() < (b.name || "").toLowerCase() ? -1 : 1;
+                }
                 return ra.toLowerCase() < rb.toLowerCase() ? -1 : 1;
             });
             var lastRoom = -1;
@@ -2752,13 +2755,23 @@ var ReactorSensor = (function(api, $) {
                 if ( scenes[i].notification_only || scenes[i].hidden ) {
                     continue;
                 }
-                if ( scenes[i].room != lastRoom ) {
-                    menu.append('<option value="" class="optheading" disabled>' + "--" + rid[scenes[i].room].name + "--</option>");
-                    lastRoom = scenes[i].room;
+                var r = scenes[i].room;
+                if ( r != lastRoom ) {
+                    if ( undefined !== r && undefined !== rid[r] ) {
+                        menu.append('<option value="" class="optheading" disabled>' + "--" + String(rid[r].name) + "--</option>");
+                        lastRoom = scenes[i].room;
+                    } else {
+                        console.log( "*** Scene " + String(scenes[i].id) + ": room " + String(scenes[i].room) + " assigned, but non-existent. Scene data follows:" );
+                        for ( var k in scenes[i] ) {
+                            if ( scenes[i].hasOwnProperty( k ) ) {
+                                console.log( "    " + String(k) + " (" + typeof(scenes[i][k]) + ")=" + scenes[i][k] );
+                            }
+                        }
+                    }
                 }
                 el = jQuery( '<option/>' );
                 el.val( scenes[i].id );
-                el.text( scenes[i].name + ' (#' + scenes[i].id + ')' );
+                el.text( String(scenes[i].name) + ' (#' + String(scenes[i].id) + ')' );
                 menu.append( el );
             }
         } else {
