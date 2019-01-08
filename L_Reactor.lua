@@ -2221,6 +2221,7 @@ local function masterTick(pdev)
     D("masterTick(%1)", pdev)
     assert(pdev == pluginDevice)
     local nextTick = math.floor( os.time() / 60 + 1 ) * 60
+    scheduleTick( tostring(pdev), nextTick )
 
     -- Check and update house mode.
     setVar( MYSID, "HouseMode", luup.attr_get( "Mode", 0 ) or "1", pdev )
@@ -2246,6 +2247,7 @@ local function masterTick(pdev)
     
     -- Geofencing. If flag on, at least one sensor is using geofencing.
     if usingGeofence then
+        L("Checking geofence...")
         -- Holy crap. We have to get userdata to get access to this? Where's the supporting API, Vera?
         local url
         if isOpenLuup then
@@ -2256,6 +2258,7 @@ local function masterTick(pdev)
         end
         local ud,httpstat,err = getJSON( url )
         if ud then
+            -- For now, we keep it simple: just a list of users (ids) that are home.
             -- ud.users is array of usergeofence, which is { id, Name, Level, IsGuest }
             -- ud.usergeofences is array of { iduser, geotags } and geotags is
             --     { PK_User (same as id), id (of geotag), accuracy, ishome, notify, radius, address, color (hex6), latitude, longitude, name (of geotag), status, and poss others? }
@@ -2279,10 +2282,8 @@ local function masterTick(pdev)
             -- setVar( MYSID, "Users", json.encode( ud.users or {} ), pdev )
             setVar( MYSID, "IsHome", table.concat( keys, "," ), pdev )
         else
-            L({level=2,msg="No geofence data! Unable to fetch userdata! HTTP status %1, %2"}, httpstat, err)
+            L({level=2,msg="Unable to fetch userdata for geofence check! HTTP status %1, %2"}, httpstat, err)
         end
-    else
-        D("masterTick() skipping geofence check")
     end
 
     -- See if any cached state has expired
@@ -2297,8 +2298,6 @@ local function masterTick(pdev)
             end
         end
     end
-
-    scheduleTick( tostring(pdev), nextTick )
 end
 
 -- Start an instance
