@@ -2262,20 +2262,15 @@ local function masterTick(pdev)
             -- ud.users is array of usergeofence, which is { id, Name, Level, IsGuest }
             -- ud.usergeofences is array of { iduser, geotags } and geotags is
             --     { PK_User (same as id), id (of geotag), accuracy, ishome, notify, radius, address, color (hex6), latitude, longitude, name (of geotag), status, and poss others? }
-            -- My geotag status="**((NULL))**" (literally that string), haven't noticed that it changes, but fence seems to work. Hmmm.
+            -- ud.user_settings contains the "ishome" we care about, though.
             local ishome = {}
-            D("masterTick() evaluating %1", ud.usergeofences)
-            for _,v in ipairs( ud.usergeofences or {} ) do
-                for _,g in ipairs( v.geotags or {} ) do
-                    D("masterTick() user %1 geofence %2 ishome=%3", v.iduser, g.id, g.ishome)
-                    if ( g.ishome or 0 ) ~= 0 then
-                        ishome[v.iduser] = true
-                    end
-                end
-            end
             local keys = {}
-            for k,_ in pairs( ishome ) do
-                table.insert( keys, k )
+            D("masterTick() user home status=%1", ud.users_settings)
+            for _,v in ipairs( ud.users_settings or {} ) do
+                if ( v.ishome or 0 ) ~= 0 then
+                    ishome[v.id] = true
+                    table.insert( keys, v.id )
+                end
             end
             table.sort( keys )
             D("masterTick() users at home=%1", keys)
