@@ -2945,8 +2945,10 @@ function request( lul_request, lul_parameters, lul_outputformat )
         r = r .. "  Sun data: " .. tostring(luup.variable_get( MYSID, "sundata", pluginDevice )) .. EOL
         for n,d in pairs( luup.devices ) do
             if d.device_type == RSTYPE and ( deviceNum==nil or n==deviceNum ) then
+                local status = ( ( getVarNumeric( "Armed", 0, n, SENSOR_SID ) ~= 0 ) and " armed" or "" )
+                status = status .. ( ( getVarNumeric("Tripped", 0, n, SENSOR_SID ) ~= 0 ) and " tripped" or "" )
                 r = r .. string.rep( "=", 132 ) .. EOL
-                r = r .. string.format("%s (#%d)", tostring(d.description), n) .. EOL
+                r = r .. string.format("%s (#%d)%s", tostring(d.description), n, status) .. EOL
                 r = r .. string.format("    Message/status: %s", luup.variable_get( RSSID, "Message", n ) or "" ) .. EOL
                 local s = luup.variable_get( RSSID, "cdata", n ) or ""
                 local cdata,_,err = json.decode( s )
