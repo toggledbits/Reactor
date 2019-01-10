@@ -1087,13 +1087,13 @@ var ReactorSensor = (function(api, $) {
         }
         container.append('<div class="predopt form-inline"><label>Only after&nbsp;</label></div>');
         jQuery('div.predopt label', container).append(preds);
-        jQuery('div.predopt', container).append('&nbsp;<label>within <input type="text" class="predtime form-control form-control-sm narrow">&nbsp;seconds (0=no time limit)</label>');
+        jQuery('div.predopt', container).append('&nbsp;<label>within <input type="text" class="predtime form-control form-control-sm narrow" autocomplete="off">&nbsp;seconds (0=no time limit)</label>');
         jQuery('select.pred', container).val( cond.after );
         jQuery('input.predtime', container).val( cond.aftertime || 0 );
         /* Duration */
-        container.append('<div class="duropt form-inline"><label>Condition is sustained for&nbsp;<select id="durop" class="form-control form-control-sm"><option value="ge">at least</option><option value="lt">less than</option></select>&nbsp;<input type="text" id="duration" class="form-control form-control-sm narrow"> seconds</label></div>');
+        container.append('<div class="duropt form-inline"><label>Condition is sustained for&nbsp;<select id="durop" class="form-control form-control-sm"><option value="ge">at least</option><option value="lt">less than</option></select>&nbsp;<input type="text" id="duration" class="form-control form-control-sm narrow" autocomplete="off"> seconds</label></div>');
         /* Repeat */
-        container.append('<div class="duropt form-inline"><label>Condition repeats <input type="text" id="rcount" class="form-control form-control-sm narrow"> times within <input type="text" id="rspan" class="form-control form-control-sm narrow"> seconds</label></div>');
+        container.append('<div class="duropt form-inline"><label>Condition repeats <input type="text" id="rcount" class="form-control form-control-sm narrow" autocomplete="off"> times within <input type="text" id="rspan" class="form-control form-control-sm narrow" autocomplete="off"> seconds</label></div>');
         container.append('<div class="latchopt form-inline"><label><input type="checkbox" class="latchcond form-control form-control-sm">&nbsp;Latch (once met, condition remains true until group resets)<label></div>');
         container.append('<i class="material-icons closeopts" title="Close Options">expand_less</i>');
         jQuery('input,select', container).on( 'change.reactor', handleOptionChange );
@@ -1130,7 +1130,7 @@ var ReactorSensor = (function(api, $) {
                 break;
 
             case 'comment':
-                container.append('<input class="form-control form-control-sm type="text" style="width: 100%">');
+                container.append('<input type="text" class="form-control form-control-sm" autocomplete="off" style="width: 100%">');
                 jQuery('input', container).on( 'change.reactor', handleConditionRowChange ).val( cond.comment || "" );
                 break;
 
@@ -1146,7 +1146,7 @@ var ReactorSensor = (function(api, $) {
                 }
                 container.append( makeVariableMenu( cond.device, cond.service, cond.variable ) );
                 container.append( makeServiceOpMenu( cond.operator ) );
-                container.append('<input type="text" id="value" class="form-control form-control-sm">');
+                container.append('<input type="text" id="value" class="form-control form-control-sm" autocomplete="off">');
                 container.append('<i class="material-icons condmore" title="Show Options">expand_more</i>');
                 op = serviceOpsIndex[cond.operator || ""];
                 jQuery( "input#value", container).val( cond.value || "" )
@@ -1226,12 +1226,12 @@ var ReactorSensor = (function(api, $) {
                 jQuery("select.opmenu", container).append('<option value="after">after</option>');
                 container.append('<div class="start form-inline pull-left">' +
                     '<select id="sunstart"></select> '+
-                    ' offset&nbsp;<input type="text" id="startoffset" value="" class="narrow form-control form-control-sm">&nbsp;minutes' +
+                    ' offset&nbsp;<input type="text" id="startoffset" value="" class="narrow form-control form-control-sm" autocomplete="off">&nbsp;minutes' +
                     '</div>'
                 );
                 container.append('<div class="end form-inline pull-left"> and ' +
                     '<select id="sunend"></select> '+
-                    ' offset&nbsp;<input type="text" id="endoffset" value="" class="narrow form-control form-control-sm">&nbsp;minutes' +
+                    ' offset&nbsp;<input type="text" id="endoffset" value="" class="narrow form-control form-control-sm" autocomplete="off">&nbsp;minutes' +
                     '</div>'
                 );
                 mm = jQuery('<select class="form-control form-control-sm">' +
@@ -1296,12 +1296,12 @@ var ReactorSensor = (function(api, $) {
                 container.append('<div class="start"></div>').append('<div class="end"> and </div>');
                 jQuery("div.start", container).append( months.clone() )
                     .append( days.clone() )
-                    .append('<input type="text" placeholder="yyyy or blank" title="Leave blank for any year" class="year narrow datespec form-control form-control-sm">')
+                    .append('<input type="text" placeholder="yyyy or blank" title="Leave blank for any year" class="year narrow datespec form-control form-control-sm" autocomplete="off">')
                     .append( hours.clone() )
                     .append( mins.clone() );
                 jQuery("div.end", container).append( months )
                     .append( days )
-                    .append('<input type="text" placeholder="yyyy" class="year narrow datespec form-control form-control-sm">')
+                    .append('<input type="text" placeholder="yyyy" class="year narrow datespec form-control form-control-sm" autocomplete="off">')
                     .append( hours )
                     .append( mins );
                 jQuery("div.end select.monthmenu", container).addClass("datespec"); /* ability to disable */
@@ -3750,7 +3750,7 @@ var ReactorSensor = (function(api, $) {
 
         switch ( newVal ) {
             case "comment":
-                ct.append('<input type="text" id="comment" class="argument form-control form-control-sm" placeholder="Enter comment text">');
+                ct.append('<input type="text" id="comment" class="argument form-control form-control-sm" placeholder="Enter comment text" autocomplete="off">');
                 jQuery( 'input', ct ).on( 'change.reactor', handleActionValueChange );
                 break;
 
@@ -3771,7 +3771,7 @@ var ReactorSensor = (function(api, $) {
                 break;
 
             case "delay":
-                ct.append('<label for="delay">for <input id="delay" type="text" class="argument narrow form-control form-control-sm" title="Enter delay time as seconds, MM:SS, or HH:MM:SS" placeholder="delay time" list="reactorvarlist"></label>');
+                ct.append('<label for="delay">for <input type="text" id="delay" class="argument narrow form-control form-control-sm" title="Enter delay time as seconds, MM:SS, or HH:MM:SS" placeholder="delay time" list="reactorvarlist"></label>');
                 ct.append('<select id="delaytype" class="form-control form-control-sm"><option value="inline">from this point</option><option value="start">from start of actions</option></select>');
                 jQuery( 'input', ct ).on( 'change.reactor', handleActionValueChange );
                 jQuery( 'select', ct ).on( 'change.reactor', handleActionValueChange );
