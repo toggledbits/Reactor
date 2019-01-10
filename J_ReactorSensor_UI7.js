@@ -1037,7 +1037,7 @@ var ReactorSensor = (function(api, $) {
                         // jQuery('input#rspan', row).prop('disabled', false);
                     } else {
                         cond.duration = dur;
-                        cond.duration_op = jQuery('select#durop', row).val();
+                        cond.duration_op = jQuery('select#durop', row).val() || "ge";
                     }
                     configModified = true;
                 }
