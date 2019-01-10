@@ -2246,7 +2246,7 @@ local function masterTick(pdev)
             ra = tostring( ra.UserData )
             local mm = ra:match( '("users_settings": *%[[^]]*%])' )
             if mm then
-                D("masterTick() found element in UserData (%1 bytes); using short decode on %2", #ra, mm)
+                D("masterTick() found element in UserData (%1 bytes); using short decode", #ra)
                 ud = json.decode( '{' .. mm .. '}' )
             else
                 D("masterTick() doing full decode on UserData, %1 bytes", #ra)
@@ -2704,8 +2704,10 @@ function tick(p)
     -- Run the to-do list tasks.
     D("tick() to-do list is %1", todo)
     for _,v in ipairs(todo) do
-        D("tick() calling task function %3(%4,%5) for %1 (%2)", v.owner, (luup.devices[v.owner] or {}).description, functions[tostring(v.func)] or tostring(v.func),
-            v.owner,v.id)
+        local fname = functions[tostring(v.func)] or tostring(v.func)
+        D("tick() calling %3(%4,%5) for %1 (task %2 %3)", v.owner, 
+            (luup.devices[v.owner] or {}).description, fname, v.owner, v.id,
+            v.info)
         -- Call timer function with arguments ownerdevicenum,taskid[,args]
         -- The extra arguments are set up when the task is set/updated.
         local success, err = pcall( v.func, v.owner, v.id, unpack(v.args or {}) )
@@ -2713,7 +2715,7 @@ function tick(p)
             L({level=1,msg="Reactor device %1 (%2) tick failed: %3"}, v.owner, (luup.devices[v.owner] or {}).description, err)
             addEvent{ dev=v.owner, event="error", message="tick failed", reason=err }
         else
-            D("tick() successful return from %2(%1)", v.owner, functions[tostring(v.func)] or tostring(v.func))
+            D("tick() successful return from %2(%1)", v.owner, fname)
         end
     end
 
