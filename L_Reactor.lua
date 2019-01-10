@@ -13,7 +13,7 @@ local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
 local _PLUGIN_VERSION = "2.1develop"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
-local _CONFIGVERSION = 00204
+local _CONFIGVERSION = 00205
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -364,9 +364,10 @@ end
 local function scheduleTick( tinfo, timeTick, flags )
     D("scheduleTick(%1,%2,%3)", tinfo, timeTick, flags)
     flags = flags or {}
-    local function nulltick(d,p) L({level=1, "nulltick(%1,%2)"},d,p) end
-    local tkey = tostring( type(tinfo) == "table" and tinfo.id or tinfo )
-    assert(tkey ~= nil)
+    if type(tinfo) ~= "table" then tinfo = { id=tinfo } end
+    local tkey = tostring( tinfo.id or error("task ID or obj required") )
+    assert( not tinfo.args or type(tinfo.args)=="table" )
+    assert( not tinfo.func or type(tinfo.func)=="function" )
     if ( timeTick or 0 ) == 0 then
         D("scheduleTick() clearing task %1", tinfo)
         tickTasks[tkey] = nil
@@ -380,12 +381,14 @@ local function scheduleTick( tinfo, timeTick, flags )
             -- Not scheduled, requested sooner than currently scheduled, or forced replacement
             tickTasks[tkey].when = timeTick
         end
-        D("scheduleTick() updated %1", tickTasks[tkey])
+        D("scheduleTick() updated %1 to %2", tkey, tickTasks[tkey])
     else
-        assert(tinfo.owner ~= nil)
-        assert(tinfo.func ~= nil)
-        tickTasks[tkey] = { id=tostring(tinfo.id), owner=tinfo.owner, when=timeTick, func=tinfo.func or nulltick, args=tinfo.args or {},
-            info=tinfo.info or "" } -- new task
+        -- New task
+        assert(tinfo.owner ~= nil) -- required for new task
+        assert(tinfo.func ~= nil) -- required for new task
+        tickTasks[tkey] = { id=tostring(tinfo.id), owner=tinfo.owner, 
+            when=timeTick, func=tinfo.func or nulltick, args=tinfo.args or {},
+            info=tinfo.info or "" }
         D("scheduleTick() new task %1 at %2", tinfo, timeTick)
     end
     -- If new tick is earlier than next plugin tick, reschedule
@@ -417,16 +420,10 @@ end
 
 -- Return array of keys for a map (table). Pass array or new is created.
 local function getKeys( m, r )
-    if r == nil then r = {} end
     local seen = {}
-    for k,_ in pairs( r ) do
-        seen[k] = true
-    end
+    if r ~= nil then for k,_ in pairs( r ) do seen[k] = true end else r = {} end
     for k,_ in pairs( m ) do
-        if seen[k] == nil then
-            table.insert( r, k )
-            seen[k] = true
-        end
+        if seen[k] == nil then table.insert( r, k ) seen[k] = true end
     end
     return r
 end
@@ -434,9 +431,7 @@ end
 -- Return whether item is on list (table as array)
 local function isOnList( l, e )
     if l == nil or e == nil then return false end
-    for n,v in ipairs(l) do
-        if v == e then return true, n end
-    end
+    for n,v in ipairs(l) do if v == e then return true, n end end
     return false
 end
 
@@ -534,6 +529,8 @@ local function plugin_runOnce( pdev )
         initVar( "NumRunning", 0, pdev, MYSID )
         initVar( "Message", "", pdev, MYSID )
         initVar( "HouseMode", luup.attr_get( "Mode", 0 ) or "1", pdev, MYSID )
+        initVar( "LastDST", "0", pdev, MYSID )
+        initVar( "IsHome", "", pdev, MYSID )
         initVar( "DebugMode", 0, pdev, MYSID )
         initVar( "MaxEvents", "", pdev, MYSID )
         initVar( "UseACE", "", pdev, RSSID )
@@ -570,6 +567,10 @@ local function plugin_runOnce( pdev )
     if s < 00204 then
         initVar( "UseACE", "", pdev, MYSID )
         initVar( "ACEURL", "", pdev, MYSID )
+    end
+    
+    if s < 00205 then
+        initVar( "IsHome", "", pdev, MYSID )
     end
 
     -- Update version last.
@@ -2684,12 +2685,12 @@ function tick(p)
     end
 
     local now = os.time()
-    local nextTick = now + 60 -- Try to start minute to minute at least
-    tickTasks._plugin.when = 0
+    local nextTick = nil
+    tickTasks._plugin.when = 0 -- marker
 
-    -- Since the tasks can manipulate the tickTasks table, the iterator
-    -- is likely to be disrupted, so make a separate list of tasks that
-    -- need service, and service them using that list.
+    -- Since the tasks can manipulate the tickTasks table (via calls to 
+    -- scheduleTick()), the iterator is likely to be disrupted, so make a 
+    -- separate list of tasks that need service (to-do list).
     local todo = {}
     for t,v in pairs(tickTasks) do
         if t ~= "_plugin" and v.when ~= nil and v.when <= now then
@@ -2700,12 +2701,14 @@ function tick(p)
         end
     end
 
-    -- Run the to-do list.
+    -- Run the to-do list tasks.
     D("tick() to-do list is %1", todo)
     for _,v in ipairs(todo) do
         D("tick() calling task function %3(%4,%5) for %1 (%2)", v.owner, (luup.devices[v.owner] or {}).description, functions[tostring(v.func)] or tostring(v.func),
             v.owner,v.id)
-        local success, err = pcall( v.func, v.owner, v.id, v.args )
+        -- Call timer function with arguments ownerdevicenum,taskid[,args]
+        -- The extra arguments are set up when the task is set/updated.
+        local success, err = pcall( v.func, v.owner, v.id, unpack(v.args or {}) )
         if not success then
             L({level=1,msg="Reactor device %1 (%2) tick failed: %3"}, v.owner, (luup.devices[v.owner] or {}).description, err)
             addEvent{ dev=v.owner, event="error", message="tick failed", reason=err }
