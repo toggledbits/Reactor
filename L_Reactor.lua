@@ -2992,7 +2992,8 @@ function request( lul_request, lul_parameters, lul_outputformat )
                             r = r .. string.format("%s/%s %s %s", cond.service or "?", cond.variable or "?", cond.operator or cond.condition or "?",
                                 cond.value or "")
                             if cond.duration then
-                                r = r .. " for " .. cond.duration .. "s"
+                                r = r .. " for " .. ( cond.duration_op or "ge" ) .. 
+                                    " " .. cond.duration .. "s"
                             end
                             if cond.after then
                                 if ( cond.aftertime or 0 ) > 0 then
