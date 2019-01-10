@@ -982,7 +982,7 @@ var ReactorSensor = (function(api, $) {
                 jQuery('select#durop', row).val("ge").prop('disabled', true);
                 jQuery('input#rspan', row).prop('disabled', false);
                 if ( jQuery('input#rspan', row).val() === "" ) {
-                    jQuery('input#rspan', row).val("60");
+                    jQuery('input#rspan', row).val( "60" );
                     cond.repeatwithin = 60;
                     configModified = true;
                 }
@@ -2358,7 +2358,8 @@ var ReactorSensor = (function(api, $) {
                 switch ( cond.type ) {
                     case 'service':
                         if ( ( cond.repeatcount || 0 ) > 1 ) {
-                            condDesc += " repeats " + cond.repeatcount + " times within " + cond.repeatwithin + " secs";
+                            condDesc += " repeats " + cond.repeatcount + 
+                                " times within " + ( cond.repeatwithin || 60 ) + " secs";
                         } else if ( ( cond.duration || 0 ) > 0 ) {
                             condDesc += " for " +
                                 ( cond.duration_op === "lt" ? "less than " : "at least " ) +

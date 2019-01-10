@@ -387,7 +387,7 @@ local function scheduleTick( tinfo, timeTick, flags )
         assert(tinfo.owner ~= nil) -- required for new task
         assert(tinfo.func ~= nil) -- required for new task
         tickTasks[tkey] = { id=tostring(tinfo.id), owner=tinfo.owner, 
-            when=timeTick, func=tinfo.func or nulltick, args=tinfo.args or {},
+            when=timeTick, func=tinfo.func, args=tinfo.args or {},
             info=tinfo.info or "" }
         D("scheduleTick() new task %1 at %2", tinfo, timeTick)
     end
@@ -1974,7 +1974,7 @@ local function evaluateGroup( grp, cdata, tdev )
                 if #( cs.repeats or {} ) < cond.repeatcount then
                     -- Not enough samples yet
                     state = false
-                elseif ( now - cs.repeats[1] ) > cond.repeatwithin then
+                elseif ( now - cs.repeats[1] ) > ( cond.repeatwithin or 60 ) then
                     -- Gap between first sample and now too long
                     D("evaluateGroup() cond %1 repeated %2x in %3s--too long!",
                         cond.id, #cs.repeats, now - cs.repeats[1])
@@ -2999,7 +2999,8 @@ function request( lul_request, lul_parameters, lul_outputformat )
                                 r = r .. " after " .. cond.after
                             end
                             if cond.repeatcount then
-                                r = r .. " repeat " .. cond.repeatcount .. " within " .. cond.repeatwithin .. "s"
+                                r = r .. " repeat " .. cond.repeatcount ..
+                                    " within " .. ( cond.repeatwithin or 60 ).. "s"
                             end
                             if (cond.latch or 0) ~= 0 then
                                 r = r .. " (latching)"
@@ -3012,6 +3013,8 @@ function request( lul_request, lul_parameters, lul_outputformat )
                             r = r .. ( cond.operator or cond.condition or "?" ) .. " " .. ( cond.value or "" )
                         elseif cond.type == "trange" then
                             r = r .. ( cond.operator or cond.condition or "?" ) .. " " .. ( cond.value or "" )
+                        elseif cond.type == "ishome" then
+                            r = r .. ( cond.operator or "is" ) .. " " .. ( cond.value or "" )
                         elseif cond.type == "reload" then
                         else
                             r = r .. json.encode(cond)
