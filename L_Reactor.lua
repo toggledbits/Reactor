@@ -193,22 +193,6 @@ local function getVarNumeric( name, dflt, dev, sid )
     return s
 end
 
--- Fetch JSON from a URL
-local function getJSON( uri, pdev )
-    D("getJSON(%1,%2)", uri, pdev)
-    pdev = pdev or pluginDevice -- luacheck: ignore 311
-    local rc,t,httpStatus = luup.inet.wget(uri, 15)
-    D("getJSON() request returned %1,t,%2", rc, httpStatus)
-    if tostring(httpStatus) ~= "200" or rc ~= 0 then
-        return nil, httpStatus, "request failed rc=" .. tostring(rc)
-    end
-    local d,pos,err = json.decode( t )
-    if err then 
-        return nil, "500", "JSON decode failed at " .. tostring(pos) .. ": " .. tostring(err)
-    end
-    return d, "200", nil
-end
-
 -- Check system battery (VeraSecure)
 local function checkSystemBattery( pdev )
     local level, source = "", ""
@@ -2245,39 +2229,49 @@ local function masterTick(pdev)
         end
     end
     
-    -- Geofencing. If flag on, at least one sensor is using geofencing.
+    -- Geofencing. If flag on, at least one sensor is using geofencing. Fetch 
+    -- userdata, which can be very large. Shame that it comes back as JSON-
+    -- formatted text that we need to decode; I'm sure the action had to encode
+    -- it that way, and all we're going to do is decode back.
     if usingGeofence then
         L("Checking geofence...")
-        -- Holy crap. We have to get userdata to get access to this? Where's the supporting API, Vera?
-        local url
-        if isOpenLuup then
-            -- Does openLuup support geofencing?
-            url = "http://127.0.0.1:3480/data_request?id=user_data&output_format=JSON"
+        local rc,rs,rj,ra = luup.call_action( "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "GetUserData", { DataFormat="json" }, 0 ) -- luacheck: ignore 211
+        -- D("masterTick() GetUserData action returned rc=%1, rs=%2, rj=%3, ra=%4", rc, rs, rj, ra)
+        if rc ~= 0 or (ra or {}).UserData == nil then
+            L({level=2,msg="Unable to fetch userdata for geofence check! rc=%1, ra=%2"}, rc, ra)
         else
-            url = "http://127.0.0.1/port_3480/data_request?id=user_data&output_format=JSON"
-        end
-        local ud,httpstat,err = getJSON( url )
-        if ud then
-            -- For now, we keep it simple: just a list of users (ids) that are home.
-            -- ud.users is array of usergeofence, which is { id, Name, Level, IsGuest }
-            -- ud.usergeofences is array of { iduser, geotags } and geotags is
-            --     { PK_User (same as id), id (of geotag), accuracy, ishome, notify, radius, address, color (hex6), latitude, longitude, name (of geotag), status, and poss others? }
-            -- ud.user_settings contains the "ishome" we care about, though.
-            local ishome = {}
-            local keys = {}
-            D("masterTick() user home status=%1", ud.users_settings)
-            for _,v in ipairs( ud.users_settings or {} ) do
-                if ( v.ishome or 0 ) ~= 0 then
-                    ishome[v.id] = true
-                    table.insert( keys, v.id )
-                end
+            -- UserData can be massive even on small installations, so try to snarf out just what we need, and parse only that.
+            local ud
+            ra = tostring( ra.UserData )
+            local mm = ra:match( '("users_settings": *%[[^]]*%])' )
+            if mm then
+                D("masterTick() found element in UserData (%1 bytes); using short decode on %2", #ra, mm)
+                ud = json.decode( '{' .. mm .. '}' )
+            else
+                D("masterTick() doing full decode on UserData, %1 bytes", #ra)
+                ud = json.decode( ra )
             end
-            table.sort( keys )
-            D("masterTick() users at home=%1", keys)
-            -- setVar( MYSID, "Users", json.encode( ud.users or {} ), pdev )
-            setVar( MYSID, "IsHome", table.concat( keys, "," ), pdev )
-        else
-            L({level=2,msg="Unable to fetch userdata for geofence check! HTTP status %1, %2"}, httpstat, err)
+            ra = nil -- luacheck: ignore 311
+            if ud then
+                -- For now, we keep it simple: just a list of users (ids) that are home.
+                -- ud.users is array of usergeofence, which is { id, Name, Level, IsGuest }
+                -- ud.usergeofences is array of { iduser, geotags } and geotags is
+                --     { PK_User (same as id), id (of geotag), accuracy, ishome, notify, radius, address, color (hex6), latitude, longitude, name (of geotag), status, and poss others? }
+                -- ud.user_settings contains the "ishome" we care about, though.
+                local keys = {}
+                D("masterTick() user home status=%1", ud.users_settings)
+                for _,v in ipairs( ud.users_settings or {} ) do
+                    if ( v.ishome or 0 ) ~= 0 then
+                        table.insert( keys, v.id )
+                    end
+                end
+                table.sort( keys )
+                D("masterTick() users at home=%1", keys)
+                -- setVar( MYSID, "Users", json.encode( ud.users or {} ), pdev )
+                setVar( MYSID, "IsHome", table.concat( keys, "," ), pdev )
+            else
+                L({level=2,msg="Failed to device userdata for geofence check!"})
+            end
         end
     end
 
