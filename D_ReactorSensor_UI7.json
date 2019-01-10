@@ -490,5 +490,6 @@
             }]
         }
     ],
+    "DeviceType": "urn:schemas-toggledbits-com:device:ReactorSensor:1",
     "device_type": "urn:schemas-toggledbits-com:device:ReactorSensor:1"
 }
