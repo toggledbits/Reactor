@@ -2135,6 +2135,38 @@ var ReactorSensor = (function(api, $) {
             }
         }
     }
+    
+    function updateToolsVersionDisplay() {
+        jQuery.ajax({
+            url: "https://www.toggledbits.com/deviceinfo/checkupdate.php",
+            data: {
+                "v": ( deviceInfo || {}).serial || "",
+                "fw": ""
+            },
+            dataType: "jsonp",
+            jsonp: "callback",
+            crossDomain: true
+        }).done( function( respData, statusText, jqXHR ) {
+            // console.log("Response from server is " + JSON.stringify(respData));
+            if ( undefined !== respData.serial ) {
+                var msg = "The latest version is " + String( respData.serial ) + ".";
+                if ( undefined !== ( deviceInfo || {}).serial ) {
+                    msg += " You are currently using " + String(deviceInfo.serial) + ".";
+                    if ( respData.serial > deviceInfo.serial ) {
+                        msg = "<b>" + msg + " You should update now.</b>";
+                    } else {
+                        msg += " No update is needed.";
+                    }
+                } else {
+                    msg += " Information about the version you are using has not yet been loaded (that is normal if you haven't yet been on the Activites tab). If you go to the Activities tab, the database will be loaded, and if an update is available, an alert will show.";
+                }
+                jQuery( 'span#di-ver-info' ).html( msg );
+            }
+        }).fail( function( jqXHR, textStatus, errorThrown ) {
+            jQuery( 'span#di-ver-info' ).text( "Information about the current version is not available." );
+            console.log( "deviceInfo version check failed: " + String(errorThrown) );
+        });
+    }    
 
     function doTools()
     {
@@ -2194,7 +2226,7 @@ var ReactorSensor = (function(api, $) {
             html += "<div>Can't display sun data: " + exc.toString() + "</div>";
         }
 
-        html += '<div><h3>Update Device Information Database</h3>The device information database contains information to help smooth out the user interface for device actions. It is recommended that you keep this database up to date by updating it periodically. The "Activities" tab will notify you when your database is out of date. You update by clicking the button below. Updates apply to all ReactorSensors, so you only need to do them on one. This process sends information about the versions of your Vera firmware, this plugin, and the current database, but no personally-identifying information. This information is used to select the correct database for your configuration only; it is not used for other analysis or any tracking. <p><button id="updateinfo" class="btn btn-sm btn-success">Update Device Info</button> <span id="status"/></p>';
+        html += '<div><h3>Update Device Information Database</h3>The device information database contains information to help smooth out the user interface for device actions. The "Activities" tab will notify you when an update is available. You may update by clicking the button below; this process does not require a Luup restart or browser refresh. The updates are shared by all ReactorSensors, so updating any one of them updates all of them. This process sends information about the versions of your Vera firmware, this plugin, and the current database, but no personally-identifying information. This information is used to select the correct database for your configuration; it is not used for tracking you. <span id="di-ver-info"/><p><button id="updateinfo" class="btn btn-sm btn-success">Update Device Info</button> <span id="status"/></p>';
 
         /* This features doesn't work on openLuup -- old form of lu_device request isn't implemented */
         if ( !isOpenLuup ) {
@@ -2273,10 +2305,15 @@ var ReactorSensor = (function(api, $) {
                 dataType: 'json'
             }).done( function( respData, respText, jqXHR ) {
                 msg.text( "Update successful! The changes take effect immediately; no restart necessary." );
+                // don't call updateToolsVersionDisplay() again because we'd need to reload devinfo to
+                // get the right message.
+                jQuery( 'span#di-ver-info' ).html( "Your database is up to date!" );
             }).fail( function( x, y, z ) {
                 msg.text( "The update failed; Vera busy/restarting. Try again in a moment." );
             });
         });
+        
+        updateToolsVersionDisplay();
     }
 
     function updateStatus( pdev ) {
