@@ -242,7 +242,7 @@ var ReactorSensor = (function(api, $) {
         for ( var ix=0; ix<serviceOps.length; ix++ ) {
             serviceOpsIndex[serviceOps[ix].op] = serviceOps[ix];
         }
-        
+
         var ud = api.getUserData();
         userIx = {};
         for ( ix=0; ix<(ud.users || {}).length; ++ix ) {
@@ -448,7 +448,7 @@ var ReactorSensor = (function(api, $) {
                     str += ")";
                 }
                 break;
-            
+
             case 'ishome':
                 t = ( cond.value || "" ).split(/,/);
                 if ( t.length < 1 || t[0] == "" ) {
@@ -688,7 +688,7 @@ var ReactorSensor = (function(api, $) {
                 });
                 cond.value = res.join( ',' );
                 break;
-                
+
             case 'housemode':
                 removeConditionProperties( cond, "operator,value" );
                 cond.operator = jQuery("div.params select.opmenu", row).val() || "is";
@@ -838,7 +838,7 @@ var ReactorSensor = (function(api, $) {
                 });
                 cond.value = res.join( ',' );
                 break;
-                
+
             case 'reload':
                 /* No parameters */
                 removeConditionProperties( cond, "" );
@@ -1380,7 +1380,7 @@ var ReactorSensor = (function(api, $) {
                 }
                 jQuery("select,input", container).on( 'change.reactor', handleConditionRowChange );
                 break;
-                
+
             case 'ishome':
                 container.append(
                     '<select class="geofencecond form-control form-control-sm"><option value="is">Any selected user is home</option><option value="is not">Any selected user is NOT home</option></select>');
@@ -2358,7 +2358,7 @@ var ReactorSensor = (function(api, $) {
                 switch ( cond.type ) {
                     case 'service':
                         if ( ( cond.repeatcount || 0 ) > 1 ) {
-                            condDesc += " repeats " + cond.repeatcount + 
+                            condDesc += " repeats " + cond.repeatcount +
                                 " times within " + ( cond.repeatwithin || 60 ) + " secs";
                         } else if ( ( cond.duration || 0 ) > 0 ) {
                             condDesc += " for " +
@@ -2392,7 +2392,7 @@ var ReactorSensor = (function(api, $) {
                     case 'interval':
                         currentValue = new Date( currentValue * 1000 ).toLocaleString();
                         break;
-                        
+
                     case 'ishome':
                         var t = (currentValue || "").split( /,/ );
                         /* Replace IDs with names for display */
@@ -4200,8 +4200,26 @@ var ReactorSensor = (function(api, $) {
             jQuery("div#tab-actions.reactortab button#revertconf").on( 'click.reactor', handleRevertClick ).prop( "disabled", true );
 
             if ( undefined !== deviceInfo ) {
-                var uc = jQuery( '<iframe sandbox src="https://www.toggledbits.com/deviceinfo/checkupdate.php?v=' + deviceInfo.serial + '" style="border: 0; height: 24px; width: 100%" />' );
+                var uc = jQuery( '<div id="di-ver-check"/>' );
                 uc.insertBefore( jQuery( 'div#tripactions' ) );
+                jQuery.ajax({
+                    url: "https://www.toggledbits.com/deviceinfo/checkupdate.php",
+                    data: {
+                        "v": deviceInfo.serial,
+                        "fw": ""
+                    },
+                    dataType: "jsonp",
+                    jsonp: "callback",
+                    crossDomain: true
+                }).done( function( respData, statusText, jqXHR ) {
+                    console.log("Response from server is " + JSON.stringify(respData));
+                    if ( undefined !== respData.serial && respData.serial > deviceInfo.serial ) {
+                        jQuery( 'div#di-ver-check' ).empty().append( "<p>A newer version of the device information database is available. Please use the update function on the Tools tab to get it. This process is quick and does not require a Luup reload or browser refresh--you can immediately come back here and go right back to work! The new version is " +
+                            String(respData.serial) + ", and you are currently using " + String(deviceInfo.serial) + ".</p>" );
+                    }
+                }).fail( function( jqXHR, textStatus, errorThrown ) {
+                    console.log( "deviceInfo version check failed: " + String(errorThrown) );
+                });
             }
 
             api.registerEventHandler('on_ui_cpanel_before_close', ReactorSensor, 'onBeforeCpanelClose');
@@ -4222,6 +4240,7 @@ var ReactorSensor = (function(api, $) {
         /* Our styles. */
         var html = "<style>";
         html += "div#tab-actions datalist { display: none; }";
+        html += "div#tab-actions.reactortab div#di-ver-check p { margin: 8px 8px 8px 8px; padding: 8px 8px 8px 8px; border: 2px solid yellow; }";
         html += "div#tab-actions.reactortab .tb-about { margin-top: 24px; }";
         html += "div#tab-actions.reactortab .color-green { color: #428BCA; }";
         html += 'div#tab-actions.reactortab .tberror { border: 1px solid red; }';
