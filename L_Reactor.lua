@@ -179,14 +179,15 @@ local function getVarNumeric( name, dflt, dev, sid )
     return s
 end
 
+-- Get var that stores JSON data. Returns data, error flag.
 local function getVarJSON( name, dflt, dev, sid )
     assert( dev ~= nil and name ~= nil )
     sid = sid or RSSID
     local s = luup.variable_get( sid, name, dev ) or ""
-    if s == "" then return dflt end
+    if s == "" then return dflt,false end
     local data,pos,err = json.decode( s )
-    if err then return dflt,pos,err end
-    return data
+    if err then return dflt,err,pos,s end
+    return data,false
 end
 
 -- Check system battery (VeraSecure)
@@ -412,6 +413,20 @@ end
 local function setMessage(s, dev)
     assert( dev ~= nil )
     luup.variable_set(RSSID, "Message", s or "", dev)
+end
+
+-- Array to map, where f(elem) returns key[,value]
+local function map( arr, f, res )
+    res = res or {}
+    for ix,x in ipairs( arr ) do
+        if f then
+            local k,v = f( x, ix )
+            res[k] = (v == nil) and x or v
+        else
+            res[x] = x
+        end
+    end
+    return res
 end
 
 -- Return array of keys for a map (table). Pass array or new is created.
@@ -653,7 +668,7 @@ local function getSceneData( sceneId, tdev )
 
     -- Load persistent scene data to cache if cache empty
     if next(sceneData) == nil then
-        sceneData = json.decode( luup.variable_get( MYSID, "scenedata", pluginDevice ) or "{}" ) or {}
+        sceneData = getVarJSON( "scenedata", {}, pluginDevice, MYSID )
     end
 
     -- Still a valid Vera scene?
@@ -1097,14 +1112,13 @@ end
 -- Continue running scenes on restart.
 local function resumeScenes()
     D("resumeScenes()")
-    local s = luup.variable_get( MYSID, "runscene", pluginDevice ) or "{}"
-    local d,pos,err = json.decode(s)
+    local d,err = getVarJSON( "runscene", {}, pluginDevice, MYSID )
     if err then
-        L({level=1,msg="Can't resume scenes, failed to parse JSON for saved scene state: %1 at %2 in %3"},
-            err, pos, s)
+        L({level=1,msg="Can't resume scenes, failed to parse JSON for saved scene state: %1"},
+            err)
         luup.variable_set( MYSID, "runscene", "{}", pluginDevice )
     end
-    sceneState = d or {}
+    sceneState = d
     for _,data in pairs( sceneState ) do
         scheduleDelay( { id=data.taskid, owner=data.owner, func=execSceneGroups }, 1 )
     end
@@ -1243,16 +1257,8 @@ local function loadCleanState( tdev )
     D("loadCleanState(%1)", tdev)
 
     -- Fetch cstate. If it's empty, there's nothing to do here.
-    local cstate = {} -- guilty until proven innocent
-    local s = luup.variable_get( RSSID, "cstate", tdev ) or ""
-    if s ~= "" then
-        local err
-        cstate,_,err = json.decode( s )
-        if err then
-            L({level=2,msg="ReactorSensor %1 (%2) corrupted cstate, clearing!"}, tdev, luup.devices[tdev].description)
-            cstate = {}
-        end
-
+    local cstate,err = getVarJSON( "cstate", {}, tdev, RSSID )
+    if not err then
         local cdata = sensorState[tostring(tdev)].configData
         if not cdata then
             L({level=1,msg="ReactorSensor %1 (%2) has corrupt configuration data!"}, tdev, luup.devices[tdev].description)
@@ -1595,7 +1601,7 @@ local function evaluateCondition( cond, grp, tdev )
         -- Sun condition (sunrise/set)
         -- Figure out sunrise/sunset. Keep cached to reduce load.
         local stamp = ndt.year * 10000 + ndt.month * 100 + ndt.day
-        local sundata = json.decode( luup.variable_get( MYSID, "sundata", pluginDevice ) or "{}" ) or {}
+        local sundata = getVarJSON( "sundata", {}, pluginDevice, MYSID )
         if ( sundata.stamp or 0 ) ~= stamp or getVarNumeric( "TestTime", 0, tdev, RSSID ) ~= 0 then
             if getVarNumeric( "UseLuupSunrise", 0, pluginDevice, MYSID ) ~= 0 then
                 L({level=2,msg="Reactor is configured to use Luup's sunrise/sunset calculations; twilight times cannot be correctly evaluated and will evaluate as dawn=sunrise, dusk=sunset"})
@@ -1845,7 +1851,6 @@ local function evaluateCondition( cond, grp, tdev )
         if op == "at" then
             if geofenceMode ~= -1 then geofenceMode = -1 end
             local userid,location = unpack(userlist)
-            D("????? evaluateCondition() check user %1 location %2: %3", userid, location, ishome[userid].tags[location])
             if (ishome[userid] or {}).tags and ishome[userid].tags[location] then
                 local val = ishome[userid].tags[location].status or ""
                 return val,val=="in"
@@ -2283,6 +2288,7 @@ local function masterTick(pdev)
                         local inlist = {}
                         if urec.tags == nil then urec.tags = {} end
                         local oldtags = shallowCopy( urec.tags )
+                        urec.homeid = nil -- clear it every time
                         for _,g in ipairs( v.geotags or {} ) do
                             local st = ( { ['enter']='in',['exit']='out' } )[tostring( g.status ):lower()] or g.status or ""
                             local tag = urec.tags[tostring(g.id)]
@@ -2305,6 +2311,7 @@ local function masterTick(pdev)
                                     v.iduser, g.name, g.id, g.ishome, st)
                                 changed = true
                             end
+                            if g.ishome then urec.homeid = g.id end
                             if st == "in" then table.insert( inlist, g.id ) end
                         end
                         urec.inlist = inlist
@@ -2317,32 +2324,46 @@ local function masterTick(pdev)
                         end
                         urec.since = os.time()
                     end
+                else
+                    -- If not in long mode, these fields are invalid. Clear.
+                    -- Keep known locations, just clear status.
+                    for _,v in pairs( ishome or {} ) do
+                        for _,g in pairs( v.tags or {} ) do
+                            g.status = ""
+                        end
+                        v.inlist = {}
+                    end
                 end
                 D("masterTick() user home status=%1", ud.users_settings)
                 -- Short form check stands alone or amends long form for home status.
+                local ulist = map( getKeys( ishome ) )
                 for _,v in ipairs( ud.users_settings or {} ) do
                     local urec = ishome[tostring(v.id)]
                     if urec then
-                        if urec.ishome ~= v.ishome then
+                        local newhome = v.ishome or 0
+                        if urec.ishome ~= newhome then
                             L("Detected geofence change: user %1 now " ..
-                                ( ( v.ishome ~= 0 ) and "home" or "not home"), v.id)
+                                ( ( newhome ~= 0 ) and "home" or "not home"), v.id)
                             changed = true
                         end
-                        urec.ishome = v.ishome
+                        urec.ishome = newhome
+                        ulist[tostring(v.id)] = nil
                     else
                         L("Detected geofence change: new user %1 ishome %2", v.id, v.ishome)
-                        urec = { ishome=v.ishome }
+                        urec = { ishome=v.ishome, inlist={}, tags={} }
                         ishome[tostring(v.id)] = urec
                         changed = true
                     end
-                    -- Remove data we don't have in this mode (in case conditions
-                    -- changed and we've gone from long form to short).
-                    if geofenceMode > 0 then
-                        urec.tags = nil 
-                        urec.inlist = nil
-                    end
                     -- Stamp it.
                     urec.since = os.time()
+                end
+                -- Handle users that weren't list (treat as not home)
+                for v,_ in pairs( ulist ) do
+                    if ishome[v].ishome ~= 0 then
+                        D("masterTick() user %1 not in users_settings, marking not home", v)
+                        ishome[v].ishome = 0
+                        changed = true
+                    end
                 end
                 D("masterTick() geofence data changed=%1, data=%2", changed, ishome)
                 if changed then
@@ -2599,7 +2620,6 @@ end
 -- Enable or disable debug
 function actionSetDebug( state, tdev )
     debugMode = state or false
-    addEvent{ event="debug", dev=tdev, debugMode=debugMode }
     if debugMode then
         D("Debug enabled")
     end
@@ -2716,7 +2736,7 @@ function actionStopScene( ctx, scene, dev )
     if scene ~= nil and tostring(scene) ~= "0" then
         taskid = string.format("ctx%dscene%s", ctx, tostring(scene))
     end
-    addEvent{ dev=dev, event="action", action="RunScene", contextDevice=ctx, scene=scene }
+    addEvent{ dev=dev, event="action", action="StopScene", contextDevice=ctx, scene=scene }
     stopScene( ctx, taskid, dev )
 end
 
@@ -2826,7 +2846,7 @@ local function sensorWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
     D("sensorWatch(%1,%2,%3,%4,%5,%6,%7)", dev, sid, var, oldVal, newVal, tdev, pdev)
     -- Watched variable has changed. Re-evaluate conditons.
     addEvent{ dev=tdev, event='devicewatch', device=dev, name=(luup.devices[dev] or {}).descriptions,
-        var=sid .. "/" .. var, old=oldVal, new=newVal }
+        var=sid .. "/" .. var, old=tostring(oldVal):sub(1,64), new=tostring(newVal):sub(1,64) }
     updateSensor( tdev )
 end
 
@@ -3051,18 +3071,20 @@ function request( lul_request, lul_parameters, lul_outputformat )
         end
         for n,d in pairs( luup.devices ) do
             if d.device_type == RSTYPE and ( deviceNum==nil or n==deviceNum ) then
+                if sensorState[tostring(n)].condState == nil then
+                    sensorState[tostring(n)].condState = loadCleanState( n )
+                end
                 local status = ( ( getVarNumeric( "Armed", 0, n, SENSOR_SID ) ~= 0 ) and " armed" or "" )
                 status = status .. ( ( getVarNumeric("Tripped", 0, n, SENSOR_SID ) ~= 0 ) and " tripped" or "" )
                 r = r .. string.rep( "=", 132 ) .. EOL
                 r = r .. string.format("%s (#%d)%s", tostring(d.description), n, status) .. EOL
                 r = r .. string.format("    Message/status: %s", luup.variable_get( RSSID, "Message", n ) or "" ) .. EOL
-                local s = luup.variable_get( RSSID, "cdata", n ) or ""
-                local cdata,_,err = json.decode( s )
+                local cdata,err = getVarJSON( "cdata", {}, n, RSSID )
                 if err then
-                    r = r .. "**** UNPARSEABLE CONFIGURATION: " .. err .. EOL .. " in " .. s
+                    r = r .. "**** UNPARSEABLE CONFIGURATION: " .. err .. EOL
                     cdata = {}
                 end
-                s = getVarNumeric( "TestTime", 0, n, RSSID )
+                local s = getVarNumeric( "TestTime", 0, n, RSSID )
                 if s ~= 0 then
                     r = r .. string.format("    Test time set: %s", os.date("%Y-%m-%d %H:%M", s)) .. EOL
                 end
@@ -3249,10 +3271,9 @@ function request( lul_request, lul_parameters, lul_outputformat )
         for k,v in pairs( luup.devices ) do
             if v.device_type == RSTYPE then
                 st.sensors[tostring(k)] = { name=v.description, devnum=k }
-                local x = luup.variable_get( RSSID, "cdata", k ) or "{}"
-                local c = json.decode( x )
-                if not c then
-                    st.sensors[tostring(k)]._comment = "Unable to parse configuration"
+                local c,err = getVarJSON( "cdata", {}, k, RSSID )
+                if not c or err then
+                    st.sensors[tostring(k)]._comment = "Unable to parse configuration: " .. tostring(err)
                 else
                     st.sensors[tostring(k)].config = c
                 end
