@@ -1780,7 +1780,9 @@ var ReactorSensor = (function(api, $) {
         jQuery("div.controls", el).append('<i class="material-icons md-btn action-delete">clear</i>');
 
         [ "comment", "service", "housemode", "sun", "weekday", "trange", "interval", "ishome", "reload" ].forEach( function( k ) {
-            jQuery( "div.condtype select", el ).append( jQuery( "<option/>" ).val( k ).text( condTypeName[k] ) );
+            if ( ! ( isOpenLuup && k == "ishome" ) ) {
+                jQuery( "div.condtype select", el ).append( jQuery( "<option/>" ).val( k ).text( condTypeName[k] ) );
+            }
         });
 
         jQuery('div.condtype select', el).on( 'change.reactor', handleTypeChange );
