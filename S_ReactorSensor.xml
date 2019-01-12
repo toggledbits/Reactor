@@ -49,15 +49,11 @@
             <shortCode>since</shortCode>
         </stateVariable>
         <stateVariable sendEvents="no">
-            <name>misc_arg</name>
-            <dataType>ui4</dataType>
-        </stateVariable>
-        <stateVariable sendEvents="no">
-            <name>str_arg</name>
+            <name>A_ARG_TYPE_string</name>
             <dataType>string</dataType>
         </stateVariable>
         <stateVariable sendEvents="no">
-            <name>bool_arg</name>
+            <name>A_ARG_TYPE_boolean</name>
             <dataType>boolean</dataType>
         </stateVariable>
     </serviceStateTable>
@@ -68,12 +64,12 @@
                 <argument>
                     <name>VariableName</name>
                     <direction>in</direction>
-                    <relatedStateVariable>str_arg</relatedStateVariable>
+                    <relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
                 </argument>
                 <argument>
                     <name>NewValue</name>
                     <direction>in</direction>
-                    <relatedStateVariable>str_arg</relatedStateVariable>
+                    <relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
                 </argument>
             </argumentList>
         </action>
@@ -92,33 +88,31 @@
             <argumentList>
                 <argument>
                     <name>GroupId</name>
-                    <relatedStateVariable>str_arg</relatedStateVariable>
+                    <direction>in</direction>
+                    <relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
                 </argument>
                 <argument>
                     <name>newEnabledValue</name>
-                    <relatedStateVariable>bool_arg</relatedStateVariable>
+                    <direction>in</direction>
+                    <relatedStateVariable>A_ARG_TYPE_boolean</relatedStateVariable>
                 </argument>
             </argumentList>
         </action>
         <action>
             <name>Reset</name>
-            <argumentList>
-            </argumentList>
+            <argumentList/>
         </action>
         <action>
             <name>Trip</name>
-            <argumentList>
-            </argumentList>
+            <argumentList/>
         </action>
         <action>
             <name>Restart</name>
-            <argumentList>
-            </argumentList>
+            <argumentList/>
         </action>
         <action>
             <name>ResetRuntime</name>
-            <argumentList>
-            </argumentList>
+            <argumentList/>
         </action>
         <action>
           <name>RunScene</name>
@@ -126,7 +120,7 @@
             <argument>
               <name>SceneNum</name>
               <direction>in</direction>
-              <relatedStateVariable>misc_arg</relatedStateVariable>
+              <relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
             </argument>
           </argumentList>
         </action>
@@ -136,7 +130,7 @@
             <argument>
               <name>SceneNum</name>
               <direction>in</direction>
-              <relatedStateVariable>misc_arg</relatedStateVariable>
+              <relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
             </argument>
           </argumentList>
         </action>
