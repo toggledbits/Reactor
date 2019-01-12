@@ -1,6 +1,6 @@
 --[[
     L_Reactor.lua - Core module for Reactor
-    Copyright 2017,2018 Patrick H. Rigney, All Rights Reserved.
+    Copyright 2017,2018,2019 Patrick H. Rigney, All Rights Reserved.
     This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
 --]]
 --luacheck: std lua51,module,read globals luup,ignore 542 611 612 614 111/_,no max line length
@@ -544,7 +544,7 @@ local function plugin_runOnce( pdev )
         initVar( "IsHome", "", pdev, MYSID )
         initVar( "DebugMode", 0, pdev, MYSID )
         initVar( "MaxEvents", "", pdev, MYSID )
-        initVar( "UseACE", "", pdev, RSSID )
+        initVar( "UseACE", "", pdev, MYSID )
         initVar( "ACEURL", "", pdev, MYSID )
 
         luup.attr_set('category_num', 1, pdev)
