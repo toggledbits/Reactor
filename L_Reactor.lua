@@ -2859,6 +2859,7 @@ function watch( dev, sid, var, oldVal, newVal )
     if sid == RSSID and var == "cdata" then
         -- Sensor configuration change. Immediate update.
         L("Child %1 (%2) configuration change, updating!", dev, luup.devices[dev].description)
+        addEvent{ dev=dev, event="configchange" }
         loadSensorConfig( dev )
         updateSensor( dev )
     else
@@ -3079,12 +3080,13 @@ function request( lul_request, lul_parameters, lul_outputformat )
                 status = status .. ( ( getVarNumeric("Tripped", 0, n, SENSOR_SID ) ~= 0 ) and " tripped" or "" )
                 r = r .. string.rep( "=", 132 ) .. EOL
                 r = r .. string.format("%s (#%d)%s", tostring(d.description), n, status) .. EOL
-                r = r .. string.format("    Message/status: %s", luup.variable_get( RSSID, "Message", n ) or "" ) .. EOL
                 local cdata,err = getVarJSON( "cdata", {}, n, RSSID )
                 if err then
                     r = r .. "**** UNPARSEABLE CONFIGURATION: " .. err .. EOL
                     cdata = {}
                 end
+                r = r .. string.format("    Version %d.%d %s", cdata.version or 0, cdata.timestamp or 0, os.date("%x %X", cdata.timestamp or 0)) .. EOL
+                r = r .. string.format("    Message/status: %s", luup.variable_get( RSSID, "Message", n ) or "" ) .. EOL
                 local s = getVarNumeric( "TestTime", 0, n, RSSID )
                 if s ~= 0 then
                     r = r .. string.format("    Test time set: %s", os.date("%Y-%m-%d %H:%M", s)) .. EOL
