@@ -11,9 +11,9 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "2.0"
+local _PLUGIN_VERSION = "2.0patch-190112"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
-local _CONFIGVERSION = 00202
+local _CONFIGVERSION = 00204
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -110,8 +110,8 @@ end
 
 local function checkVersion(dev)
     local ui7Check = luup.variable_get(MYSID, "UI7Check", dev) or ""
-    if isOpenLuup then 
-        return true 
+    if isOpenLuup then
+        return true
     end
     if luup.version_branch == 1 and luup.version_major == 7 then
         if ui7Check == "" then
@@ -125,15 +125,10 @@ local function checkVersion(dev)
     return false
 end
 
-local function urlencode( str )
-    str = tostring(str):gsub( "([^A-Za-z0-9_ -])", function( ch ) return string.format("%%%02x", string.byte( ch ) ) end )
-    return str:gsub( " ", "+" )
-end
-
 local function split( str, sep )
     if sep == nil then sep = "," end
     local arr = {}
-    if #str == 0 then return arr, 0 end
+    if str == nil or #str == 0 then return arr, 0 end
     local rest = string.gsub( str or "", "([^" .. sep .. "]*)" .. sep, function( m ) table.insert( arr, m ) return "" end )
     table.insert( arr, rest )
     return arr, #arr
@@ -142,7 +137,7 @@ end
 -- Shallow copy
 local function shallowCopy( t )
     local r = {}
-    for k,v in pairs(t) do
+    for k,v in pairs(t or {}) do
         r[k] = v
     end
     return r
@@ -167,7 +162,6 @@ local function setVar( sid, name, val, dev )
     -- D("setVar(%1,%2,%3,%4) old value %5", sid, name, val, dev, s )
     if s ~= val then
         luup.variable_set( sid, name, val, dev )
-        return val
     end
     return s
 end
@@ -176,7 +170,7 @@ end
 local function getVarNumeric( name, dflt, dev, sid )
     assert( dev ~= nil )
     assert( name ~= nil )
-    if sid == nil then sid = RSSID end
+    sid = sid or RSSID
     local s = luup.variable_get( sid, name, dev )
     if (s == nil or s == "") then return dflt end
     s = tonumber(s, 10)
@@ -276,14 +270,14 @@ local function rateLimit( rh, rateMax, bump)
 end
 
 --[[
-    Compute sunrise/set for given date (t, a timestamp), lat/lon (degrees), 
-    elevation (elev in meters). Apply optional twilight adjustment (degrees, 
+    Compute sunrise/set for given date (t, a timestamp), lat/lon (degrees),
+    elevation (elev in meters). Apply optional twilight adjustment (degrees,
     civil=6.0, nautical=12.0, astronomical=18.0). Returns four values: times
     (as *nix timestamps) of sunrise, sunset, and solar noon; and the length of
     the period in hours (length of day).
     Ref: https://en.wikipedia.org/wiki/Sunrise_equation
     Ref: https://www.aa.quae.nl/en/reken/zonpositie.html
---]]    
+--]]
 function sun( lon, lat, elev, t )
     if t == nil then t = os.time() end -- t defaults to now
     if elev == nil then elev = 0.0 end -- elev defaults to 0
@@ -293,20 +287,20 @@ function sun( lon, lat, elev, t )
     local rlon = lon * pi / 180.0
     -- Apply TZ offset for JD in local TZ not UTC; truncate time and force noon.
     local locale_offset = os.difftime( t, os.time( os.date("!*t", t) ) )
-    local n = math.floor( ( t + locale_offset ) / 86400 + 0.5 + 2440587.5 ) - 2451545.0 
+    local n = math.floor( ( t + locale_offset ) / 86400 + 0.5 + 2440587.5 ) - 2451545.0
     local N = n - rlon / tau
     local M = ( 6.24006 + 0.017202 * N ) % tau
-    local C = 0.0334196 * math.sin( M ) + 0.000349066 * 
+    local C = 0.0334196 * math.sin( M ) + 0.000349066 *
         math.sin( 2 * M ) + 0.00000523599 * math.sin( 3 * M )
     local lam = ( M + C + pi + 1.796593 ) % tau
-    local Jt = 2451545.0 + N + 0.0053 * math.sin( M ) - 
+    local Jt = 2451545.0 + N + 0.0053 * math.sin( M ) -
         0.0069 * math.sin( 2 * lam )
     local decl = math.asin( math.sin( lam ) * math.sin( 0.409105 ) )
     function w0( rl, elvm, dang, wid )
         if not wid then wid = 0.0144862 end
-        return math.acos( ( math.sin( (-wid) + 
-            ( -0.0362330 * math.sqrt( elvm ) / 1.0472 ) ) - 
-                math.sin( rl ) * math.sin( dang ) ) / 
+        return math.acos( ( math.sin( (-wid) +
+            ( -0.0362330 * math.sqrt( elvm ) / 1.0472 ) ) -
+                math.sin( rl ) * math.sin( dang ) ) /
         ( math.cos( rl ) * math.cos( dang ) ) ) end
     local tw = 0.104719755 -- 6 deg in rad; each twilight step is 6 deg
     local function JE(j) return math.floor( ( j - 2440587.5 ) * 86400 ) end
@@ -512,11 +506,11 @@ local function sensor_runOnce( tdev )
     if s < 00109 then
         luup.variable_set( RSSID, "sundata", nil, tdev ) -- moved to master
     end
-    
+
     if s < 00201 then
         initVar( "ValueChangeHoldTime", 2, tdev, RSSID )
     end
-    
+
     -- Update version last.
     if (s ~= _CONFIGVERSION) then
         luup.variable_set(RSSID, "Version", _CONFIGVERSION, tdev)
@@ -536,8 +530,11 @@ local function plugin_runOnce( pdev )
         initVar( "NumRunning", 0, pdev, MYSID )
         initVar( "Message", "", pdev, MYSID )
         initVar( "HouseMode", luup.attr_get( "Mode", 0 ) or "1", pdev, MYSID )
+        initVar( "LastDST", "0", pdev, MYSID )
         initVar( "DebugMode", 0, pdev, MYSID )
         initVar( "MaxEvents", "", pdev, MYSID )
+        initVar( "UseACE", "", pdev, MYSID )
+        initVar( "ACEURL", "", pdev, MYSID )
 
         luup.attr_set('category_num', 1, pdev)
 
@@ -562,9 +559,14 @@ local function plugin_runOnce( pdev )
     if s < 00200 then
         initVar( "StateCacheExpiry", 600, pdev, MYSID )
     end
-    
+
     if s < 00202 then
         initVar( "MaxEvents", "", pdev, MYSID )
+    end
+
+    if s < 00204 then
+        initVar( "UseACE", "", pdev, MYSID )
+        initVar( "ACEURL", "", pdev, MYSID )
     end
 
     -- Update version last.
@@ -607,7 +609,7 @@ local function loadScene( sceneId, pdev )
         table.sort( data.groups, function( a, b ) return (a.delay or 0) < (b.delay or 0) end )
     end
     D("loadScene() loaded scene %1: %2", sceneId, data)
-    
+
     -- Keep cached
     if next(sceneData) == nil then
         sceneData = json.decode( luup.variable_get( MYSID, "scenedata", pluginDevice ) or "{}" ) or {}
@@ -641,7 +643,7 @@ local function getSceneData( sceneId, tdev )
 
     -- Special scene?
     local skey = tostring(sceneId)
-    if skey == "__trip" or skey == "__untrip" then 
+    if skey == "__trip" or skey == "__untrip" then
         -- For these special scenes, they're already in config ready to go.
         local pt = (skey=="__untrip") and "untripactions" or "tripactions"
         local r = sensorState[tostring(tdev)].configData[pt]
@@ -713,7 +715,7 @@ local function execLua( fname, luafragment, extarg, tdev )
         local err
         fnc,err = loadstring( luafragment, fname )
         if fnc == nil or err then
-            L({level=1,msg="%1 %(2) [%3] Lua load failed"}, 
+            L({level=1,msg="%1 %(2) [%3] Lua load failed"},
                 luup.devices[tdev].description, tdev, fname)
             luup.log( "Reactor: " .. err .. "\n" .. luafragment, 1 )
             return false, err -- flag error
@@ -742,7 +744,7 @@ local function execLua( fname, luafragment, extarg, tdev )
         luaEnv.print =  function( ... )  -- luacheck: ignore 212
                             local dev = luaEnv.__reactor_getdevice() or 0
                             local msg = table.concat( arg or {}, " " ) or ""
-                            luup.log( ((luup.devices[dev] or {}).description or "?") .. 
+                            luup.log( ((luup.devices[dev] or {}).description or "?") ..
                                 " (" .. tostring(dev) .. ") [" .. tostring(luaEnv.__reactor_getscript() or "?") ..
                                 "] " .. msg)
                             addEvent{ dev=dev, event="lua", script=luaEnv.__reactor_getscript(), message=msg }
@@ -810,10 +812,10 @@ local function execLua( fname, luafragment, extarg, tdev )
     rmt.__newindex =    function(t, n, v)
                             error("Cannot set " .. tostring(n) .. " in Reactor.variables -- this is a read-only data structure")
                         end
-    rmt.__index =   function(t, n) 
+    rmt.__index =   function(t, n)
                         -- Always fetch, because it could be changing dynamically
                         local v = luup.variable_get( VARSID, n, tdev )
-                        if v == nil then 
+                        if v == nil then
                             L({level=1,msg="%1 (%2) runLua action: your code accesses undeclared Reactor variable 'Reactor.variables."..n.."'"},
                                 luup.devices[tdev].description, tdev, n)
                             addEvent{ dev=tdev, event="lua", script=fname, message="WARNING: Attempt to access undefined Reactor variable "..n }
@@ -922,7 +924,7 @@ local function execSceneGroups( tdev, taskid )
                         (luup.devices[devnum] or {}).description or "?unknown?",
                         scd.name or "", scd.id )
                     -- If Lua HomeAutomationGateway RunScene action, run in Reactor
-                    if action.service == "urn:micasaverde-com:serviceId:HomeAutomationGateway1" and 
+                    if action.service == "urn:micasaverde-com:serviceId:HomeAutomationGateway1" and
                             action.action == "RunScene" and devnum == 0 then
                         -- Overriding like this runs the scene as a job (so it doesn't start immediately)
                         D("execSceneGroups() overriding Vera RunScene with our own!")
@@ -950,7 +952,7 @@ local function execSceneGroups( tdev, taskid )
                         local param = {}
                         for k,p in ipairs( action.parameters or {} ) do
                             -- Reactor behavior: omit if value not defined
-                            if p.value ~= nil then 
+                            if p.value ~= nil then
                                 local val = resolveVarRef( p.value, tdev )
                                 if val ~= nil then
                                     -- Vera action arguments are always strings. Boolean special.
@@ -959,9 +961,9 @@ local function execSceneGroups( tdev, taskid )
                                 end
                             end
                         end
-                        D("execSceneGroups() dev %4 (%5) do %1/%2(%3) for %6 (%7)", 
+                        D("execSceneGroups() dev %4 (%5) do %1/%2(%3) for %6 (%7)",
                             action.service, action.action, param, devnum,
-                            (luup.devices[devnum] or {}).description or "?unknown?", 
+                            (luup.devices[devnum] or {}).description or "?unknown?",
                             scd.name or "", scd.id )
                         luup.call_action( action.service, action.action, param, devnum )
                     end
@@ -971,7 +973,7 @@ local function execSceneGroups( tdev, taskid )
                 elseif action.type == "runscene" then
                     -- Run scene in same context as this one. Whoa... recursion... depth???
                     local scene = resolveVarRef( action.scene, tdev )
-                    D("execSceneGroups() launching scene %1 (%2) from scene %3", 
+                    D("execSceneGroups() launching scene %1 (%2) from scene %3",
                         scene, action.scene, scd.id)
                     -- Not running as job here because we want in-line execution of scene actions (the Reactor way).
                     runScene( scene, tdev, { contextDevice=sst.options.contextDevice, stopPriorScenes=false } )
@@ -1042,7 +1044,7 @@ local function execScene( scd, tdev, options )
 
     -- Mark
     addEvent{ dev=tdev, event="startscene", scene=scd.id, sceneName=scd.name or scd.id}
-    
+
     -- If there's scene lua, try to run it.
     if ( scd.lua or "" ) ~= "" then
         D("execScene() handling scene (global) Lua")
@@ -1119,14 +1121,14 @@ runScene = function( scene, tdev, options )
         luup.call_action( "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "RunScene", { SceneNum=scene }, 0 )
         return
     end
-    
+
     local scd = getSceneData( scene, tdev )
     if scd == nil then
         L({level=1,msg="%1 (%2) can't run scene %3, not found/loaded."}, tdev,
             luup.devices[tdev].description, scene)
         return
     end
-    
+
     execScene( scd, tdev, options )
 end
 
@@ -1214,9 +1216,9 @@ local function loadSensorConfig( tdev )
     -- Check old-style scene runners, fix.
     s = luup.variable_get( RSSID, "Scenes", tdev ) or ""
     if s ~= "" then
-        L({level=2,msg="%3 (%2) Upgrading old-style scene pair %1 to actions (one-time upgrade)"}, 
+        L({level=2,msg="%3 (%2) Upgrading old-style scene pair %1 to actions (one-time upgrade)"},
             s, tdev, luup.devices[tdev].description)
-        
+
         local st = split( s, "," )
         if st[1] ~= "" then
             cdata.tripactions = { isReactorScene=true, groups={ { delay=0, actions={ { ['type']="runscene", scene=st[1] } } } } }
@@ -1501,7 +1503,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
             D("evaluateCondition() change op, condstate %1, val %2, changed %3", cs, vv, changed)
             if not changed then return false end
             -- Changed, go true and re-eval in 2 seconds (will go false unless changed again)
-            scheduleDelay( { id=tdev,info="change "..cond.id }, 
+            scheduleDelay( { id=tdev,info="change "..cond.id },
                 getVarNumeric( "ValueChangeHoldTime", 2, tdev, RSSID ) )
             -- drop through to true return
         else
@@ -1565,7 +1567,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
                 sundata = { sunrise=luup.sunrise(), sunset=luup.sunset() }
             else
                 -- Compute sun data
-                sundata = sun( luup.longitude, luup.latitude, 
+                sundata = sun( luup.longitude, luup.latitude,
                     getVarNumeric( "Elevation", 0.0, pluginDevice, MYSID ), now )
                 D("evaluationCondition() location (%1,%2) computed %3", luup.longitude, luup.latitude, sundata)
             end
@@ -1634,7 +1636,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
             -- No date specified, only time components. Magnitude comparison.
             D("evaluateCondition() time-only comparison, now is %1, ndt is %2", now, ndt)
             local nowMSM = ndt.hour * 60 + ndt.min
-            local startMSM = tpart[4] * 60 + tpart[5] 
+            local startMSM = tpart[4] * 60 + tpart[5]
             if op == "after" then
                 D("evaluateCondition() time-only comparison %1 after %2", nowMSM, startMSM)
                 doNextCondCheck( { id=tdev,info="trangeHM "..cond.id }, nowMSM, startMSM )
@@ -1776,7 +1778,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
                 return false,false
             else
                 -- Check to see if we've missed an interval
-                if nextTrue > ( lastTrue + interval ) then 
+                if nextTrue > ( lastTrue + interval ) then
                     D("evaluateConditions() we must missed an interval! Forcing true...")
                     nextTrue = now
                 end
@@ -1793,7 +1795,7 @@ local function evaluateCondition( cond, grp, cdata, tdev )
             end
         else
             -- First run. Delay until the first interval.
-            
+
         end
         -- Go true.
         D("evaluateConditions() triggering interval condition %1", cond.id)
@@ -2030,13 +2032,13 @@ end
 -- Perform update tasks
 local function updateSensor( tdev )
     D("updateSensor(%1) %2", tdev, luup.devices[tdev].description)
-    
+
     -- If not enabled, no work to do.
     if not isEnabled( tdev ) then
         D("updateSensor() disabled; no action")
         return
     end
-    
+
     -- Reload sensor state if cache purged
     local skey = tostring(tdev)
     if sensorState[skey].condState == nil then
@@ -2059,7 +2061,7 @@ local function updateSensor( tdev )
         local tt = getVarNumeric( "TestTime", 0, tdev, RSSID )
         sensorState[skey].timebase = tt == 0 and os.time() or tt
         sensorState[skey].timeparts = os.date("*t", sensorState[skey].timebase)
-        D("updateSensor() base time is %1 (%2)", sensorState[skey].timebase, 
+        D("updateSensor() base time is %1 (%2)", sensorState[skey].timebase,
             sensorState[skey].timeparts)
 
         -- Update state (if changed)
@@ -2168,7 +2170,7 @@ local function masterTick(pdev)
             end
         end
     end
-    
+
     -- See if any cached state has expired
     local expiry = getVarNumeric( "StateCacheExpiry", 600, pdev, MYSID )
     if expiry > 0 then
@@ -2181,7 +2183,7 @@ local function masterTick(pdev)
             end
         end
     end
-    
+
     scheduleTick( tostring(pdev), nextTick )
 end
 
@@ -2297,7 +2299,7 @@ function startPlugin( pdev )
 --]]
 
     L("Plugin version %2, device %1 (%3)", pdev, _PLUGIN_VERSION, luup.devices[pdev].description)
-    
+
     luup.variable_set( MYSID, "Message", "Initializing...", pdev )
     luup.variable_set( MYSID, "NumRunning", "0", pdev )
 
@@ -2312,7 +2314,7 @@ function startPlugin( pdev )
     sceneWaiting = {}
     sceneState = {}
     luaEnv = nil
-    
+
     -- Debug?
     if getVarNumeric( "DebugMode", 0, pdev, MYSID ) ~= 0 then
         debugMode = true
@@ -2322,7 +2324,7 @@ function startPlugin( pdev )
     -- Check for ALTUI and OpenLuup
     local failmsg = false
     for k,v in pairs(luup.devices) do
-        if v.device_type == "urn:schemas-upnp-org:device:altui:1" then
+        if v.device_type == "urn:schemas-upnp-org:device:altui:1" and v.device_num_parent == 0 then
             D("start() detected ALTUI at %1", k)
             isALTUI = true
             local rc,rs,jj,ra = luup.call_action("urn:upnp-org:serviceId:altui1", "RegisterPlugin",
@@ -2373,7 +2375,7 @@ function startPlugin( pdev )
 
     -- More inits
     maxEvents = getVarNumeric( "MaxEvents", 50, pdev, MYSID )
-    
+
     -- Initialize and start the plugin timer and master tick
     runStamp = 1
     scheduleDelay( { id=tostring(pdev), func=waitSystemReady, owner=pdev }, 5 )
@@ -2495,7 +2497,7 @@ end
 
 -- Run a scene. By default, it's assumed this action is being called from outside
 -- Reactor, so starting a scene does not stop prior started scenes, and ReactorScenes
--- are forced (if you don't want ReactorScenes, call the HomeAutomationGateway1 
+-- are forced (if you don't want ReactorScenes, call the HomeAutomationGateway1
 -- service action on device 0).
 function actionRunScene( scene, options, dev )
     L("RunScene action request, scene %1", scene)
@@ -2552,7 +2554,7 @@ function actionSetGroupEnabled( grpid, enab, dev )
         end
         grp.disabled = (not enab) and 1 or nil
         grp.enabled = nil
-        L("%1 (%2) SetGroupEnabled %3 now %4", luup.devices[dev].description, 
+        L("%1 (%2) SetGroupEnabled %3 now %4", luup.devices[dev].description,
             dev, grp.groupid, grp.disabled and "disabled" or "enabled")
         addEvent{ dev=dev, event="action", action="SetGroupEnabled", group=grpid, enabled=enab and 1 or 0 }
         -- No need to call updateSensor here, modifying cdata does it
@@ -2735,9 +2737,9 @@ local function getReactorScene( t, s )
                         table.insert( p, pp.name .. "=" .. tostring(pp.value) )
                     end
                     p = table.concat( p, ", " )
-                    resp = resp .. pfx .. "Device " .. (act.device or "?") .. " (" .. 
-                        ((luup.devices[act.device or 0] or {}).description or (act.deviceName or "").."?") .. 
-                        ") action " .. (act.service or "?") .. "/" .. 
+                    resp = resp .. pfx .. "Device " .. (act.device or "?") .. " (" ..
+                        ((luup.devices[act.device or 0] or {}).description or (act.deviceName or "").."?") ..
+                        ") action " .. (act.service or "?") .. "/" ..
                         (act.action or "?") .. "( " .. p .. " )"
                 elseif act.type == "housemode" then
                     resp = resp .. pfx .. "Change house mode to " .. tostring(act.housemode)
@@ -2808,14 +2810,14 @@ function request( lul_request, lul_parameters, lul_outputformat )
 
     elseif action == "preloadscene" then
         -- Preload scene used by a ReactorSensor. Call by UI during edit.
-        if ( lul_parameters.flush or 0 ) ~= 0 then 
+        if ( lul_parameters.flush or 0 ) ~= 0 then
             -- On demand, flush all scene data.
             sceneData = {}
             luup.variable_set( MYSID, "scenedata", "{}", pluginDevice )
         end
         status, msg = pcall( loadScene, tonumber(lul_parameters.scene or 0), pluginDevice )
         return json.encode( { status=status,message=msg } ), "application/json"
-        
+
     elseif action == "summary" then
         local r = ""
         r = r .. string.rep("*", 29) .. " LOGIC SUMMARY REPORT " .. string.rep("*", 29) .. EOL
@@ -2834,6 +2836,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
                     r = r .. "**** UNPARSEABLE CONFIGURATION: " .. err .. EOL .. " in " .. s
                     cdata = {}
                 end
+                r = r .. string.format("    Version %d.%d %s", cdata.version or 0, cdata.timestamp or 0, os.date("%x %X", c   1046 data.timestamp or 0)) .. EOL
                 s = getVarNumeric( "TestTime", 0, n, RSSID )
                 if s ~= 0 then
                     r = r .. string.format("    Test time set: %s", os.date("%Y-%m-%d %H:%M", s)) .. EOL
@@ -2856,7 +2859,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
                 local ng=0
                 for _,gc in ipairs( cdata.conditions or {} ) do
                     ng = ng + 1
-                    r = r .. "    Group #" .. ng .. " <" .. gc.groupid .. ">" .. 
+                    r = r .. "    Group #" .. ng .. " <" .. gc.groupid .. ">" ..
                         ( gc.disabled and " (disabled)" or "" ) .. EOL
                     for _,cond in ipairs( gc.groupconditions or {} ) do
                         -- ??? TO DO: Add cstate
@@ -2920,12 +2923,12 @@ function request( lul_request, lul_parameters, lul_outputformat )
         local result, err = luaxp.evaluate( expr, ctx )
         local ret = { status=true, resultValue=result, err=err or false, expression=expr }
         return json.encode( ret ), "application/json"
-        
+
     elseif action == "infoupdate" then
         -- Fetch and install updated deviceinfo file; these will change more frequently than the plugin.
         -- Updates are user-driven from the UI, and the user is advised that the version of firmware is
-        -- sent to my server to ensure that the correct file is received (if per-version exceptions are 
-        -- needed). The version info and any other data collected by the process are not stored except 
+        -- sent to my server to ensure that the correct file is received (if per-version exceptions are
+        -- needed). The version info and any other data collected by the process are not stored except
         -- in temporary logs that are periodically purged, and not for any analytical purpose.
         local targetPath = "/etc/cmh-ludl/D_ReactorDeviceInfo.json"
         local tmpPath = "/tmp/D_ReactorDeviceInfo.tmp"
@@ -2968,17 +2971,15 @@ function request( lul_request, lul_parameters, lul_outputformat )
             if es ~= 0 then
                 return json.encode{ status=false, exitStatus=es,
                     message="The download was successful but the updated file could not be installed;" ..
-                    " please move " .. tmpPath .. " to " .. targetPath }, 
+                    " please move " .. tmpPath .. " to " .. targetPath },
                     "application/json"
             end
-            return json.encode{ status=true, message="Device info updated" }, "application/json" 
-        else
-            return json.encode{ status=false, message="Download failed (" .. tostring(httpStatus) .. ")" }
+            return json.encode{ status=true, message="Device info updated" }, "application/json"
         end
-        return json.encode{ status=false, message="Can't update device info, status " .. httpStatus }, "application/json"
-        
+        return json.encode{ status=false, message="Download failed (" .. tostring(httpStatus) .. ")" }, "application/json"
+
     elseif action == "submitdevice" then
-    
+
         D("request() submitdevice with data %1", lul_parameters.data)
         local http = require("socket.http")
         local https = require("ssl.https")
@@ -3041,12 +3042,12 @@ function request( lul_request, lul_parameters, lul_outputformat )
             end
         end
         return json.encode( { status=true, message="Done!", file=bfile } ), "application/json"
-      
+
     elseif action == "purge" then
         luup.variable_set( MYSID, "scenedata", "{}", pluginDevice )
         scheduleDelay( { id="reload", func=luup.reload, owner=pluginDevice }, 2 )
         return  "Purged; reloading Luup.", "text/plain"
-        
+
     elseif action == "status" then
         local st = {
             name=_PLUGIN_NAME,
@@ -3081,10 +3082,10 @@ function request( lul_request, lul_parameters, lul_outputformat )
             end
         end
         return alt_json_encode( st ), "application/json"
-        
+
     elseif action == "serviceinfo" then
         error("not yet implemented")
-        
+
     else
         error("Not implemented: " .. action)
     end
