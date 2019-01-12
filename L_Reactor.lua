@@ -2618,7 +2618,7 @@ function actionMasterClear( dev )
 end
 
 -- Enable or disable debug
-function actionSetDebug( state, tdev )
+function actionSetDebug( state, tdev ) -- luacheck: ignore 212
     debugMode = state or false
     if debugMode then
         D("Debug enabled")
