@@ -178,6 +178,17 @@ local function getVarNumeric( name, dflt, dev, sid )
     return s
 end
 
+-- Get var that stores JSON data. Returns data, error flag.
+local function getVarJSON( name, dflt, dev, sid )
+    assert( dev ~= nil and name ~= nil )
+    sid = sid or RSSID
+    local s = luup.variable_get( sid, name, dev ) or ""
+    if s == "" then return dflt,false end
+    local data,pos,err = json.decode( s )
+    if err then return dflt,err,pos,s end
+    return data,false
+end
+
 -- Check system battery (VeraSecure)
 local function checkSystemBattery( pdev )
     local level, source = "", ""
@@ -2786,6 +2797,17 @@ local function alt_json_encode( st )
     end
     str = str .. "}"
     return str
+end
+
+local function shortDate( d )
+    d = tonumber(d) or 0
+    local delta = math.abs( os.time() - d )
+    if delta < 86400 then
+        return os.date("%X", d)
+    elseif delta < (86400*364) then
+        return os.date("%m-%d.%X", d)
+    end
+    return os.date("%Y-%m-%d.%X", d)
 end
 
 function request( lul_request, lul_parameters, lul_outputformat )
