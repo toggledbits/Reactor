@@ -3117,7 +3117,7 @@ var ReactorSensor = (function(api, $) {
             case "runscene":
                 var sc = jQuery( 'select#scene', row ).val() || "";
                 if ( "" === sc ) {
-                    jQuery( 'select#scene' ).addClass( "tberror" );
+                    jQuery( 'select#scene', row ).addClass( "tberror" );
                 }
                 break;
 
