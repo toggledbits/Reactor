@@ -2846,7 +2846,8 @@ local function sensorWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
     D("sensorWatch(%1,%2,%3,%4,%5,%6,%7)", dev, sid, var, oldVal, newVal, tdev, pdev)
     -- Watched variable has changed. Re-evaluate conditons.
     addEvent{ dev=tdev, event='devicewatch', device=dev, name=(luup.devices[dev] or {}).descriptions,
-        var=sid .. "/" .. var, old=tostring(oldVal):sub(1,64), new=tostring(newVal):sub(1,64) }
+        var=sid .. "/" .. var, old=string.format("%q", tostring(oldVal):sub(1,64)), 
+        new=string.format("%q", tostring(newVal):sub(1,64)) }
     updateSensor( tdev )
 end
 
