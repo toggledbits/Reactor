@@ -311,17 +311,6 @@ function sun( lon, lat, elev, t )
         JE(Jt), 24*w0(rlat,elev,decl)/pi
 end
 
--- Find device by name
-local function findDeviceByName( n )
-    n = tostring(n):lower()
-    for k,v in pairs( luup.devices ) do
-        if tostring(v.description):lower() == n then
-            return k,v
-        end
-    end
-    return nil
-end
-
 -- Add, if not already set, a watch on a device and service
 local function addServiceWatch( dev, svc, var, target )
     -- Don't watch our own variables--we update them in sequence anyway
