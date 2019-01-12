@@ -2783,7 +2783,7 @@ var ReactorSensor = (function(api, $) {
             case "runscene":
                 var sc = jQuery( 'select#scene', row ).val() || "";
                 if ( "" === sc ) {
-                    jQuery( 'select#scene' ).addClass( "tberror" );
+                    jQuery( 'select#scene', row ).addClass( "tberror" );
                 }
                 break;
 
@@ -3757,21 +3757,22 @@ var ReactorSensor = (function(api, $) {
                         timeout: 5000
                     }).done( function( data, statusText, jqXHR ) {
                         var pred = row;
+                        var newrow;
+                        if ( "" !== (data.lua || "") ) {
+                            /* First action in first group is scene Lua if it's there */
+                            var lua = (data.encoded_lua || 0) != 0 ? atob(data.lua) : data.lua;
+                            newRow = getActionRow();
+                            jQuery( "select#actiontype", newRow).val( "runlua" );
+                            changeActionType( newRow, "runlua" );
+                            jQuery( "textarea.luacode", newRow ).val( lua ).trigger( "reactorinit" );
+                            pred = newRow.addClass( "tbmodified" ).insertAfter( pred );
+                        }
                         /* Sort groups by delay ascending */
                         data.groups = data.groups || [];
                         data.groups.sort( function( a, b ) { return (a.delay||0) - (b.delay||0); });
                         for ( var ig=0; ig<(data.groups || []).length; ig++ ) {
-                            var newRow;
+                            newRow;
                             var gr = data.groups[ig];
-                            if ( 0 === ig && "" !== (data.lua || "") ) {
-                                /* First action in first group is scene Lua if it's there */
-                                var lua = (data.encoded_lua || 0) != 0 ? atob(data.lua) : data.lua;
-                                newRow = getActionRow();
-                                jQuery( "select#actiontype", newRow).val( "runlua" );
-                                changeActionType( newRow, "runlua" );
-                                jQuery( "textarea.luacode", newRow ).val( lua ).trigger( "reactorinit" );
-                                pred = newRow.addClass( "tbmodified" ).insertAfter( pred );
-                            }
                             if ( 0 != (gr.delay || 0) ) {
                                 /* Delayed group -- insert delay action */
                                 newRow = getActionRow();
@@ -3812,12 +3813,12 @@ var ReactorSensor = (function(api, $) {
                                     }
                                 }, [ newRow, act ]);
                             }
-
-                            /* All actions inserted. Remove original row. */
-                            row.remove();
-                            configModified = true;
-                            changeActionRow( row );
                         }
+
+                        /* All actions inserted. Remove original row. */
+                        row.remove();
+                        configModified = true;
+                        changeActionRow( row );
                     }).fail( function( jqXHR, textStatus, errorThrown ) {
                         // Bummer.
                         console.log("Failed to load scene data: " + textStatus + " " + String(errorThrown));
