@@ -34,7 +34,7 @@ local sceneData = {}
 local sceneWaiting = {}
 local sceneState = {}
 local hasBattery = true
-local usingGeofence = false
+local geofenceMode = 0
 local maxEvents = 50
 local luaEnv -- global state for all runLua actions
 
@@ -135,24 +135,10 @@ local function split( str, sep )
     return arr, #arr
 end
 
--- Array to map, where f(elem) returns key[,value]
-local function map( arr, f, res )
-    res = res or {}
-    for _,x in ipairs( arr ) do
-        if f then
-            local k,v = f( x )
-            res[k] = (v == nil) and x or v
-        else
-            res[x] = x
-        end
-    end
-    return res
-end
-
 -- Shallow copy
 local function shallowCopy( t )
     local r = {}
-    for k,v in pairs(t) do
+    for k,v in pairs(t or {}) do
         r[k] = v
     end
     return r
@@ -185,12 +171,22 @@ end
 local function getVarNumeric( name, dflt, dev, sid )
     assert( dev ~= nil )
     assert( name ~= nil )
-    if sid == nil then sid = RSSID end
+    sid = sid or RSSID
     local s = luup.variable_get( sid, name, dev )
     if (s == nil or s == "") then return dflt end
     s = tonumber(s, 10)
     if (s == nil) then return dflt end
     return s
+end
+
+local function getVarJSON( name, dflt, dev, sid )
+    assert( dev ~= nil and name ~= nil )
+    sid = sid or RSSID
+    local s = luup.variable_get( sid, name, dev ) or ""
+    if s == "" then return dflt end
+    local data,pos,err = json.decode( s )
+    if err then return dflt,pos,err end
+    return data
 end
 
 -- Check system battery (VeraSecure)
@@ -1842,34 +1838,41 @@ local function evaluateCondition( cond, grp, tdev )
         -- Geofence, is user home?
         -- Add watch on parent if we don't already have one.
         addServiceWatch( pluginDevice, MYSID, "IsHome", tdev )
-        usingGeofence = true -- flag to masterTick
         local op = cond.operator or "is"
-        local ishome = luup.variable_get( MYSID, "IsHome", pluginDevice ) or ""
-        -- ??? should the value we return for display give user names rather than ids? friendlier...
-        local homelist = split( ishome )
-        -- If condition's matching user list is empty, return op-dependent/shortcut exit.
+        local ishome = getVarJSON( "IsHome", {}, pluginDevice, MYSID )
         local userlist = split( cond.value or "" )
-        D("evaluateCondition() ishome op=%1, home=%2, cond=%3", op, homelist, userlist)
-        if #userlist < 1 or userlist[1] == "" then 
-            -- Empty userlist. If op is "is not" and somebody is home, return false.
-            local anyhome = #homelist > 0 and homelist[1] ~= ""
-            if op == "is not" then 
-                return ishome,not anyhome
+        D("evaluateCondition() ishome op=%1 %3; ishome=%2", op, ishome, userlist)
+        if op == "at" then
+            if geofenceMode ~= -1 then geofenceMode = -1 end
+            local userid,location = unpack(userlist)
+            D("????? evaluateCondition() check user %1 location %2: %3", userid, location, ishome[userid].tags[location])
+            if (ishome[userid] or {}).tags and ishome[userid].tags[location] then
+                local val = ishome[userid].tags[location].status or ""
+                return val,val=="in"
             end
-            -- Default "is"; if anybody is home, return true.
-            return ishome,anyhome
-        end
-        -- Convert to map and scan.
-        homelist = map( homelist )
-        for _,v in ipairs( userlist ) do
-            if op == "is not" and homelist[v] == nil then 
-                return ishome,true
-            elseif homelist[v] ~= nil then 
-                return ishome,true 
+            -- Don't have data for this location or user.
+            return "",false
+        else
+            -- We could just traverse IsHome, but we want to show
+            if geofenceMode == 0 then geofenceMode = 1 end -- don't change -1
+            if #userlist < 1 or (#userlist == 1 and userlist[1] == "") then 
+                -- Empty userlist.
+                for k,v in pairs( ishome ) do
+                    D("evaluateCondition() any op %1, checking %2 ishome=%3", op, k, v.ishome)
+                    if v.ishome == 0 and op == "is not" then return k,true end
+                    if v.ishome == 1 and op == "is" then return k,true end
+                end
+            else
+                -- Check listed users
+                for _,v in ipairs( userlist ) do
+                    -- Note that if we have no data for the user, it counts as "not home".
+                    local uh = ( ( ishome[v] or {} ).ishome or 0 ) ~= 0
+                    if op == "is not" and not uh then return v,true end
+                    if op == "is" and uh then return v,true end
+                end
             end
+            return "",false
         end
-        -- Condition not met
-        return ishome,false
     else
         L({level=2,msg="Sensor %1 (%2) unknown condition type %3 for cond %4 in group %5; fails."},
             tdev, luup.devices[tdev].description, cond.type, cond.id, grp.groupid)
@@ -2234,21 +2237,27 @@ local function masterTick(pdev)
     -- userdata, which can be very large. Shame that it comes back as JSON-
     -- formatted text that we need to decode; I'm sure the action had to encode
     -- it that way, and all we're going to do is decode back.
-    if usingGeofence then
+    if geofenceMode ~= 0 then
         L("Checking geofence...")
+        local ishome = getVarJSON( "IsHome", {}, pdev, MYSID )
         local rc,rs,rj,ra = luup.call_action( "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "GetUserData", { DataFormat="json" }, 0 ) -- luacheck: ignore 211
         -- D("masterTick() GetUserData action returned rc=%1, rs=%2, rj=%3, ra=%4", rc, rs, rj, ra)
         if rc ~= 0 or (ra or {}).UserData == nil then
             L({level=2,msg="Unable to fetch userdata for geofence check! rc=%1, ra=%2"}, rc, ra)
         else
-            -- UserData can be massive even on small installations, so try to snarf out just what we need, and parse only that.
             local ud
+            -- If mode > 0, we're only using home condition, so only need short
+            -- decode of that we need, rather than all of user_data, which is
+            -- massive even on small installations.
             ra = tostring( ra.UserData )
-            local mm = ra:match( '("users_settings": *%[[^]]*%])' )
-            if mm then
-                D("masterTick() found element in UserData (%1 bytes); using short decode", #ra)
-                ud = json.decode( '{' .. mm .. '}' )
-            else
+            if geofenceMode > 0 then
+                local mm = ra:match( '("users_settings": *%[[^]]*%])' )
+                if mm then
+                    D("masterTick() found element in UserData (%1 bytes); using short decode", #ra)
+                    ud = json.decode( '{' .. mm .. '}' )
+                end
+            end
+            if ud == nil then
                 D("masterTick() doing full decode on UserData, %1 bytes", #ra)
                 ud = json.decode( ra )
             end
@@ -2259,17 +2268,86 @@ local function masterTick(pdev)
                 -- ud.usergeofences is array of { iduser, geotags } and geotags is
                 --     { PK_User (same as id), id (of geotag), accuracy, ishome, notify, radius, address, color (hex6), latitude, longitude, name (of geotag), status, and poss others? }
                 -- ud.user_settings contains the "ishome" we care about, though.
-                local keys = {}
-                D("masterTick() user home status=%1", ud.users_settings)
-                for _,v in ipairs( ud.users_settings or {} ) do
-                    if ( v.ishome or 0 ) ~= 0 then
-                        table.insert( keys, v.id )
+                local changed = false
+                if geofenceMode < 0 then
+                    -- Long form geofence check.
+                    D("masterTick() doing long form geofence check with %1", ud.usergeofences)
+                    for _,v in ipairs( ud.usergeofences or {} ) do
+                        if not ishome[tostring(v.iduser)] then
+                            -- New user listed
+                            L("Detected geofence change: new user %1", v.iduser)
+                            ishome[tostring(v.iduser)] = { ishome=0, tags={} }
+                            changed = true
+                        end
+                        local urec = ishome[tostring(v.iduser)]
+                        local inlist = {}
+                        if urec.tags == nil then urec.tags = {} end
+                        local oldtags = shallowCopy( urec.tags )
+                        for _,g in ipairs( v.geotags or {} ) do
+                            local st = ( { ['enter']='in',['exit']='out' } )[tostring( g.status ):lower()] or g.status or ""
+                            local tag = urec.tags[tostring(g.id)]
+                            if tag then
+                                -- Update known geotag
+                                if st ~= tag.status then
+                                    L("Detected geofence change: user %1 status %2 for %3 (%4) %5",
+                                        v.iduser, st, g.name, g.id, g.ishome)
+                                    tag.status = st
+                                    changed = true
+                                end
+                                -- Update remaining fields, but don't mark changed.
+                                tag.name = g.name
+                                tag.homeloc = g.ishome
+                                oldtags[tostring(g.id)] = nil -- remove from old
+                            else
+                                -- New geotag
+                                urec.tags[tostring(g.id)] = { id=g.id, name=g.name, homeloc=g.ishome, status=st }
+                                L("Detected geofence change: user %1 has added %2 (%3) %4 %5",
+                                    v.iduser, g.name, g.id, g.ishome, st)
+                                changed = true
+                            end
+                            if st == "in" then table.insert( inlist, g.id ) end
+                        end
+                        urec.inlist = inlist
+                        -- Handle geotags that have been removed
+                        for k,g in pairs( oldtags ) do
+                            L("Detected geofence change: user %1 deleted %2 (%3) %4",
+                                v.iduser, g.name, g.id, g.ishome)
+                            urec.tags[k] = nil
+                            changed = true
+                        end
+                        urec.since = os.time()
                     end
                 end
-                table.sort( keys )
-                D("masterTick() users at home=%1", keys)
-                -- setVar( MYSID, "Users", json.encode( ud.users or {} ), pdev )
-                setVar( MYSID, "IsHome", table.concat( keys, "," ), pdev )
+                D("masterTick() user home status=%1", ud.users_settings)
+                -- Short form check stands alone or amends long form for home status.
+                for _,v in ipairs( ud.users_settings or {} ) do
+                    local urec = ishome[tostring(v.id)]
+                    if urec then
+                        if urec.ishome ~= v.ishome then
+                            L("Detected geofence change: user %1 now " ..
+                                ( ( v.ishome ~= 0 ) and "home" or "not home"), v.id)
+                            changed = true
+                        end
+                        urec.ishome = v.ishome
+                    else
+                        L("Detected geofence change: new user %1 ishome %2", v.id, v.ishome)
+                        urec = { ishome=v.ishome }
+                        ishome[tostring(v.id)] = urec
+                        changed = true
+                    end
+                    -- Remove data we don't have in this mode (in case conditions
+                    -- changed and we've gone from long form to short).
+                    if geofenceMode > 0 then
+                        urec.tags = nil 
+                        urec.inlist = nil
+                    end
+                    -- Stamp it.
+                    urec.since = os.time()
+                end
+                D("masterTick() geofence data changed=%1, data=%2", changed, ishome)
+                if changed then
+                    setVar( MYSID, "IsHome", json.encode( ishome ), pdev )
+                end
             else
                 L({level=2,msg="Failed to device userdata for geofence check!"})
             end
@@ -2917,6 +2995,19 @@ local function shortDate( d )
     return os.date("%Y-%m-%d.%X", d)
 end
 
+local function showGeofenceData( r )
+    r = r or ""
+    local data = getVarJSON( "IsHome", {}, pluginDevice, MYSID )
+    for user,udata in pairs( data ) do
+        r = r .. "            User " .. tostring(user) .. " ishome=" .. tostring(udata.ishome) .. 
+            " inlist=" .. table.concat( udata.inlist or {} ) .. " since " .. shortDate( udata.since ) .. EOL
+        for _,tdata in pairs( udata.tags or {} ) do
+            r = r .. "            " .. string.format("|%5d %q type %q status %q", tdata.id, tdata.name or "", (tdata.homeloc or 0)~=0 and "home" or "other", tdata.status or "") .. EOL
+        end
+    end
+    return r
+end
+
 function request( lul_request, lul_parameters, lul_outputformat )
     D("request(%1,%2,%3) luup.device=%4", lul_request, lul_parameters, lul_outputformat, luup.device)
     local action = lul_parameters['action'] or lul_parameters['command'] or ""
@@ -2933,16 +3024,31 @@ function request( lul_request, lul_parameters, lul_outputformat )
             sceneData = {}
             luup.variable_set( MYSID, "scenedata", "{}", pluginDevice )
         end
-        status, msg = pcall( loadScene, tonumber(lul_parameters.scene or 0), pluginDevice )
+        local status, msg = pcall( loadScene, tonumber(lul_parameters.scene or 0), pluginDevice )
         return json.encode( { status=status,message=msg } ), "application/json"
 
     elseif action == "summary" then
         local r = ""
-        r = r .. string.rep("*", 29) .. " LOGIC SUMMARY REPORT " .. string.rep("*", 29) .. EOL
+        r = r .. string.rep("*", 51) .. " REACTOR LOGIC SUMMARY REPORT " .. string.rep("*", 51) .. EOL
         r = r .. "   Version: " .. tostring(_PLUGIN_VERSION) .. " config " .. tostring(_CONFIGVERSION) .. EOL
         r = r .. "Local time: " .. os.date("%Y-%m-%dT%H:%M:%S%z") .. ", DST=" .. tostring(luup.variable_get( MYSID, "LastDST", pluginDevice )) .. EOL
         r = r .. "House mode: " .. tostring(luup.variable_get( MYSID, "HouseMode", pluginDevice )) .. EOL
         r = r .. "  Sun data: " .. tostring(luup.variable_get( MYSID, "sundata", pluginDevice )) .. EOL
+        if geofenceMode ~= 0 then
+            r = r .. "  Geofence: running in " .. (geofenceMode < 0 and "long" or "quick") .. " mode." .. EOL
+            local status, p = pcall( showGeofenceData )
+            if status then 
+                r = r .. p
+            else
+                r = r .. "            ? " .. tostring(p) .. EOL
+            end
+        else
+            r = r .. "  Geofence: not running" .. EOL
+        end
+        if hasBattery then
+            r = r .. "     Power: " .. tostring(luup.variable_get( MYSID, "SystemPowerSource", pluginDevice ))
+            r = r .. ", battery level " .. tostring(luup.variable_get( MYSID, "SystemBatteryLevel", pluginDevice )) .. EOL
+        end
         for n,d in pairs( luup.devices ) do
             if d.device_type == RSTYPE and ( deviceNum==nil or n==deviceNum ) then
                 local status = ( ( getVarNumeric( "Armed", 0, n, SENSOR_SID ) ~= 0 ) and " armed" or "" )

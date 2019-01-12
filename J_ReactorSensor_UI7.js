@@ -245,9 +245,19 @@ var ReactorSensor = (function(api, $) {
 
         var ud = api.getUserData();
         userIx = {};
-        for ( ix=0; ix<(ud.users || {}).length; ++ix ) {
-            userIx[ud.users[ix].id] = ud.users[ix].Name;
+        for ( ix=0; ix<(ud.users || []).length; ++ix ) {
+            userIx[ud.users[ix].id] = { name: ud.users[ix].Name || ud.users[ix].id };
         }
+        jQuery.each( ud.usergeofences || [], function( ix, fobj ) {
+            userIx[ fobj.iduser ].tags = {};
+            jQuery.each( fobj.geotags || [], function( iy, gobj ) {
+                userIx[ fobj.iduser ].tags[ gobj.id ] = {
+                    id: gobj.id,
+                    ishome: gobj.ishome,
+                    name: gobj.name
+                };
+            });
+        });
     }
 
     /**
@@ -451,19 +461,33 @@ var ReactorSensor = (function(api, $) {
 
             case 'ishome':
                 t = ( cond.value || "" ).split(/,/);
-                if ( t.length < 1 || t[0] == "" ) {
-                    str += cond.operator === "is not" ? "no user is home" : "any user is home";
-                } else {
-                    /* Replace IDs with names for display */
-                    for ( k=0; k<t.length; ++k ) {
-                        t[k] = userIx[t[k]] ? userIx[t[k]] : ( t[k] + '?' );
-                    }
-                    if ( t.length == 1 ) {
-                        str += t[0];
+                if ( "at" === cond.operator ) {
+                    var uu = userIx[t[0]];
+                    if ( undefined === uu ) {
+                        str += String(t[0]) + " at location " + String(t[1]);
                     } else {
-                        str += " any of " + t.join(', ');
+                        var nn = uu.name || t[0];
+                        if ( uu.tags && uu.tags[t[1]] ) {
+                            str += nn + " at " + uu.tags[t[1]].name;
+                        } else {
+                            str += nn + " at location " + t[1];
+                        }
                     }
-                    str += " " + ( cond.operator || "is" ) + " home";
+                } else {
+                    if ( t.length < 1 || t[0] == "" ) {
+                        str += cond.operator === "is not" ? "no user is home" : "any user is home";
+                    } else {
+                        /* Replace IDs with names for display */
+                        for ( k=0; k<t.length; ++k ) {
+                            t[k] = userIx[t[k]] ? userIx[t[k]].name : ( t[k] + '?' );
+                        }
+                        if ( t.length == 1 ) {
+                            str += t[0];
+                        } else {
+                            str += " any of " + t.join(', ');
+                        }
+                        str += " " + ( cond.operator || "is" ) + " home";
+                    }
                 }
                 break;
 
@@ -833,9 +857,20 @@ var ReactorSensor = (function(api, $) {
                 removeConditionProperties( cond, "operator,value" );
                 cond.operator = jQuery("div.params select.geofencecond", row).val() || "is";
                 res = [];
-                jQuery("input#opts:checked", row).each( function( ix, control ) {
-                    res.push( control.value /* DOM element */ );
-                });
+                if ( "at" === cond.operator ) {
+                    res[0] = jQuery( 'select#userid', row ).val() || "";
+                    res[1] = jQuery( 'select#location', row ).val() || "";
+                    if ( "" === res[0] ) {
+                        jQuery( 'select#userid', row ).addClass( 'tberror' );
+                    }
+                    if ( "" === res[1] ) {
+                        jQuery( 'select#location', row ).addClass( 'tberror' );
+                    }
+                } else {
+                    jQuery("input#opts:checked", row).each( function( ix, control ) {
+                        res.push( control.value /* DOM element */ );
+                    });
+                }
                 cond.value = res.join( ',' );
                 break;
 
@@ -1116,6 +1151,59 @@ var ReactorSensor = (function(api, $) {
     }
 
     /**
+     *
+     */
+    function updateGeofenceLocations( row, loc ) {
+        var user = jQuery( 'select#userid', row ).val() || "";
+        var mm = jQuery( 'select#location', row );
+        mm.empty();
+        if ( "" !== user ) {
+            var ud = api.getUserData();
+            for ( var k=0; k<(ud.usergeofences || []).length; ++k ) {
+                if ( ud.usergeofences[k].iduser == user ) {
+                    mm.append( jQuery( '<option/>' ).val( "" ).text( '--choose location--' ) );
+                    jQuery.each( ud.usergeofences[k].geotags || [], function( ix, v ) {
+                        mm.append( jQuery( '<option/>' ).val( v.id ).text( v.name ) );
+                    });
+                    var el = jQuery( 'option[value="' + (loc || "") + '"]' );
+                    if ( el.length == 0 ) {
+                        mm.append( jQuery( '<option/>' ).val( loc )
+                            .text( "Deleted location " + String(loc) )
+                        );
+                    }
+                    mm.val( loc || "" );
+                    break;
+                }
+            }
+        }
+    }
+
+    /**
+     *
+     */
+    function handleGeofenceUserChange( ev ) {
+        var row = jQuery( ev.currentTarget ).closest( 'div.conditionrow' );
+        updateGeofenceLocations( row, "" );
+        handleConditionRowChange( ev );
+    }
+
+    /**
+     *
+     */
+    function handleGeofenceOperatorChange( ev ) {
+        var row = jQuery( ev.currentTarget ).closest( 'div.conditionrow' );
+        var val = jQuery( ev.currentTarget ).val() || "is";
+        if ( "at" === val ) {
+            jQuery( 'select#userid,select#location', row ).show();
+            jQuery( 'label,input#opts', row ).hide();
+        } else {
+            jQuery( 'select#userid,select#location', row ).hide();
+            jQuery( 'label,input#opts', row ).show();
+        }
+        handleConditionRowChange( ev );
+    }
+
+    /**
      * Set condition for type
      */
     function setConditionForType( cond, row ) {
@@ -1383,20 +1471,40 @@ var ReactorSensor = (function(api, $) {
 
             case 'ishome':
                 container.append(
-                    '<select class="geofencecond form-control form-control-sm"><option value="is">Any selected user is home</option><option value="is not">Any selected user is NOT home</option></select>');
+                    '<select class="geofencecond form-control form-control-sm"><option value="is">Any selected user is home</option><option value="is not">Any selected user is NOT home</option><option value="at">Selected user in geofence</option></select>');
+                mm = jQuery( '<select id="userid" class="form-control form-control-sm"/>' );
+                mm.append( jQuery( '<option/>' ).val("").text('--choose user--') );
                 for ( k in userIx ) {
                     if ( userIx.hasOwnProperty( k ) ) {
-                        el = jQuery( '<label class="checkbox-inline"/>' ).text( userIx[k] || k );
+                        el = jQuery( '<label class="checkbox-inline"/>' ).text( ( userIx[k] || {} ).name || k );
                         el.append( jQuery( '<input type="checkbox" id="opts" value="' + k + '">' ) );
                         container.append( el );
+                        mm.append( jQuery( '<option/>' ).val( k ).text( ( userIx[k] || {} ).name || k ) );
                     }
                 }
+                container.append( mm );
+                container.append( '<select id="location" class="form-control form-control-sm"/>' );
                 jQuery("input#opts", container).on( 'change.reactor', handleConditionRowChange );
-                jQuery("select.geofencecond", container).on( 'change.reactor', handleConditionRowChange )
+                jQuery("select.geofencecond", container)
+                    .on( 'change.reactor', handleGeofenceOperatorChange )
                     .val( cond.operator || "is" );
-                (cond.value || "").split(',').forEach( function( val ) {
-                    jQuery('input#opts[value="' + val + '"]', container).prop('checked', true);
-                });
+                jQuery("select#userid", container).on( 'change.reactor', handleGeofenceUserChange );
+                jQuery("select#location", container).on( 'change.reactor', handleConditionRowChange );
+                if ( cond.operator == "at" ) {
+                    jQuery( 'label,input#opts', container ).hide();
+                    jQuery( 'select#userid,select#location', container ).show();
+                    mm = ( cond.value || "" ).split(',');
+                    if ( mm.length > 0 ) {
+                        jQuery( 'select#userid', container ).val( mm[0] );
+                        updateGeofenceLocations( container, mm[1] );
+                    }
+                } else {
+                    jQuery( 'label,input#opts', container ).show();
+                    jQuery( 'select#userid,select#location', container ).hide();
+                    (cond.value || "").split(',').forEach( function( val ) {
+                        jQuery('input#opts[value="' + val + '"]', container).prop('checked', true);
+                    });
+                }
                 break;
 
             case 'reload':
@@ -2135,7 +2243,7 @@ var ReactorSensor = (function(api, $) {
             }
         }
     }
-    
+
     function updateToolsVersionDisplay() {
         jQuery.ajax({
             url: "https://www.toggledbits.com/deviceinfo/checkupdate.php",
@@ -2166,7 +2274,7 @@ var ReactorSensor = (function(api, $) {
             jQuery( 'span#di-ver-info' ).text( "Information about the current version is not available." );
             console.log( "deviceInfo version check failed: " + String(errorThrown) );
         });
-    }    
+    }
 
     function doTools()
     {
@@ -2312,7 +2420,7 @@ var ReactorSensor = (function(api, $) {
                 msg.text( "The update failed; Vera busy/restarting. Try again in a moment." );
             });
         });
-        
+
         updateToolsVersionDisplay();
     }
 
@@ -2432,14 +2540,18 @@ var ReactorSensor = (function(api, $) {
 
                     case 'ishome':
                         var t = (currentValue || "").split( /,/ );
-                        /* Replace IDs with names for display */
-                        if ( t.length > 0 && t[0] !== "" ) {
-                            for ( var k=0; k<t.length; ++k ) {
-                                t[k] = userIx[t[k]] ? userIx[t[k]] : ( t[k] + '?' );
-                            }
-                            currentValue = t.join(', ');
+                        if ( "at" === cond.operator ) {
+                            // ???
                         } else {
-                            currentValue = "";
+                            /* Replace IDs with names for display */
+                            if ( t.length > 0 && t[0] !== "" ) {
+                                for ( var k=0; k<t.length; ++k ) {
+                                    t[k] = userIx[t[k]] ? userIx[t[k]].name : ( t[k] + '?' );
+                                }
+                                currentValue = t.join(', ');
+                            } else {
+                                currentValue = "";
+                            }
                         }
                         break;
 
