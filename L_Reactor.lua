@@ -2820,24 +2820,32 @@ function request( lul_request, lul_parameters, lul_outputformat )
 
     elseif action == "summary" then
         local r = ""
-        r = r .. string.rep("*", 29) .. " LOGIC SUMMARY REPORT " .. string.rep("*", 29) .. EOL
+        r = r .. string.rep("*", 51) .. " REACTOR LOGIC SUMMARY REPORT " .. string.rep("*", 51) .. EOL
         r = r .. "   Version: " .. tostring(_PLUGIN_VERSION) .. " config " .. tostring(_CONFIGVERSION) .. EOL
         r = r .. "Local time: " .. os.date("%Y-%m-%dT%H:%M:%S%z") .. ", DST=" .. tostring(luup.variable_get( MYSID, "LastDST", pluginDevice )) .. EOL
         r = r .. "House mode: " .. tostring(luup.variable_get( MYSID, "HouseMode", pluginDevice )) .. EOL
         r = r .. "  Sun data: " .. tostring(luup.variable_get( MYSID, "sundata", pluginDevice )) .. EOL
+        if hasBattery then
+            r = r .. "     Power: " .. tostring(luup.variable_get( MYSID, "SystemPowerSource", pluginDevice ))
+            r = r .. ", battery level " .. tostring(luup.variable_get( MYSID, "SystemBatteryLevel", pluginDevice )) .. EOL
+        end
         for n,d in pairs( luup.devices ) do
             if d.device_type == RSTYPE and ( deviceNum==nil or n==deviceNum ) then
+                if sensorState[tostring(n)].condState == nil then
+                    sensorState[tostring(n)].condState = loadCleanState( n )
+                end
+                local status = ( ( getVarNumeric( "Armed", 0, n, SENSOR_SID ) ~= 0 ) and " armed" or "" )
+                status = status .. ( ( getVarNumeric("Tripped", 0, n, SENSOR_SID ) ~= 0 ) and " tripped" or "" )
                 r = r .. string.rep( "=", 132 ) .. EOL
-                r = r .. string.format("%s (#%d)", tostring(d.description), n) .. EOL
-                r = r .. string.format("    Message/status: %s", luup.variable_get( RSSID, "Message", n ) or "" ) .. EOL
-                local s = luup.variable_get( RSSID, "cdata", n ) or ""
-                local cdata,_,err = json.decode( s )
+                r = r .. string.format("%s (#%d)%s", tostring(d.description), n, status) .. EOL
+                local cdata,err = getVarJSON( "cdata", {}, n, RSSID )
                 if err then
-                    r = r .. "**** UNPARSEABLE CONFIGURATION: " .. err .. EOL .. " in " .. s
+                    r = r .. "**** UNPARSEABLE CONFIGURATION: " .. err .. EOL
                     cdata = {}
                 end
-                r = r .. string.format("    Version %d.%d %s", cdata.version or 0, cdata.timestamp or 0, os.date("%x %X", c   1046 data.timestamp or 0)) .. EOL
-                s = getVarNumeric( "TestTime", 0, n, RSSID )
+                r = r .. string.format("    Version %d.%d %s", cdata.version or 0, cdata.timestamp or 0, os.date("%x %X", cdata.timestamp or 0)) .. EOL
+                r = r .. string.format("    Message/status: %s", luup.variable_get( RSSID, "Message", n ) or "" ) .. EOL
+                local s = getVarNumeric( "TestTime", 0, n, RSSID )
                 if s ~= 0 then
                     r = r .. string.format("    Test time set: %s", os.date("%Y-%m-%d %H:%M", s)) .. EOL
                 end
@@ -2858,19 +2866,23 @@ function request( lul_request, lul_parameters, lul_outputformat )
                 end
                 local ng=0
                 for _,gc in ipairs( cdata.conditions or {} ) do
+                    local gs = (sensorState[tostring(n)].condState or {})[gc.groupid] or {}
                     ng = ng + 1
-                    r = r .. "    Group #" .. ng .. " <" .. gc.groupid .. ">" ..
+                    r = r .. "    Group #" .. ng .. " <" .. gc.groupid .. "> " ..
+                        ( gs.evalstate and "true" or "false" ) .. " as of " .. shortDate( gs.evalstamp ) ..
                         ( gc.disabled and " (disabled)" or "" ) .. EOL
                     for _,cond in ipairs( gc.groupconditions or {} ) do
-                        -- ??? TO DO: Add cstate
-                        r = r .. "        (" .. ( cond.type or "?type?" ) .. ") "
+                        local cs = (sensorState[tostring(n)].condState or {})[cond.id] or {}
+                        r = r .. "        =" .. ( cs.evalstate and "T" or "f" )
+                        r = r .. " (" .. ( cond.type or "?type?" ) .. ") "
                         if cond.type == "service" then
                             r = r .. string.format("%s (%d) ", ( luup.devices[cond.device]==nil ) and ( "*** missing " .. ( cond.devicename or "unknown" ) ) or
                                 luup.devices[cond.device].description, cond.device )
                             r = r .. string.format("%s/%s %s %s", cond.service or "?", cond.variable or "?", cond.operator or cond.condition or "?",
                                 cond.value or "")
                             if cond.duration then
-                                r = r .. " for " .. cond.duration .. "s"
+                                r = r .. " for " .. ( cond.duration_op or "ge" ) .. 
+                                    " " .. cond.duration .. "s"
                             end
                             if cond.after then
                                 if ( cond.aftertime or 0 ) > 0 then
@@ -2879,7 +2891,8 @@ function request( lul_request, lul_parameters, lul_outputformat )
                                 r = r .. " after " .. cond.after
                             end
                             if cond.repeatcount then
-                                r = r .. " repeat " .. cond.repeatcount .. " within " .. cond.repeatwithin .. "s"
+                                r = r .. " repeat " .. cond.repeatcount ..
+                                    " within " .. ( cond.repeatwithin or 60 ).. "s"
                             end
                             if (cond.latch or 0) ~= 0 then
                                 r = r .. " (latching)"
@@ -2896,10 +2909,11 @@ function request( lul_request, lul_parameters, lul_outputformat )
                         else
                             r = r .. json.encode(cond)
                         end
-                        local cs = (sensorState[tostring(n)].condState or {})[cond.id] or {}
                         r = r .. " ["
+                        r = r .. ( cs.laststate and "true" or "false" ) .. "/" .. (cs.evalstate and "true" or "false" )
+                        r = r .. " as of " .. shortDate( cs.statestamp ) .. "/" .. shortDate( cs.evalstamp ) .. "; "
                         if cs.priorvalue then r = r .. tostring(cs.priorvalue) .. " => " end
-                        r = r .. tostring(cs.lastvalue) .. " at " .. os.date("%x %X", cs.valuestamp or 0) .. "]"
+                        r = r .. tostring(cs.lastvalue) .. " at " .. shortDate( cs.valuestamp ) .. "]"
                         r = r .. " <" .. cond.id .. ">"
                         r = r .. EOL
                     end
@@ -3017,9 +3031,9 @@ function request( lul_request, lul_parameters, lul_outputformat )
             if v.device_type == RSTYPE then
                 st.sensors[tostring(k)] = { name=v.description, devnum=k }
                 local x = luup.variable_get( RSSID, "cdata", k ) or "{}"
-                local c = json.decode( x )
+                local c,_,err = json.decode( x )
                 if not c then
-                    st.sensors[tostring(k)]._comment = "Unable to parse configuration"
+                    st.sensors[tostring(k)]._comment = "Unable to parse configuration: " .. tostring(err)
                 else
                     st.sensors[tostring(k)].config = c
                 end
@@ -3027,11 +3041,13 @@ function request( lul_request, lul_parameters, lul_outputformat )
         end
         local bdata = json.encode( st )
         if action == "backup" then
-            local bfile = "/etc/cmh-ludl/reactor-config-backup.json"
+            local bfile
             if isOpenLuup then
                 local loader = require "openLuup.loader"
                 if loader.find_file == nil then return json.encode{ status=false, message="Your openLuup is out of date; please update to 2018.11.21 or higher." } end
                 bfile = loader.find_file( "L_Reactor.lua" ):gsub( "L_Reactor.lua$", "" ) .. "reactor-config-backup.json"
+            else
+                bfile = "/etc/cmh-ludl/reactor-config-backup.json"
             end
             local f = io.open( bfile, "w" )
             if f then
@@ -3040,8 +3056,9 @@ function request( lul_request, lul_parameters, lul_outputformat )
             else
                 error("ERROR can't write " .. bfile)
             end
+            return json.encode( { status=true, message="Done!", file=bfile } ), "application/json"
         end
-        return json.encode( { status=true, message="Done!", file=bfile } ), "application/json"
+        return bdata, "application/json"
 
     elseif action == "purge" then
         luup.variable_set( MYSID, "scenedata", "{}", pluginDevice )
