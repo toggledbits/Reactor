@@ -3771,7 +3771,6 @@ var ReactorSensor = (function(api, $) {
                         data.groups = data.groups || [];
                         data.groups.sort( function( a, b ) { return (a.delay||0) - (b.delay||0); });
                         for ( var ig=0; ig<(data.groups || []).length; ig++ ) {
-                            newRow;
                             var gr = data.groups[ig];
                             if ( 0 != (gr.delay || 0) ) {
                                 /* Delayed group -- insert delay action */
