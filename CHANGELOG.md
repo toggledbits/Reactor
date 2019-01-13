@@ -1,6 +1,8 @@
 # Change Log #
 
-## Version 2.0patch-190112 (stable branch)
+## Version 2.1 (released)
+
+This is primarily a fix release that corrects a number of UI errors that people have run into.
 
 * Enhancement: Use datalist on browsers that support it for entry of allowed value list (menu) fields, which creates more flexibility for the user in that the defined values are shown (and autocomplete), but other values can be entered (in case they are absent from enhancement data).
 * Enhancement: cleaner handling of optional parameters in enhanced services; handle all parameters in un-enhanced services as optional unless a default is known.
