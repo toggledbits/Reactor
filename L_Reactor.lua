@@ -2985,13 +2985,14 @@ local function getEvents( deviceNum )
     local resp = "    Events" .. EOL
     for _,e in ipairs( ( sensorState[tostring(deviceNum)] or {}).eventList or {} ) do
         resp = resp .. string.format("        %15s ", os.date("%x %X", e.when or 0) )
-        resp = resp .. ( e.event or "event?" ) .. ":"
+        resp = resp .. ( e.event or "event?" ) .. ": "
+        local d = {}
         for k,v in pairs(e) do
             if not ( k == "time" or k == "when" or k == "event" or ( k == "dev" and tostring(v)==tostring(deviceNum) ) ) then
-                resp = resp .. string.format(" %s=%s,", tostring(k), tostring(v))
+                table.insert( d, string.format("%s=%s", tostring(k), tostring(v)) )
             end
         end
-        resp = resp .. EOL
+        resp = resp .. table.concat( d, ", " ) .. EOL
     end
     return resp
 end
