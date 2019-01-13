@@ -413,12 +413,12 @@ var ReactorSensor = (function(api, $) {
                     if ( k === null || k.length !== 3 ) {
                         return spec + '???';
                     } else {
-                        t = parseInt( k[2] );
+                        var offs = parseInt( k[2] );
                         var str = ' ';
-                        if ( t < 0 ) {
-                            str = str + String(-t) + " mins before ";
-                        } else if ( t > 0 ) {
-                            str = str + String(t) + " mins after ";
+                        if ( offs < 0 ) {
+                            str = str + String(-offs) + " mins before ";
+                        } else if ( offs > 0 ) {
+                            str = str + String(offs) + " mins after ";
                         }
                         str = str + ( names[k[1]] || k[1] );
                         return str;
