@@ -719,6 +719,8 @@ local function stopScene( ctx, taskid, tdev )
     luup.variable_set( MYSID, "runscene", json.encode(sceneState), pluginDevice )
 end
 
+local stringify -- fwd decl
+
 -- Run Lua fragment for scene. Returns result,error
 local function execLua( fname, luafragment, extarg, tdev )
     D("execLua(%1,<luafragment>,%2,%3)", fname, extarg, tdev)
@@ -750,7 +752,6 @@ local function execLua( fname, luafragment, extarg, tdev )
         luaEnv.https = nil
         luaEnv.luaxp = nil
         -- Pre-declare these to keep metamethods from griping later
-        luaEnv.Reactor = {}
         luaEnv.reactor_device = false
         luaEnv.reactor_ext_arg = ""
         -- These stubs are replaced per-run
@@ -758,7 +759,11 @@ local function execLua( fname, luafragment, extarg, tdev )
         luaEnv.__reactor_getscript = function() end
         luaEnv.print =  function( ... )  -- luacheck: ignore 212
                             local dev = luaEnv.__reactor_getdevice() or 0
-                            local msg = table.concat( arg or {}, " " ) or ""
+                            local msg = ""
+                            for _,v in ipairs( arg or {} ) do
+                                msg = msg .. tostring( v or "(nil)" ) .. " "
+                            end
+                            msg = msg:gsub( "/r/n?", "/n" ):gsub( "%s+$", "" )
                             luup.log( ((luup.devices[dev] or {}).description or "?") ..
                                 " (" .. tostring(dev) .. ") [" .. tostring(luaEnv.__reactor_getscript() or "?") ..
                                 "] " .. msg)
@@ -786,6 +791,7 @@ local function execLua( fname, luafragment, extarg, tdev )
             rawset(t, n, v)
         end
         mt.__index = function(t, n) -- luacheck: ignore 212
+            if ( ( ( t.package or {} ).loaded or {} )[n] ) then return t.package.loaded[n] end -- hmmm
             local v = rawget(t, n)
             if v == nil and debug.getinfo(2, "S").what ~= "C" then
                 local dev = t.__reactor_getdevice()
@@ -845,6 +851,7 @@ local function execLua( fname, luafragment, extarg, tdev )
     -- Finally. Post our device environment and run the code.
     -- Add reactor_device and reactor_ext_arg for backwards compatibility
     luaEnv.Reactor = _R
+    luaEnv.Reactor.dump = stringify -- handy
     luaEnv.reactor_device = tdev -- legacy ???unused?
     luaEnv.reactor_ext_arg = extarg or "" -- legacy ???unused?
     luaEnv.__reactor_getdevice = function() return tdev end
@@ -856,7 +863,7 @@ local function execLua( fname, luafragment, extarg, tdev )
     luaEnv.Reactor = {} -- dispose of device context
     D("execLua() lua success=%3 return=(%2)%1", ret, type(ret), success)
     -- Scene return value must be exactly boolean false to stop scene.
-    return ret ~= false, success
+    return ret, not success and ret or false
 end
 
 local runScene -- forward declaration
@@ -1006,6 +1013,7 @@ local function execSceneGroups( tdev, taskid )
                         end
                     end
                     local more, err = execLua( fname, lua, nil, tdev )
+                    D("execSceneGroups() execLua returned %1,%2", more, err)
                     if err then
                         addEvent{ dev=tdev, event="abortscene", scene=scd.id, sceneName=scd.name or scd.id, reason="Lua error: " .. tostring(err) }
                         L({level=1,msg="%1 (%2) aborting scene %3 Lua execution at group step %4, Lua run failed: %5"},
@@ -1014,12 +1022,14 @@ local function execSceneGroups( tdev, taskid )
                         -- Throw on the brakes! (stop all scenes in context)
                         stopScene( tdev, nil, tdev )
                         return nil
-                    elseif not more then
+                    elseif more == false then -- N.B. specific test to match exactly boolean type false (but not nil)
                         addEvent{ dev=tdev, event="abortscene", scene=scd.id, sceneName=scd.name or scd.id, reason="Lua returned (" .. type(more) .. ")" .. tostring(more) }
                         L("%1 (%2) scene %3 Lua at step %4 returned (%5)%6, stopping actions.",
                             luup.devices[tdev].description, tdev, scd.id, ix, type(more), more)
                         stopScene( nil, taskid, tdev ) -- stop just this scene.
                         return nil
+                    else
+                        addEvent{ dev=tdev, event="runlua", scene=scd.id, sceneName=scd.name or scd.id, reason="RunLua success, returned (" .. type(more) .. ")" .. tostring(more) }
                     end
                 else
                     L({level=1,msg="BUG: Unhandled action type %1 at %2 in scene %3 for %4 (%5)"},
@@ -1086,7 +1096,7 @@ local function execScene( scd, tdev, options )
             L{level=2,msg="Lua:\n"..luafragment} -- concat to avoid formatting
             return
         end
-        if not more then
+        if more == false then -- N.B. specific test to match exactly boolean type false (but not nil)
             addEvent{ dev=tdev, event="abortscene", scene=scd.id, sceneName=scd.name or scd.id, reason="Lua returned (" .. type(more) .. ")" .. tostring(more) }
             L("%1 (%2) scene %3 Lua returned (%4)%5, scene run aborted.",
                 luup.devices[tdev].description, tdev. scd.id, type(more), more)
@@ -2986,7 +2996,10 @@ local function getEvents( deviceNum )
     return resp
 end
 
-local function alt_json_encode( st )
+-- A "safer" JSON encode for Lua structures that may contain recursive refereance.
+-- This output is intended for display ONLY, it is not to be used for data transfer.
+local function alt_json_encode( st, seen )
+    seen = seen or {}
     str = "{"
     local comma = false
     for k,v in pairs(st) do
@@ -2994,17 +3007,29 @@ local function alt_json_encode( st )
         comma = true
         str = str .. '"' .. k .. '":'
         if type(v) == "table" then
-            str = str .. alt_json_encode( v )
-        elseif type(v) == "number" then
-            str = str .. tostring(v)
-        elseif type(v) == "boolean" then
-            str = str .. ( v and "true" or "false" )
+            if seen[v] then str = str .. '"(recursion)"'
+            else 
+                seen[v] = k
+                str = str .. alt_json_encode( v, seen )
+            end
         else
-            str = str .. string.format("%q", tostring(v))
+            str = str .. stringify( v, seen )
         end
     end
     str = str .. "}"
     return str
+end 
+
+-- Stringify a primitive type
+stringify = function( v, seen )
+    if v == nil then
+        return "(nil)"
+    elseif type(v) == "number" or type(v) == "boolean" then 
+        return tostring(v)
+    elseif type(v) == "table" then
+        return alt_json_encode( v, seen )
+    end
+    return string.format( "%q", tostring(v) )
 end
 
 local function shortDate( d )
