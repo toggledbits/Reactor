@@ -2833,12 +2833,12 @@ function request( lul_request, lul_parameters, lul_outputformat )
         local r = ""
         r = r .. string.rep("*", 51) .. " REACTOR LOGIC SUMMARY REPORT " .. string.rep("*", 51) .. EOL
         r = r .. "   Version: " .. tostring(_PLUGIN_VERSION) .. " config " .. tostring(_CONFIGVERSION) .. EOL
-        r = r .. "Local time: " .. os.date("%Y-%m-%dT%H:%M:%S%z") .. ", DST=" .. tostring(luup.variable_get( MYSID, "LastDST", pluginDevice )) .. EOL
-        r = r .. "House mode: " .. tostring(luup.variable_get( MYSID, "HouseMode", pluginDevice )) .. EOL
-        r = r .. "  Sun data: " .. tostring(luup.variable_get( MYSID, "sundata", pluginDevice )) .. EOL
+        r = r .. "Local time: " .. os.date("%Y-%m-%dT%H:%M:%S%z") .. ", DST=" .. tostring(luup.variable_get( MYSID, "LastDST", pluginDevice ) or "") .. EOL
+        r = r .. "House mode: " .. tostring(luup.variable_get( MYSID, "HouseMode", pluginDevice ) or "") .. EOL
+        r = r .. "  Sun data: " .. tostring(luup.variable_get( MYSID, "sundata", pluginDevice ) or "") .. EOL
         if hasBattery then
-            r = r .. "     Power: " .. tostring(luup.variable_get( MYSID, "SystemPowerSource", pluginDevice ))
-            r = r .. ", battery level " .. tostring(luup.variable_get( MYSID, "SystemBatteryLevel", pluginDevice )) .. EOL
+            r = r .. "     Power: " .. tostring(luup.variable_get( MYSID, "SystemPowerSource", pluginDevice ) or "")
+            r = r .. ", battery level " .. tostring(luup.variable_get( MYSID, "SystemBatteryLevel", pluginDevice ) or "") .. EOL
         end
         for n,d in pairs( luup.devices ) do
             if d.device_type == RSTYPE and ( deviceNum==nil or n==deviceNum ) then
