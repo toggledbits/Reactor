@@ -774,6 +774,8 @@ var ReactorSensor = (function(api, $) {
         /* Make a new service/variable menu and replace it on the row. */
         var newMenu = makeVariableMenu( cond.device, cond.service, cond.variable );
         jQuery("select.varmenu", row).replaceWith( newMenu );
+        jQuery("select.varmenu", row).off( 'change.reactor' ).on( 'change.reactor', handleConditionRowChange );
+
         updateConditionRow( row ); /* pass it on */
     }
 
@@ -3759,7 +3761,7 @@ var ReactorSensor = (function(api, $) {
                         timeout: 5000
                     }).done( function( data, statusText, jqXHR ) {
                         var pred = row;
-                        var newrow;
+                        var newRow;
                         if ( "" !== (data.lua || "") ) {
                             /* First action in first group is scene Lua if it's there */
                             var lua = (data.encoded_lua || 0) != 0 ? atob(data.lua) : data.lua;
