@@ -907,6 +907,41 @@ var ReactorSensor = (function(api, $) {
         configModified = true;
         updateConditionRow( row, jQuery( el ) );
     }
+    
+    /** 
+     * Update current value display for service condition
+     */
+    function updateCurrentServiceValue( row ) {
+        var device = parseInt( jQuery("select.devicemenu", row).val() );
+        var service = jQuery("select.varmenu", row).val() || "";
+        var variable = service.replace( /^[^\/]+\//, "" );
+        service = service.replace( /\/.*$/, "" );
+        var span = jQuery( 'span#currval', row );
+        if ( !isNaN(device) && "" !== service && "" != variable ) {
+            var val = api.getDeviceState( device, service, variable );
+            if ( undefined === val ) {
+                span.text( 'Current value: (not set)' );
+            } else {
+                span.text( 'Current value: ' + String(val) );
+            }
+        } else {
+            span.empty();
+        }
+    }
+    
+    /**
+     * Handler for variable change.
+     */
+    function handleConditionVarChange( ev ) {
+        var el = ev.currentTarget;
+        var row = jQuery( el ).closest('div.conditionrow');
+
+        updateCurrentServiceValue( row );
+
+        /* Same closing as handleConditionRowChange() */
+        configModified = true;
+        updateConditionRow( row, jQuery( el ) );
+    }
 
     /**
      * Handler for operator change
@@ -973,6 +1008,9 @@ var ReactorSensor = (function(api, $) {
         /* Make a new service/variable menu and replace it on the row. */
         var newMenu = makeVariableMenu( cond.device, cond.service, cond.variable );
         jQuery("select.varmenu", row).replaceWith( newMenu );
+        jQuery("select.varmenu", row).off( 'change.reactor' ).on( 'change.reactor', handleConditionVarChange );
+        updateCurrentServiceValue( row );
+
         updateConditionRow( row ); /* pass it on */
     }
 
@@ -1246,14 +1284,19 @@ var ReactorSensor = (function(api, $) {
                 container.append( makeServiceOpMenu( cond.operator ) );
                 container.append('<input type="text" id="value" class="form-control form-control-sm" autocomplete="off">');
                 container.append('<i class="material-icons condmore" title="Show Options">expand_more</i>');
+                container.append(' ');
+                container.append('<span id="currval"/>');
+
                 op = serviceOpsIndex[cond.operator || ""];
                 jQuery( "input#value", container).val( cond.value || "" )
                     .css( "visibility", ( undefined !== op && 0 === op.args ) ? "hidden" : "visible" )
                     .on( 'change.reactor', handleConditionRowChange );
-                jQuery("select.varmenu", container).on( 'change.reactor', handleConditionRowChange );
+                jQuery("select.varmenu", container).on( 'change.reactor', handleConditionVarChange );
                 jQuery("select.opmenu", container).on( 'change.reactor', handleConditionOperatorChange );
                 jQuery("select.devicemenu", container).on( 'change.reactor', handleDeviceChange );
                 jQuery("i.condmore", container).on( 'click.reactor', handleExpandOptionsClick );
+                
+                updateCurrentServiceValue( container );
                 break;
 
             case 'housemode':
