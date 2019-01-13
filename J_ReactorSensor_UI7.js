@@ -1869,12 +1869,6 @@ var ReactorSensor = (function(api, $) {
             jQuery("button.addcond", gel).on( 'click.reactor', handleAddConditionClick );
         }
 
-        /* Insert add group button row (not a divider but looks similar) */
-        jQuery("div#tab-conds.reactortab").append('<div class="row"><div class="col-sm-5"><hr></div>' +
-            '<div class="col-sm-2 text-center"><button id="addgroup" class="btn btn-sm btn-primary">Add Group</button></div>' +
-            '<div class="col-sm-5"><hr></div>' +
-            '</div>');
-        jQuery("button#addgroup").on( 'click.reactor', handleAddGroupClick );
         jQuery("button#saveconf").on( 'click.reactor', handleSaveClick );
         jQuery("button#revertconf").on( 'click.reactor', handleRevertClick );
 
@@ -2941,6 +2935,14 @@ var ReactorSensor = (function(api, $) {
             html += footer();
 
             api.setCpanelContent(html);
+
+            /* Insert add group button row (not a divider but looks similar) */
+            var container = jQuery("div#tab-conds.reactortab");
+            container.append('<div class="row"><div class="col-sm-5"><hr></div>' +
+                '<div class="col-sm-2 text-center"><button id="addgroup" class="btn btn-sm btn-primary">Add Group</button></div>' +
+                '<div class="col-sm-5"><hr></div>' +
+                '</div>');
+            jQuery("button#addgroup", container).on( 'click.reactor', handleAddGroupClick );
 
             redrawConditions();
 
