@@ -1818,30 +1818,37 @@ local function evaluateCondition( cond, grp, tdev )
             local offs = lastTrue - baseTime
             local nint = math.floor( offs / interval ) + 1
             local nextTrue = baseTime + nint * interval
-            D("evaluateCondition() current state is %1 as of %2, next %3", cs.laststate, lastTrue, nextTrue)
+            -- An interval is considered missed if we're a minute or more late.
+            local missed = now >= ( nextTrue + 60 )
+            D("evaluateCondition() current state is %1 as of %2, next %3, missed %4", cs.laststate, lastTrue, nextTrue, missed)
             if cs.laststate then
-                -- We are currently true; schedule next interval and go false
+                -- We are currently true (in a pulse); schedule next interval.
                 while nextTrue <= now do nextTrue = nextTrue + interval end -- ??? use maths
                 D("evaluateCondition() resetting, next %1", nextTrue)
-                scheduleTick( { id=tdev,info="interval "..cond.id }, nextTrue )
-                cs.lastvalue = lastTrue -- preserve reference point
-                return now,false
-            else
-                -- Check to see if we've missed an interval
-                if nextTrue > ( lastTrue + interval ) then
-                    D("evaluateConditions() we must missed an interval! Forcing true...")
-                    nextTrue = now
+                scheduleTick( { id=tdev, info="interval "..cond.id }, nextTrue )
+                return lastTrue,false
+            end
+            -- Not in a pulse. Announce a missed interval if that happened.
+            if missed then
+                local late = now - nextTrue
+                D("evaluateCondition() missed interval %2 by %1!", late, nextTrue)
+                addEvent{ dev=tdev, event="notify", cond=cond.id, delay=late,
+                    message="Detected missed interval " .. os.date("%c", nextTrue ) ..
+                    ( cond.skipmissed and " (skipped)" or "" )
+                }
+                -- If we skip missed interval, just reschedule.
+                if cond.skipmissed then
+                    scheduleTick( { id=tdev, info="interval "..cond.id }, nextTrue )
+                    return lastTrue,false
                 end
-                -- We are false; have we reached edge time yet?
-                if now < nextTrue then
-                    -- Haven't met interval yet.
-                    local delay = nextTrue - now
-                    D("evaluateCondition() too early, delaying %1 seconds", delay)
-                    scheduleDelay( { id=tdev,info="interval "..cond.id }, delay )
-                    cs.lastvalue = lastTrue -- preserve reference point
-                    return now,false
-                end
-                D("evaluationCondition() interval edge met or exceeded!")
+            end
+            -- Is it time yet?
+            if now < nextTrue then
+                -- No...
+                local delay = nextTrue - now
+                D("evaluateCondition() too early, delaying %1 seconds", delay)
+                scheduleDelay( { id=tdev,info="interval "..cond.id }, delay )
+                return lastTrue,false
             end
         else
             -- First run. Delay until the first interval.
