@@ -3068,7 +3068,7 @@ var ReactorSensor = (function(api, $) {
                     /* Menu, can be array of strings or objects */
                     if ( undefined !== window.HTMLDataListElement ) {
                         /* Use datalist when supported (allows more flexible entry) */
-                        var dlid = (action.service + '-' + action.name + '-' + parm.name).replace( /[^a-z0-9-]/ig, "-" );
+                        var dlid = (action.service + '-' + ( action.name || action.action ) + '-' + parm.name).replace( /[^a-z0-9-]/ig, "-" );
                         if ( 0 == jQuery( 'datalist#'+dlid ).length ) {
                             /* Datalist doesn't exist yet, create it */
                             inp = jQuery('<datalist class="argdata" id="' + dlid + '"/>');
