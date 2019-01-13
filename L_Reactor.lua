@@ -743,7 +743,10 @@ local function execLua( fname, luafragment, extarg, tdev )
         luaEnv.__reactor_getscript = function() end
         luaEnv.print =  function( ... )  -- luacheck: ignore 212
                             local dev = luaEnv.__reactor_getdevice() or 0
-                            local msg = table.concat( arg or {}, " " ) or ""
+                            local msg = ""
+                            for _,v in ipairs( arg or {} ) do
+                                msg = msg .. tostring(v or "(nil)") .. " "
+                            end
                             luup.log( ((luup.devices[dev] or {}).description or "?") ..
                                 " (" .. tostring(dev) .. ") [" .. tostring(luaEnv.__reactor_getscript() or "?") ..
                                 "] " .. msg)
@@ -771,6 +774,7 @@ local function execLua( fname, luafragment, extarg, tdev )
             rawset(t, n, v)
         end
         mt.__index = function(t, n) -- luacheck: ignore 212
+            if ( ( ( t.package or {} ).loaded or {} )[n] ) then return t.package.loaded[n] end -- hmmm
             local v = rawget(t, n)
             if v == nil and debug.getinfo(2, "S").what ~= "C" then
                 local dev = t.__reactor_getdevice()
@@ -998,7 +1002,7 @@ local function execSceneGroups( tdev, taskid )
                         -- Throw on the brakes! (stop all scenes in context)
                         stopScene( tdev, nil, tdev )
                         return nil
-                    elseif not more then
+                    elseif more == false then -- N.B. use openLuup semantics, seems correct.
                         addEvent{ dev=tdev, event="abortscene", scene=scd.id, sceneName=scd.name or scd.id, reason="Lua returned (" .. type(more) .. ")" .. tostring(more) }
                         L("%1 (%2) scene %3 Lua at step %4 returned (%5)%6, stopping actions.",
                             luup.devices[tdev].description, tdev, scd.id, ix, type(more), more)
@@ -1070,7 +1074,7 @@ local function execScene( scd, tdev, options )
             L{level=2,msg="Lua:\n"..luafragment} -- concat to avoid formatting
             return
         end
-        if not more then
+        if more == false then
             addEvent{ dev=tdev, event="abortscene", scene=scd.id, sceneName=scd.name or scd.id, reason="Lua returned (" .. type(more) .. ")" .. tostring(more) }
             L("%1 (%2) scene %3 Lua returned (%4)%5, scene run aborted.",
                 luup.devices[tdev].description, tdev. scd.id, type(more), more)
