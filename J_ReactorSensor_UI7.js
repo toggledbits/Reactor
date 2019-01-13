@@ -35,21 +35,26 @@ var ReactorSensor = (function(api, $) {
     // unused: isALTUI = undefined !== MultiBox;
     var lastx = 0;
     var condTypeName = { "service": "Service/Variable", "housemode": "House Mode", "comment": "Comment", "weekday": "Weekday",
-        "sun": "Sunrise/Sunset", "trange": "Date/Time", "interval": "Interval", "ishome": "Geofence", "reload": "Luup Reloaded" };
+        "sun": "Sunrise/Sunset", "trange": "Date/Time", "interval": "Interval", "ishome": "Geofence", "reload": "Luup Reloaded" 
+    };
     var weekDayName = [ '?', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat' ];
     var monthName = [ '?', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec' ];
     var opName = { "bet": "between", "nob": "not between", "after": "after", "before": "before" };
     var houseModeName = [ '?', 'Home', 'Away', 'Night', 'Vacation' ];
-    var inttypes = { "ui1": { min: 0, max: 255 }, "i1": { min: -128, max: 127 },
+    var inttypes = {
+        "ui1": { min: 0, max: 255 }, "i1": { min: -128, max: 127 },
         "ui2": { min: 0, max: 65535 }, "i2": { min: -32768, max: 32767 },
-        "ui4": { min: 0, max: 4294967295 }, "i4": { min: -2147483648, max:2147483647 } };
+        "ui4": { min: 0, max: 4294967295 }, "i4": { min: -2147483648, max: 2147483647 },
+        "int": { min: -2147483648, max: 2147483647 }
+    };
     var serviceOps = [ { op: '=', desc: 'equals', args: 1 }, { op: '<>', desc: 'not equals', args: 1 },
         { op: '<', desc: '<', args: 1 }, { op: '<=', desc: '<=', args: 1 },
         { op: '>', desc: '>', args: 1 }, { op: '>=', desc: '>=', args: 1 },
         { op: 'starts', desc: 'starts with', args: 1 }, { op: 'ends', desc: 'ends with', args: 1 },
         { op: 'contains', desc: 'contains', args: 1 }, { op: 'in', desc: 'in', args: 1 },
         { op: 'istrue', desc: 'is TRUE', args: 0 }, { op: 'isfalse', desc: 'is FALSE', args: 0 },
-        { op: 'change', desc: 'changes', args: 2 } ];
+        { op: 'change', desc: 'changes', args: 2 }
+    ];
     var serviceOpsIndex = {};
 
     /* Return footer */
@@ -3090,7 +3095,7 @@ var ReactorSensor = (function(api, $) {
                                     // check value type, range?
                                     // ??? subtypes? like RGB
                                     var typ = p.type || p.dataType || "string";
-                                    if ( typ.match( /^u?i[124]$/i ) ) {
+                                    if ( "int" === typ || typ.match( /^u?i[124]$/i ) ) {
                                         /* Integer. Watch for RGB spec of form #xxx or #xxxxxx */
                                         v = v.replace( /^#([0-9a-f])([0-9a-f])([0-9a-f])$/i, "0x\\1\\1\\2\\2\\3\\3" );
                                         v = v.replace( /^#[0-9a-f]{6,8}$/, "0x" );
@@ -3101,14 +3106,18 @@ var ReactorSensor = (function(api, $) {
                                             ( undefined !== p.min && v < p.min ) || ( undefined != p.max && v > p.max ) ) {
                                             field.addClass( 'tberror' ); // ???explain why?
                                         }
-                                    } else if ( "r4" === typ ) {
+                                    } else if ( typ.match( /(r4|r8|float|number)/i ) ) {
                                         /* Float */
                                         v = parseFloat( v );
                                         if ( isNaN( v ) || ( undefined !== p.min && v < p.min ) || ( undefined !== p.max && v > p.max ) ) {
                                             field.addClass( 'tberror' );
                                         }
+                                    } else if ( "boolean" === typ ) {
+                                        if ( ! v.match( /^(0|1|true|false|yes|no)$/i ) ) {
+                                            field.addClass( 'tberror' );
+                                        }
                                     } else if ( "string" !== typ ) {
-                                        /* Hmmm */
+                                        /* Known unsupported/TBD: date/dateTime/dateTime.tz/time/time.tz (ISO8601), bin.base64, bin.hex, uri, uuid, char, fixed.lll.rrr */
                                         console.log("validateActionRow: no validation for type " + String(typ));
                                     }
                                 }
