@@ -3390,6 +3390,10 @@ var ReactorSensor = (function(api, $) {
         if ( !isNaN(devNum) && action && action.deviceOverride && action.deviceOverride[devNum] ) {
             console.log("changeActionAction: using device override for " + String(devNum));
             action = action.deviceOverride[devNum];
+            if ( undefined != action && undefined == action.name ) {
+                /* exceptions use different key ??? should fix this in data! */
+                action.name = action.action;
+            }
         }
         if ( undefined !== action ) {
             /* Info assist from our enhancement data */
@@ -3949,7 +3953,7 @@ var ReactorSensor = (function(api, $) {
                 } else {
                     jQuery( 'textarea.luacode', ct ).on( 'change.reactor', handleActionValueChange );
                 }
-                ct.append('<div class="tbhint">Your Lua code must return boolean <em>true</em> or <em>false</em>. Action execution will stop if anything other than boolean true, or nothing, is returned by your code (this is a feature). It is also recommended that the first line of your Lua be a comment with text to help you identify the code--if there\'s an error logged, the first line of the script is almost always shown. Also, you can use the <tt>print()</tt> function to write to Reactor\'s event log, which is shown in the Logic Summary and easier/quicker to get at than the Vera logs.</div>');
+                ct.append('<div class="tbhint">If your Lua code returns boolean <em>false</em>, scene execution will stop and the remaining actions that follow will not be run (this is a feature). It is also recommended that the first line of your Lua be a comment with text to help you identify the code--if there\'s an error logged, the first line of the script is almost always shown. Also, you can use the <tt>print()</tt> function to write to Reactor\'s event log, which is shown in the Logic Summary and easier/quicker to get at than the Vera log file.</div>');
                 break;
 
             default:

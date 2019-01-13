@@ -855,7 +855,8 @@ local function execLua( fname, luafragment, extarg, tdev )
     setfenv(fnc, oldenv)
     luaEnv.Reactor = {} -- dispose of device context
     D("execLua() lua success=%3 return=(%2)%1", ret, type(ret), success)
-    return ret, (not success) and ret or false
+    -- Scene return value must be exactly boolean false to stop scene.
+    return ret ~= false, success
 end
 
 local runScene -- forward declaration
@@ -1017,7 +1018,7 @@ local function execSceneGroups( tdev, taskid )
                         addEvent{ dev=tdev, event="abortscene", scene=scd.id, sceneName=scd.name or scd.id, reason="Lua returned (" .. type(more) .. ")" .. tostring(more) }
                         L("%1 (%2) scene %3 Lua at step %4 returned (%5)%6, stopping actions.",
                             luup.devices[tdev].description, tdev, scd.id, ix, type(more), more)
-                        stopScene( nil, taskid, tdev )
+                        stopScene( nil, taskid, tdev ) -- stop just this scene.
                         return nil
                     end
                 else
