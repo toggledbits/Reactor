@@ -16,7 +16,7 @@ var ReactorSensor = (function(api, $) {
     var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
     var DEVINFO_MINSERIAL = 2.88;
-    
+
     var CDATA_VERSION = 19012;
 
     var myModule = {};
@@ -35,7 +35,7 @@ var ReactorSensor = (function(api, $) {
     // unused: isALTUI = undefined !== MultiBox;
     var lastx = 0;
     var condTypeName = { "service": "Service/Variable", "housemode": "House Mode", "comment": "Comment", "weekday": "Weekday",
-        "sun": "Sunrise/Sunset", "trange": "Date/Time", "interval": "Interval", "ishome": "Geofence", "reload": "Luup Reloaded" 
+        "sun": "Sunrise/Sunset", "trange": "Date/Time", "interval": "Interval", "ishome": "Geofence", "reload": "Luup Reloaded"
     };
     var weekDayName = [ '?', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat' ];
     var monthName = [ '?', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec' ];
@@ -316,6 +316,44 @@ var ReactorSensor = (function(api, $) {
         }
         m = parseInt( m );
         return monthName[m] + ' ' + d + ( isEmpty( y ) ? '' : ' ' + y ) + ' ' + tstr;
+    }
+
+    function grabLog( ev ) {
+        jQuery( 'div#logdata' ).empty();
+        var url = api.getDataRequestURL();
+        url = url.replace( /(:3480|\/port_3480).*/, "" );
+        url = url + "/cgi-bin/cmh/log.sh?Device=LuaUPnP";
+        jQuery( 'div#logdata' ).append( jQuery( '<p/>' ).text( 'Fetching ' + url ) );
+        $.ajax({
+            url: url,
+            data: {},
+            cache: false,
+            dataType: 'text'
+        }).done( function( data, statusText, jqXHR ) {
+            var keypat = new RegExp( "Reactor\\(debug\\): startSensor\\(" + api.getCpanelDeviceId() + "," );
+            var pos = data.search( keypat );
+            if ( pos < 0 ) {
+                jQuery( 'div#logdata' ).append( '<b>SUBJECT DATA NOT FOUND. RESTART THIS REACTOR SENSOR AFTER ENABLING DEBUG.</b>' );
+                return;
+            }
+            while ( pos >= 0 ) {
+                data = data.substring( pos+16 );
+                pos = data.search( keypat );
+            }
+            jQuery( 'div#logdata' ).empty().append( '<pre/>' );
+            var lines = data.split( /\r?\n/ );
+            var k = 0, n = 0;
+            while ( n < 500 && k<lines.length ) {
+                var l = lines[k].replace( /<span [^>]*>/i, "" ).replace( /<\/span>/i, "" );
+                if ( ! l.match( /^(06)/ ) ) {
+                    jQuery( 'div#logdata pre' ).append( l + "\n" );
+                    n++;
+                }
+                k++;
+            }
+        }).fail( function() {
+            jQuery( 'div#logdata' ).empty().append("<b>Hmm, that didn't go well. Try again in a few moments.</b>");
+        });
     }
 
     function makeConditionDescription( cond ) {
@@ -907,8 +945,8 @@ var ReactorSensor = (function(api, $) {
         configModified = true;
         updateConditionRow( row, jQuery( el ) );
     }
-    
-    /** 
+
+    /**
      * Update current value display for service condition
      */
     function updateCurrentServiceValue( row ) {
@@ -929,7 +967,7 @@ var ReactorSensor = (function(api, $) {
             span.empty().attr( 'title', "" );
         }
     }
-    
+
     /**
      * Handler for variable change.
      */
@@ -1296,7 +1334,7 @@ var ReactorSensor = (function(api, $) {
                 jQuery("select.opmenu", container).on( 'change.reactor', handleConditionOperatorChange );
                 jQuery("select.devicemenu", container).on( 'change.reactor', handleDeviceChange );
                 jQuery("i.condmore", container).on( 'click.reactor', handleExpandOptionsClick );
-                
+
                 updateCurrentServiceValue( container );
                 break;
 
@@ -2470,6 +2508,14 @@ var ReactorSensor = (function(api, $) {
                 msg.text( "The update failed; Vera busy/restarting. Try again in a moment." );
             });
         });
+
+        /* Tools get log fetcher */
+        if ( ! isOpenLuup ) {
+            jQuery( 'div#supportlinks' ).append( " &#0149; " )
+                .append( '<a href="javascript:void();" id="grablog">Grab&nbsp;Log&nbsp;Snippet</a>' );
+            jQuery( '<div id="logdata"/>' ).insertAfter( 'div#supportlinks' );
+            jQuery( 'a#grablog' ).on( 'click', grabLog );
+        }
 
         updateToolsVersionDisplay();
     }
