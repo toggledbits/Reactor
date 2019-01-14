@@ -919,13 +919,14 @@ var ReactorSensor = (function(api, $) {
         var span = jQuery( 'span#currval', row );
         if ( !isNaN(device) && "" !== service && "" != variable ) {
             var val = api.getDeviceState( device, service, variable );
-            if ( undefined === val ) {
-                span.text( 'Current value: (not set)' );
+            if ( undefined === val || false === val ) {
+                span.text( 'Current value: (not set)' ).attr( 'title', "This variable is not present in the device state." );
             } else {
-                span.text( 'Current value: ' + String(val) );
+                var abbrev = val.length > 64 ? val.substring(0,61) + '...' : val;
+                span.text( 'Current value: ' + abbrev ).attr( 'title', val.length==0 ? "The string is blank/empty." : val );
             }
         } else {
-            span.empty();
+            span.empty().attr( 'title', "" );
         }
     }
     
@@ -1162,7 +1163,7 @@ var ReactorSensor = (function(api, $) {
                 var opt = jQuery('<option/>').val( gc.id );
                 var t = makeConditionDescription( gc );
                 if ( t.length > 40 ) {
-                    t = t.substr(0,36) + "...";
+                    t = t.substring(0,37) + "...";
                 }
                 opt.text( t );
                 preds.append( opt );
@@ -1178,7 +1179,7 @@ var ReactorSensor = (function(api, $) {
         /* Repeat */
         container.append('<div class="duropt form-inline"><label>Condition repeats <input type="text" id="rcount" class="form-control form-control-sm narrow" autocomplete="off"> times within <input type="text" id="rspan" class="form-control form-control-sm narrow" autocomplete="off"> seconds</label></div>');
         container.append('<div class="latchopt form-inline"><label><input type="checkbox" class="latchcond form-control form-control-sm">&nbsp;Latch (once met, condition remains true until group resets)<label></div>');
-        container.append('<i class="material-icons closeopts" title="Close Options">expand_less</i>');
+        container.append('<i class="md-btn material-icons closeopts" title="Close Options">expand_less</i>');
         jQuery('input,select', container).on( 'change.reactor', handleOptionChange );
         jQuery('i.closeopts', container).on( 'click.reactor', handleCloseOptionsClick );
         if ( ( cond.duration || 0 ) > 0 ) {
@@ -1283,7 +1284,7 @@ var ReactorSensor = (function(api, $) {
                 container.append( makeVariableMenu( cond.device, cond.service, cond.variable ) );
                 container.append( makeServiceOpMenu( cond.operator ) );
                 container.append('<input type="text" id="value" class="form-control form-control-sm" autocomplete="off">');
-                container.append('<i class="material-icons condmore" title="Show Options">expand_more</i>');
+                container.append('<i class="md-btn material-icons condmore" title="Show Options">expand_more</i>');
                 container.append(' ');
                 container.append('<span id="currval"/>');
 
@@ -2940,6 +2941,7 @@ var ReactorSensor = (function(api, $) {
             html += "div#tab-conds.reactortab .color-green { color: #006040; }";
             html += 'div#tab-conds.reactortab .tberror { border: 1px solid red; }';
             html += 'div#tab-conds.reactortab .tbwarn { border: 1px solid yellow; background-color: yellow; }';
+            html += 'div#tab-conds.reactortab span#currval { font-family: "Courier New", Courier, monospace; font-size: 0.9em; }';
             html += 'div#tab-conds.reactortab div.warning { color: red; }';
             html += 'div#tab-conds.reactortab i.md-btn:disabled { color: #cccccc; cursor: auto; }';
             html += 'div#tab-conds.reactortab i.md-btn[disabled] { color: #cccccc; cursor: auto; }';
