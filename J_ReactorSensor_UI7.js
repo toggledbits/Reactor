@@ -67,7 +67,7 @@ var ReactorSensor = (function(api, $) {
             ' and <a href="http://forum.micasaverde.com/index.php/board,93.0.html" target="_blank">forum board</a> for support.</div>';
         html += '<div id="supportlinks">Support links: ' +
             ' <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=debug" target="_blank">Toggle&nbsp;Debug</a>' +
-            ' &bull; <a href="/cgi-bin/cmh/log.sh?Device=LuaUPnP" target="_blank">Log&nbsp;File</a>' +
+            ' &bull; <a id="fulllogscript" href="/cgi-bin/cmh/log.sh?Device=LuaUPnP" target="_blank">Full&nbsp;Log&nbsp;File</a>' +
             ' &bull; <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=status" target="_blank">Plugin&nbsp;Status</a>' +
             ' &bull; <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=summary&device=' + api.getCpanelDeviceId() + '" target="_blank">Logic&nbsp;Summary</a>' +
             '</div>';
@@ -2511,8 +2511,8 @@ var ReactorSensor = (function(api, $) {
 
         /* Tools get log fetcher */
         if ( ! isOpenLuup ) {
-            jQuery( 'div#supportlinks' ).append( " &#0149; " )
-                .append( '<a href="javascript:void();" id="grablog">Grab&nbsp;Log&nbsp;Snippet</a>' );
+            jQuery( '<span><a href="javascript:void();" id="grablog">Grab&nbsp;Log&nbsp;Snippet</a> &bull; </span>' )
+                .insertBefore( 'div#supportlinks a#fulllogscript' );
             jQuery( '<div id="logdata"/>' ).insertAfter( 'div#supportlinks' );
             jQuery( 'a#grablog' ).on( 'click', grabLog );
         }
