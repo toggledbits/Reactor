@@ -7,6 +7,7 @@
 * Enhancement: RunLua actions can now use Reactor.dump() to display the content of tables (e.g. `print(Reactor.dump(luup.scenes))`).
 * Enhancement: attempt to load the ACE editor if it is not loaded, so it can be used to edit RunLua code with syntax highlighting under both UI7 and AltUI (AltUI loads ACE for us).
 * Enhancement: "change" operator now supports "from" and "to" values, so a condition can test more than just if the value changes at all, but also if it changes from/to specific value (e.g. house mode changes from Away to Home).
+* Fix an issue where cache expiry of condition state data may cause trip/untrip manual action buttons to fail to execute Lua fragments in the activities. This does not affect the normal, automatic operation of trip/untrip in response to conditions, only manual.
 
 ## Version 2.1 (released)
 

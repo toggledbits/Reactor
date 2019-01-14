@@ -584,6 +584,11 @@ local function plugin_runOnce( pdev )
         initVar( "IsHome", "", pdev, MYSID )
     end
 
+    if s < 00204 then
+        initVar( "UseACE", "", pdev, MYSID )
+        initVar( "ACEURL", "", pdev, MYSID )
+    end
+
     -- Update version last.
     if s ~= _CONFIGVERSION then
         luup.variable_set( MYSID, "Version", _CONFIGVERSION, pdev )
@@ -597,6 +602,64 @@ local function getHouseMode( tdev )
         return tostring(mode)
     end
     return luup.variable_get( MYSID, "HouseMode", pluginDevice ) or "1"
+end
+
+-- Clean cstate
+local function loadCleanState( tdev )
+    D("loadCleanState(%1)", tdev)
+
+    -- If we have state in memory, it's assumed to be clean.
+    if sensorState[tostring(tdev)].condState then
+        -- Bump time to avoid expiration (cache hit) and return
+        sensorState[tostring(tdev)].condState.lastSaved = os.time()
+        return sensorState[tostring(tdev)].condState
+    end
+
+    -- Fetch cstate. If it's empty, there's nothing to do here.
+    local cstate = {} -- guilty until proven innocent
+    local s = luup.variable_get( RSSID, "cstate", tdev ) or ""
+    if s ~= "" then
+        local err
+        cstate,_,err = json.decode( s )
+        if err then
+            L({level=2,msg="ReactorSensor %1 (%2) corrupted cstate, clearing!"}, tdev, luup.devices[tdev].description)
+            cstate = {}
+        end
+
+        local cdata = sensorState[tostring(tdev)].configData
+        if not cdata then
+            L({level=1,msg="ReactorSensor %1 (%2) has corrupt configuration data!"}, tdev, luup.devices[tdev].description)
+            error("ReactorSensor " .. tdev .. " has invalid configuration data")
+            -- no return
+        end
+
+        -- Find all conditions in cdata
+        local conds = {}
+        for _,grp in ipairs( cdata.conditions or {} ) do
+            table.insert( conds, grp.groupid )
+            for _,cond in ipairs( grp.groupconditions or {} ) do
+                table.insert( conds, cond.id )
+            end
+        end
+        D("loadCleanState() cdata has %1 conditions: %2", #conds, conds)
+
+        -- Get all conditions in cstate. Remove from that list all cdata conditions.
+        local states = getKeys( cstate )
+        D("loadCleanState() cstate has %1 states: %2", #states, states)
+        local dels = {} -- map
+        for _,k in ipairs( states ) do dels[k] = true end
+        for _,k in ipairs( conds ) do dels[k] = nil end
+
+        -- Delete whatever is left
+        D("loadCleanState() deleting %1", dels)
+        for k,_ in pairs( dels ) do cstate[ k ] = nil end
+    end
+
+    -- Save updated state
+    D("loadCleanState() saving state %1", cstate)
+    cstate.lastSaved = os.time()
+    luup.variable_set( RSSID, "cstate", json.encode( cstate ), tdev )
+    return cstate
 end
 
 -- Load scene data from Luup.
@@ -1162,6 +1225,8 @@ local function trip( state, tdev )
     L("%2 (#%1) now %3", tdev, luup.devices[tdev].description, state and "tripped" or "untripped")
     luup.variable_set( SENSOR_SID, "Tripped", state and "1" or "0", tdev )
     addEvent{dev=tdev,event='sensorstate',state=state}
+    -- Make sure condState is loaded/ready (may have been expired by cache)
+    sensorState[tostring(tdev)].condState = loadCleanState( tdev )
     if not state then
         -- Luup keeps (SecuritySensor1/)LastTrip, but we also keep LastReset
         luup.variable_set( RSSID, "LastReset", os.time(), tdev )
@@ -1261,48 +1326,6 @@ local function loadSensorConfig( tdev )
     -- in actions or scenes are honored immediately.
     luaFunc = {}
     return cdata
-end
-
--- Clean cstate
-local function loadCleanState( tdev )
-    D("loadCleanState(%1)", tdev)
-
-    -- Fetch cstate. If it's empty, there's nothing to do here.
-    local cstate,err = getVarJSON( "cstate", {}, tdev, RSSID )
-    if not err then
-        local cdata = sensorState[tostring(tdev)].configData
-        if not cdata then
-            L({level=1,msg="ReactorSensor %1 (%2) has corrupt configuration data!"}, tdev, luup.devices[tdev].description)
-            error("ReactorSensor " .. tdev .. " has invalid configuration data")
-            -- no return
-        end
-
-        -- Find all conditions in cdata
-        local conds = {}
-        for _,grp in ipairs( cdata.conditions or {} ) do
-            table.insert( conds, grp.groupid )
-            for _,cond in ipairs( grp.groupconditions or {} ) do
-                table.insert( conds, cond.id )
-            end
-        end
-        D("loadCleanState() cdata has %1 conditions: %2", #conds, conds)
-
-        -- Get all conditions in cstate. Remove from that list all cdata conditions.
-        local states = getKeys( cstate )
-        D("loadCleanState() cstate has %1 states: %2", #states, states)
-        local dels = {} -- map
-        for _,k in ipairs( states ) do dels[k] = true end
-        for _,k in ipairs( conds ) do dels[k] = nil end
-
-        -- Delete whatever is left
-        D("loadCleanState() deleting %1", dels)
-        for k,_ in pairs( dels ) do cstate[ k ] = nil end
-    end
-
-    -- Save updated state
-    D("loadCleanState() saving state %1", cstate)
-    luup.variable_set( RSSID, "cstate", json.encode( cstate ), tdev )
-    return cstate
 end
 
 local function evaluateVariable( vname, ctx, cdata, tdev )
@@ -2116,6 +2139,7 @@ end
 -- Perform update tasks
 local function updateSensor( tdev )
     D("updateSensor(%1) %2", tdev, luup.devices[tdev].description)
+    local skey = tostring(tdev)
 
     -- If not enabled, no work to do.
     if not isEnabled( tdev ) then
@@ -2124,11 +2148,7 @@ local function updateSensor( tdev )
     end
 
     -- Reload sensor state if cache purged
-    local skey = tostring(tdev)
-    if sensorState[skey].condState == nil then
-        sensorState[skey].condState = loadCleanState( tdev )
-        sensorState[skey].condState.lastSaved = nil -- flag no expiry during use
-    end
+    sensorState[skey].condState = loadCleanState( tdev )
 
     -- Check throttling for update rate
     local hasTimer = false -- luacheck: ignore 311/hasTimer
@@ -2429,6 +2449,7 @@ local function startSensor( tdev, pdev )
     loadSensorConfig( tdev )
 
     -- Clean and restore our condition state.
+    sensorState[tostring(tdev)].condState = nil
     sensorState[tostring(tdev)].condState = loadCleanState( tdev )
 
     addEvent{ dev=tdev, event='start' }
@@ -3064,6 +3085,17 @@ local function showGeofenceData( r )
     return r
 end
 
+local function shortDate( d )
+    d = tonumber(d) or 0
+    local delta = math.abs( os.time() - d )
+    if delta < 86400 then
+        return os.date("%X", d)
+    elseif delta < (86400*364) then
+        return os.date("%m-%d.%X", d)
+    end
+    return os.date("%Y-%m-%d.%X", d)
+end
+
 function request( lul_request, lul_parameters, lul_outputformat )
     D("request(%1,%2,%3) luup.device=%4", lul_request, lul_parameters, lul_outputformat, luup.device)
     local action = lul_parameters['action'] or lul_parameters['command'] or ""
@@ -3107,9 +3139,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
         end
         for n,d in pairs( luup.devices ) do
             if d.device_type == RSTYPE and ( deviceNum==nil or n==deviceNum ) then
-                if sensorState[tostring(n)].condState == nil then
-                    sensorState[tostring(n)].condState = loadCleanState( n )
-                end
+                sensorState[tostring(n)].condState = loadCleanState( n )
                 local status = ( ( getVarNumeric( "Armed", 0, n, SENSOR_SID ) ~= 0 ) and " armed" or "" )
                 status = status .. ( ( getVarNumeric("Tripped", 0, n, SENSOR_SID ) ~= 0 ) and " tripped" or "" )
                 r = r .. string.rep( "=", 132 ) .. EOL
