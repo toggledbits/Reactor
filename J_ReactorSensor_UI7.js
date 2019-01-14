@@ -3,10 +3,8 @@
  * J_ReactorSensor_UI7.js
  * Configuration interface for ReactorSensor
  *
- * Copyright 2018 Patrick H. Rigney, All Rights Reserved.
+ * Copyright 2018,2019 Patrick H. Rigney, All Rights Reserved.
  * This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
- *
- * Patch level: 4
  */
 /* globals api,jQuery,$,unescape,MultiBox,ace */
 
@@ -56,7 +54,7 @@ var ReactorSensor = (function(api, $) {
         var html = '';
         html += '<div class="clearfix">';
         html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
-        html += '<div id="tbcopyright">Reactor ver 2.0 &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
+        html += '<div id="tbcopyright">Reactor ver 2.1 &copy; 2018,2019 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
             ' All Rights Reserved. Please check out the <a href="https://www.toggledbits.com/reactor" target="_blank">online documentation</a>' +
             ' and <a href="http://forum.micasaverde.com/index.php/board,93.0.html" target="_blank">forum board</a> for support.</div>';
         html += '<div id="supportlinks">Support links: ' +
@@ -357,12 +355,12 @@ var ReactorSensor = (function(api, $) {
                     if ( k === null || k.length !== 3 ) {
                         return spec + '???';
                     } else {
-                        t = parseInt( k[2] );
+                        var offs = parseInt( k[2] );
                         var str = ' ';
-                        if ( t < 0 ) {
-                            str = str + String(-t) + " mins before ";
+                        if ( offs < 0 ) {
+                            str = str + String(-offs) + " mins before ";
                         } else if ( t > 0 ) {
-                            str = str + String(t) + " mins after ";
+                            str = str + String(offs) + " mins after ";
                         }
                         str = str + ( names[k[1]] || k[1] );
                         return str;
@@ -594,10 +592,10 @@ var ReactorSensor = (function(api, $) {
 
             case 'service':
                 cond.device = parseInt( jQuery("div.params select.devicemenu", row).val() );
-                cond.service = jQuery("div.params select.varmenu", row).val();
+                cond.service = jQuery("div.params select.varmenu", row).val() || "";
                 cond.variable = cond.service.replace( /^[^\/]+\//, "" );
                 cond.service = cond.service.replace( /\/.*$/, "" );
-                cond.operator = jQuery("div.params select.opmenu", row).val();
+                cond.operator = jQuery("div.params select.opmenu", row).val() || "=";
                 var op = serviceOpsIndex[cond.operator || ""];
                 jQuery( "input#value", row ).css( "visibility", ( undefined !== op && 0 === op.args ) ? "hidden" : "visible" );
                 cond.value = jQuery("input#value", row).val() || "";
@@ -638,7 +636,7 @@ var ReactorSensor = (function(api, $) {
                     }
                 }
                 /* Fetch and load */
-                cond.operator = jQuery("div.params select.opmenu", row).val();
+                cond.operator = jQuery("div.params select.opmenu", row).val() || "bet";
                 res = [];
                 var mon = jQuery("div.start select.monthmenu", row).val() || "";
                 if ( mon !== "" ) {
@@ -776,6 +774,8 @@ var ReactorSensor = (function(api, $) {
         /* Make a new service/variable menu and replace it on the row. */
         var newMenu = makeVariableMenu( cond.device, cond.service, cond.variable );
         jQuery("select.varmenu", row).replaceWith( newMenu );
+        jQuery("select.varmenu", row).off( 'change.reactor' ).on( 'change.reactor', handleConditionRowChange );
+
         updateConditionRow( row ); /* pass it on */
     }
 
@@ -939,9 +939,9 @@ var ReactorSensor = (function(api, $) {
         jQuery('select.pred', container).val( cond.after );
         jQuery('input.predtime', container).val( cond.aftertime || 0 );
         /* Duration */
-        container.append('<div class="duropt form-inline"><label>State is sustained for&nbsp;<select class="durop form-control form-control-sm"><option value="ge">at least</option><option value="lt">less than</option></select>&nbsp;<input type="text" class="duration form-control form-control-sm narrow"> seconds</label></div>');
+        container.append('<div class="duropt form-inline"><label>Condition is sustained for&nbsp;<select class="durop form-control form-control-sm"><option value="ge">at least</option><option value="lt">less than</option></select>&nbsp;<input type="text" class="duration form-control form-control-sm narrow"> seconds</label></div>');
         /* Repeat */
-        container.append('<div class="duropt form-inline"><label>State repeats <input type="text" class="rcount form-control form-control-sm narrow"> times within <input type="text" class="rspan form-control form-control-sm narrow"> seconds</label></div>');
+        container.append('<div class="duropt form-inline"><label>Condition repeats <input type="text" class="rcount form-control form-control-sm narrow"> times within <input type="text" class="rspan form-control form-control-sm narrow"> seconds</label></div>');
         container.append('<div class="latchopt form-inline"><label><input type="checkbox" class="latchcond form-control form-control-sm">&nbsp;Latch (once met, condition remains true until group resets)<label></div>');
         container.append('<i class="material-icons closeopts" title="Close Options">expand_less</i>');
         jQuery('input,select', container).on( 'change.reactor', handleOptionChange );
@@ -1552,12 +1552,6 @@ var ReactorSensor = (function(api, $) {
             jQuery("button.addcond", gel).on( 'click.reactor', handleAddConditionClick );
         }
 
-        /* Insert add group button row (not a divider but looks similar) */
-        jQuery("div#tab-conds.reactortab").append('<div class="row"><div class="col-sm-5"><hr></div>' +
-            '<div class="col-sm-2 text-center"><button id="addgroup" class="btn btn-sm btn-primary">Add Group</button></div>' +
-            '<div class="col-sm-5"><hr></div>' +
-            '</div>');
-        jQuery("button#addgroup").on( 'click.reactor', handleAddGroupClick );
         jQuery("button#saveconf").on( 'click.reactor', handleSaveClick );
         jQuery("button#revertconf").on( 'click.reactor', handleRevertClick );
 
@@ -1713,6 +1707,7 @@ var ReactorSensor = (function(api, $) {
         if ( configModified && confirm( "You have unsaved changes! Press OK to save them, or Cancel to discard them." ) ) {
             handleSaveClick( undefined );
         }
+        configModified = false;
     }
 
     function relativeTime( dt ) {
@@ -1728,7 +1723,7 @@ var ReactorSensor = (function(api, $) {
     }
 
     function handleTestChange( ev ) {
-        var container = jQuery('div.testfields');
+        var container = jQuery('div#reactortools.reactortab');
         var el = jQuery('input#testdateenable', container);
         var vv = "";
         if ( el.prop('checked') ) {
@@ -1759,10 +1754,10 @@ var ReactorSensor = (function(api, $) {
 
         el = jQuery('input#testhousemode', container);
         if ( el.prop('checked') ) {
-            jQuery('select', el.closest('div.row')).prop('disabled', false);
+            jQuery('select#mode', container).prop('disabled', false);
             vv = jQuery('select#mode').val();
         } else {
-            jQuery('select', el.closest('div.row')).prop('disabled', true);
+            jQuery('select#mode', container).prop('disabled', true);
             vv = "";
         }
         api.setDeviceStateVariablePersistent( api.getCpanelDeviceId(), serviceId, "TestHouseMode", vv );
@@ -2181,7 +2176,7 @@ var ReactorSensor = (function(api, $) {
             for ( var j=0; j<(grp.groupconditions || []).length; j++ ) {
                 var cond = grp.groupconditions[j];
                 el = jQuery('<div class="row cond" id="' + cond.id + '"></div>');
-                var currentValue = cstate[cond.id] === undefined ? cstate[cond.id] : cstate[cond.id].lastvalue;
+                var currentValue = ( cstate[cond.id] || {} ).lastvalue;
 
                 el.append('<div class="col-sm-6 col-md-2">' +
                     ( condTypeName[ cond.type ] !== undefined ? condTypeName[ cond.type ] : cond.type ) +
@@ -2240,7 +2235,8 @@ var ReactorSensor = (function(api, $) {
                 if ( cond.type !== "comment" ) {
                     if ( currentValue !== undefined ) {
                         var cs = cstate[cond.id];
-                        el.append('<div class="currentvalue col-sm-6 col-md-4">(' + currentValue + ') ' +
+                        el.append('<div class="currentvalue col-sm-6 col-md-4">(' +
+                            currentValue + ') ' +
                             ( cs.laststate ? "true" : "false" ) +
                             ' as of ' + relativeTime( cs.statestamp ) +
                             ( ( cond.latch || false ) && cs.evalstate && !cs.laststate ? " (latched true)" : "" ) +
@@ -2603,6 +2599,14 @@ var ReactorSensor = (function(api, $) {
 
             api.setCpanelContent(html);
 
+            /* Insert add group button row (not a divider but looks similar) */
+            var container = jQuery("div#tab-conds.reactortab");
+            container.append('<div class="row"><div class="col-sm-5"><hr></div>' +
+                '<div class="col-sm-2 text-center"><button id="addgroup" class="btn btn-sm btn-primary">Add Group</button></div>' +
+                '<div class="col-sm-5"><hr></div>' +
+                '</div>');
+            jQuery("button#addgroup", container).on( 'click.reactor', handleAddGroupClick );
+
             redrawConditions();
 
             api.registerEventHandler('on_ui_cpanel_before_close', ReactorSensor, 'onBeforeCpanelClose');
@@ -2622,7 +2626,7 @@ var ReactorSensor = (function(api, $) {
         var menu = jQuery( '<select class="form-control form-control-sm" />' );
         /* If lots of scenes, sort by room; otherwise, use straight as-is */
         var i;
-        if ( scenes.length > 10 ) {
+        if ( true || scenes.length > 10 ) {
             var rooms = api.cloneObject( ud.rooms );
             var rid = {};
             for ( i=0; i<rooms.length; ++i ) {
@@ -2630,27 +2634,41 @@ var ReactorSensor = (function(api, $) {
             }
             rid[0] = { id: 0, name: "(no room)" };
             scenes.sort( function( a, b ) {
-                if ( rid[a.room].name == rid[b.room].name ) {
-                    /* Same room */
-                    return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1;
+                var ra = ( rid[a.room || 0] || {} ).name || "";
+                var rb = ( rid[b.room || 0] || {} ).name || "";
+                if ( ra.toLowerCase() == rb.toLowerCase() ) {
+                    return (a.name || "").toLowerCase() < (b.name || "").toLowerCase() ? -1 : 1;
                 }
-                return rid[a.room].name.toLowerCase() < rid[b.room].name.toLowerCase() ? -1 : 1;
+                return ra.toLowerCase() < rb.toLowerCase() ? -1 : 1;
             });
             var lastRoom = -1;
             var el;
             for ( i=0; i<scenes.length; i++ ) {
-                if ( scenes[i].room != lastRoom ) {
-                    menu.append('<option value="" class="optheading" disabled>' + "--" + rid[scenes[i].room].name + "--</option>");
-                    lastRoom = scenes[i].room;
+                if ( scenes[i].notification_only || scenes[i].hidden ) {
+                    continue;
+                }
+                var r = scenes[i].room;
+                if ( r != lastRoom ) {
+                    if ( undefined !== r && undefined !== rid[r] ) {
+                        menu.append('<option value="" class="optheading" disabled>' + "--" + String(rid[r].name) + "--</option>");
+                        lastRoom = scenes[i].room;
+                    } else {
+                        console.log( "*** Scene " + String(scenes[i].id) + ": room " + String(scenes[i].room) + " assigned, but non-existent. Scene data follows:" );
+                        for ( var k in scenes[i] ) {
+                            if ( scenes[i].hasOwnProperty( k ) ) {
+                                console.log( "    " + String(k) + " (" + typeof(scenes[i][k]) + ")=" + scenes[i][k] );
+                            }
+                        }
+                    }
                 }
                 el = jQuery( '<option/>' );
                 el.val( scenes[i].id );
-                el.text( scenes[i].name + ' (#' + scenes[i].id + ')' );
+                el.text( String(scenes[i].name) + ' (#' + String(scenes[i].id) + ')' );
                 menu.append( el );
             }
         } else {
             /* Simple alpha list */
-            scenes.sort( function(a, b) { return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1; } );
+            scenes.sort( function(a, b) { return ( a.name || "" ).toLowerCase() < ( b.name || "" ).toLowerCase() ? -1 : 1; } );
             for ( i=0; i<scenes.length; i++ ) {
                 if ( scenes[i].notification_only || scenes[i].hidden ) {
                     continue;
@@ -2769,7 +2787,7 @@ var ReactorSensor = (function(api, $) {
             case "runscene":
                 var sc = jQuery( 'select#scene', row ).val() || "";
                 if ( "" === sc ) {
-                    jQuery( 'select#scene' ).addClass( "tberror" );
+                    jQuery( 'select#scene', row ).addClass( "tberror" );
                 }
                 break;
 
@@ -2851,33 +2869,39 @@ var ReactorSensor = (function(api, $) {
                     if ( ai && ai.deviceOverride && ai.deviceOverride[action.device] ) {
                         ai = ai.deviceOverride[action.device];
                     }
-                    if ( ! ai ) {
-                        console.log( "Can't find actioninfo for " + t );
-                        scene = false;
-                        return false;
-                    }
                     action.parameters = [];
-                    for ( k=0; k < (ai.parameters || [] ).length; k++ ) {
-                        pt = { name: ai.parameters[k].name };
-                        if ( undefined !== ai.parameters[k].value ) {
-                            // Fixed value
-                            pt.value = ai.parameters[k].value;
-                        } else {
-                            t = jQuery( '#' + ai.parameters[k].name, row ).val() || "";
-                            if ( "" === t && undefined !== ai.parameters[k].default ) t = ai.parameters[k].default;
-                            if ( "" === t ) {
-                                if ( ai.parameters[k].optional ) {
-                                    continue; /* skip it, not even on the list */
+                    if ( ai ) {
+                        for ( k=0; k < (ai.parameters || [] ).length; k++ ) {
+                            pt = { name: ai.parameters[k].name };
+                            if ( undefined !== ai.parameters[k].value ) {
+                                // Fixed value
+                                pt.value = ai.parameters[k].value;
+                            } else {
+                                /* Ignore default here, it's assumed to be valid when needed */
+                                t = jQuery( '#' + ai.parameters[k].name, row ).val() || "";
+                                if ( "" === t ) {
+                                    if ( ai.parameters[k].optional ) {
+                                        continue; /* skip it, not even on the list */
+                                    }
+                                    console.log("buildActionList: " + action.service + "/" +
+                                        action.action + " required parameter " +
+                                        ai.parameters[k].name + " has no value");
+                                    scene = false;
+                                    return false;
                                 }
-                                console.log("buildActionList: " + action.service + "/" +
-                                    action.action + " required parameter " +
-                                    ai.parameters[k].name + " has no value");
-                                scene = false;
-                                return false;
+                                pt.value = t;
                             }
-                            pt.value = t;
+                            action.parameters.push( pt );
                         }
-                        action.parameters.push( pt );
+                    } else {
+                        /* No action info; build using fields directly */
+                        console.log( "Can't find actioninfo for " + t );
+                        jQuery( '.argument', row ).each( function() {
+                            var val = jQuery( this ).val() || "";
+                            if ( val !== "" ) {
+                                action.parameters.push( { name: jQuery( this ).attr('id'), value: val } );
+                            }
+                        });
                     }
                     break;
 
@@ -3046,33 +3070,73 @@ var ReactorSensor = (function(api, $) {
                 }
                 if ( undefined !== parm.values && Array.isArray( parm.values ) ) {
                     /* Menu, can be array of strings or objects */
-                    inp = jQuery('<select class="argument form-control form-control-sm"/>');
-                    for ( j=0; j<parm.values.length; j++ ) {
-                        opt = jQuery( '<option/>' );
-                        if ( "object" === typeof(parm.values[j]) ) {
-                            for ( var z in parm.values[j] ) {
-                                if ( parm.values[j].hasOwnProperty( z ) ) {
-                                    opt.val( String(z) );
-                                    opt.text( String( parm.values[j][z] ) );
+                    if ( undefined !== window.HTMLDataListElement ) {
+                        /* Use datalist when supported (allows more flexible entry) */
+                        var dlid = (action.service + '-' + ( action.name || action.action ) + '-' + parm.name).replace( /[^a-z0-9-]/ig, "-" );
+                        if ( 0 == jQuery( 'datalist#'+dlid ).length ) {
+                            /* Datalist doesn't exist yet, create it */
+                            inp = jQuery('<datalist class="argdata" id="' + dlid + '"/>');
+                            for ( j=0; j<parm.values.length; j++ ) {
+                                opt = jQuery( '<option/>' );
+                                if ( "object" === typeof(parm.values[j]) ) {
+                                    for ( var z in parm.values[j] ) {
+                                        if ( parm.values[j].hasOwnProperty( z ) ) {
+                                            opt.val( String(z) );
+                                            opt.text( String( parm.values[j][z] ) );
+                                        }
+                                    }
+                                } else {
+                                    opt.val( String( parm.values[j] ) );
+                                    opt.text( String( parm.values[j] ) );
                                 }
+                                inp.append( opt );
                             }
-                        } else {
-                            opt.val( String( parm.values[j] ) );
-                            opt.text( String( parm.values[j] ) );
+                            /* Add variables and append to tab (datalists are global to tab) */
+                            appendVariables( inp );
+                            jQuery( 'div#tab-actions.reactortab' ).append( inp );
                         }
-                        inp.append( opt );
-                    }
-                    /* Add variables */
-                    appendVariables( inp );
-                    /* As a default, just choose the first option, unless specified */
-                    if ( undefined !== parm.default ) {
-                        inp.val( parm.default );
+                        /* Now pass on the input field */
+                        inp = jQuery( '<input class="argument form-control form-control-sm" list="' + dlid + '">' );
+                        if ( undefined !== parm.default ) {
+                            inp.val( parm.default );
+                        }
                     } else {
-                        jQuery( 'option:first' ).prop( 'selected', true );
+                        /* Standard select menu */
+                        inp = jQuery( '<select class="argument form-control form-control-sm"/>' );
+                        if ( parm.optional ) {
+                            inp.append( '<option value="">(unspecified)</option>' );
+                        }
+                        for ( j=0; j<parm.values.length; j++ ) {
+                            opt = jQuery( '<option/>' );
+                            if ( "object" === typeof(parm.values[j]) ) {
+                                for ( var z in parm.values[j] ) {
+                                    if ( parm.values[j].hasOwnProperty( z ) ) {
+                                        opt.val( String(z) );
+                                        opt.text( String( parm.values[j][z] ) );
+                                    }
+                                }
+                            } else {
+                                opt.val( String( parm.values[j] ) );
+                                opt.text( String( parm.values[j] ) );
+                            }
+                            inp.append( opt );
+                        }
+                        /* Add variables */
+                        appendVariables( inp );
+                        /* As a default, just choose the first option, unless specified */
+                        if ( undefined !== parm.default ) {
+                            inp.val( parm.default );
+                        } else {
+                            jQuery( 'option:first' ).prop( 'selected', true );
+                        }
                     }
                 } else if ( parm.type == "scene" ) {
                     inp = makeSceneMenu();
-                    inp.prepend( '<option value="" selected>--choose--</option>' );
+                    if ( parm.optional ) {
+                        inp.append( '<option value="" selected>(unspecified)</option>' );
+                    } else {
+                        inp.append( '<option value="" selected>--choose--</option>' );
+                    }
                     if ( undefined !== parm.extraValues ) {
                         if ( Array.isArray( parm.extraValues ) ) {
                             for ( j=0; j<parm.extraValues.length; j++ ) {
@@ -3095,11 +3159,17 @@ var ReactorSensor = (function(api, $) {
                 } else if ( parm.type == "boolean" ) {
                     /* Menu */
                     inp = jQuery('<select class="argument form-control form-control-sm"/>');
+                    if ( parm.optional ) {
+                        inp.prepend( '<option value="">not specified</option>' );
+                    }
                     inp.append('<option value="0">0/off/false</option>');
                     inp.append('<option value="1">1/on/true</option>');
                     /* Add variables */
                     appendVariables( inp );
-                    /* Don't set default, let default default */
+                    /* Don't set default, let default default -- WHY???? */
+                    if ( parm.default ) {
+                        inp.val( parm.default );
+                    }
                 } else if ( false && parm.type == "ui1" && parm.min !== undefined && parm.max !== undefined ) {
                     inp = jQuery('<div class="argument tbslider"/>');
                     inp.slider({
@@ -3118,12 +3188,12 @@ var ReactorSensor = (function(api, $) {
                     inp.slider("option", "disabled", false);
                     inp.slider("option", "value", undefined === parm.default ? parm.min : parm.default ); //??? fixme: clobbered later
                 } else if ( (parm.type || "").match(/^(r|u?i)[124]$/i ) ) {
-                    inp = jQuery( '<input class="argument narrow form-control form-control-sm" list="reactorvars">' );
+                    inp = jQuery( '<input class="argument narrow form-control form-control-sm" list="reactorvarlist">' );
                     inp.attr( 'placeholder', action.parameters[k].name );
-                    inp.val( undefined==parm.default ? (undefined==parm.min ? 0 : parm.min ) : parm.default );
+                    inp.val( undefined==parm.default ? (undefined==parm.min ? (undefined==parm.optional ? 0 : "") : parm.min ) : parm.default );
                 } else {
                     console.log("J_ReactorSensor_UI7.js: using default field presentation for type " + String(parm.type));
-                    inp = jQuery( '<input class="argument form-control form-control-sm" list="reactorvars">' );
+                    inp = jQuery( '<input class="argument form-control form-control-sm" list="reactorvarlist">' );
                     inp.attr( 'placeholder', action.parameters[k].name );
                     inp.val( undefined===parm.default ? "" : parm.default );
                 }
@@ -3358,12 +3428,18 @@ var ReactorSensor = (function(api, $) {
                         for ( var ip=0; ip < (service.actionList[j].arguments || []).length; ++ip ) {
                             var p = service.actionList[j].arguments[ip];
                             p.type = p.dataType || "string";
+                            if ( ! p.defaultValue ) {
+                                p.optional = 1;
+                            } else {
+                                p.default = p.defaultValue;
+                            }
                         }
                     }
                     key = service.serviceId + "/" + actname;
                     if ( actions[key] === undefined ) {
                         // Save action data as we use it.
                         ai.deviceOverride = {};
+                        ai.service = service.serviceId;
                         actions[key] = ai;
                     }
                     if ( ai.hidden ) {
@@ -3516,7 +3592,7 @@ var ReactorSensor = (function(api, $) {
                 break;
                 
             case "delay": 
-                ct.append('<label for="delay">for <input id="delay" type="text" class="argument narrow form-control form-control-sm" title="Enter delay time as seconds, MM:SS, or HH:MM:SS" placeholder="delay time" list="reactorvars"></label>');
+                ct.append('<label for="delay">for <input id="delay" type="text" class="argument narrow form-control form-control-sm" title="Enter delay time as seconds, MM:SS, or HH:MM:SS" placeholder="delay time" list="reactorvarlist"></label>');
                 ct.append('<select id="delaytype" class="form-control form-control-sm"><option value="inline">from this point</option><option value="start">from start of actions</option></select>');
                 jQuery( 'input', ct ).on( 'change.reactor', handleActionValueChange );
                 jQuery( 'select', ct ).on( 'change.reactor', handleActionValueChange );
@@ -3685,21 +3761,21 @@ var ReactorSensor = (function(api, $) {
                         timeout: 5000
                     }).done( function( data, statusText, jqXHR ) {
                         var pred = row;
+                        var newRow;
+                        if ( "" !== (data.lua || "") ) {
+                            /* First action in first group is scene Lua if it's there */
+                            var lua = (data.encoded_lua || 0) != 0 ? atob(data.lua) : data.lua;
+                            newRow = getActionRow();
+                            jQuery( "select#actiontype", newRow).val( "runlua" );
+                            changeActionType( newRow, "runlua" );
+                            jQuery( "textarea.luacode", newRow ).val( lua ).trigger( "reactorinit" );
+                            pred = newRow.addClass( "tbmodified" ).insertAfter( pred );
+                        }
                         /* Sort groups by delay ascending */
                         data.groups = data.groups || [];
                         data.groups.sort( function( a, b ) { return (a.delay||0) - (b.delay||0); });
                         for ( var ig=0; ig<(data.groups || []).length; ig++ ) {
-                            var newRow;
                             var gr = data.groups[ig];
-                            if ( 0 === ig && "" !== (data.lua || "") ) {
-                                /* First action in first group is scene Lua if it's there */
-                                var lua = (data.encoded_lua || 0) != 0 ? atob(data.lua) : data.lua;
-                                newRow = getActionRow();
-                                jQuery( "select#actiontype", newRow).val( "runlua" );
-                                changeActionType( newRow, "runlua" );
-                                jQuery( "textarea.luacode", newRow ).val( lua ).trigger( "reactorinit" );
-                                pred = newRow.addClass( "tbmodified" ).insertAfter( pred );
-                            }
                             if ( 0 != (gr.delay || 0) ) {
                                 /* Delayed group -- insert delay action */
                                 newRow = getActionRow();
@@ -3740,12 +3816,12 @@ var ReactorSensor = (function(api, $) {
                                     }
                                 }, [ newRow, act ]);
                             }
-
-                            /* All actions inserted. Remove original row. */
-                            row.remove();
-                            configModified = true;
-                            changeActionRow( row );
                         }
+
+                        /* All actions inserted. Remove original row. */
+                        row.remove();
+                        configModified = true;
+                        changeActionRow( row );
                     }).fail( function( jqXHR, textStatus, errorThrown ) {
                         // Bummer.
                         console.log("Failed to load scene data: " + textStatus + " " + String(errorThrown));
@@ -3927,7 +4003,7 @@ var ReactorSensor = (function(api, $) {
             }
 
             /* Set up a data list with our variables */
-            var dl = jQuery('<datalist id="reactorvars"></datalist>');
+            var dl = jQuery('<datalist id="reactorvarlist"></datalist>');
             if ( cd.variables ) {
                 for ( var vname in cd.variables ) {
                     if ( cd.variables.hasOwnProperty( vname ) ) {
@@ -3966,6 +4042,7 @@ var ReactorSensor = (function(api, $) {
 
         /* Our styles. */
         var html = "<style>";
+        html += "div#tab-actions datalist { display: none; }";
         html += "div#tab-actions.reactortab .tb-about { margin-top: 24px; }";
         html += "div#tab-actions.reactortab .color-green { color: #428BCA; }";
         html += 'div#tab-actions.reactortab .tberror { border: 1px solid red; }';
