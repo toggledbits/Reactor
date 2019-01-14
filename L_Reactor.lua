@@ -544,6 +544,7 @@ local function plugin_runOnce( pdev )
         initVar( "IsHome", "", pdev, MYSID )
         initVar( "DebugMode", 0, pdev, MYSID )
         initVar( "MaxEvents", "", pdev, MYSID )
+        initVar( "StateCacheExpiry", 600, pdev, MYSID )
         initVar( "UseACE", "", pdev, MYSID )
         initVar( "ACEURL", "", pdev, MYSID )
 
