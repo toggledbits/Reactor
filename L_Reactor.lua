@@ -383,7 +383,7 @@ local function scheduleTick( tinfo, timeTick, flags )
         -- New task
         assert(tinfo.owner ~= nil) -- required for new task
         assert(tinfo.func ~= nil) -- required for new task
-        tickTasks[tkey] = { id=tostring(tinfo.id), owner=tinfo.owner, 
+        tickTasks[tkey] = { id=tostring(tinfo.id), owner=tinfo.owner,
             when=timeTick, func=tinfo.func, args=tinfo.args or {},
             info=tinfo.info or "" }
         D("scheduleTick() new task %1 at %2", tinfo, timeTick)
@@ -574,12 +574,12 @@ local function plugin_runOnce( pdev )
     if s < 00202 then
         initVar( "MaxEvents", "", pdev, MYSID )
     end
-    
+
     if s < 00204 then
         initVar( "UseACE", "", pdev, MYSID )
         initVar( "ACEURL", "", pdev, MYSID )
     end
-    
+
     if s < 00205 then
         initVar( "IsHome", "", pdev, MYSID )
     end
@@ -1540,16 +1540,16 @@ local function evaluateCondition( cond, grp, tdev )
         elseif op == "change" then
             if cv ~= "" and cv ~= "," then
                 local ar = split( cv, "," )
-                -- With terminal values. If value hasn't changed, consider as 
+                -- With terminal values. If value hasn't changed, consider as
                 -- re-eval, go back further in history for prior value.
-                local prior = ( cond.laststate.lastvalue == vv ) and 
+                local prior = ( cond.laststate.lastvalue == vv ) and
                     cond.laststate.priorvalue or cond.laststate.lastvalue
                 D("evaluateCondition() service change op, currval=%1, prior=%2, term=%3", vv, prior, ar)
                 if #ar > 0 and ar[1] ~= "" and prior ~= ar[1] then return vv,false end
                 if #ar > 1 and ar[2] ~= "" and vv ~= ar[2] then return vv,false end
                 return vv,true
             end
-            D("evaluateCondition() service change op, currval=%1, prior=%2, term=%3", 
+            D("evaluateCondition() service change op, currval=%1, prior=%2, term=%3",
                 vv, cond.laststate.lastvalue, cv)
             if vv == cond.laststate.lastvalue then return vv,false end
             -- Changed without terminal values, pulse.
@@ -1568,7 +1568,7 @@ local function evaluateCondition( cond, grp, tdev )
         local mode = getHouseMode( tdev )
         if cond.operator == "change" then
             if val ~= "" and val ~= "," then
-                -- With terminal values. If value hasn't changed, consider as 
+                -- With terminal values. If value hasn't changed, consider as
                 -- re-eval, go back further in history for prior value.
                 local prior = ( cond.laststate.lastvalue == mode ) and cond.laststate.priorvalue or cond.laststate.lastvalue
                 D("evaluateCondition() housemode change op, currval=%1, prior=%2, term=%3", mode, prior, modes)
@@ -1901,7 +1901,7 @@ local function evaluateCondition( cond, grp, tdev )
         else
             -- We could just traverse IsHome, but we want to show
             if geofenceMode == 0 then geofenceMode = 1 end -- don't change -1
-            if #userlist < 1 or (#userlist == 1 and userlist[1] == "") then 
+            if #userlist < 1 or (#userlist == 1 and userlist[1] == "") then
                 -- Empty userlist.
                 for k,v in pairs( ishome ) do
                     D("evaluateCondition() any op %1, checking %2 ishome=%3", op, k, v.ishome)
@@ -2275,8 +2275,8 @@ local function masterTick(pdev)
             end
         end
     end
-    
-    -- Geofencing. If flag on, at least one sensor is using geofencing. Fetch 
+
+    -- Geofencing. If flag on, at least one sensor is using geofencing. Fetch
     -- userdata, which can be very large. Shame that it comes back as JSON-
     -- formatted text that we need to decode; I'm sure the action had to encode
     -- it that way, and all we're going to do is decode back.
@@ -2825,8 +2825,8 @@ function tick(p)
     local nextTick = nil
     tickTasks._plugin.when = 0 -- marker
 
-    -- Since the tasks can manipulate the tickTasks table (via calls to 
-    -- scheduleTick()), the iterator is likely to be disrupted, so make a 
+    -- Since the tasks can manipulate the tickTasks table (via calls to
+    -- scheduleTick()), the iterator is likely to be disrupted, so make a
     -- separate list of tasks that need service (to-do list).
     local todo = {}
     for t,v in pairs(tickTasks) do
@@ -2842,7 +2842,7 @@ function tick(p)
     D("tick() to-do list is %1", todo)
     for _,v in ipairs(todo) do
         local fname = functions[tostring(v.func)] or tostring(v.func)
-        D("tick() calling %3(%4,%5) for %1 (task %2 %3)", v.owner, 
+        D("tick() calling %3(%4,%5) for %1 (task %2 %3)", v.owner,
             (luup.devices[v.owner] or {}).description, fname, v.owner, v.id,
             v.info)
         -- Call timer function with arguments ownerdevicenum,taskid[,args]
@@ -2885,7 +2885,7 @@ local function sensorWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
     D("sensorWatch(%1,%2,%3,%4,%5,%6,%7)", dev, sid, var, oldVal, newVal, tdev, pdev)
     -- Watched variable has changed. Re-evaluate conditons.
     addEvent{ dev=tdev, event='devicewatch', device=dev, name=(luup.devices[dev] or {}).descriptions,
-        var=sid .. "/" .. var, old=string.format("%q", tostring(oldVal):sub(1,64)), 
+        var=sid .. "/" .. var, old=string.format("%q", tostring(oldVal):sub(1,64)),
         new=string.format("%q", tostring(newVal):sub(1,64)) }
     updateSensor( tdev )
 end
@@ -3037,7 +3037,7 @@ local function alt_json_encode( st, seen )
         str = str .. '"' .. k .. '":'
         if type(v) == "table" then
             if seen[v] then str = str .. '"(recursion)"'
-            else 
+            else
                 seen[v] = k
                 str = str .. alt_json_encode( v, seen )
             end
@@ -3047,13 +3047,13 @@ local function alt_json_encode( st, seen )
     end
     str = str .. "}"
     return str
-end 
+end
 
 -- Stringify a primitive type
 stringify = function( v, seen )
     if v == nil then
         return "(nil)"
-    elseif type(v) == "number" or type(v) == "boolean" then 
+    elseif type(v) == "number" or type(v) == "boolean" then
         return tostring(v)
     elseif type(v) == "table" then
         return alt_json_encode( v, seen )
@@ -3076,7 +3076,7 @@ local function showGeofenceData( r )
     r = r or ""
     local data = getVarJSON( "IsHome", {}, pluginDevice, MYSID )
     for user,udata in pairs( data ) do
-        r = r .. "            User " .. tostring(user) .. " ishome=" .. tostring(udata.ishome) .. 
+        r = r .. "            User " .. tostring(user) .. " ishome=" .. tostring(udata.ishome) ..
             " inlist=" .. table.concat( udata.inlist or {} ) .. " since " .. shortDate( udata.since ) .. EOL
         for _,tdata in pairs( udata.tags or {} ) do
             r = r .. "            " .. string.format("|%5d %q type %q status %q", tdata.id, tdata.name or "", (tdata.homeloc or 0)~=0 and "home" or "other", tdata.status or "") .. EOL
@@ -3118,14 +3118,14 @@ function request( lul_request, lul_parameters, lul_outputformat )
     elseif action == "summary" then
         local r = ""
         r = r .. string.rep("*", 51) .. " REACTOR LOGIC SUMMARY REPORT " .. string.rep("*", 51) .. EOL
-        r = r .. "   Version: " .. tostring(_PLUGIN_VERSION) .. " config " .. tostring(_CONFIGVERSION) .. EOL
+        r = r .. "   Version: " .. tostring(_PLUGIN_VERSION) .. " config " .. tostring(_CONFIGVERSION) .. " pluginDevice " .. pluginDevice .. EOL
         r = r .. "Local time: " .. os.date("%Y-%m-%dT%H:%M:%S%z") .. ", DST=" .. tostring(luup.variable_get( MYSID, "LastDST", pluginDevice ) or "") .. EOL
         r = r .. "House mode: " .. tostring(luup.variable_get( MYSID, "HouseMode", pluginDevice ) or "") .. EOL
         r = r .. "  Sun data: " .. tostring(luup.variable_get( MYSID, "sundata", pluginDevice ) or "") .. EOL
         if geofenceMode ~= 0 then
             r = r .. "  Geofence: running in " .. (geofenceMode < 0 and "long" or "quick") .. " mode." .. EOL
             local status, p = pcall( showGeofenceData )
-            if status then 
+            if status then
                 r = r .. p
             else
                 r = r .. "            ? " .. tostring(p) .. EOL
@@ -3187,7 +3187,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
                             r = r .. string.format("%s/%s %s %s", cond.service or "?", cond.variable or "?", cond.operator or cond.condition or "?",
                                 cond.value or "")
                             if cond.duration then
-                                r = r .. " for " .. ( cond.duration_op or "ge" ) .. 
+                                r = r .. " for " .. ( cond.duration_op or "ge" ) ..
                                     " " .. cond.duration .. "s"
                             end
                             if cond.after then
