@@ -997,6 +997,7 @@ local function execSceneGroups( tdev, taskid )
                 -- Genuine Vera/Luup scene (just has device actions)
                 local devnum = tonumber( action.device )
                 if devnum == nil or luup.devices[devnum] == nil then
+                    addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, warning="Action skipped, device number invalid or does not exist: " .. tostring( action.device ) }
                     L({level=2,msg="%5 (%6): invalid device number (%4) in scene %1 (%2) group %3; skipping action."},
                         scd.id, scd.name, nextGroup, action.device, tdev, luup.devices[tdev].description)
                     D("execSceneGroups() action=%1, all group %2 actions=%3", action, nextGroup, scd.groups[nextGroup].actions)
@@ -1032,6 +1033,7 @@ local function execSceneGroups( tdev, taskid )
                 elseif action.type == "device" then
                     local devnum = tonumber( action.device )
                     if devnum == nil or luup.devices[devnum] == nil then
+                        addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, warning="Action skipped, device number invalid or does not exist: " .. tostring( action.device ) }
                         L({level=1,msg="%5 (%6): invalid device (%4) in scene %1 (%2) group %3; skipping action."},
                             scd.name or "", scd.id, nextGroup, action.device, tdev, luup.devices[tdev].description)
                     else
@@ -1071,6 +1073,7 @@ local function execSceneGroups( tdev, taskid )
                         local mime = require('mime')
                         lua = mime.unb64( lua )
                         if lua == nil then
+                            addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, ['error']="Aborting; unable to decode Lua for action #" .. tostring(ix) }
                             L({level=1,msg="Aborting scene %1 (%2) run, unable to decode scene Lua"}, scd.id, scd.name)
                             return
                         end
@@ -1078,7 +1081,7 @@ local function execSceneGroups( tdev, taskid )
                     local more, err = execLua( fname, lua, nil, tdev )
                     D("execSceneGroups() execLua returned %1,%2", more, err)
                     if err then
-                        addEvent{ dev=tdev, event="abortscene", scene=scd.id, sceneName=scd.name or scd.id, reason="Lua error: " .. tostring(err) }
+                        addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, ['error']="Aborting; Lua error in action #" .. tostring(ix) .. ": " .. tostring(err) }
                         L({level=1,msg="%1 (%2) aborting scene %3 Lua execution at group step %4, Lua run failed: %5"},
                             luup.devices[tdev].description, tdev, scd.id, ix, err)
                         L{level=2,msg="Lua:\n"..lua} -- concat to avoid formatting
@@ -1086,16 +1089,19 @@ local function execSceneGroups( tdev, taskid )
                         stopScene( tdev, nil, tdev )
                         return nil
                     elseif more == false then -- N.B. specific test to match exactly boolean type false (but not nil)
-                        addEvent{ dev=tdev, event="abortscene", scene=scd.id, sceneName=scd.name or scd.id, reason="Lua returned (" .. type(more) .. ")" .. tostring(more) }
+                        addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, notice="Stopping; Run Lua action #" .. tostring(ix) .. " returned (" .. type(more) .. ")" .. tostring(more) }
                         L("%1 (%2) scene %3 Lua at step %4 returned (%5)%6, stopping actions.",
                             luup.devices[tdev].description, tdev, scd.id, ix, type(more), more)
                         stopScene( nil, taskid, tdev ) -- stop just this scene.
                         return nil
+                    --[[
                     else
-                        addEvent{ dev=tdev, event="runlua", scene=scd.id, sceneName=scd.name or scd.id, reason="RunLua success, returned (" .. type(more) .. ")" .. tostring(more) }
+                        addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, notice="Run Lua action #" .. tostring(ix) .. " OK, return value (" .. type(more) .. ")" .. tostring(more) }
+                    --]]
                     end
                 else
-                    L({level=1,msg="BUG: Unhandled action type %1 at %2 in scene %3 for %4 (%5)"},
+                    addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, warning="Action #" .. tostring(ix) .. " unrecognized type: " .. tostring(action.type) .. ", ignored." }
+                    L({level=1,msg="Unhandled action type %1 at %2 in scene %3 for %4 (%5)"},
                         action.type, ix, scd.id, tdev, luup.devices[tdev].description)
                 end
             end
@@ -1142,6 +1148,7 @@ local function execScene( scd, tdev, options )
             local mime = require('mime')
             luafragment = mime.unb64( scd.lua )
             if luafragment == nil then
+                addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, ['error']="Aborting; unable to decode scene Lua" }
                 L({level=1,msg="Aborting scene %1 (%2) run, unable to decode scene Lua"}, scd.id, scd.name)
                 return
             end
@@ -1153,14 +1160,14 @@ local function execScene( scd, tdev, options )
         local fname = string.format("scene%s_start", tostring(scd.id))
         local more,err = execLua( fname, luafragment, options.externalArgument, tdev )
         if err then
-            addEvent{ dev=tdev, event="abortscene", scene=scd.id, sceneName=scd.name or scd.id, reason="Lua error: " .. tostring(err) }
+            addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, ['error']="Aborting; Lua error in scene Lua: " .. tostring(err) }
             L({level=1,msg="%1 (%2) scene %3 scene Lua run failed: %4"},
                 luup.devices[tdev].description, tdev, scd.id, err)
             L{level=2,msg="Lua:\n"..luafragment} -- concat to avoid formatting
             return
         end
         if more == false then -- N.B. specific test to match exactly boolean type false (but not nil)
-            addEvent{ dev=tdev, event="abortscene", scene=scd.id, sceneName=scd.name or scd.id, reason="Lua returned (" .. type(more) .. ")" .. tostring(more) }
+            addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, notice="Stopping; scene Lua returned (" .. type(more) .. ")" .. tostring(more) }
             L("%1 (%2) scene %3 Lua returned (%4)%5, scene run aborted.",
                 luup.devices[tdev].description, tdev. scd.id, type(more), more)
             return
@@ -1634,9 +1641,10 @@ local function evaluateCondition( cond, grp, tdev )
     elseif cond.type == "sun" then
         -- Sun condition (sunrise/set)
         -- Figure out sunrise/sunset. Keep cached to reduce load.
-        local stamp = ndt.year * 10000 + ndt.month * 100 + ndt.day
+        local usingTestTime = getVarNumeric( "TestTime", 0, tdev, RSSID ) ~= 0
+        local stamp = ndt.year * 1000 + ndt.yday
         local sundata = getVarJSON( "sundata", {}, pluginDevice, MYSID )
-        if ( sundata.stamp or 0 ) ~= stamp or getVarNumeric( "TestTime", 0, tdev, RSSID ) ~= 0 then
+        if ( sundata.stamp or 0 ) ~= stamp or usingTestTime then
             if getVarNumeric( "UseLuupSunrise", 0, pluginDevice, MYSID ) ~= 0 then
                 L({level=2,msg="Reactor is configured to use Luup's sunrise/sunset calculations; twilight times cannot be correctly evaluated and will evaluate as dawn=sunrise, dusk=sunset"})
                 sundata = { sunrise=luup.sunrise(), sunset=luup.sunset() }
@@ -1646,8 +1654,13 @@ local function evaluateCondition( cond, grp, tdev )
                     getVarNumeric( "Elevation", 0.0, pluginDevice, MYSID ), now )
                 D("evaluationCondition() location (%1,%2) computed %3", luup.longitude, luup.latitude, sundata)
             end
-            sundata.stamp = stamp
-            luup.variable_set( MYSID, "sundata", json.encode(sundata), pluginDevice )
+            sundata.longitude = luup.longitude
+            sundata.latitude = luup.latitude
+            if not usingTestTime then
+                -- Only write if not testing.
+                sundata.stamp = stamp
+                luup.variable_set( MYSID, "sundata", json.encode(sundata), pluginDevice )
+            end
         end
         local nowMSM = ndt.hour * 60 + ndt.min
         local op = cond.operator or "bet"
@@ -3083,17 +3096,6 @@ local function showGeofenceData( r )
         end
     end
     return r
-end
-
-local function shortDate( d )
-    d = tonumber(d) or 0
-    local delta = math.abs( os.time() - d )
-    if delta < 86400 then
-        return os.date("%X", d)
-    elseif delta < (86400*364) then
-        return os.date("%m-%d.%X", d)
-    end
-    return os.date("%Y-%m-%d.%X", d)
 end
 
 function request( lul_request, lul_parameters, lul_outputformat )
