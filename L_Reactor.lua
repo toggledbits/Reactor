@@ -394,7 +394,7 @@ local function scheduleTick( tinfo, timeTick, flags )
         tickTasks._plugin.when = timeTick
         local delay = timeTick - os.time()
         if delay < 1 then delay = 1 end
-        D("scheduleTick() rescheduling plugin tick for %1", delay)
+        D("scheduleTick() rescheduling plugin tick for %1s to %2", delay, timeTick)
         runStamp = runStamp + 1
         luup.call_delay( "reactorTick", delay, runStamp )
     end
@@ -406,7 +406,7 @@ end
 local function scheduleDelay( tinfo, delay, flags )
     D("scheduleDelay(%1,%2,%3)", tinfo, delay, flags )
     if delay < 1 then delay = 1 end
-    return scheduleTick( tinfo, delay+os.time(), flags )
+    return scheduleTick( tinfo, os.time()+delay, flags )
 end
 
 -- Set the status message
@@ -2833,7 +2833,8 @@ end
 -- tasks that need to be run and when, and try to stay on schedule. This
 -- keeps us light on resources: typically one system timer only for any
 -- number of devices.
-local functions = { [tostring(masterTick)]="masterTick", [tostring(sensorTick)]="sensorTick" }
+local functions = { [tostring(masterTick)]="masterTick", [tostring(sensorTick)]="sensorTick",
+    [tostring(loadWaitingScenes)]="loadWaitingScenes", [tostring(execSceneGroups)]="execSceneGroups" }
 function tick(p)
     D("tick(%1) pluginDevice=%2", p, pluginDevice)
     local stepStamp = tonumber(p,10)
