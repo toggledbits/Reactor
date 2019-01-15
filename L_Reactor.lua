@@ -927,7 +927,7 @@ local function execLua( fname, luafragment, extarg, tdev )
     luaEnv.Reactor = {} -- dispose of device context
     D("execLua() lua success=%3 return=(%2)%1", ret, type(ret), success)
     -- Scene return value must be exactly boolean false to stop scene.
-    return ret, not success and ret or false
+    return ret, (not success) and ret or false
 end
 
 local runScene -- forward declaration
@@ -949,8 +949,8 @@ end
 -- Run the next scene group(s), until we run out of groups or a group delay
 -- restriction hasn't been met. Across reloads, scenes will "catch up," running
 -- groups that are now past-due (native Luup scenes don't do this).
-local function execSceneGroups( tdev, taskid )
-    D("execSceneGroups(%1,%2)", tdev, taskid )
+local function execSceneGroups( tdev, taskid, scd )
+    D("execSceneGroups(%1,%2,%3)", tdev, taskid, type(scd) )
     assert(luup.devices[tdev].device_type == MYTYPE or luup.devices[tdev].device_type == RSTYPE)
 
     -- Get sceneState, make sure it's consistent with request.
@@ -958,10 +958,13 @@ local function execSceneGroups( tdev, taskid )
     D("scene state %1", sst)
     if sst == nil then return end
 
-    local scd = getSceneData(sst.scene, tdev)
-    if scd == nil then
-        L({level=1,msg="Previously running scene %1 now not found/loaded. Aborting run."}, sst.scene)
-        return stopScene( nil, taskid, tdev )
+    -- Reload the scene if it wasn't passed to us (from cache)
+    if not scd then
+        scd = getSceneData(sst.scene, tdev)
+        if scd == nil then
+            L({level=1,msg="Previously running scene %1 now not found/loaded. Aborting run."}, sst.scene)
+            return stopScene( nil, taskid, tdev )
+        end
     end
 
     -- Run next scene group (and keep running groups until no more or delay needed)
@@ -977,19 +980,22 @@ local function execSceneGroups( tdev, taskid )
                 luup.devices[tdev].description, tdev, nextGroup)
             delay = 0
         end
-        D("execSceneGroups() delay is %1 %2", delay, scd.groups[nextGroup].delaytype or "start")
-        local tt
-        if scd.isReactorScene and (scd.groups[nextGroup].delaytype == "inline") then
-            -- ReactorScenes can delay inline or from start of scene; handle former.
-            tt = (sst.lastgrouptime or 0) + delay
-        else
-            tt = sst.starttime + delay
-        end
-        if tt > now then
-            -- It's not time yet. Schedule task to continue.
-            D("execSceneGroups() scene group %1 must delay to %2", nextGroup, tt)
-            scheduleTick( { id=sst.taskid, owner=sst.owner, func=execSceneGroups }, tt )
-            return taskid
+        D("execSceneGroups() delay is %1 %2", delay, scd.groups[nextGroup].delaytype)
+        if delay > 0 then
+            local delaytype = scd.groups[nextGroup].delaytype or "inline"
+            local tt
+            -- Vera (7.x.x) scenes are always "start" delay type.
+            if scd.groups[nextGroup].delaytype == "start" or not scd.isReactorScene then
+                tt = sst.starttime + delay
+            else
+                tt = (sst.lastgrouptime or now) + delay
+            end
+            if tt > now then
+                -- It's not time yet. Schedule task to continue.
+                D("execSceneGroups() scene group %1 must delay to %2", nextGroup, tt)
+                scheduleTick( { id=sst.taskid, owner=sst.owner, func=execSceneGroups, args={} }, tt )
+                return taskid
+            end
         end
 
         -- Run this group.
@@ -1058,7 +1064,8 @@ local function execSceneGroups( tdev, taskid )
                     end
                 elseif action.type == "housemode" then
                     D("execSceneGroups() setting house mode to %1", action.housemode)
-                    luup.call_action( "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "SetHouseMode", { Mode=action.housemode or "1" }, 0 )
+                    luup.call_action( "urn:micasaverde-com:serviceId:HomeAutomationGateway1", 
+                        "SetHouseMode", { Mode=action.housemode or "1" }, 0 )
                 elseif action.type == "runscene" then
                     -- Run scene in same context as this one. Whoa... recursion... depth???
                     local scene = resolveVarRef( action.scene, tdev )
@@ -1127,8 +1134,6 @@ local function execScene( scd, tdev, options )
     D("execScene(%1(id),%2,%3)", scd.id, tdev, options )
     options = options or {}
 
-    local now = os.time()
-
     -- Check if scene running. If so, stop it.
     local ctx = tonumber( options.contextDevice ) or 0
     local taskid = string.format("ctx%s-sc%s", tostring(ctx), tostring(scd.id))
@@ -1179,7 +1184,7 @@ local function execScene( scd, tdev, options )
     D("execScene() setting up to run groups for scene")
     sceneState[taskid] = {
         scene=scd.id,   -- scene ID
-        starttime=now,  -- original start time for scene
+        starttime=os.time(),  -- original start time for scene
         lastgroup=0,    -- last group to finish
         taskid=taskid,  -- timer task ID
         context=ctx,    -- context device (device requesting scene run)
@@ -1188,7 +1193,7 @@ local function execScene( scd, tdev, options )
     }
     luup.variable_set( MYSID, "runscene", json.encode(sceneState), pluginDevice )
 
-    return execSceneGroups( tdev, taskid )
+    return execSceneGroups( tdev, taskid, scd )
 end
 
 -- Continue running scenes on restart.
@@ -1202,7 +1207,7 @@ local function resumeScenes()
     end
     sceneState = d
     for _,data in pairs( sceneState ) do
-        scheduleDelay( { id=data.taskid, owner=data.owner, func=execSceneGroups }, 1 )
+        scheduleDelay( { id=data.taskid, owner=data.owner, func=execSceneGroups, args={} }, 1 )
     end
 end
 
@@ -1211,17 +1216,18 @@ runScene = function( scene, tdev, options )
     D("runScene(%1,%2,%3)", scene, tdev, options )
     options = options or {}
 
-    -- If using Luup scenes, short-cut
-    if getVarNumeric("UseReactorScenes", 1, tdev, RSSID) == 0 and not options.forceReactorScenes then
-        D("runScene() handing-off scene run to Luup")
-        luup.call_action( "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "RunScene", { SceneNum=scene }, 0 )
-        return
-    end
-
     local scd = getSceneData( scene, tdev )
     if scd == nil then
         L({level=1,msg="%1 (%2) can't run scene %3, not found/loaded."}, tdev,
             luup.devices[tdev].description, scene)
+        return
+    end
+
+    -- If using Luup scenes, short-cut
+    if getVarNumeric("UseReactorScenes", 1, tdev, RSSID) == 0 and not options.forceReactorScenes 
+        and not scd.isReactorScene then
+        D("runScene() handing-off scene run to Luup")
+        luup.call_action( "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "RunScene", { SceneNum=scene }, 0 )
         return
     end
 
@@ -1386,6 +1392,7 @@ local function getExpressionContext( cdata, tdev )
         if n == nil then return luaxp.NULL end
         return n
     end
+    ctx.__functions.random = function( args ) return math.random( unpack( args ) ) end
     ctx.__functions.getstate = function( args )
         local dev, svc, var = unpack( args )
         local vn = finddevice( dev )
@@ -2458,6 +2465,8 @@ local function startSensor( tdev, pdev )
     sensorState[skey].updateThrottled = false
     sensorState[skey].changeRate = initRate( 60, 15 )
     sensorState[skey].changeThrottled = false
+    
+    math.randomseed( os.time() )
 
     -- Load the config data.
     loadSensorConfig( tdev )
