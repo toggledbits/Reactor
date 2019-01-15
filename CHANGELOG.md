@@ -1,5 +1,9 @@
 # Change Log #
 
+## Version 2.1-hotfix (hotfixes since 2.1 release)
+
+* Fix an issue where cache expiry of condition state data may cause trip/untrip manual action buttons to fail to execute Lua fragments in the activities. This does not affect the normal, automatic operation of trip/untrip in response to conditions, only manual.
+
 ## Version 2.1 (released)
 
 This is primarily a fix release that corrects a number of UI errors that people have run into.
