@@ -1,5 +1,7 @@
 # Change Log #
 
+NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
+
 ## Version 2.2stable-19015 (stable branch)
 
 * Enhancement: New condition type "geofence" lets you react to one or more users being home, or not at home, or in one of the user's configured locations.
@@ -23,8 +25,6 @@ This is primarily a fix release that corrects a number of UI errors that people 
 * Fix: Fix problem with "unsaved changes" prompt coming up again on re-entry to cpanel after prior cpanel exit when save is declined.
 
 ## Version 2.0 (released) ##
-
-Note to OpenLuup Users: openLuup 2018.11.21 is required to run this version and higher.
 
 * Move all documentation to the project wiki; lots of doc improvements (and still work to do, particularly on the Activities page). Contributers are welcome. Wiki: https://github.com/toggledbits/Reactor/wiki
 * Allow renaming of condition groups, so you can give them functional names rather than the unique IDs automatically assigned. Valid group names must start with a letter with alphanumeric (and underscore) allowed to follow.
