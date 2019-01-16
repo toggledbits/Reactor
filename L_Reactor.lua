@@ -2304,6 +2304,7 @@ local function masterTick(pdev)
     if geofenceMode ~= 0 then
         L("Checking geofence...")
         local ishome = getVarJSON( "IsHome", {}, pdev, MYSID )
+        if type(ishome) ~= "table" then ishome = {} end
         local rc,rs,rj,ra = luup.call_action( "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "GetUserData", { DataFormat="json" }, 0 ) -- luacheck: ignore 211
         -- D("masterTick() GetUserData action returned rc=%1, rs=%2, rj=%3, ra=%4", rc, rs, rj, ra)
         if rc ~= 0 or (ra or {}).UserData == nil then
@@ -2416,7 +2417,7 @@ local function masterTick(pdev)
                     -- Stamp it.
                     urec.since = os.time()
                 end
-                -- Handle users that weren't list (treat as not home)
+                -- Handle users that weren't listed (treat as not home)
                 for v,_ in pairs( ulist ) do
                     if ishome[v].ishome ~= 0 then
                         D("masterTick() user %1 not in users_settings, marking not home", v)
