@@ -13,7 +13,7 @@ local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
 local _PLUGIN_VERSION = "2.2develop"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
-local _CONFIGVERSION = 00205
+local _CONFIGVERSION = 00206
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -23,7 +23,8 @@ local VARSID = "urn:toggledbits-com:serviceId:ReactorValues"
 local RSSID = "urn:toggledbits-com:serviceId:ReactorSensor"
 local RSTYPE = "urn:schemas-toggledbits-com:device:ReactorSensor:1"
 
-local SENSOR_SID  = "urn:micasaverde-com:serviceId:SecuritySensor1"
+local SENSOR_SID = "urn:micasaverde-com:serviceId:SecuritySensor1"
+local SWITCH_SID = "urn:upnp-org:serviceId:SwitchPower1"
 
 local sensorState = {}
 local tickTasks = {}
@@ -479,6 +480,9 @@ local function sensor_runOnce( tdev )
         initVar( "ArmedTripped", 0, tdev, SENSOR_SID )
         initVar( "LastTrip", 0, tdev, SENSOR_SID )
         initVar( "AutoUntrip", 0, tdev, SENSOR_SID )
+        
+        initVar( "Target", 0, tdev, SWITCH_SID )
+        initVar( "Status", 0, tdev, SWITCH_SID )
 
         -- Force this value.
         luup.variable_set( "urn:micasaverde-com:serviceId:HaDevice1", "ModeSetting", "1:;2:;3:;4:", tdev )
@@ -519,6 +523,12 @@ local function sensor_runOnce( tdev )
 
     if s < 00201 then
         initVar( "ValueChangeHoldTime", 2, tdev, RSSID )
+    end
+    
+    if s < 00206 then
+        local currState = getVarNumeric( "Tripped", 0, tdev, SENSOR_SID )
+        initVar( "Target", currState, tdev, SWITCH_SID )
+        initVar( "Status", currState, tdev, SWITCH_SID )
     end
 
     -- Update version last.
@@ -1238,6 +1248,8 @@ end
 local function trip( state, tdev )
     L("%2 (#%1) now %3", tdev, luup.devices[tdev].description, state and "tripped" or "untripped")
     luup.variable_set( SENSOR_SID, "Tripped", state and "1" or "0", tdev )
+    luup.variable_set( SWITCH_SID, "Target", state and "1" or "0", tdev )
+    luup.variable_set( SWITCH_SID, "Status", state and "1" or "0", tdev )
     addEvent{dev=tdev,event='sensorstate',state=state}
     -- Make sure condState is loaded/ready (may have been expired by cache)
     sensorState[tostring(tdev)].condState = loadCleanState( tdev )
@@ -2304,7 +2316,11 @@ local function masterTick(pdev)
     if geofenceMode ~= 0 then
         L("Checking geofence...")
         local ishome = getVarJSON( "IsHome", {}, pdev, MYSID )
-        if type(ishome) ~= "table" then ishome = {} end
+        if type(ishome) ~= "table" then 
+            D("masterTick() IsHome data type invalid (%1)", type(ishome))
+            L{level=2,msg="IsHome data invalid/corrupt; resetting."}
+            ishome = {} 
+        end
         local rc,rs,rj,ra = luup.call_action( "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "GetUserData", { DataFormat="json" }, 0 ) -- luacheck: ignore 211
         -- D("masterTick() GetUserData action returned rc=%1, rs=%2, rj=%3, ra=%4", rc, rs, rj, ra)
         if rc ~= 0 or (ra or {}).UserData == nil then

@@ -23,6 +23,11 @@
             <SCPDURL>S_SecuritySensor1.xml</SCPDURL>
           </service>
           <service>
+            <serviceType>urn:schemas-upnp-org:service:SwitchPower:1</serviceType>
+            <serviceId>urn:upnp-org:serviceId:SwitchPower1</serviceId>
+            <SCPDURL>S_SwitchPower1.xml</SCPDURL>
+          </service>
+          <service>
             <serviceType>urn:schemas-toggledbits-com:service:ReactorSensor:1</serviceType>
             <serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
             <SCPDURL>S_ReactorSensor.xml</SCPDURL>
