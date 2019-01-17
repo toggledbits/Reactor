@@ -2851,7 +2851,6 @@ var ReactorSensor = (function(api, $) {
             device = '"' + jQuery( 'select#gsdev option:selected' ).text().replace( / +\(#\d+\)$/, "" ) + '"';
         }
         var str = ' getstate( ' + device + ', "' + service + '", "' + variable + '" ) ';
-        console.log( 'getstate insertion string is ' + str );
         
         var varrow = row.prev();
         var f = jQuery( 'textarea.expr', varrow );
