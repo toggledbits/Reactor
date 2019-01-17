@@ -703,10 +703,10 @@ var ReactorSensor = (function(api, $) {
 
         /* Delete button of single condition in first condition group is
            disabled/hidden. Must keep one condition, hopefully set. */
-        jQuery('div.conditionrow div.controls i.action-delete').prop('disabled', false).show();
+        jQuery('div.conditionrow div.controls i.action-delete').attr('disabled', false);
         var lastMo = jQuery('div.conditiongroup:first div.conditionrow div.controls');
         if ( lastMo.length == 1 ) {
-            jQuery('i.action-delete', lastMo).prop('disabled', true ).hide();
+            jQuery('i.action-delete', lastMo).attr('disabled', true );
         }
 
         updateSaveControls();
@@ -2828,42 +2828,125 @@ var ReactorSensor = (function(api, $) {
             updateVariableControls();
         }
     }
+    
+    function clearGetStateOptions() {
+        var container = jQuery('div#reactorvars');
+        var row = jQuery( 'div#opt-state', container );
+        row.remove();
+        jQuery( 'button#addvar', container ).attr( 'disabled', false );
+        jQuery( 'textarea.expr,i.md-btn', container ).attr( 'disabled', false );
+    }
+    
+    function handleGetStateClear( ev ) {
+        clearGetStateOptions();
+    }
+    
+    function handleGetStateInsert( ev ) {
+        var row = jQuery( ev.currentTarget ).closest( 'div.row' );
+        
+        var device = jQuery( 'select#gsdev', row ).val() || 0;
+        var service = jQuery( 'select#gsvar', row ).val() || "";
+        var variable = service.replace( /^[^\/]+\//, "" );
+        service = service.replace( /\/.*$/, "" );
+        var str = ' getstate( ' + device + '. "' + service + '", "' + variable + '" ) ';
+        console.log( 'getstate insertion string is ' + str );
+        
+        var varrow = row.prev();
+        var f = jQuery( 'textarea.expr', varrow );
+        var txt = f.val() || "";
+        var p = f.get(0).selectionEnd || 0;
+        if ( p >= 0 ) {
+            str = txt.substring(0, p) + str + txt.substring(p);
+        } else {
+            str = str + txt;
+        }
+        f.val( str.trim() );
+
+        clearGetStateOptions();
+        configModified = true;
+        updateVariableControls();
+    }
+    
+    function handleGetStateOptionChange( ev ) {
+        var row = jQuery( ev.currentTarget ).closest( 'div.row' );
+        var f = jQuery( ev.currentTarget );
+        if ( f.attr( 'id' ) == "gsdev" ) {
+            var device = parseInt( f.val() || "" );
+            var s = makeVariableMenu( device, "", "" ).attr( 'id', 'gsvar' );
+            jQuery( 'select#gsvar', row ).replaceWith( s );
+            /* Switch to new varmenu */
+            f = jQuery( 'select#gsvar', row );
+            f.on( 'change.reactor', handleGetStateOptionChange );
+        }
+        jQuery( 'button#getstateinsert', row ).prop( 'disabled', "" === f.val() );
+    }
+    
+    function handleGetStateClick( ev ) {
+        var row = jQuery( ev.currentTarget ).closest( 'div.varexp' );
+        var container = jQuery('div#reactorvars');
+        
+        jQuery( 'button#addvar', container ).attr( 'disabled', true );
+        jQuery( 'textarea.expr,i.md-btn', container ).attr( 'disabled', true );
+        
+        jQuery( 'textarea.expr', row ).attr( 'disabled', false );
+        
+        el = jQuery( '<div class="col-xs-12 col-md-9 col-md-offset-2 form-inline" />' );
+        el.append( makeDeviceMenu( "", "" ).attr( 'id', 'gsdev' ) );
+        el.append( makeVariableMenu( parseInt( jQuery( 'select#gsdev', el ).val() ), "", "" )
+            .attr( 'id', 'gsvar' ) );
+        el.append( jQuery( '<button/>' ).attr( 'id', 'getstateinsert' )
+            .addClass( "btn btn-xs btn-success" )
+            .text( 'Insert' ) );
+        el.append( jQuery( '<button/>' ).attr( 'id', 'getstatecancel' )
+            .addClass( "btn btn-xs btn-default" )
+            .text( 'Cancel' ) );
+        jQuery( '<div id="opt-state" class="row" />' ).append( el ).insertAfter( row );
+        
+        jQuery( 'select.devicemenu', el ).on( 'change.reactor', handleGetStateOptionChange );
+        jQuery( 'button#getstateinsert', el ).prop( 'disabled', true )
+            .on( 'click.reactor', handleGetStateInsert );
+        jQuery( 'button#getstatecancel', el ).on( 'click.reactor', handleGetStateClear );
+    }
 
     function getVariableRow() {
         var editrow = jQuery('<div class="row varexp"></div>');
         editrow.append( '<div id="varname" class="col-xs-12 col-sm-12 col-md-2"></div>' );
-        editrow.append( '<div class="col-xs-11 col-sm-11 col-md-9"><textarea class="expr form-control form-control-sm" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="off"/></div>' );
-        editrow.append( '<div class="col-xs-1 col-sm-1 col-md-1 text-right"><i id="tryexpr" class="material-icons md-btn" title="Try this expression">directions_run</i><i id="deletevar" class="material-icons md-btn">clear</i></div>' );
+        editrow.append( '<div class="col-xs-12 col-sm-10 col-md-9"><textarea class="expr form-control form-control-sm" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="off"/></div>' );
+        // ??? devices_other is an alternate for insert state variable
+        editrow.append( '<div class="col-xs-12 col-sm-2 col-md-1 text-right"><i id="tryexpr" class="material-icons md-btn" title="Try this expression">directions_run</i><i id="getstate" class="material-icons md-btn" title="Insert device state variable value">memory</i><i id="deletevar" class="material-icons md-btn" title="Delete this variable">clear</i></div>' );
         jQuery( 'textarea.expr', editrow ).on( 'change.reactor', handleVariableChange );
-        jQuery( 'i#tryexpr', editrow ).prop('disabled', true).on('click.reactor', handleTryExprClick);
-        jQuery( 'i#deletevar', editrow ).prop('disabled', true).on('click.reactor', handleDeleteVariableClick);
+        jQuery( 'i#tryexpr', editrow ).attr('disabled', true).on('click.reactor', handleTryExprClick);
+        jQuery( 'i#getstate', editrow ).attr('disabled', true).on('click.reactor', handleGetStateClick);
+        jQuery( 'i#deletevar', editrow ).attr('disabled', true).on('click.reactor', handleDeleteVariableClick);
         return editrow;
     }
 
     function handleAddVariableClick() {
         var container = jQuery('div#reactorvars');
 
+        jQuery( 'button#addvar', container ).attr( 'disabled', true );
+        jQuery( 'div.varexp textarea.expr,i.md-btn', container ).attr( 'disabled', true );
+
         var editrow = getVariableRow();
-        jQuery( 'div.varexp textarea.expr,i.md-btn', container ).prop( 'disabled', true );
-        jQuery( 'button#addvar', container ).prop( 'disabled', true );
-        jQuery( 'textarea.expr', editrow ).prop('disabled', true);
         jQuery( 'div#varname', editrow ).empty().append( '<input class="form-control form-control-sm" title="Enter a variable name and then TAB out of the field.">' );
         jQuery( 'div#varname input', editrow ).on('change.reactor', function( ev ) {
             /* Convert to regular row */
             var f = jQuery( ev.currentTarget );
+            var row = f.closest( 'div.varexp' );
             var vname = f.val() || "";
             if ( vname === "" || jQuery( 'div.varexp#' + vname ).length > 0 || !vname.match( /^[A-Z][A-Z0-9_]*$/i ) ) {
+                row.addClass( 'tberror' );
                 f.addClass('tberror');
-                f.closest('.row').addClass( 'tberror' );
                 f.focus();
             } else {
-                var row = f.closest( 'div.varexp' ).attr('id', vname).removeClass('editrow').removeClass('tberror');
-                jQuery( '.tberror', row ).removeClass('editrow');
+                row.attr('id', vname).removeClass('editrow').removeClass('tberror');
+                jQuery( '.tberror', row ).removeClass('tberror');
                 /* Remove the name input field and swap in the name (text) */
                 f.parent().empty().text(vname);
                 /* Re-enable fields and add button */
-                jQuery( 'div.varexp textarea.expr,i.md-btn', container ).prop('disabled', false);
-                jQuery( 'button#addvar', container ).prop( 'disabled', false );
+                jQuery( 'div.varexp textarea.expr,i.md-btn', container ).attr('disabled', false);
+                jQuery( 'button#addvar', container ).attr( 'disabled', false );
+                jQuery( 'textarea.expr', row ).focus();
                 /* Do the regular stuff */
                 handleVariableChange( null );
             }
@@ -2888,6 +2971,7 @@ var ReactorSensor = (function(api, $) {
                 el.attr('id', vn);
                 jQuery( 'div#varname', el).text( vn );
                 jQuery( 'textarea.expr', el ).val( vd.expression );
+                jQuery( 'i.md-btn', el ).attr( 'disabled', false );
                 gel.append( el );
             }
         }
