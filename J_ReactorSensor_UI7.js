@@ -3252,9 +3252,8 @@ var ReactorSensor = (function(api, $) {
                             ai = ai.deviceOverride[devnum];
                         }
                         if ( ! ai ) {
-                            console.log('validateActionRow: no info for ' + sact + ' device ' + devnum);
-                            jQuery( 'select.devicemenu', row ).addClass('tberror');
-                            ai = {};
+                            console.log('validateActionRow: no info for ' + sact + ' for device ' + devnum);
+                            return; /* If we don't know, we don't check */
                         }
                         for ( var k=0; k < (ai.parameters || [] ).length; k++ ) {
                             var p = ai.parameters[k];
@@ -3408,7 +3407,7 @@ var ReactorSensor = (function(api, $) {
                         for ( k=0; k < (ai.parameters || [] ).length; k++ ) {
                             pt = { name: ai.parameters[k].name };
                             if ( undefined !== ai.parameters[k].value ) {
-                                // Fixed value
+                                /* Fixed value */
                                 pt.value = ai.parameters[k].value;
                             } else {
                                 /* Ignore default here, it's assumed to be valid when needed */
@@ -3984,7 +3983,7 @@ var ReactorSensor = (function(api, $) {
                         continue;
                     }
 
-                    opt = jQuery('<option></option>').val( key ).text( actname );
+                    opt = jQuery( '<option/>' ).val( key ).text( actname + ( nodata ? "??(E)" : "") );
                     if ( nodata ) opt.addClass( "nodata" );
                     section.append( opt.clone() );
 
@@ -4004,10 +4003,12 @@ var ReactorSensor = (function(api, $) {
                 known.append( "<option class='optheading' value='' disabled><b>---Common Actions---</b></option>" );
                 for ( j=0; j<over.length; j++ ) {
                     var devact = over[j];
+                    var fake = false
                     if ( undefined === deviceInfo.services[devact.service] || undefined == deviceInfo.services[devact.service].actions[devact.action] ) {
                         /* Service/action in device exception not "real". Fake it real good. */
                         deviceInfo.services[devact.service] = deviceInfo.services[devact.service] || { actions: {} };
                         deviceInfo.services[devact.service].actions[devact.action] = { name: devact.action, deviceOverride: {} };
+                        fake = true;
                     }
                     /* There's a well-known service/action, so copy it, and apply overrides */
                     var act = deepcopy( deviceInfo.services[devact.service].actions[devact.action] );
@@ -4018,7 +4019,8 @@ var ReactorSensor = (function(api, $) {
                     }
                     if ( act.hidden ) continue;
                     key = act.service + "/" + act.action;
-                    known.append( jQuery('<option/>').val( key ).text( act.description || act.action ) );
+                    known.append( jQuery('<option/>').val( key ).text( ( act.description || act.action ) + 
+                        ( fake ? "??(O)" : "" ) ) );
                     hasAction = true;
                     if ( undefined === actions[key] ) {
                         actions[key] = deviceInfo.services[devact.service].actions[devact.action];
