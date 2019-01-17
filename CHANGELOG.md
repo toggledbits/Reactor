@@ -4,6 +4,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 2.2 (develop branch)
 
+* Enhancement: When editing variable expressions, a new "insert getstate" tool is available to more easily fetch device state variable values into the expression.
 * Enhancement: Reactor now implements service SwitchPower1, which mirrors the SecuritySensor1 state (i.e. the binary light is on when the ReactorSensor is tripped; off when it is untripped); this allows facilities that don't support SecuritySensor1 but can support SwitchPower1 to sense and manipulate the ReactorSensor.
 * Enhancement: New condition type "geofence" lets you react to one or more users being home, or not at home, or in one of the user's configured locations.
 * Enhancement: Show current value of state variable when selecting configuring service conditions (conditions that test service state variables). The display value will be truncated to 64 characters. Hovering over the displayed value or "Current value" label will display the entire string.
