@@ -62,8 +62,8 @@ var ReactorSensor = (function(api, $) {
         var html = '';
         html += '<div class="clearfix">';
         html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
-        html += '<div id="tbcopyright">Reactor ver 2.2stable-19015 &copy; 2018,2019 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
-            ' All Rights Reserved. Please check out the <a href="https://www.toggledbits.com/reactor" target="_blank">online documentation</a>' +
+        html += '<div id="tbcopyright">Reactor ver 2.2stable-19017 &copy; 2018,2019 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
+            ' All Rights Reserved. Please check out the <a href="https://github.com/toggledbits/Reactor/wiki" target="_blank">online documentation</a>' +
             ' and <a href="http://forum.micasaverde.com/index.php/board,93.0.html" target="_blank">forum board</a> for support.</div>';
         html += '<div id="supportlinks">Support links: ' +
             ' <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=debug" target="_blank">Toggle&nbsp;Debug</a>' +
@@ -703,10 +703,10 @@ var ReactorSensor = (function(api, $) {
 
         /* Delete button of single condition in first condition group is
            disabled/hidden. Must keep one condition, hopefully set. */
-        jQuery('div.conditionrow div.controls i.action-delete').prop('disabled', false).show();
+        jQuery('div.conditionrow div.controls i.action-delete').attr('disabled', false);
         var lastMo = jQuery('div.conditiongroup:first div.conditionrow div.controls');
         if ( lastMo.length == 1 ) {
-            jQuery('i.action-delete', lastMo).prop('disabled', true ).hide();
+            jQuery('i.action-delete', lastMo).attr('disabled', true );
         }
 
         updateSaveControls();
@@ -2772,13 +2772,12 @@ var ReactorSensor = (function(api, $) {
             var row = jQuery(obj);
             var vname = row.attr("id");
             if ( undefined === vname ) return;
-            var expr = jQuery('textarea.expr', row).val();
-            if ( expr === "" ) {
+            var expr = ( jQuery('textarea.expr', row).val() || "" ).trim();
+            if ( "" === expr ) {
                 jQuery('textarea.expr', row).addClass('tberror');
             }
             if ( cd.variables[vname] === undefined ) {
                 cd.variables[vname] = { name: vname, expression: expr };
-                configModified = true;
             } else if ( cd.variables[vname].expression !== expr ) {
                 cd.variables[vname].expression = expr;
                 configModified = true;
@@ -2828,42 +2827,139 @@ var ReactorSensor = (function(api, $) {
             updateVariableControls();
         }
     }
+    
+    function clearGetStateOptions() {
+        var container = jQuery('div#reactorvars');
+        var row = jQuery( 'div#opt-state', container );
+        row.remove();
+        jQuery( 'button#addvar', container ).attr( 'disabled', false );
+        jQuery( 'textarea.expr,i.md-btn', container ).attr( 'disabled', false );
+    }
+    
+    function handleGetStateClear( ev ) {
+        clearGetStateOptions();
+    }
+    
+    function handleGetStateInsert( ev ) {
+        var row = jQuery( ev.currentTarget ).closest( 'div.row' );
+        
+        var device = jQuery( 'select#gsdev', row ).val() || 0;
+        var service = jQuery( 'select#gsvar', row ).val() || "";
+        var variable = service.replace( /^[^\/]+\//, "" );
+        service = service.replace( /\/.*$/, "" );
+        if ( jQuery( 'input#usename', row ).prop( 'checked' ) ) {
+            device = '"' + jQuery( 'select#gsdev option:selected' ).text().replace( / +\(#\d+\)$/, "" ) + '"';
+        }
+        var str = ' getstate( ' + device + ', "' + service + '", "' + variable + '" ) ';
+        
+        var varrow = row.prev();
+        var f = jQuery( 'textarea.expr', varrow );
+        var expr = f.val() || "";
+        var p = f.get(0).selectionEnd || -1;
+        if ( p >= 0 ) {
+            expr = expr.substring(0, p) + str + expr.substring(p);
+        } else {
+            expr = str + expr;
+        }
+        expr = expr.trim()
+        f.val( expr );
+        f.removeClass( 'tberror' );
+        var vname = varrow.attr("id");
+        var cd = iData[api.getCpanelDeviceId()].cdata;
+        if ( cd.variables[vname] === undefined ) {
+            cd.variables[vname] = { name: vname, expression: expr };
+        } else {
+            cd.variables[vname].expression = expr;
+        }
+        configModified = true;
+
+        clearGetStateOptions();
+        updateVariableControls();
+    }
+    
+    function handleGetStateOptionChange( ev ) {
+        var row = jQuery( ev.currentTarget ).closest( 'div.row' );
+        var f = jQuery( ev.currentTarget );
+        if ( f.attr( 'id' ) == "gsdev" ) {
+            var device = parseInt( f.val() || "" );
+            var s = makeVariableMenu( device, "", "" ).attr( 'id', 'gsvar' );
+            jQuery( 'select#gsvar', row ).replaceWith( s );
+            /* Switch to new varmenu */
+            f = jQuery( 'select#gsvar', row );
+            f.on( 'change.reactor', handleGetStateOptionChange );
+        }
+        jQuery( 'button#getstateinsert', row ).prop( 'disabled', "" === f.val() );
+    }
+    
+    function handleGetStateClick( ev ) {
+        var row = jQuery( ev.currentTarget ).closest( 'div.varexp' );
+        var container = jQuery('div#reactorvars');
+        
+        jQuery( 'button#addvar', container ).attr( 'disabled', true );
+        jQuery( 'textarea.expr,i.md-btn', container ).attr( 'disabled', true );
+        
+        jQuery( 'textarea.expr', row ).attr( 'disabled', false );
+        
+        el = jQuery( '<div class="col-xs-12 col-md-9 col-md-offset-2 form-inline" />' );
+        el.append( makeDeviceMenu( "", "" ).attr( 'id', 'gsdev' ) );
+        el.append( makeVariableMenu( parseInt( jQuery( 'select#gsdev', el ).val() ), "", "" )
+            .attr( 'id', 'gsvar' ) );
+        el.append(' ');
+        el.append( '<input id="usename" type="checkbox">&nbsp;Use&nbsp;Name' );
+        el.append(' ');
+        el.append( jQuery( '<button/>' ).attr( 'id', 'getstateinsert' )
+            .addClass( "btn btn-xs btn-success" )
+            .text( 'Insert' ) );
+        el.append( jQuery( '<button/>' ).attr( 'id', 'getstatecancel' )
+            .addClass( "btn btn-xs btn-default" )
+            .text( 'Cancel' ) );
+        jQuery( '<div id="opt-state" class="row" />' ).append( el ).insertAfter( row );
+        
+        jQuery( 'select.devicemenu', el ).on( 'change.reactor', handleGetStateOptionChange );
+        jQuery( 'button#getstateinsert', el ).prop( 'disabled', true )
+            .on( 'click.reactor', handleGetStateInsert );
+        jQuery( 'button#getstatecancel', el ).on( 'click.reactor', handleGetStateClear );
+    }
 
     function getVariableRow() {
         var editrow = jQuery('<div class="row varexp"></div>');
         editrow.append( '<div id="varname" class="col-xs-12 col-sm-12 col-md-2"></div>' );
-        editrow.append( '<div class="col-xs-11 col-sm-11 col-md-9"><textarea class="expr form-control form-control-sm" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="off"/></div>' );
-        editrow.append( '<div class="col-xs-1 col-sm-1 col-md-1 text-right"><i id="tryexpr" class="material-icons md-btn" title="Try this expression">directions_run</i><i id="deletevar" class="material-icons md-btn">clear</i></div>' );
+        editrow.append( '<div class="col-xs-12 col-sm-10 col-md-9"><textarea class="expr form-control form-control-sm" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="off"/></div>' );
+        // ??? devices_other is an alternate for insert state variable
+        editrow.append( '<div class="col-xs-12 col-sm-2 col-md-1 text-right"><i id="tryexpr" class="material-icons md-btn" title="Try this expression">directions_run</i><i id="getstate" class="material-icons md-btn" title="Insert device state variable value">memory</i><i id="deletevar" class="material-icons md-btn" title="Delete this variable">clear</i></div>' );
         jQuery( 'textarea.expr', editrow ).on( 'change.reactor', handleVariableChange );
-        jQuery( 'i#tryexpr', editrow ).prop('disabled', true).on('click.reactor', handleTryExprClick);
-        jQuery( 'i#deletevar', editrow ).prop('disabled', true).on('click.reactor', handleDeleteVariableClick);
+        jQuery( 'i#tryexpr', editrow ).attr('disabled', true).on('click.reactor', handleTryExprClick);
+        jQuery( 'i#getstate', editrow ).attr('disabled', true).on('click.reactor', handleGetStateClick);
+        jQuery( 'i#deletevar', editrow ).attr('disabled', true).on('click.reactor', handleDeleteVariableClick);
         return editrow;
     }
 
     function handleAddVariableClick() {
         var container = jQuery('div#reactorvars');
 
+        jQuery( 'button#addvar', container ).attr( 'disabled', true );
+        jQuery( 'div.varexp textarea.expr,i.md-btn', container ).attr( 'disabled', true );
+
         var editrow = getVariableRow();
-        jQuery( 'div.varexp textarea.expr,i.md-btn', container ).prop( 'disabled', true );
-        jQuery( 'button#addvar', container ).prop( 'disabled', true );
-        jQuery( 'textarea.expr', editrow ).prop('disabled', true);
         jQuery( 'div#varname', editrow ).empty().append( '<input class="form-control form-control-sm" title="Enter a variable name and then TAB out of the field.">' );
         jQuery( 'div#varname input', editrow ).on('change.reactor', function( ev ) {
             /* Convert to regular row */
             var f = jQuery( ev.currentTarget );
+            var row = f.closest( 'div.varexp' );
             var vname = f.val() || "";
             if ( vname === "" || jQuery( 'div.varexp#' + vname ).length > 0 || !vname.match( /^[A-Z][A-Z0-9_]*$/i ) ) {
+                row.addClass( 'tberror' );
                 f.addClass('tberror');
-                f.closest('.row').addClass( 'tberror' );
                 f.focus();
             } else {
-                var row = f.closest( 'div.varexp' ).attr('id', vname).removeClass('editrow').removeClass('tberror');
-                jQuery( '.tberror', row ).removeClass('editrow');
+                row.attr('id', vname).removeClass('editrow').removeClass('tberror');
+                jQuery( '.tberror', row ).removeClass('tberror');
                 /* Remove the name input field and swap in the name (text) */
                 f.parent().empty().text(vname);
                 /* Re-enable fields and add button */
-                jQuery( 'div.varexp textarea.expr,i.md-btn', container ).prop('disabled', false);
-                jQuery( 'button#addvar', container ).prop( 'disabled', false );
+                jQuery( 'div.varexp textarea.expr,i.md-btn', container ).attr('disabled', false);
+                jQuery( 'button#addvar', container ).attr( 'disabled', false );
+                jQuery( 'textarea.expr', row ).focus();
                 /* Do the regular stuff */
                 handleVariableChange( null );
             }
@@ -2888,13 +2984,14 @@ var ReactorSensor = (function(api, $) {
                 el.attr('id', vn);
                 jQuery( 'div#varname', el).text( vn );
                 jQuery( 'textarea.expr', el ).val( vd.expression );
+                jQuery( 'i.md-btn', el ).attr( 'disabled', false );
                 gel.append( el );
             }
         }
 
         /* Add "Add" button */
         gel.append('<div class="row buttonrow">' +
-            '<div class="col-xs-12 col-sm-12"><button id="addvar" class="btn btn-sm btn-primary">Add Variable/Expression</button> Need help? Check out the <a href="https://www.toggledbits.com/reactor" target="_blank">documentation</a> or ask in the <a href="http://forum.micasaverde.com/index.php/board,93.0.html" target="_blank">Vera forums</a>.</div>' +
+            '<div class="col-xs-12 col-sm-12"><button id="addvar" class="btn btn-sm btn-primary">Add Variable/Expression</button> Need help? Check out the <a href="https://github.com/toggledbits/Reactor/wiki/Expressions-&-Variables" target="_blank">documentation</a> or ask in the <a href="http://forum.micasaverde.com/index.php/board,93.0.html" target="_blank">Vera forums</a>.</div>' +
             '</div>');
 
         /* Append the group */
@@ -3155,9 +3252,8 @@ var ReactorSensor = (function(api, $) {
                             ai = ai.deviceOverride[devnum];
                         }
                         if ( ! ai ) {
-                            console.log('validateActionRow: no info for ' + sact + ' device ' + devnum);
-                            jQuery( 'select.devicemenu', row ).addClass('tberror');
-                            ai = {};
+                            console.log('validateActionRow: no info for ' + sact + ' for device ' + devnum);
+                            return; /* If we don't know, we don't check */
                         }
                         for ( var k=0; k < (ai.parameters || [] ).length; k++ ) {
                             var p = ai.parameters[k];
@@ -3311,7 +3407,7 @@ var ReactorSensor = (function(api, $) {
                         for ( k=0; k < (ai.parameters || [] ).length; k++ ) {
                             pt = { name: ai.parameters[k].name };
                             if ( undefined !== ai.parameters[k].value ) {
-                                // Fixed value
+                                /* Fixed value */
                                 pt.value = ai.parameters[k].value;
                             } else {
                                 /* Ignore default here, it's assumed to be valid when needed */
@@ -3887,7 +3983,7 @@ var ReactorSensor = (function(api, $) {
                         continue;
                     }
 
-                    opt = jQuery('<option></option>').val( key ).text( actname );
+                    opt = jQuery( '<option/>' ).val( key ).text( actname + ( nodata ? "??(E)" : "") );
                     if ( nodata ) opt.addClass( "nodata" );
                     section.append( opt.clone() );
 
@@ -3907,10 +4003,12 @@ var ReactorSensor = (function(api, $) {
                 known.append( "<option class='optheading' value='' disabled><b>---Common Actions---</b></option>" );
                 for ( j=0; j<over.length; j++ ) {
                     var devact = over[j];
+                    var fake = false
                     if ( undefined === deviceInfo.services[devact.service] || undefined == deviceInfo.services[devact.service].actions[devact.action] ) {
                         /* Service/action in device exception not "real". Fake it real good. */
                         deviceInfo.services[devact.service] = deviceInfo.services[devact.service] || { actions: {} };
                         deviceInfo.services[devact.service].actions[devact.action] = { name: devact.action, deviceOverride: {} };
+                        fake = true;
                     }
                     /* There's a well-known service/action, so copy it, and apply overrides */
                     var act = deepcopy( deviceInfo.services[devact.service].actions[devact.action] );
@@ -3921,7 +4019,8 @@ var ReactorSensor = (function(api, $) {
                     }
                     if ( act.hidden ) continue;
                     key = act.service + "/" + act.action;
-                    known.append( jQuery('<option/>').val( key ).text( act.description || act.action ) );
+                    known.append( jQuery('<option/>').val( key ).text( ( act.description || act.action ) + 
+                        ( fake ? "??(O)" : "" ) ) );
                     hasAction = true;
                     if ( undefined === actions[key] ) {
                         actions[key] = deviceInfo.services[devact.service].actions[devact.action];
