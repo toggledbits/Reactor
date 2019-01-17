@@ -2772,13 +2772,12 @@ var ReactorSensor = (function(api, $) {
             var row = jQuery(obj);
             var vname = row.attr("id");
             if ( undefined === vname ) return;
-            var expr = jQuery('textarea.expr', row).val();
-            if ( expr === "" ) {
+            var expr = ( jQuery('textarea.expr', row).val() || "" ).trim();
+            if ( "" === expr ) {
                 jQuery('textarea.expr', row).addClass('tberror');
             }
             if ( cd.variables[vname] === undefined ) {
                 cd.variables[vname] = { name: vname, expression: expr };
-                configModified = true;
             } else if ( cd.variables[vname].expression !== expr ) {
                 cd.variables[vname].expression = expr;
                 configModified = true;
@@ -2848,22 +2847,34 @@ var ReactorSensor = (function(api, $) {
         var service = jQuery( 'select#gsvar', row ).val() || "";
         var variable = service.replace( /^[^\/]+\//, "" );
         service = service.replace( /\/.*$/, "" );
-        var str = ' getstate( ' + device + '. "' + service + '", "' + variable + '" ) ';
+        if ( jQuery( 'input#usename', row ).prop( 'checked' ) ) {
+            device = '"' + jQuery( 'select#gsdev option:selected' ).text().replace( / +\(#\d+\)$/, "" ) + '"';
+        }
+        var str = ' getstate( ' + device + ', "' + service + '", "' + variable + '" ) ';
         console.log( 'getstate insertion string is ' + str );
         
         var varrow = row.prev();
         var f = jQuery( 'textarea.expr', varrow );
-        var txt = f.val() || "";
-        var p = f.get(0).selectionEnd || 0;
+        var expr = f.val() || "";
+        var p = f.get(0).selectionEnd || -1;
         if ( p >= 0 ) {
-            str = txt.substring(0, p) + str + txt.substring(p);
+            expr = expr.substring(0, p) + str + expr.substring(p);
         } else {
-            str = str + txt;
+            expr = str + expr;
         }
-        f.val( str.trim() );
+        expr = expr.trim()
+        f.val( expr );
+        f.removeClass( 'tberror' );
+        var vname = varrow.attr("id");
+        var cd = iData[api.getCpanelDeviceId()].cdata;
+        if ( cd.variables[vname] === undefined ) {
+            cd.variables[vname] = { name: vname, expression: expr };
+        } else {
+            cd.variables[vname].expression = expr;
+        }
+        configModified = true;
 
         clearGetStateOptions();
-        configModified = true;
         updateVariableControls();
     }
     
@@ -2894,6 +2905,9 @@ var ReactorSensor = (function(api, $) {
         el.append( makeDeviceMenu( "", "" ).attr( 'id', 'gsdev' ) );
         el.append( makeVariableMenu( parseInt( jQuery( 'select#gsdev', el ).val() ), "", "" )
             .attr( 'id', 'gsvar' ) );
+        el.append(' ');
+        el.append( '<input id="usename" type="checkbox">&nbsp;Use&nbsp;Name' );
+        el.append(' ');
         el.append( jQuery( '<button/>' ).attr( 'id', 'getstateinsert' )
             .addClass( "btn btn-xs btn-success" )
             .text( 'Insert' ) );
