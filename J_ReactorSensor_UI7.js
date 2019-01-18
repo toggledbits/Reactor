@@ -55,6 +55,7 @@ var ReactorSensor = (function(api, $) {
         { op: 'istrue', desc: 'is TRUE', args: 0 }, { op: 'isfalse', desc: 'is FALSE', args: 0 },
         { op: 'change', desc: 'changes', args: 2 }
     ];
+    var noCaseOptPattern = /(=|<>|contains|starts|ends|in|change)/i;
     var serviceOpsIndex = {};
 
     /* Return footer */
@@ -99,6 +100,11 @@ var ReactorSensor = (function(api, $) {
             return dflt;
         }
         return getInteger( s );
+    }
+    
+    /* Return value or default if undefined */
+    function coalesce( v, d ) {
+        return ( undefined === v ) ? d : v;
     }
 
     /* Get device object from userdata by device number */
@@ -385,6 +391,10 @@ var ReactorSensor = (function(api, $) {
                             str += ' ' + cond.value;
                         }
                     }
+                }
+                if ( ( cond.operator || "=" ).match( noCaseOptPattern ) &&
+                        coalesce( cond.nocase, 1 ) == 0 ) {
+                    str += ' (match case)';
                 }
                 break;
 
@@ -730,12 +740,18 @@ var ReactorSensor = (function(api, $) {
                 break;
 
             case 'service':
-                removeConditionProperties( cond, "device,service,variable,operator,value" );
+                /* Below removes nocase, but we put it back if needed */
+                removeConditionProperties( cond, "device,devicename,service,variable,operator,value" );
                 cond.device = parseInt( jQuery("div.params select.devicemenu", row).val() );
                 cond.service = jQuery("div.params select.varmenu", row).val() || "";
                 cond.variable = cond.service.replace( /^[^\/]+\//, "" );
                 cond.service = cond.service.replace( /\/.*$/, "" );
                 cond.operator = jQuery("div.params select.opmenu", row).val() || "=";
+                if ( cond.operator.match( noCaseOptPattern ) ) {
+                    if ( ! jQuery( 'input#nocase', row ).prop( 'checked' ) ) {
+                        cond.nocase = 0;
+                    }
+                }
                 var op = serviceOpsIndex[cond.operator || ""];
                 jQuery( "input#value", row ).css( "visibility", ( undefined !== op && 0 === op.args ) ? "hidden" : "visible" );
                 // use op.args???
@@ -954,17 +970,17 @@ var ReactorSensor = (function(api, $) {
         var service = jQuery("select.varmenu", row).val() || "";
         var variable = service.replace( /^[^\/]+\//, "" );
         service = service.replace( /\/.*$/, "" );
-        var span = jQuery( 'span#currval', row );
+        var blk = jQuery( 'div#currval', row );
         if ( !isNaN(device) && "" !== service && "" != variable ) {
             var val = api.getDeviceState( device, service, variable );
             if ( undefined === val || false === val ) {
-                span.text( 'Current value: (not set)' ).attr( 'title', "This variable is not present in the device state." );
+                blk.text( 'Current value: (not set)' ).attr( 'title', "This variable is not present in the device state." );
             } else {
                 var abbrev = val.length > 64 ? val.substring(0,61) + '...' : val;
-                span.text( 'Current value: ' + abbrev ).attr( 'title', val.length==0 ? "The string is blank/empty." : val );
+                blk.text( 'Current value: ' + abbrev ).attr( 'title', val.length==0 ? "The string is blank/empty." : val );
             }
         } else {
-            span.empty().attr( 'title', "" );
+            blk.empty().attr( 'title', "" );
         }
     }
 
@@ -1001,23 +1017,32 @@ var ReactorSensor = (function(api, $) {
                 jQuery( 'fieldset#housemodeselects', row ).hide();
             }
         } else if ( "service" === cond.type ) {
-            var inp = jQuery( 'input#value', row );
+            var inp = jQuery( 'input#value', row ) || "=";
             if ( val == "change" ) {
                 if ( inp.length > 0 ) {
                     // Change single input field to double fields.
                     inp.show();
                     var lab = jQuery( '<label class="tbsecondaryinput"> to </label>' );
-                    lab.append( inp.clone().attr('id', 'val2').off( 'change.reactor' ).on( 'change.reactor', handleConditionRowChange ) );
+                    lab.append( inp.clone().attr('id', 'val2').val( '' )
+                        .attr( 'placeholder', 'blank=any value' )
+                        .off( 'change.reactor' ).on( 'change.reactor', handleConditionRowChange ) );
                     lab.insertAfter( inp );
-                    inp.attr('id', 'val1');
+                    inp.attr( 'id', 'val1' ).attr( 'placeholder', 'blank=any value' );
                 }
             } else {
                 if ( inp.length == 0 ) {
                     inp = jQuery( 'input#val1', row );
                     jQuery( 'label.tbsecondaryinput', row ).remove();
-                    inp.attr('id', 'value');
+                    inp.attr('id', 'value').attr('placeholder', '');
                 }
                 inp.css( "visibility", ( undefined !== op && 0 === op.args ) ? "hidden" : "visible" );
+            }
+            var opt = jQuery( '#nocaseopt', row );
+            if ( val.match( noCaseOptPattern ) ) {
+                opt.show();
+                jQuery( 'input#nocase', opt ).prop( 'checked', coalesce( cond.nocase, 1 ) !== 0 );
+            } else {
+                opt.hide();
             }
         } else {
             console.log( "Invalid row type in handleConditionOperatorChange(): " + String( cond.type ) );
@@ -1058,7 +1083,7 @@ var ReactorSensor = (function(api, $) {
         var row = jQuery( el ).closest('div.conditionrow');
         var cond = iData[api.getCpanelDeviceId()].ixCond[ row.attr("id") ];
 
-        var pred = jQuery('select.pred', row);
+        var pred = jQuery('select#pred', row);
         if ( "" === pred.val() ) {
             if ( undefined !== cond.after ) {
                 delete cond.after;
@@ -1066,10 +1091,10 @@ var ReactorSensor = (function(api, $) {
                 configModified = true;
             }
         } else {
-            var pt = parseInt( jQuery('input.predtime', row).val() );
+            var pt = parseInt( jQuery('input#predtime', row).val() );
             if ( isNaN( pt ) || pt < 0 ) {
                 pt = 0;
-                jQuery('input.predtime', row).val(pt);
+                jQuery('input#predtime', row).val(pt);
             }
             if ( cond.after !== pred.val() || cond.aftertime !== pt ) {
                 cond.after = pred.val();
@@ -1111,7 +1136,7 @@ var ReactorSensor = (function(api, $) {
             }
         }
 
-        var latchval = jQuery('input.latchcond', row).prop('checked') ? 1 : 0;
+        var latchval = jQuery('input#latchcond', row).prop('checked') ? 1 : 0;
         if ( latchval != ( cond.latch || 0 ) ) {
             cond.latch = latchval;
             configModified = true;
@@ -1177,7 +1202,7 @@ var ReactorSensor = (function(api, $) {
         jQuery('div.params div.condopts', row).remove();
 
         /* Put the open tool back */
-        jQuery('div.params i.condmore').show();
+        jQuery('div.params i#condmore').show();
     }
 
     function handleExpandOptionsClick( ev ) {
@@ -1193,7 +1218,7 @@ var ReactorSensor = (function(api, $) {
         /* Create the options container and add options */
         var container = jQuery('<div class="condopts"></div>');
         /* Predecessor */
-        var preds = jQuery('<select class="pred form-control form-control-sm"><option value="">(any time/no sequence)</option></select>');
+        var preds = jQuery('<select id="pred" class="form-control form-control-sm"><option value="">(any time/no sequence)</option></select>');
         for ( var ic=0; ic<(grp.groupconditions || []).length; ic++) {
             var gc = grp.groupconditions[ic];
             /* Must be service, not this condition, and not the predecessor to this condition (recursive) */
@@ -1207,16 +1232,16 @@ var ReactorSensor = (function(api, $) {
                 preds.append( opt );
             }
         }
-        container.append('<div class="predopt form-inline"><label>Only after&nbsp;</label></div>');
-        jQuery('div.predopt label', container).append(preds);
-        jQuery('div.predopt', container).append('&nbsp;<label>within <input type="text" class="predtime form-control form-control-sm narrow" autocomplete="off">&nbsp;seconds (0=no time limit)</label>');
-        jQuery('select.pred', container).val( cond.after );
-        jQuery('input.predtime', container).val( cond.aftertime || 0 );
+        container.append('<div id="predopt" class="form-inline"><label>Only after&nbsp;</label></div>');
+        jQuery('div#predopt label', container).append(preds);
+        jQuery('div#predopt', container).append('&nbsp;<label>within <input type="text" id="predtime" class="form-control form-control-sm narrow" autocomplete="off">&nbsp;seconds (0=no time limit)</label>');
+        jQuery('select#pred', container).val( cond.after );
+        jQuery('input#predtime', container).val( cond.aftertime || 0 );
         /* Duration */
-        container.append('<div class="duropt form-inline"><label>Condition is sustained for&nbsp;<select id="durop" class="form-control form-control-sm"><option value="ge">at least</option><option value="lt">less than</option></select>&nbsp;<input type="text" id="duration" class="form-control form-control-sm narrow" autocomplete="off"> seconds</label></div>');
+        container.append('<div id="duropt" class="form-inline"><label>Condition is sustained for&nbsp;<select id="durop" class="form-control form-control-sm"><option value="ge">at least</option><option value="lt">less than</option></select>&nbsp;<input type="text" id="duration" class="form-control form-control-sm narrow" autocomplete="off"> seconds</label></div>');
         /* Repeat */
-        container.append('<div class="duropt form-inline"><label>Condition repeats <input type="text" id="rcount" class="form-control form-control-sm narrow" autocomplete="off"> times within <input type="text" id="rspan" class="form-control form-control-sm narrow" autocomplete="off"> seconds</label></div>');
-        container.append('<div class="latchopt form-inline"><label><input type="checkbox" class="latchcond form-control form-control-sm">&nbsp;Latch (once met, condition remains true until group resets)<label></div>');
+        container.append('<div id="repopt" class="form-inline"><label>Condition repeats <input type="text" id="rcount" class="form-control form-control-sm narrow" autocomplete="off"> times within <input type="text" id="rspan" class="form-control form-control-sm narrow" autocomplete="off"> seconds</label></div>');
+        container.append('<div id="latchopt" class="form-inline"><label class="checkbox-inline"><input type="checkbox" id="latchcond" class="form-check">&nbsp;Latch (once met, condition remains true until group resets)<label></div>');
         container.append('<i class="md-btn material-icons closeopts" title="Close Options">expand_less</i>');
         jQuery('input,select', container).on( 'change.reactor', handleOptionChange );
         jQuery('i.closeopts', container).on( 'click.reactor', handleCloseOptionsClick );
@@ -1229,9 +1254,9 @@ var ReactorSensor = (function(api, $) {
             jQuery('input#duration', container).prop('disabled', rc != "");
             jQuery('select#durop', container).prop('disabled', rc != "");
             jQuery('input#rcount', container).val( rc );
-            jQuery('input#rspan', container).val( rc == "" ? "" : ( cond.repeatwithin || "60" ) );
+            jQuery('input#rspan', container).prop('disabled', rc=="").val( rc == "" ? "" : ( cond.repeatwithin || "60" ) );
         }
-        jQuery('input.latchcond', container).prop('checked', ( cond.latch || 0 ) != 0 );
+        jQuery('input#latchcond', container).prop('checked', ( cond.latch || 0 ) != 0 );
 
         /* Add it to the params */
         jQuery('div.params', row).append( container );
@@ -1322,9 +1347,11 @@ var ReactorSensor = (function(api, $) {
                 container.append( makeVariableMenu( cond.device, cond.service, cond.variable ) );
                 container.append( makeServiceOpMenu( cond.operator ) );
                 container.append('<input type="text" id="value" class="form-control form-control-sm" autocomplete="off">');
-                container.append('<i class="md-btn material-icons condmore" title="Show Options">expand_more</i>');
                 container.append(' ');
-                container.append('<span id="currval"/>');
+                container.append('<fieldset id="nocaseopt"><label class="checkbox-inline" for="nocase"><input id="nocase" type="checkbox" class="form-check">Ignore&nbsp;case</label></fieldset>');
+                container.append(' ');
+                container.append('<i id="condmore" class="md-btn material-icons" title="Show Options">expand_more</i>');
+                container.append('<div id="currval"/>');
 
                 op = serviceOpsIndex[cond.operator || ""];
                 jQuery( "input#value", container).val( cond.value || "" )
@@ -1332,8 +1359,10 @@ var ReactorSensor = (function(api, $) {
                     .on( 'change.reactor', handleConditionRowChange );
                 jQuery("select.varmenu", container).on( 'change.reactor', handleConditionVarChange );
                 jQuery("select.opmenu", container).on( 'change.reactor', handleConditionOperatorChange );
+                jQuery('input#nocase', container).prop( 'checked', coalesce( cond.nocase, 1 ) !== 0 )
+                    .on( 'change.reactor', handleConditionRowChange );
                 jQuery("select.devicemenu", container).on( 'change.reactor', handleDeviceChange );
-                jQuery("i.condmore", container).on( 'click.reactor', handleExpandOptionsClick );
+                jQuery("i#condmore", container).on( 'click.reactor', handleExpandOptionsClick );
 
                 updateCurrentServiceValue( container );
                 break;
@@ -1904,7 +1933,7 @@ var ReactorSensor = (function(api, $) {
 
             /* Create div.conditiongroup and add conditions */
             var gel = jQuery('<div class="conditiongroup"></div>').attr("id", grp.groupid);
-            gel.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6 form-inline"><span class="titletext"></span> <label for="grpdisable"><input id="grpdisable" type="checkbox" class="form-check">&nbsp;Disabled</form></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>');
+            gel.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6 form-inline"><span class="titletext"></span> <label for="grpdisable" class="checkbox-inline"><input id="grpdisable" type="checkbox" class="form-check">Disabled</label></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>');
             jQuery( 'span.titletext', gel ).text( "Group: " + grp.groupid ).on( 'click.reactor', handleTitleClick );
             jQuery( 'input#grpdisable', gel ).prop( 'checked', grp.disabled )
                 .on( 'change.reactor', function( ev ) {
@@ -2387,12 +2416,12 @@ var ReactorSensor = (function(api, $) {
         html += '<h3>Test Tools</h3>';
 
         html += '<div class="row">';
-        html += '<div class="col-sm-2 col-md-4 col-lg-3 col-xl-2"><label for="testdateenable"><input type="checkbox" value="1" id="testdateenable">&nbsp;Test&nbsp;Date:</label></div>';
+        html += '<div class="col-sm-2 col-md-4 col-lg-3 col-xl-2"><label for="testdateenable" class="checkbox-inline"><input type="checkbox" value="1" id="testdateenable">&nbsp;Test&nbsp;Date:</label></div>';
         html += '<div class="col-sm-10 col-md-8 col-lg-9 col-xl-10 form-inline"><select id="testyear" class="form-control form-control-sm"></select><select id="testmonth" class="form-control form-control-sm"></select><select class="form-control form-control-sm" id="testday"></select><input class="narrow form-control form-control-sm" id="testtime"></div>';
         html += '</div>'; /* row */
 
         html += '<div class="row">';
-        html += '<div class="col-sm-2 col-md-4 col-lg-3 col-xl-2"><label for="testhousemode"><input type="checkbox" value="1" id="testhousemode">&nbsp;Test&nbsp;House&nbsp;Mode</label></div>';
+        html += '<div class="col-sm-2 col-md-4 col-lg-3 col-xl-2"><label for="testhousemode" class="checkbox-inline"><input type="checkbox" value="1" id="testhousemode">&nbsp;Test&nbsp;House&nbsp;Mode</label></div>';
         html += '<div class="col-sm-10 col-md-8 col-lg-9 col-xl-10 form-inline"><select class="form-control form-control-sm" id="mode"><option value="1">Home</option><option value="2">Away</option><option value="3">Night</option><option value="4">Vacation</option></select></div>';
         html += '</div>'; /* row */
 
@@ -2905,7 +2934,7 @@ var ReactorSensor = (function(api, $) {
         el.append( makeVariableMenu( parseInt( jQuery( 'select#gsdev', el ).val() ), "", "" )
             .attr( 'id', 'gsvar' ) );
         el.append(' ');
-        el.append( '<input id="usename" type="checkbox">&nbsp;Use&nbsp;Name' );
+        el.append( '<label class="checkbox-inline" for="usename"><input id="usename" type="checkbox">&nbsp;Use&nbsp;Name</label>' );
         el.append(' ');
         el.append( jQuery( '<button/>' ).attr( 'id', 'getstateinsert' )
             .addClass( "btn btn-xs btn-success" )
@@ -3084,7 +3113,9 @@ var ReactorSensor = (function(api, $) {
             html += "div#tab-conds.reactortab .color-green { color: #006040; }";
             html += 'div#tab-conds.reactortab .tberror { border: 1px solid red; }';
             html += 'div#tab-conds.reactortab .tbwarn { border: 1px solid yellow; background-color: yellow; }';
-            html += 'div#tab-conds.reactortab span#currval { font-family: "Courier New", Courier, monospace; font-size: 0.9em; }';
+            html += 'div#tab-conds.reactortab label { font-weight: normal; }';
+            html += 'div#tab-conds.reactortab fieldset#nocaseopt { display: inline-block; }';
+            html += 'div#tab-conds.reactortab div#currval { font-family: "Courier New", Courier, monospace; font-size: 0.9em; }';
             html += 'div#tab-conds.reactortab div.warning { color: red; }';
             html += 'div#tab-conds.reactortab i.md-btn:disabled { color: #cccccc; cursor: auto; }';
             html += 'div#tab-conds.reactortab i.md-btn[disabled] { color: #cccccc; cursor: auto; }';

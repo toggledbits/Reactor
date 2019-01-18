@@ -1524,7 +1524,7 @@ local function evaluateCondition( cond, grp, tdev )
         local cv,cn = getValue( cond.value, sensorState[tostring(tdev)].ctx, tdev )
 
         -- If case-insensitive, canonify to lowercase.
-        if cond.nocase then
+        if ( cond.nocase or 1 ) ~= 0 then
             vv = string.lower( vv )
             cv = string.lower( cv )
         end
@@ -3216,6 +3216,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
                                 luup.devices[cond.device].description, cond.device )
                             r = r .. string.format("%s/%s %s %s", cond.service or "?", cond.variable or "?", cond.operator or cond.condition or "?",
                                 cond.value or "")
+                            if cond.nocase == 0 then r = r .. " (match case)" end
                             if cond.duration then
                                 r = r .. " for " .. ( cond.duration_op or "ge" ) ..
                                     " " .. cond.duration .. "s"
