@@ -995,7 +995,7 @@ local function execSceneGroups( tdev, taskid, scd )
             local delaytype = scd.groups[nextGroup].delaytype or "inline"
             local tt
             -- Vera (7.x.x) scenes are always "start" delay type.
-            if scd.groups[nextGroup].delaytype == "start" or not scd.isReactorScene then
+            if delaytype == "start" or not scd.isReactorScene then
                 tt = sst.starttime + delay
             else
                 tt = (sst.lastgrouptime or now) + delay
@@ -3276,6 +3276,13 @@ function request( lul_request, lul_parameters, lul_outputformat )
         local result, err = luaxp.evaluate( expr, ctx )
         local ret = { status=true, resultValue=result, err=err or false, expression=expr }
         return json.encode( ret ), "application/json"
+        
+    elseif action == "testlua" then
+        local _,err = loadstring( lul_parameters.lua or "" )
+        if err then
+            return json.encode{ status=false, message=err }, "application/json"
+        end
+        return json.encode{ status=true, message="Lua OK" }, "application/json"
 
     elseif action == "infoupdate" then
         -- Fetch and install updated deviceinfo file; these will change more frequently than the plugin.

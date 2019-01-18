@@ -2890,7 +2890,7 @@ var ReactorSensor = (function(api, $) {
         } else {
             expr = str + expr;
         }
-        expr = expr.trim()
+        expr = expr.trim();
         f.val( expr );
         f.removeClass( 'tberror' );
         var vname = varrow.attr("id");
@@ -2929,7 +2929,7 @@ var ReactorSensor = (function(api, $) {
         
         jQuery( 'textarea.expr', row ).attr( 'disabled', false );
         
-        el = jQuery( '<div class="col-xs-12 col-md-9 col-md-offset-2 form-inline" />' );
+        var el = jQuery( '<div class="col-xs-12 col-md-9 col-md-offset-2 form-inline" />' );
         el.append( makeDeviceMenu( "", "" ).attr( 'id', 'gsdev' ) );
         el.append( makeVariableMenu( parseInt( jQuery( 'select#gsdev', el ).val() ), "", "" )
             .attr( 'id', 'gsvar' ) );
@@ -3180,6 +3180,32 @@ var ReactorSensor = (function(api, $) {
     }
 
     function doSettings() {}
+    
+    function testLua( lua, el, row ) {
+        $.ajax({
+            url: api.getDataRequestURL(),
+            method: 'POST', /* data could be long */
+            data: {
+                id: "lr_Reactor",
+                action: "testlua",
+                lua: lua
+            },
+            cache: false,
+            dataType: 'json',
+            timeout: 5000
+        }).done( function( data, statusText, jqXHR ) {
+            if ( data.status ) {
+                /* Good Lua */
+                return;
+            } else if ( data.status === false ) { /* specific false, not undefined */
+                el.addClass( "tberror" );
+                jQuery( 'div.actiondata' ).prepend( '<div class="tberrmsg"/>' );
+                jQuery( 'div.tberrmsg', row ).text( data.message || "Error in Lua" );
+            }
+        }).fail( function( stat ) {
+            console.log("Failed to check Lua: " + stat);
+        });
+    }
 
     function makeSceneMenu() {
         var ud = api.getUserData();
@@ -3246,6 +3272,7 @@ var ReactorSensor = (function(api, $) {
         var actionType = jQuery('select#actiontype', row).val();
         jQuery('.tberror', row).removeClass( 'tberror' );
         row.removeClass( 'tberror' );
+        jQuery( 'div.tberrmsg', row ).remove();
 
         switch ( actionType ) {
             case "comment":
@@ -3360,6 +3387,8 @@ var ReactorSensor = (function(api, $) {
                 // check Lua?
                 if ( lua.match( /^[\r\n\s]*$/ ) ) {
                     jQuery( 'textarea.luacode', row ).addClass( "tberror" );
+                } else {
+                    testLua( lua, jQuery( 'textarea.luacode', row ), row );
                 }
                 break;
 
@@ -4034,7 +4063,7 @@ var ReactorSensor = (function(api, $) {
                 known.append( "<option class='optheading' value='' disabled><b>---Common Actions---</b></option>" );
                 for ( j=0; j<over.length; j++ ) {
                     var devact = over[j];
-                    var fake = false
+                    var fake = false;
                     if ( undefined === deviceInfo.services[devact.service] || undefined == deviceInfo.services[devact.service].actions[devact.action] ) {
                         /* Service/action in device exception not "real". Fake it real good. */
                         deviceInfo.services[devact.service] = deviceInfo.services[devact.service] || { actions: {} };
@@ -4637,6 +4666,7 @@ var ReactorSensor = (function(api, $) {
         html += "div#tab-actions.reactortab .color-green { color: #428BCA; }";
         html += 'div#tab-actions.reactortab .tberror { border: 1px solid red; }';
         html += 'div#tab-actions.reactortab .tbwarn { border: 1px solid yellow; background-color: yellow; }';
+        html += 'div#tab-actions.reactortab .tberrmsg { padding: 8px 8px 8px 8px; color: red; }';
         html += 'div#tab-actions.reactortab i.md-btn:disabled { color: #cccccc; cursor: auto; }';
         html += 'div#tab-actions.reactortab i.md-btn[disabled] { color: #cccccc; cursor: auto; }';
         html += 'div#tab-actions.reactortab i.md-btn { color: #2d6a9f; font-size: 14pt; cursor: pointer; }';
