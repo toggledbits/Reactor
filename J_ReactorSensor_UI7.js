@@ -48,14 +48,16 @@ var ReactorSensor = (function(api, $) {
         "int": { min: -2147483648, max: 2147483647 }
     };
     var serviceOps = [ { op: '=', desc: 'equals', args: 1 }, { op: '<>', desc: 'not equals', args: 1 },
-        { op: '<', desc: '<', args: 1 }, { op: '<=', desc: '<=', args: 1 },
-        { op: '>', desc: '>', args: 1 }, { op: '>=', desc: '>=', args: 1 },
-        { op: 'starts', desc: 'starts with', args: 1 }, { op: 'ends', desc: 'ends with', args: 1 },
-        { op: 'contains', desc: 'contains', args: 1 }, { op: 'in', desc: 'in', args: 1 },
+        { op: '<', desc: '<', args: 1, numeric: 1 }, { op: '<=', desc: '<=', args: 1, numeric: 1 },
+        { op: '>', desc: '>', args: 1, numeric: 1 }, { op: '>=', desc: '>=', args: 1, numeric: 1 },
+        { op: 'starts', desc: 'starts with', args: 1 }, { op: 'notstarts', desc: 'does not start with', args: 1 },
+        { op: 'ends', desc: 'ends with', args: 1 }, { op: 'notends', desc: 'does not end with', args: 1 },
+        { op: 'contains', desc: 'contains', args: 1 }, { op: 'notcontains', desc: 'does not contain', args: 1 },
+        { op: 'in', desc: 'in', args: 1 }, { op: 'notin', desc: 'not in', args: 1 },
         { op: 'istrue', desc: 'is TRUE', args: 0 }, { op: 'isfalse', desc: 'is FALSE', args: 0 },
         { op: 'change', desc: 'changes', args: 2 }
     ];
-    var noCaseOptPattern = /(=|<>|contains|starts|ends|in|change)/i;
+    var noCaseOptPattern = /(=|<>|contains|notcontains|starts|notstarts|ends|notends|in|notin|change)/i;
     var serviceOpsIndex = {};
 
     /* Return footer */
@@ -101,7 +103,7 @@ var ReactorSensor = (function(api, $) {
         }
         return getInteger( s );
     }
-    
+
     /* Return value or default if undefined */
     function coalesce( v, d ) {
         return ( undefined === v ) ? d : v;
@@ -388,7 +390,7 @@ var ReactorSensor = (function(api, $) {
                                 str += " to " + k[1];
                             }
                         } else {
-                            str += ' ' + cond.value;
+                            str += ' ' + ( t.numeric ? cond.value : JSON.stringify( cond.value ) );
                         }
                     }
                 }
@@ -519,16 +521,17 @@ var ReactorSensor = (function(api, $) {
 
             case 'ishome':
                 t = ( cond.value || "" ).split(/,/);
-                if ( "at" === cond.operator ) {
+                if ( "at" === cond.operator || "notat" === cond.operator ) {
+                    var desc = cond.operator == "at" ? " at " : " not at ";
                     var uu = userIx[t[0]];
                     if ( undefined === uu ) {
-                        str += String(t[0]) + " at location " + String(t[1]);
+                        str += String(t[0]) + desc + " location " + String(t[1]);
                     } else {
                         var nn = uu.name || t[0];
                         if ( uu.tags && uu.tags[t[1]] ) {
-                            str += nn + " at " + uu.tags[t[1]].name;
+                            str += nn + desc + uu.tags[t[1]].name;
                         } else {
-                            str += nn + " at location " + t[1];
+                            str += nn + desc + " location " + t[1];
                         }
                     }
                 } else {
@@ -765,6 +768,13 @@ var ReactorSensor = (function(api, $) {
                 } else {
                     cond.value = jQuery("input#value", row).val() || "";
                 }
+                /* For numeric op, check that value is parseable as a number (unless var ref) */
+                if ( op && op.numeric && ! cond.value.match( /\{[^}]+\}/ ) ) {
+                    var n = parseFloat( cond.value );
+                    if ( isNaN( n ) ) {
+                        jQuery( 'input#value', row ).addClass( 'tberror' );
+                    }
+                }
                 break;
 
             case 'weekday':
@@ -921,7 +931,7 @@ var ReactorSensor = (function(api, $) {
                 removeConditionProperties( cond, "operator,value" );
                 cond.operator = jQuery("div.params select.geofencecond", row).val() || "is";
                 res = [];
-                if ( "at" === cond.operator ) {
+                if ( "at" === cond.operator || "notat" === cond.operator ) {
                     res[0] = jQuery( 'select#userid', row ).val() || "";
                     res[1] = jQuery( 'select#location', row ).val() || "";
                     if ( "" === res[0] ) {
@@ -1305,7 +1315,7 @@ var ReactorSensor = (function(api, $) {
     function handleGeofenceOperatorChange( ev ) {
         var row = jQuery( ev.currentTarget ).closest( 'div.conditionrow' );
         var val = jQuery( ev.currentTarget ).val() || "is";
-        if ( "at" === val ) {
+        if ( "at" === val || "notat" === val ) {
             jQuery( 'select#userid,select#location', row ).show();
             jQuery( 'label,input#opts', row ).hide();
         } else {
@@ -1345,7 +1355,7 @@ var ReactorSensor = (function(api, $) {
                     configModified = true;
                 }
                 container.append( makeVariableMenu( cond.device, cond.service, cond.variable ) );
-                container.append( makeServiceOpMenu( cond.operator ) );
+                container.append( makeServiceOpMenu( cond.operator || "=" ) );
                 container.append('<input type="text" id="value" class="form-control form-control-sm" autocomplete="off">');
                 container.append(' ');
                 container.append('<fieldset id="nocaseopt"><label class="checkbox-inline" for="nocase"><input id="nocase" type="checkbox" class="form-check">Ignore&nbsp;case</label></fieldset>');
@@ -1353,7 +1363,7 @@ var ReactorSensor = (function(api, $) {
                 container.append('<i id="condmore" class="md-btn material-icons" title="Show Options">expand_more</i>');
                 container.append('<div id="currval"/>');
 
-                op = serviceOpsIndex[cond.operator || ""];
+                op = serviceOpsIndex[cond.operator || "="];
                 jQuery( "input#value", container).val( cond.value || "" )
                     .css( "visibility", ( undefined !== op && 0 === op.args ) ? "hidden" : "visible" )
                     .on( 'change.reactor', handleConditionRowChange );
@@ -1592,7 +1602,7 @@ var ReactorSensor = (function(api, $) {
 
             case 'ishome':
                 container.append(
-                    '<select class="geofencecond form-control form-control-sm"><option value="is">Any selected user is home</option><option value="is not">Any selected user is NOT home</option><option value="at">Selected user in geofence</option></select>');
+                    '<select class="geofencecond form-control form-control-sm"><option value="is">Any selected user is home</option><option value="is not">Any selected user is NOT home</option><option value="at">User in geofence</option><option value="notat">Uuser not in geofence</option></select>');
                 mm = jQuery( '<select id="userid" class="form-control form-control-sm"/>' );
                 mm.append( jQuery( '<option/>' ).val("").text('--choose user--') );
                 for ( k in userIx ) {
@@ -1611,7 +1621,7 @@ var ReactorSensor = (function(api, $) {
                     .val( cond.operator || "is" );
                 jQuery("select#userid", container).on( 'change.reactor', handleGeofenceUserChange );
                 jQuery("select#location", container).on( 'change.reactor', handleConditionRowChange );
-                if ( cond.operator == "at" ) {
+                if ( cond.operator == "at" || cond.operator == "notat" ) {
                     jQuery( 'label,input#opts', container ).hide();
                     jQuery( 'select#userid,select#location', container ).show();
                     mm = ( cond.value || "" ).split(',');
@@ -1749,7 +1759,10 @@ var ReactorSensor = (function(api, $) {
         /* Create a new condition group div, assign a group ID */
         var newId = getUID("grp");
         var condgroup = jQuery('<div class="conditiongroup"/>').attr('id', newId);
-        condgroup.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span class="titletext"></span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>');
+        condgroup.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span id="groupcontrols"/><span class="titletext"/></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>');
+        jQuery( 'span#groupcontrols', condgroup ).append( '<i id="grpmoveup" class="material-icon md-btn">arrow_upward</i>' );
+        jQuery( 'span#groupcontrols', condgroup ).append( '<i id="grpmovedn" class="material-icon md-btn">arrow_downward</i>' );
+        jQuery( 'span#groupcontrols', condgroup ).append( '<i id="grpdelete" class="material-icon md-btn">clear</i>' );
         jQuery( 'span.titletext', condgroup ).text( "Group: " + newId ).on( 'click.reactor', handleTitleClick );
         jQuery("button#addgroup", condgroup).on( 'click.reactor', handleAddGroupClick );
         jQuery("button#saveconf", condgroup).on( 'click.reactor', handleSaveClick );
@@ -2665,7 +2678,7 @@ var ReactorSensor = (function(api, $) {
 
                     case 'ishome':
                         var t = (currentValue || "").split( /,/ );
-                        if ( "at" === cond.operator ) {
+                        if ( "at" === cond.operator || "notat" === cond.operator ) {
                             // ???
                         } else {
                             /* Replace IDs with names for display */
@@ -2856,7 +2869,7 @@ var ReactorSensor = (function(api, $) {
             updateVariableControls();
         }
     }
-    
+
     function clearGetStateOptions() {
         var container = jQuery('div#reactorvars');
         var row = jQuery( 'div#opt-state', container );
@@ -2864,14 +2877,14 @@ var ReactorSensor = (function(api, $) {
         jQuery( 'button#addvar', container ).attr( 'disabled', false );
         jQuery( 'textarea.expr,i.md-btn', container ).attr( 'disabled', false );
     }
-    
+
     function handleGetStateClear( ev ) {
         clearGetStateOptions();
     }
-    
+
     function handleGetStateInsert( ev ) {
         var row = jQuery( ev.currentTarget ).closest( 'div.row' );
-        
+
         var device = jQuery( 'select#gsdev', row ).val() || 0;
         var service = jQuery( 'select#gsvar', row ).val() || "";
         var variable = service.replace( /^[^\/]+\//, "" );
@@ -2880,7 +2893,7 @@ var ReactorSensor = (function(api, $) {
             device = '"' + jQuery( 'select#gsdev option:selected' ).text().replace( / +\(#\d+\)$/, "" ) + '"';
         }
         var str = ' getstate( ' + device + ', "' + service + '", "' + variable + '" ) ';
-        
+
         var varrow = row.prev();
         var f = jQuery( 'textarea.expr', varrow );
         var expr = f.val() || "";
@@ -2905,7 +2918,7 @@ var ReactorSensor = (function(api, $) {
         clearGetStateOptions();
         updateVariableControls();
     }
-    
+
     function handleGetStateOptionChange( ev ) {
         var row = jQuery( ev.currentTarget ).closest( 'div.row' );
         var f = jQuery( ev.currentTarget );
@@ -2919,16 +2932,16 @@ var ReactorSensor = (function(api, $) {
         }
         jQuery( 'button#getstateinsert', row ).prop( 'disabled', "" === f.val() );
     }
-    
+
     function handleGetStateClick( ev ) {
         var row = jQuery( ev.currentTarget ).closest( 'div.varexp' );
         var container = jQuery('div#reactorvars');
-        
+
         jQuery( 'button#addvar', container ).attr( 'disabled', true );
         jQuery( 'textarea.expr,i.md-btn', container ).attr( 'disabled', true );
-        
+
         jQuery( 'textarea.expr', row ).attr( 'disabled', false );
-        
+
         var el = jQuery( '<div class="col-xs-12 col-md-9 col-md-offset-2 form-inline" />' );
         el.append( makeDeviceMenu( "", "" ).attr( 'id', 'gsdev' ) );
         el.append( makeVariableMenu( parseInt( jQuery( 'select#gsdev', el ).val() ), "", "" )
@@ -2943,7 +2956,7 @@ var ReactorSensor = (function(api, $) {
             .addClass( "btn btn-xs btn-default" )
             .text( 'Cancel' ) );
         jQuery( '<div id="opt-state" class="row" />' ).append( el ).insertAfter( row );
-        
+
         jQuery( 'select.devicemenu', el ).on( 'change.reactor', handleGetStateOptionChange );
         jQuery( 'button#getstateinsert', el ).prop( 'disabled', true )
             .on( 'click.reactor', handleGetStateInsert );
@@ -3180,7 +3193,7 @@ var ReactorSensor = (function(api, $) {
     }
 
     function doSettings() {}
-    
+
     function testLua( lua, el, row ) {
         $.ajax({
             url: api.getDataRequestURL(),
@@ -3280,7 +3293,7 @@ var ReactorSensor = (function(api, $) {
 
             case "delay":
                 var delay = jQuery( 'input#delay', row ).val() || "";
-                if ( delay.match( /\{[^}]+\}/i ) ) {
+                if ( delay.match( /\{[^}]+\}/ ) ) {
                     // Variable reference. ??? check it?
                 } else if ( delay.match( /^([0-9][0-9]?)(:[0-9][0-9]?){1,2}$/ ) ) {
                     // MM:SS or HH:MM:SS
@@ -4079,7 +4092,7 @@ var ReactorSensor = (function(api, $) {
                     }
                     if ( act.hidden ) continue;
                     key = act.service + "/" + act.action;
-                    known.append( jQuery('<option/>').val( key ).text( ( act.description || act.action ) + 
+                    known.append( jQuery('<option/>').val( key ).text( ( act.description || act.action ) +
                         ( fake ? "??(O)" : "" ) ) );
                     hasAction = true;
                     if ( undefined === actions[key] ) {

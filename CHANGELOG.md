@@ -10,7 +10,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 * Enhancement: New condition type "geofence" lets you react to one or more users being home, or not at home, or in one of the user's configured locations.
 * Enhancement: Show current value of state variable when selecting configuring service conditions (conditions that test service state variables). The display value will be truncated to 64 characters. Hovering over the displayed value or "Current value" label will display the entire string.
 * Enhancement: RunLua actions can now use Reactor.dump() to display the content of tables (e.g. `print(Reactor.dump(luup.scenes))`).
-* Enhancement: attempt to load the ACE editor if it is not loaded, so it can be used to edit RunLua code with syntax highlighting under both UI7 and AltUI (AltUI loads ACE for us).
+* Enhancement: attempt to load the ACE editor if it is not loaded, so it can be used to edit RunLua code with syntax highlighting under both UI7 and AltUI (AltUI loads ACE for us). Note: ACE is disabled by default currently on UI7, as there is some issue with Chrome/Mac; it seems to work for other browsers, so if you want to try/use it, set the `UseACE` state variable to "1" on the Reactor master device.
 * Enhancement: "change" operator now supports "from" and "to" values, so a condition can test more than just if the value changes at all, but also if it changes from/to specific value (e.g. house mode changes from Away to Home).
 * Fix an issue where cache expiry of condition state data may cause trip/untrip manual action buttons to fail to execute Lua fragments in the activities. This does not affect the normal, automatic operation of trip/untrip in response to conditions, only manual.
 
