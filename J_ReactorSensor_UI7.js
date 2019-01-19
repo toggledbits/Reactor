@@ -707,20 +707,16 @@ var ReactorSensor = (function(api, $) {
 
         /* Up/down tools for conditions enabled except up for first and down
            for last in each group. */
-        jQuery('div.controls i.action-up').attr('disabled', false);
-        jQuery('div.controls i.action-down').attr('disabled', false);
+        jQuery('div.condcontrols i.action-up').attr('disabled', false);
+        jQuery('div.condcontrols i.action-down').attr('disabled', false);
         jQuery('div.conditiongroup').each( function( ix, grpEl ) {
-            jQuery( 'div.conditionrow:first div.controls i.action-up', grpEl ).attr('disabled', true);
-            jQuery( 'div.conditionrow:last div.controls i.action-down', grpEl ).attr('disabled', true);
-        });
+            jQuery( 'div.conditionrow:first div.condcontrols i.action-up', grpEl ).attr('disabled', true);
+            jQuery( 'div.conditionrow:last div.condcontrols i.action-down', grpEl ).attr('disabled', true);
 
-        /* Delete button of single condition in first condition group is
-           disabled/hidden. Must keep one condition, hopefully set. */
-        jQuery('div.conditionrow div.controls i.action-delete').attr('disabled', false);
-        var lastMo = jQuery('div.conditiongroup:first div.conditionrow div.controls');
-        if ( lastMo.length == 1 ) {
-            jQuery('i.action-delete', lastMo).attr('disabled', true );
-        }
+            /* Delete on condition if more than 1 in group */
+            var count = jQuery( 'div.conditionrow', grpEl ).length;
+            jQuery( 'div.condcontrols i.action-delete', grpEl ).attr( 'disabled', count <= 1 );
+        });
 
         updateSaveControls();
     }
@@ -1602,7 +1598,7 @@ var ReactorSensor = (function(api, $) {
 
             case 'ishome':
                 container.append(
-                    '<select class="geofencecond form-control form-control-sm"><option value="is">Any selected user is home</option><option value="is not">Any selected user is NOT home</option><option value="at">User in geofence</option><option value="notat">Uuser not in geofence</option></select>');
+                    '<select class="geofencecond form-control form-control-sm"><option value="is">Any selected user is home</option><option value="is not">Any selected user is NOT home</option><option value="at">User in geofence</option><option value="notat">User not in geofence</option></select>');
                 mm = jQuery( '<select id="userid" class="form-control form-control-sm"/>' );
                 mm.append( jQuery( '<option/>' ).val("").text('--choose user--') );
                 for ( k in userIx ) {
@@ -1749,27 +1745,132 @@ var ReactorSensor = (function(api, $) {
     }
 
     /**
+     * Update group controls.
+     */
+    function updateGroupControls() {
+        var myid = api.getCpanelDeviceId();
+        var cdata = iData[myid].cdata;
+        jQuery.each( cdata.conditions || [], function( ix, obj ) {
+            var grpid = obj.groupid;
+            var grpEl = jQuery( 'div.conditiongroup#' + grpid );
+            jQuery( 'i#grpmoveup', grpEl ).attr( 'disabled', ix==0 );
+            jQuery( 'i#grpmovedn', grpEl ).attr( 'disabled', ix>=( cdata.conditions.length-1 ) );
+            jQuery( 'i#grpdelete', grpEl ).attr( 'disabled', cdata.conditions.length < 2 );
+        });
+    }
+
+    /**
+     * Handle click on group organization controls
+     */
+    function handleGroupControlClick( ev ) {
+        var el = jQuery( ev.currentTarget );
+        if ( el.attr( 'disabled' ) ) { return; }
+        var grpEl = el.closest( 'div.conditiongroup' );
+        var grpId = grpEl.attr('id');
+        var action = el.attr('id');
+
+        var myid = api.getCpanelDeviceId();
+        var cdata = iData[myid].cdata;
+        var grpix = findCdataGroupIndex( grpId );
+        var grp, anch;
+        switch ( action ) {
+            case "grpenable":
+                var grpconfig = cdata.conditions[grpix];
+                if ( grpconfig.disabled ) {
+                    delete grpconfig.disabled;
+                    grpEl.removeClass( 'groupdisabled' );
+                } else {
+                    grpconfig.disabled = 1;
+                    grpEl.addClass( 'groupdisabled' );
+                }
+                el.text( grpconfig.disabled ? "sync" : "sync_disabled" );
+                configModified = true;
+                break;
+
+            case "grpdelete":
+                if ( cdata.conditions.length > 1 ) {
+                    delete iData[myid].ixGroup[ grpId ];
+                    cdata.conditions.splice( grpix, 1 );
+                    /* remove the OR divider above the group */
+                    if ( grpix > 0 ) {
+                        grpEl.prev().remove();
+                    } else {
+                        grpEl.next().remove();
+                    }
+                    /* Remove the entire conditiongroup from display. */
+                    grpEl.remove();
+
+                    configModified = true;
+                }
+                break;
+
+            case "grpmoveup":
+                /* Move up. */
+                if ( grpix > 0 ) {
+                    /* Move up in data structure */
+                    var prior = jQuery( 'div#' + cdata.conditions[grpix-1].groupid + '.conditiongroup' );
+                    grp = cdata.conditions.splice( grpix, 1 );
+                    cdata.conditions.splice( grpix-1, 0, grp[0] );
+
+                    /* Move up in display */
+                    anch = grpEl.next( 'div.row' ); /* Always a row after, either separator or "Add Group" */
+                    // not working in jQuery for UI7: var prior = grpEl.prev( 'div.conditiongroup' ); /* find prior group */
+                    grpEl.detach();
+                    grpEl.insertAfter( prior );
+                    prior.detach();
+                    prior.insertBefore( anch );
+
+                    configModified = true;
+                }
+                break;
+
+            case "grpmovedn":
+                /* Move down */
+                if ( grpix < ( cdata.conditions.length-1 ) ) {
+                    /* Move down is data structure */
+                    var next = jQuery( 'div#' + cdata.conditions[grpix+1].groupid + '.conditiongroup' );
+                    grp = cdata.conditions.splice( grpix, 1 );
+                    cdata.conditions.splice( grpix+1, 0, grp[0] );
+
+                    /* Move down in display */
+                    anch = grpEl.next( 'div.row' ); /* Always a row after, either separator or "Add Group" */
+                    // not working in jQuery for UI7: var next = grpEl.next( 'div.conditiongroup' ); /* find next row */
+                    grpEl.detach();
+                    grpEl.insertAfter( next );
+                    next.detach();
+                    next.insertBefore( anch );
+
+                    configModified = true;
+                }
+                break;
+
+            default:
+                /* Nada */
+        }
+
+        updateGroupControls();
+        updateSaveControls();
+    }
+
+    /**
      * Handle click on Add Group button.
      */
     function handleAddGroupClick( ev ) {
         var el = ev.currentTarget;
-        var row = jQuery( el ).closest('div.row'); /* add group button row */
         jQuery(el).prop('disabled', true); /* disable the (only) add group button for now */
 
         /* Create a new condition group div, assign a group ID */
         var newId = getUID("grp");
         var condgroup = jQuery('<div class="conditiongroup"/>').attr('id', newId);
-        condgroup.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span id="groupcontrols"/><span class="titletext"/></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>');
-        jQuery( 'span#groupcontrols', condgroup ).append( '<i id="grpmoveup" class="material-icon md-btn">arrow_upward</i>' );
-        jQuery( 'span#groupcontrols', condgroup ).append( '<i id="grpmovedn" class="material-icon md-btn">arrow_downward</i>' );
-        jQuery( 'span#groupcontrols', condgroup ).append( '<i id="grpdelete" class="material-icon md-btn">clear</i>' );
+        condgroup.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span class="titletext"/><span id="groupcontrols" /></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>');
+        jQuery( 'span#groupcontrols', condgroup ).append( '<i id="grpenable" class="material-icons md-btn md14" title="Enable/disable group">sync</i>' );
+        jQuery( 'span#groupcontrols', condgroup ).append( '<i id="grpmoveup" class="material-icons md-btn md14" title="Move group up">arrow_upward</i>' );
+        jQuery( 'span#groupcontrols', condgroup ).append( '<i id="grpmovedn" class="material-icons md-btn md14" title="Move group down">arrow_downward</i>' );
+        jQuery( 'span#groupcontrols', condgroup ).append( '<i id="grpdelete" class="material-icons md-btn md14" title="Delete group">clear</i>' );
+        jQuery( 'span#groupcontrols i', condgroup ).on( 'click.reactor', handleGroupControlClick );
         jQuery( 'span.titletext', condgroup ).text( "Group: " + newId ).on( 'click.reactor', handleTitleClick );
         jQuery("button#addgroup", condgroup).on( 'click.reactor', handleAddGroupClick );
         jQuery("button#saveconf", condgroup).on( 'click.reactor', handleSaveClick );
-
-        /* Insert a new divider with "OR" caption */
-        jQuery('<div class="row divider"><div class="col-sm-5"><hr></div><div class="col-sm-2 text-center"><h5>OR</h5></div><div class="col-sm-5"><hr></div></div>')
-            .insertBefore(row);
 
         /* Create a condition row for the first condition in the group */
         var condId = getUID("cond");
@@ -1783,7 +1884,11 @@ var ReactorSensor = (function(api, $) {
         jQuery("button.addcond", b).on( 'click.reactor', handleAddConditionClick );
         condgroup.append(b); /* Add it to the conditiongroup */
 
-        condgroup.insertBefore(row); /* Insert new conditiongroup */
+        /* Insert a new divider with "OR" caption, and then our new group. */
+        var addgroup = jQuery( 'div#conditions div#addgroupcontrol' );
+        jQuery( '<div class="row divider"><div class="col-sm-5"><hr></div><div class="col-sm-2 text-center"><h5>OR</h5></div><div class="col-sm-5"><hr></div></div>' )
+            .insertBefore( addgroup );
+        condgroup.insertBefore( addgroup );
 
         /* Add to group store and index */
         var newcond = { id: condId };
@@ -1793,7 +1898,8 @@ var ReactorSensor = (function(api, $) {
         iData[myid].cdata.conditions.push( iData[myid].ixGroup[newId] );
 
         configModified = true;
-        updateConditionRow( cel );
+        updateGroupControls();
+        updateConditionRow( cel ); /* handles updateSaveControls() */
     }
 
     /**
@@ -1801,9 +1907,8 @@ var ReactorSensor = (function(api, $) {
      */
     function handleConditionSort( ev ) {
         var el = ev.currentTarget;
-        if ( jQuery( el ).prop('disabled') ) {
-            return;
-        }
+        if ( jQuery( el ).attr( 'disabled' ) ) { return; }
+
         var row = jQuery(el).closest('div.row');
         var up = jQuery(el).hasClass('action-up');
         var grpId = row.closest('div.conditiongroup').attr('id');
@@ -1854,6 +1959,8 @@ var ReactorSensor = (function(api, $) {
         var condId = row.attr('id');
         var grpId = jQuery( el ).closest( 'div.conditiongroup' ).attr("id");
         var myid = api.getCpanelDeviceId();
+
+        if ( el.attr( 'disabled' ) ) { return; }
 
         /* See if the condition is referenced in a sequence */
         var okDelete = false;
@@ -1908,10 +2015,10 @@ var ReactorSensor = (function(api, $) {
         var el = jQuery('<div class="row conditionrow"></div>');
         el.append( '<div class="col-sm-2 condtype"><select class="form-control form-control-sm"><option value="">--choose--</option></select></div>' );
         el.append( '<div class="col-sm-9 params"></div>' );
-        el.append( '<div class="col-sm-1 controls text-right"></div>');
-        jQuery("div.controls", el).append('<i class="material-icons md-btn action-up">arrow_upward</i>');
-        jQuery("div.controls", el).append('<i class="material-icons md-btn action-down">arrow_downward</i>');
-        jQuery("div.controls", el).append('<i class="material-icons md-btn action-delete">clear</i>');
+        el.append( '<div class="col-sm-1 condcontrols text-right"></div>');
+        jQuery("div.condcontrols", el).append('<i class="material-icons md-btn md14 action-up" title="Move condition up">arrow_upward</i>');
+        jQuery("div.condcontrols", el).append('<i class="material-icons md-btn md14 action-down" title="Move condition down">arrow_downward</i>');
+        jQuery("div.condcontrols", el).append('<i class="material-icons md-btn md14 action-delete" title="Delete condition">clear</i>');
 
         [ "comment", "service", "housemode", "sun", "weekday", "trange", "interval", "ishome", "reload" ].forEach( function( k ) {
             if ( ! ( isOpenLuup && k == "ishome" ) ) {
@@ -1920,9 +2027,9 @@ var ReactorSensor = (function(api, $) {
         });
 
         jQuery('div.condtype select', el).on( 'change.reactor', handleTypeChange );
-        jQuery('div.controls i.action-up', el).on( 'click.reactor', handleConditionSort );
-        jQuery('div.controls i.action-down', el).on( 'click.reactor', handleConditionSort );
-        jQuery('div.controls i.action-delete', el).on( 'click.reactor', handleConditionDelete );
+        jQuery('div.condcontrols i.action-up', el).on( 'click.reactor', handleConditionSort );
+        jQuery('div.condcontrols i.action-down', el).on( 'click.reactor', handleConditionSort );
+        jQuery('div.condcontrols i.action-delete', el).on( 'click.reactor', handleConditionDelete );
         return el;
     }
 
@@ -1930,15 +2037,19 @@ var ReactorSensor = (function(api, $) {
      * Redraw the conditions from the current cdata
     */
     function redrawConditions() {
-        jQuery('div#conditions').empty();
+        var container = jQuery("div#conditions");
+        container.empty();
+
+        /* Insert add group button row (not a divider but looks similar) */
+        var addgroup = jQuery( '<div id="addgroupcontrol" class="row"><div class="col-sm-5"><hr></div>' +
+            '<div class="col-sm-2 text-center"><button id="addgroup" class="btn btn-sm btn-primary">Add Group</button></div>' +
+            '<div class="col-sm-5"><hr></div>' +
+            '</div>' );
+        container.append( addgroup );
+        addgroup.on( 'click.reactor', handleAddGroupClick );
 
         var myid = api.getCpanelDeviceId();
         for (var ng=0; ng<(iData[myid].cdata.conditions || []).length; ++ng) {
-            if ( ng > 0 ) {
-                /* Insert divider */
-                jQuery("div#conditions").append('<div class="row divider"><div class="col-sm-5"><hr></div><div class="col-sm-2 text-center"><h5>OR</h5></div><div class="col-sm-5"><hr></div></div>');
-            }
-
             var grp = iData[myid].cdata.conditions[ng];
             if ( grp.groupid === undefined )
                 grp.groupid = getUID("group");
@@ -1946,29 +2057,22 @@ var ReactorSensor = (function(api, $) {
 
             /* Create div.conditiongroup and add conditions */
             var gel = jQuery('<div class="conditiongroup"></div>').attr("id", grp.groupid);
-            gel.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6 form-inline"><span class="titletext"></span> <label for="grpdisable" class="checkbox-inline"><input id="grpdisable" type="checkbox" class="form-check">Disabled</label></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>');
-            jQuery( 'span.titletext', gel ).text( "Group: " + grp.groupid ).on( 'click.reactor', handleTitleClick );
-            jQuery( 'input#grpdisable', gel ).prop( 'checked', grp.disabled )
-                .on( 'change.reactor', function( ev ) {
-                    var el = jQuery( ev.currentTarget );
-                    var grpel = el.closest( 'div.conditiongroup' );
-                    var grpid = grpel.attr( 'id' );
-                    var grpconfig = iData[api.getCpanelDeviceId()].ixGroup[grpid];
-                    if ( el.prop( 'checked' ) ) {
-                        grpconfig.disabled = 1;
-                        grpel.addClass( 'groupdisabled' );
-                    } else {
-                        delete grpconfig.disabled;
-                        grpel.removeClass( 'groupdisabled' );
-                    }
-                    configModified = true;
-                    updateSaveControls();
-                });
+            gel.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6 form-inline"><span class="titletext"></span><span id="groupcontrols" /></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>');
+            jQuery( 'span#groupcontrols', gel ).append( '<i id="grpenable" class="material-icons md-btn md14" title="Enable/disable group">sync</i>' );
+            jQuery( 'span#groupcontrols', gel ).append( '<i id="grpmoveup" class="material-icons md-btn md14" title="Move group up">arrow_upward</i>' );
+            jQuery( 'span#groupcontrols', gel ).append( '<i id="grpmovedn" class="material-icons md-btn md14" title="Move group down">arrow_downward</i>' );
+            jQuery( 'span#groupcontrols', gel ).append( '<i id="grpdelete" class="material-icons md-btn md14" title="Delete group">clear</i>' );
+            jQuery( 'span#groupcontrols i', gel ).on( 'click.reactor', handleGroupControlClick );
+
+            jQuery( 'span#groupcontrols i#grpenable', gel ).text( grp.disabled ? "sync" : "sync_disabled" );
             if ( grp.disabled ) {
                 gel.addClass('groupdisabled');
             } else {
                 gel.removeClass('groupdisabled');
             }
+
+            jQuery( 'span.titletext', gel ).text( "Group: " + grp.groupid ).on( 'click.reactor', handleTitleClick );
+
             for (var nc=0; nc<(grp.groupconditions || []).length; ++nc) {
                 var cond = grp.groupconditions[nc];
                 var row = getConditionRow();
@@ -1989,10 +2093,15 @@ var ReactorSensor = (function(api, $) {
             }
 
             /* Append "Add Condition" button */
-            gel.append('<div class="row buttonrow"><div class="col-xs-12 col-sm-12"><button class="addcond btn btn-sm btn-primary">Add Condition</button></div></div>');
+            gel.append( '<div class="row buttonrow"><div class="col-xs-12 col-sm-12"><button class="addcond btn btn-sm btn-primary">Add Condition</button></div></div>' );
 
             /* Append the group */
-            jQuery("div#conditions").append(gel);
+            if ( ng > 0 ) {
+                /* Insert divider */
+                jQuery( '<div class="row divider"><div class="col-sm-5"><hr></div><div class="col-sm-2 text-center"><h5>OR</h5></div><div class="col-sm-5"><hr></div></div>' )
+                    .insertBefore( addgroup );
+            }
+            gel.insertBefore( addgroup );
 
             /* Activate the "Add Condition" button */
             jQuery("button.addcond", gel).on( 'click.reactor', handleAddConditionClick );
@@ -2001,6 +2110,7 @@ var ReactorSensor = (function(api, $) {
         jQuery("button#saveconf").on( 'click.reactor', handleSaveClick );
         jQuery("button#revertconf").on( 'click.reactor', handleRevertClick );
 
+        updateGroupControls();
         updateControls();
     }
 
@@ -3130,9 +3240,13 @@ var ReactorSensor = (function(api, $) {
             html += 'div#tab-conds.reactortab fieldset#nocaseopt { display: inline-block; }';
             html += 'div#tab-conds.reactortab div#currval { font-family: "Courier New", Courier, monospace; font-size: 0.9em; }';
             html += 'div#tab-conds.reactortab div.warning { color: red; }';
-            html += 'div#tab-conds.reactortab i.md-btn:disabled { color: #cccccc; cursor: auto; }';
-            html += 'div#tab-conds.reactortab i.md-btn[disabled] { color: #cccccc; cursor: auto; }';
-            html += 'div#tab-conds.reactortab i.md-btn { color: #004020; font-size: 14pt; cursor: pointer; }';
+            html += 'div#tab-conds.reactortab span#groupcontrols { color: white; margin-right: 8px; }';
+            html += 'div#tab-conds.reactortab div.condcontrols { color: #004020; }';
+            html += 'div#tab-conds.reactortab i.md-btn:disabled { color: #999999; cursor: auto; }';
+            html += 'div#tab-conds.reactortab i.md-btn[disabled] { color: #999999; cursor: auto; }';
+            html += 'div#tab-conds.reactortab i.md-btn { cursor: pointer; }';
+            html += 'div#tab-conds.reactortab .md12 { font-size: 12pt; }';
+            html += 'div#tab-conds.reactortab .md14 { font-size: 14pt; }';
             html += 'div#tab-conds.reactortab input.tbinvert { min-width: 16px; min-height: 16px; }';
             html += 'div#tab-conds.reactortab div.conditions { width: 100%; }';
             html += 'div#tab-conds.reactortab div.tblisttitle { background-color: #006040; color: #fff; padding: 8px; min-height: 42px; }';
@@ -3172,14 +3286,6 @@ var ReactorSensor = (function(api, $) {
             html += footer();
 
             api.setCpanelContent(html);
-
-            /* Insert add group button row (not a divider but looks similar) */
-            var container = jQuery("div#tab-conds.reactortab");
-            container.append('<div class="row"><div class="col-sm-5"><hr></div>' +
-                '<div class="col-sm-2 text-center"><button id="addgroup" class="btn btn-sm btn-primary">Add Group</button></div>' +
-                '<div class="col-sm-5"><hr></div>' +
-                '</div>');
-            jQuery("button#addgroup", container).on( 'click.reactor', handleAddGroupClick );
 
             redrawConditions();
 

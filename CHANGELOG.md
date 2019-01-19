@@ -4,6 +4,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 2.2 (develop branch)
 
+* Enhancement: Groups can now be moved up and down (like conditions), just for organizational purposes (order has no meaning to the logic). It's also possible to delete a group directly (previously you had to delete all of its conditions one-by-one, and that would then delete the group). The enable/disable control was made an icon in the same group as the foregoing tools for consistency and better appearance.
 * Enhancement: When editing variable expressions, a new "insert getstate" tool is available to more easily fetch device state variable values into the expression.
 * Enhancement: Reactor will check "Run Lua" fragments by putting them through Lua loadstring(), as an early check for syntax errors.
 * Enhancement: Reactor now implements service SwitchPower1, which mirrors the SecuritySensor1 state (i.e. the binary light is on when the ReactorSensor is tripped; off when it is untripped); this allows facilities that don't support SecuritySensor1 but can support SwitchPower1 to sense and manipulate the ReactorSensor.
