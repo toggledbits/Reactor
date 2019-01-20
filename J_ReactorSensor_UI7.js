@@ -1374,6 +1374,7 @@ var ReactorSensor = (function(api, $) {
                 break;
 
             case 'housemode':
+                if ( ( cond.operator || "" ) == "" ) { cond.operator = "is"; }
                 mm = jQuery('<select class="opmenu form-control form-control-sm"></select>');
                 mm.append( '<option value="is">is any of</option>' );
                 mm.append( '<option value="change">changes from</option>' );
@@ -1382,11 +1383,11 @@ var ReactorSensor = (function(api, $) {
                 container.append( mm );
                 container.append( " " );
                 // Checkboxes in their own div
-                var d = jQuery( '<fieldset id="housemodechecks" class="condfields"/>' );
+                var d = jQuery( '<fieldset id="housemodechecks" class="condfields form-inline"/>' );
                 for ( k=1; k<=4; k++ ) {
-                    mm = jQuery( '<input type="checkbox"/>' ).attr( 'value', k ).attr( 'id', 'opts' );
+                    mm = jQuery( '<input type="checkbox" class="form-check"/>' ).attr( 'value', k ).attr( 'id', 'opts' );
                     v = jQuery( '<label class="checkbox-inline" />' ).text( houseModeName[k] );
-                    v.append( mm );
+                    v.prepend( mm );
                     d.append( v );
                 }
                 container.append( d );
@@ -1954,10 +1955,10 @@ var ReactorSensor = (function(api, $) {
      * Handle click on the condition delete tool
      */
     function handleConditionDelete( ev ) {
-        var el = ev.currentTarget;
-        var row = jQuery( el ).closest( 'div.row' );
+        var el = jQuery( ev.currentTarget );
+        var row = el.closest( 'div.row' );
         var condId = row.attr('id');
-        var grpId = jQuery( el ).closest( 'div.conditiongroup' ).attr("id");
+        var grpId = el.closest( 'div.conditiongroup' ).attr("id");
         var myid = api.getCpanelDeviceId();
 
         if ( el.attr( 'disabled' ) ) { return; }
