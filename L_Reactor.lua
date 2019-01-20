@@ -480,7 +480,7 @@ local function sensor_runOnce( tdev )
         initVar( "ArmedTripped", 0, tdev, SENSOR_SID )
         initVar( "LastTrip", 0, tdev, SENSOR_SID )
         initVar( "AutoUntrip", 0, tdev, SENSOR_SID )
-        
+
         initVar( "Target", 0, tdev, SWITCH_SID )
         initVar( "Status", 0, tdev, SWITCH_SID )
 
@@ -524,7 +524,7 @@ local function sensor_runOnce( tdev )
     if s < 00201 then
         initVar( "ValueChangeHoldTime", 2, tdev, RSSID )
     end
-    
+
     if s < 00206 then
         local currState = getVarNumeric( "Tripped", 0, tdev, SENSOR_SID )
         initVar( "Target", currState, tdev, SWITCH_SID )
@@ -793,7 +793,35 @@ local function stopScene( ctx, taskid, tdev )
     luup.variable_set( MYSID, "runscene", json.encode(sceneState), pluginDevice )
 end
 
-local stringify -- fwd decl
+-- Get a value (works as constant or expression (including simple variable ref).
+-- Returns result as string and number
+local function getValue( val, ctx, tdev )
+    D("getValue(%1,%2,%3)", val, ctx, tdev)
+    ctx = ctx or sensorState[tostring(tdev)].ctx
+    val = val or ""
+    if #val >=2 and val:byte(1) == 34 and val:byte(-1) == 34 then
+        -- Dequote quoted string and return
+        return val:sub( 2, -2 ), nil
+    end
+    if #val >= 2 and val:byte(1) == 123 and val:byte(-1) == 125 then
+        -- Expression wrapped in {}
+        local mp = val:sub( 2, -2 )
+        if luaxp == nil then
+            luaxp = require("L_LuaXP_Reactor")
+        end
+        local result,err = luaxp.evaluate( mp, ctx )
+        if err then
+            L({level=2,msg="%1 (%2) Error evaluating %3: %4"}, luup.devices[tdev].description,
+                tdev, mp, err)
+            val = ""
+        else
+            val = result
+        end
+    end
+    return tostring(val), tonumber(val)
+end
+
+local stringify -- fwd decl for execLua
 
 -- Run Lua fragment for scene. Returns result,error
 local function execLua( fname, luafragment, extarg, tdev )
@@ -943,7 +971,11 @@ end
 local runScene -- forward declaration
 
 -- Resolve variable references. Recursion is allowed.
+-- ??? Deprecate this resolver.
 local function resolveVarRef( v, tdev, depth )
+    if getVarNumeric( "RevertOldResolver", 0, pluginDevice, MYSID ) == 0 then
+        return getValue( v, nil, tdev )
+    end
     depth = depth or 1
     if type(v) ~= "string" then return v end
     local var = v:match( "%{([^}]+)%}" )
@@ -995,7 +1027,7 @@ local function execSceneGroups( tdev, taskid, scd )
             local delaytype = scd.groups[nextGroup].delaytype or "inline"
             local tt
             -- Vera (7.x.x) scenes are always "start" delay type.
-            if scd.groups[nextGroup].delaytype == "start" or not scd.isReactorScene then
+            if delaytype == "start" or not scd.isReactorScene then
                 tt = sst.starttime + delay
             else
                 tt = (sst.lastgrouptime or now) + delay
@@ -1074,7 +1106,7 @@ local function execSceneGroups( tdev, taskid, scd )
                     end
                 elseif action.type == "housemode" then
                     D("execSceneGroups() setting house mode to %1", action.housemode)
-                    luup.call_action( "urn:micasaverde-com:serviceId:HomeAutomationGateway1", 
+                    luup.call_action( "urn:micasaverde-com:serviceId:HomeAutomationGateway1",
                         "SetHouseMode", { Mode=action.housemode or "1" }, 0 )
                 elseif action.type == "runscene" then
                     -- Run scene in same context as this one. Whoa... recursion... depth???
@@ -1234,7 +1266,7 @@ runScene = function( scene, tdev, options )
     end
 
     -- If using Luup scenes, short-cut
-    if getVarNumeric("UseReactorScenes", 1, tdev, RSSID) == 0 and not options.forceReactorScenes 
+    if getVarNumeric("UseReactorScenes", 1, tdev, RSSID) == 0 and not options.forceReactorScenes
         and not scd.isReactorScene then
         D("runScene() handing-off scene run to Luup")
         luup.call_action( "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "RunScene", { SceneNum=scene }, 0 )
@@ -1369,6 +1401,10 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
     -- if debugMode then luaxp._DEBUG = D end
     ctx.NULL = luaxp.NULL
     local result, err = luaxp.evaluate( vdef.expression or "?", ctx )
+    if not ( err or luaxp.isNull(result) or string.find( ":number:string:boolean:", type(result) ) ) then
+        -- Type we can't store in state variable.
+        err = { message="Invalid result type for state variable storage (" .. type(result) .. ")" }
+    end
     if not ( err or luaxp.isNull(result) ) then
         D("evaluateVariable() %2 (%1) %3 evaluates to %4", tdev, luup.devices[tdev].description,
             vdef.expression, result)
@@ -1376,8 +1412,17 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
         ctx[vname] = result
         -- Canonify booleans by converting to number for storage as state variable
         if type(result) == "boolean" then result = result and "1" or "0" end
+        if type(result) == "table" then 
+            for ix,v in ipairs( result ) do
+                if type(v) ~= "number" then
+                    table[ix] = string.format( "%q", tostring(v) )
+                end
+            end
+            result = 'list(' .. table.concat( result, "," ) .. ')'
+        end
         local oldVal = luup.variable_get( VARSID, vname, tdev )
-        if oldVal == nil or oldVal ~= result then
+        if oldVal == nil or oldVal ~= tostring(result or "") then
+            addEvent{ dev=tdev, event="variable", variable=vname, oldval=oldVal, newval=result }
             luup.variable_set( VARSID, vname, tostring(result or ""), tdev )
             luup.variable_set( VARSID, vname .. "_Error", "", tdev )
         end
@@ -1387,6 +1432,7 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
         ctx[vname] = luaxp.NULL
         local msg = (err or {}).message or "Failed"
         if (err or {}).location ~= nil then msg = msg .. " at " .. tostring(err.location) end
+        addEvent{ dev=tdev, event="expression", variable=vname, ['error']=msg }
         luup.variable_set( VARSID, vname, "", tdev )
         luup.variable_set( VARSID, vname .. "_Error", msg, tdev )
         return nil, err
@@ -1408,15 +1454,67 @@ local function getExpressionContext( cdata, tdev )
     ctx.__functions.getstate = function( args )
         local dev, svc, var = unpack( args )
         local vn = finddevice( dev )
-        D("getstate(%1), dev=%2, svc=%3, var=%4, vn=%5", args, dev, svc, var, vn)
+        D("getstate(%1), dev=%2, svc=%3, var=%4, vn(dev)=%5", args, dev, svc, var, vn)
         if vn == luaxp.NULL or vn == nil or luup.devices[vn] == nil then
+            addEvent{ dev=tdev, event="expression", context="getstate", ['error']="Device not found: " .. tostring(dev) }
             return luaxp.NULL
         end
         -- Create a watch if we don't have one.
         addServiceWatch( vn, svc, var, tdev )
         -- Get and return value
-        local val = luup.variable_get( svc, var, vn )
+        return luup.variable_get( svc, var, vn ) or luaxp.NULL
+    end
+    ctx.__functions.setstate = function( args )
+        local dev, svc, var, val = unpack( args )
+        local vn = finddevice( dev )
+        D("setstate(%1), dev=%2, svc=%3, var=%4, val=%5, vn(dev)=%6", args, dev, svc, var, val, vn)
+        if vn == luaxp.NULL or vn == nil or luup.devices[vn] == nil then
+            addEvent{ dev=tdev, event="expression", context="setstate", ['error']="Device not found: " .. tostring(dev) }
+            return luaxp.NULL
+        end
+        -- Set value.
+        local vv = val
+        if vv == nil or luaxp.isNull(vv) then
+            vv = ""
+        elseif type(vv) == "table" then
+            vv = table.concat( vv, "," )
+        else
+            vv = tostring(vv)
+        end
+        luup.variable_set( svc or "urn:upnp-org:serviceId:DefaultService", var or "Unnamed", vv, vn )
         if val == nil then return luaxp.NULL end
+        return val
+    end
+    ctx.__functions.getattribute = function( args )
+        local dev, attr = unpack( args )
+        local vn = finddevice( dev )
+        D("getattribute(%1), dev=%2, attr=%3, vn(dev)=%4", args, dev, attr, vn)
+        if vn == luaxp.NULL or vn == nil or luup.devices[vn] == nil then
+            addEvent{ dev=tdev, event="expression", context="getattribute", ['error']="Device not found: " .. tostring(dev) }
+            return luaxp.NULL
+        end
+        -- Get and return value.
+        return luup.attr_get( attr, vn ) or luaxp.NULL
+    end
+    ctx.__functions.getluup = function( args )
+        local key = unpack( args )
+        if key == nil or luup[key] == nil then return luaxp.NULL end
+        local t = type(luup[key])
+        if t == "string" or t == "number" then
+            return luup[key]
+        end
+        return luaxp.NULL
+    end
+    ctx.__functions.stringify = function( args )
+        local val = unpack( args )
+        return json.encode( val )
+    end
+    ctx.__functions.unstringify = function( args )
+        local str = unpack( args )
+        local val,pos,err = json.decode( str )
+        if err then
+            luaxp.evalerror("Failed to unstringify at " .. pos .. ": " .. err)
+        end
         return val
     end
     -- Implement LuaXP extension resolver as recursive evaluation. This allows expressions
@@ -1453,6 +1551,8 @@ local function updateVariables( cdata, tdev )
             evaluateVariable( n, ctx, cdata, tdev )
         end
     end
+    -- Save the expression context for other uses.
+    sensorState[tostring(tdev)].ctx = ctx
 end
 
 -- Helper to schedule next condition update. Times are MSM (mins since midnight)
@@ -1470,32 +1570,6 @@ local function doNextCondCheck( taskinfo, nowMSM, startMSM, endMSM )
     local tt = math.floor( ( os.time() + delay ) / 60 ) * 60
     D("doNextCondCheck() edge %3, scheduling next check for %1 (delay %2secs)", tt, delay, edge)
     scheduleTick( taskinfo, tt )
-end
-
--- Get a value (works as constant or expression (including simple variable ref).
--- Returns result as string and number
-local function getValue( val, ctx, tdev )
-    val = val or ""
-    if #val >=2 and val:byte(1) == 34 and val:byte(-1) == 34 then
-        -- Dequote quoted string and return
-        return val:sub( 2, -2 ), nil
-    end
-    if #val >= 2 and val:byte(1) == 123 and val:byte(-1) == 125 then
-        -- Expression wrapped in {}
-        local mp = val:sub( 2, -2 )
-        if luaxp == nil then
-            luaxp = require("L_LuaXP_Reactor")
-        end
-        local result,err = luaxp.evaluate( mp, ctx )
-        if err then
-            L({level=2,msg="%1 (%2) Error evaluating %1: %2"}, luup.devices[tdev].description,
-                tdev, mp, err)
-            val = ""
-        else
-            val = result
-        end
-    end
-    return tostring(val), tonumber(val)
 end
 
 local function evaluateCondition( cond, grp, tdev )
@@ -1521,10 +1595,10 @@ local function evaluateCondition( cond, grp, tdev )
         local vn = tonumber( vv )
 
         -- Get condition value
-        local cv,cn = getValue( cond.value, sensorState[tostring(tdev)].ctx, tdev )
+        local cv,cn = getValue( cond.value, nil, tdev )
 
         -- If case-insensitive, canonify to lowercase.
-        if cond.nocase then
+        if ( cond.nocase or 1 ) ~= 0 then
             vv = string.lower( vv )
             cv = string.lower( cv )
         end
@@ -1546,11 +1620,17 @@ local function evaluateCondition( cond, grp, tdev )
             if vn == nil or cn == nil or vn > cn then return vv,false end
         elseif op == "contains" then
             if not string.find( vv, cv ) then return vv,false end
+        elseif op == "notcontains" then
+            if string.find( vv, cv ) then return vv,false end
         elseif op == "starts" then
             if not string.find( vv, "^" .. cv ) then return vv,false end
+        elseif op == "notstarts" then
+            if string.find( vv, "^" .. cv ) then return vv,false end
         elseif op == "ends" then
             if not string.find( vv, cv .. "$" ) then return vv,false end
-        elseif op == "in" then
+        elseif op == "notends" then
+            if string.find( vv, cv .. "$" ) then return vv,false end
+        elseif op == "in" or op == "notin" then
             local lst = split( cv )
             local found = false
             for _,z in ipairs( lst ) do
@@ -1559,7 +1639,8 @@ local function evaluateCondition( cond, grp, tdev )
                     break
                 end
             end
-            if not found then return vv,false end
+            if op == "notin" and found then return vv,false end
+            if op == "in" and not found then return vv,false end
         elseif op == "istrue" then
             if (vn or 0) == 0 and not TRUESTRINGS:find( ":" .. vv:lower() .. ":" ) then return vv,false end
         elseif op == "isfalse" then
@@ -1922,12 +2003,12 @@ local function evaluateCondition( cond, grp, tdev )
         local ishome = getVarJSON( "IsHome", {}, pluginDevice, MYSID )
         local userlist = split( cond.value or "" )
         D("evaluateCondition() ishome op=%1 %3; ishome=%2", op, ishome, userlist)
-        if op == "at" then
+        if op == "at" or op == "notat" then
             if geofenceMode ~= -1 then geofenceMode = -1 end
             local userid,location = unpack(userlist)
             if (ishome[userid] or {}).tags and ishome[userid].tags[location] then
                 local val = ishome[userid].tags[location].status or ""
-                return val,val=="in"
+                return val,val==( op=="at" and "in" or "out" )
             end
             -- Don't have data for this location or user.
             return "",false
@@ -2316,10 +2397,10 @@ local function masterTick(pdev)
     if geofenceMode ~= 0 then
         L("Checking geofence...")
         local ishome = getVarJSON( "IsHome", {}, pdev, MYSID )
-        if type(ishome) ~= "table" then 
+        if type(ishome) ~= "table" then
             D("masterTick() IsHome data type invalid (%1)", type(ishome))
             L{level=2,msg="IsHome data invalid/corrupt; resetting."}
-            ishome = {} 
+            ishome = {}
         end
         local rc,rs,rj,ra = luup.call_action( "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "GetUserData", { DataFormat="json" }, 0 ) -- luacheck: ignore 211
         -- D("masterTick() GetUserData action returned rc=%1, rs=%2, rj=%3, ra=%4", rc, rs, rj, ra)
@@ -2482,7 +2563,7 @@ local function startSensor( tdev, pdev )
     sensorState[skey].updateThrottled = false
     sensorState[skey].changeRate = initRate( 60, 15 )
     sensorState[skey].changeThrottled = false
-    
+
     math.randomseed( os.time() )
 
     -- Load the config data.
@@ -3216,6 +3297,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
                                 luup.devices[cond.device].description, cond.device )
                             r = r .. string.format("%s/%s %s %s", cond.service or "?", cond.variable or "?", cond.operator or cond.condition or "?",
                                 cond.value or "")
+                            if cond.nocase == 0 then r = r .. " (match case)" end
                             if cond.duration then
                                 r = r .. " for " .. ( cond.duration_op or "ge" ) ..
                                     " " .. cond.duration .. "s"
@@ -3275,6 +3357,13 @@ function request( lul_request, lul_parameters, lul_outputformat )
         local result, err = luaxp.evaluate( expr, ctx )
         local ret = { status=true, resultValue=result, err=err or false, expression=expr }
         return json.encode( ret ), "application/json"
+
+    elseif action == "testlua" then
+        local _,err = loadstring( lul_parameters.lua or "" )
+        if err then
+            return json.encode{ status=false, message=err }, "application/json"
+        end
+        return json.encode{ status=true, message="Lua OK" }, "application/json"
 
     elseif action == "infoupdate" then
         -- Fetch and install updated deviceinfo file; these will change more frequently than the plugin.

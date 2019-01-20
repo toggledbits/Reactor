@@ -48,13 +48,16 @@ var ReactorSensor = (function(api, $) {
         "int": { min: -2147483648, max: 2147483647 }
     };
     var serviceOps = [ { op: '=', desc: 'equals', args: 1 }, { op: '<>', desc: 'not equals', args: 1 },
-        { op: '<', desc: '<', args: 1 }, { op: '<=', desc: '<=', args: 1 },
-        { op: '>', desc: '>', args: 1 }, { op: '>=', desc: '>=', args: 1 },
-        { op: 'starts', desc: 'starts with', args: 1 }, { op: 'ends', desc: 'ends with', args: 1 },
-        { op: 'contains', desc: 'contains', args: 1 }, { op: 'in', desc: 'in', args: 1 },
+        { op: '<', desc: '<', args: 1, numeric: 1 }, { op: '<=', desc: '<=', args: 1, numeric: 1 },
+        { op: '>', desc: '>', args: 1, numeric: 1 }, { op: '>=', desc: '>=', args: 1, numeric: 1 },
+        { op: 'starts', desc: 'starts with', args: 1 }, { op: 'notstarts', desc: 'does not start with', args: 1 },
+        { op: 'ends', desc: 'ends with', args: 1 }, { op: 'notends', desc: 'does not end with', args: 1 },
+        { op: 'contains', desc: 'contains', args: 1 }, { op: 'notcontains', desc: 'does not contain', args: 1 },
+        { op: 'in', desc: 'in', args: 1 }, { op: 'notin', desc: 'not in', args: 1 },
         { op: 'istrue', desc: 'is TRUE', args: 0 }, { op: 'isfalse', desc: 'is FALSE', args: 0 },
         { op: 'change', desc: 'changes', args: 2 }
     ];
+    var noCaseOptPattern = /(=|<>|contains|notcontains|starts|notstarts|ends|notends|in|notin|change)/i;
     var serviceOpsIndex = {};
 
     /* Return footer */
@@ -99,6 +102,11 @@ var ReactorSensor = (function(api, $) {
             return dflt;
         }
         return getInteger( s );
+    }
+
+    /* Return value or default if undefined */
+    function coalesce( v, d ) {
+        return ( undefined === v ) ? d : v;
     }
 
     /* Get device object from userdata by device number */
@@ -382,9 +390,13 @@ var ReactorSensor = (function(api, $) {
                                 str += " to " + k[1];
                             }
                         } else {
-                            str += ' ' + cond.value;
+                            str += ' ' + ( t.numeric ? cond.value : JSON.stringify( cond.value ) );
                         }
                     }
+                }
+                if ( ( cond.operator || "=" ).match( noCaseOptPattern ) &&
+                        coalesce( cond.nocase, 1 ) == 0 ) {
+                    str += ' (match case)';
                 }
                 break;
 
@@ -509,16 +521,17 @@ var ReactorSensor = (function(api, $) {
 
             case 'ishome':
                 t = ( cond.value || "" ).split(/,/);
-                if ( "at" === cond.operator ) {
+                if ( "at" === cond.operator || "notat" === cond.operator ) {
+                    var desc = cond.operator == "at" ? " at " : " not at ";
                     var uu = userIx[t[0]];
                     if ( undefined === uu ) {
-                        str += String(t[0]) + " at location " + String(t[1]);
+                        str += String(t[0]) + desc + " location " + String(t[1]);
                     } else {
                         var nn = uu.name || t[0];
                         if ( uu.tags && uu.tags[t[1]] ) {
-                            str += nn + " at " + uu.tags[t[1]].name;
+                            str += nn + desc + uu.tags[t[1]].name;
                         } else {
-                            str += nn + " at location " + t[1];
+                            str += nn + desc + " location " + t[1];
                         }
                     }
                 } else {
@@ -694,20 +707,16 @@ var ReactorSensor = (function(api, $) {
 
         /* Up/down tools for conditions enabled except up for first and down
            for last in each group. */
-        jQuery('div.controls i.action-up').attr('disabled', false);
-        jQuery('div.controls i.action-down').attr('disabled', false);
+        jQuery('div.condcontrols i.action-up').attr('disabled', false);
+        jQuery('div.condcontrols i.action-down').attr('disabled', false);
         jQuery('div.conditiongroup').each( function( ix, grpEl ) {
-            jQuery( 'div.conditionrow:first div.controls i.action-up', grpEl ).attr('disabled', true);
-            jQuery( 'div.conditionrow:last div.controls i.action-down', grpEl ).attr('disabled', true);
-        });
+            jQuery( 'div.conditionrow:first div.condcontrols i.action-up', grpEl ).attr('disabled', true);
+            jQuery( 'div.conditionrow:last div.condcontrols i.action-down', grpEl ).attr('disabled', true);
 
-        /* Delete button of single condition in first condition group is
-           disabled/hidden. Must keep one condition, hopefully set. */
-        jQuery('div.conditionrow div.controls i.action-delete').attr('disabled', false);
-        var lastMo = jQuery('div.conditiongroup:first div.conditionrow div.controls');
-        if ( lastMo.length == 1 ) {
-            jQuery('i.action-delete', lastMo).attr('disabled', true );
-        }
+            /* Delete on condition if more than 1 in group */
+            var count = jQuery( 'div.conditionrow', grpEl ).length;
+            jQuery( 'div.condcontrols i.action-delete', grpEl ).attr( 'disabled', count <= 1 );
+        });
 
         updateSaveControls();
     }
@@ -730,12 +739,18 @@ var ReactorSensor = (function(api, $) {
                 break;
 
             case 'service':
-                removeConditionProperties( cond, "device,service,variable,operator,value" );
+                /* Below removes nocase, but we put it back if needed */
+                removeConditionProperties( cond, "device,devicename,service,variable,operator,value" );
                 cond.device = parseInt( jQuery("div.params select.devicemenu", row).val() );
                 cond.service = jQuery("div.params select.varmenu", row).val() || "";
                 cond.variable = cond.service.replace( /^[^\/]+\//, "" );
                 cond.service = cond.service.replace( /\/.*$/, "" );
                 cond.operator = jQuery("div.params select.opmenu", row).val() || "=";
+                if ( cond.operator.match( noCaseOptPattern ) ) {
+                    if ( ! jQuery( 'input#nocase', row ).prop( 'checked' ) ) {
+                        cond.nocase = 0;
+                    }
+                }
                 var op = serviceOpsIndex[cond.operator || ""];
                 jQuery( "input#value", row ).css( "visibility", ( undefined !== op && 0 === op.args ) ? "hidden" : "visible" );
                 // use op.args???
@@ -748,6 +763,13 @@ var ReactorSensor = (function(api, $) {
                     }
                 } else {
                     cond.value = jQuery("input#value", row).val() || "";
+                }
+                /* For numeric op, check that value is parseable as a number (unless var ref) */
+                if ( op && op.numeric && ! cond.value.match( /\{[^}]+\}/ ) ) {
+                    var n = parseFloat( cond.value );
+                    if ( isNaN( n ) ) {
+                        jQuery( 'input#value', row ).addClass( 'tberror' );
+                    }
                 }
                 break;
 
@@ -905,7 +927,7 @@ var ReactorSensor = (function(api, $) {
                 removeConditionProperties( cond, "operator,value" );
                 cond.operator = jQuery("div.params select.geofencecond", row).val() || "is";
                 res = [];
-                if ( "at" === cond.operator ) {
+                if ( "at" === cond.operator || "notat" === cond.operator ) {
                     res[0] = jQuery( 'select#userid', row ).val() || "";
                     res[1] = jQuery( 'select#location', row ).val() || "";
                     if ( "" === res[0] ) {
@@ -954,17 +976,17 @@ var ReactorSensor = (function(api, $) {
         var service = jQuery("select.varmenu", row).val() || "";
         var variable = service.replace( /^[^\/]+\//, "" );
         service = service.replace( /\/.*$/, "" );
-        var span = jQuery( 'span#currval', row );
+        var blk = jQuery( 'div#currval', row );
         if ( !isNaN(device) && "" !== service && "" != variable ) {
             var val = api.getDeviceState( device, service, variable );
             if ( undefined === val || false === val ) {
-                span.text( 'Current value: (not set)' ).attr( 'title', "This variable is not present in the device state." );
+                blk.text( 'Current value: (not set)' ).attr( 'title', "This variable is not present in the device state." );
             } else {
                 var abbrev = val.length > 64 ? val.substring(0,61) + '...' : val;
-                span.text( 'Current value: ' + abbrev ).attr( 'title', val.length==0 ? "The string is blank/empty." : val );
+                blk.text( 'Current value: ' + abbrev ).attr( 'title', val.length==0 ? "The string is blank/empty." : val );
             }
         } else {
-            span.empty().attr( 'title', "" );
+            blk.empty().attr( 'title', "" );
         }
     }
 
@@ -1001,23 +1023,32 @@ var ReactorSensor = (function(api, $) {
                 jQuery( 'fieldset#housemodeselects', row ).hide();
             }
         } else if ( "service" === cond.type ) {
-            var inp = jQuery( 'input#value', row );
+            var inp = jQuery( 'input#value', row ) || "=";
             if ( val == "change" ) {
                 if ( inp.length > 0 ) {
                     // Change single input field to double fields.
                     inp.show();
                     var lab = jQuery( '<label class="tbsecondaryinput"> to </label>' );
-                    lab.append( inp.clone().attr('id', 'val2').off( 'change.reactor' ).on( 'change.reactor', handleConditionRowChange ) );
+                    lab.append( inp.clone().attr('id', 'val2').val( '' )
+                        .attr( 'placeholder', 'blank=any value' )
+                        .off( 'change.reactor' ).on( 'change.reactor', handleConditionRowChange ) );
                     lab.insertAfter( inp );
-                    inp.attr('id', 'val1');
+                    inp.attr( 'id', 'val1' ).attr( 'placeholder', 'blank=any value' );
                 }
             } else {
                 if ( inp.length == 0 ) {
                     inp = jQuery( 'input#val1', row );
                     jQuery( 'label.tbsecondaryinput', row ).remove();
-                    inp.attr('id', 'value');
+                    inp.attr('id', 'value').attr('placeholder', '');
                 }
                 inp.css( "visibility", ( undefined !== op && 0 === op.args ) ? "hidden" : "visible" );
+            }
+            var opt = jQuery( '#nocaseopt', row );
+            if ( val.match( noCaseOptPattern ) ) {
+                opt.show();
+                jQuery( 'input#nocase', opt ).prop( 'checked', coalesce( cond.nocase, 1 ) !== 0 );
+            } else {
+                opt.hide();
             }
         } else {
             console.log( "Invalid row type in handleConditionOperatorChange(): " + String( cond.type ) );
@@ -1058,7 +1089,7 @@ var ReactorSensor = (function(api, $) {
         var row = jQuery( el ).closest('div.conditionrow');
         var cond = iData[api.getCpanelDeviceId()].ixCond[ row.attr("id") ];
 
-        var pred = jQuery('select.pred', row);
+        var pred = jQuery('select#pred', row);
         if ( "" === pred.val() ) {
             if ( undefined !== cond.after ) {
                 delete cond.after;
@@ -1066,10 +1097,10 @@ var ReactorSensor = (function(api, $) {
                 configModified = true;
             }
         } else {
-            var pt = parseInt( jQuery('input.predtime', row).val() );
+            var pt = parseInt( jQuery('input#predtime', row).val() );
             if ( isNaN( pt ) || pt < 0 ) {
                 pt = 0;
-                jQuery('input.predtime', row).val(pt);
+                jQuery('input#predtime', row).val(pt);
             }
             if ( cond.after !== pred.val() || cond.aftertime !== pt ) {
                 cond.after = pred.val();
@@ -1111,7 +1142,7 @@ var ReactorSensor = (function(api, $) {
             }
         }
 
-        var latchval = jQuery('input.latchcond', row).prop('checked') ? 1 : 0;
+        var latchval = jQuery('input#latchcond', row).prop('checked') ? 1 : 0;
         if ( latchval != ( cond.latch || 0 ) ) {
             cond.latch = latchval;
             configModified = true;
@@ -1177,7 +1208,7 @@ var ReactorSensor = (function(api, $) {
         jQuery('div.params div.condopts', row).remove();
 
         /* Put the open tool back */
-        jQuery('div.params i.condmore').show();
+        jQuery('div.params i#condmore').show();
     }
 
     function handleExpandOptionsClick( ev ) {
@@ -1193,7 +1224,7 @@ var ReactorSensor = (function(api, $) {
         /* Create the options container and add options */
         var container = jQuery('<div class="condopts"></div>');
         /* Predecessor */
-        var preds = jQuery('<select class="pred form-control form-control-sm"><option value="">(any time/no sequence)</option></select>');
+        var preds = jQuery('<select id="pred" class="form-control form-control-sm"><option value="">(any time/no sequence)</option></select>');
         for ( var ic=0; ic<(grp.groupconditions || []).length; ic++) {
             var gc = grp.groupconditions[ic];
             /* Must be service, not this condition, and not the predecessor to this condition (recursive) */
@@ -1207,16 +1238,16 @@ var ReactorSensor = (function(api, $) {
                 preds.append( opt );
             }
         }
-        container.append('<div class="predopt form-inline"><label>Only after&nbsp;</label></div>');
-        jQuery('div.predopt label', container).append(preds);
-        jQuery('div.predopt', container).append('&nbsp;<label>within <input type="text" class="predtime form-control form-control-sm narrow" autocomplete="off">&nbsp;seconds (0=no time limit)</label>');
-        jQuery('select.pred', container).val( cond.after );
-        jQuery('input.predtime', container).val( cond.aftertime || 0 );
+        container.append('<div id="predopt" class="form-inline"><label>Only after&nbsp;</label></div>');
+        jQuery('div#predopt label', container).append(preds);
+        jQuery('div#predopt', container).append('&nbsp;<label>within <input type="text" id="predtime" class="form-control form-control-sm narrow" autocomplete="off">&nbsp;seconds (0=no time limit)</label>');
+        jQuery('select#pred', container).val( cond.after );
+        jQuery('input#predtime', container).val( cond.aftertime || 0 );
         /* Duration */
-        container.append('<div class="duropt form-inline"><label>Condition is sustained for&nbsp;<select id="durop" class="form-control form-control-sm"><option value="ge">at least</option><option value="lt">less than</option></select>&nbsp;<input type="text" id="duration" class="form-control form-control-sm narrow" autocomplete="off"> seconds</label></div>');
+        container.append('<div id="duropt" class="form-inline"><label>Condition is sustained for&nbsp;<select id="durop" class="form-control form-control-sm"><option value="ge">at least</option><option value="lt">less than</option></select>&nbsp;<input type="text" id="duration" class="form-control form-control-sm narrow" autocomplete="off"> seconds</label></div>');
         /* Repeat */
-        container.append('<div class="duropt form-inline"><label>Condition repeats <input type="text" id="rcount" class="form-control form-control-sm narrow" autocomplete="off"> times within <input type="text" id="rspan" class="form-control form-control-sm narrow" autocomplete="off"> seconds</label></div>');
-        container.append('<div class="latchopt form-inline"><label><input type="checkbox" class="latchcond form-control form-control-sm">&nbsp;Latch (once met, condition remains true until group resets)<label></div>');
+        container.append('<div id="repopt" class="form-inline"><label>Condition repeats <input type="text" id="rcount" class="form-control form-control-sm narrow" autocomplete="off"> times within <input type="text" id="rspan" class="form-control form-control-sm narrow" autocomplete="off"> seconds</label></div>');
+        container.append('<div id="latchopt" class="form-inline"><label class="checkbox-inline"><input type="checkbox" id="latchcond" class="form-check">&nbsp;Latch (once met, condition remains true until group resets)<label></div>');
         container.append('<i class="md-btn material-icons closeopts" title="Close Options">expand_less</i>');
         jQuery('input,select', container).on( 'change.reactor', handleOptionChange );
         jQuery('i.closeopts', container).on( 'click.reactor', handleCloseOptionsClick );
@@ -1229,9 +1260,9 @@ var ReactorSensor = (function(api, $) {
             jQuery('input#duration', container).prop('disabled', rc != "");
             jQuery('select#durop', container).prop('disabled', rc != "");
             jQuery('input#rcount', container).val( rc );
-            jQuery('input#rspan', container).val( rc == "" ? "" : ( cond.repeatwithin || "60" ) );
+            jQuery('input#rspan', container).prop('disabled', rc=="").val( rc == "" ? "" : ( cond.repeatwithin || "60" ) );
         }
-        jQuery('input.latchcond', container).prop('checked', ( cond.latch || 0 ) != 0 );
+        jQuery('input#latchcond', container).prop('checked', ( cond.latch || 0 ) != 0 );
 
         /* Add it to the params */
         jQuery('div.params', row).append( container );
@@ -1280,7 +1311,7 @@ var ReactorSensor = (function(api, $) {
     function handleGeofenceOperatorChange( ev ) {
         var row = jQuery( ev.currentTarget ).closest( 'div.conditionrow' );
         var val = jQuery( ev.currentTarget ).val() || "is";
-        if ( "at" === val ) {
+        if ( "at" === val || "notat" === val ) {
             jQuery( 'select#userid,select#location', row ).show();
             jQuery( 'label,input#opts', row ).hide();
         } else {
@@ -1320,25 +1351,30 @@ var ReactorSensor = (function(api, $) {
                     configModified = true;
                 }
                 container.append( makeVariableMenu( cond.device, cond.service, cond.variable ) );
-                container.append( makeServiceOpMenu( cond.operator ) );
+                container.append( makeServiceOpMenu( cond.operator || "=" ) );
                 container.append('<input type="text" id="value" class="form-control form-control-sm" autocomplete="off">');
-                container.append('<i class="md-btn material-icons condmore" title="Show Options">expand_more</i>');
                 container.append(' ');
-                container.append('<span id="currval"/>');
+                container.append('<fieldset id="nocaseopt"><label class="checkbox-inline" for="nocase"><input id="nocase" type="checkbox" class="form-check">Ignore&nbsp;case</label></fieldset>');
+                container.append(' ');
+                container.append('<i id="condmore" class="md-btn material-icons" title="Show Options">expand_more</i>');
+                container.append('<div id="currval"/>');
 
-                op = serviceOpsIndex[cond.operator || ""];
+                op = serviceOpsIndex[cond.operator || "="];
                 jQuery( "input#value", container).val( cond.value || "" )
                     .css( "visibility", ( undefined !== op && 0 === op.args ) ? "hidden" : "visible" )
                     .on( 'change.reactor', handleConditionRowChange );
                 jQuery("select.varmenu", container).on( 'change.reactor', handleConditionVarChange );
                 jQuery("select.opmenu", container).on( 'change.reactor', handleConditionOperatorChange );
+                jQuery('input#nocase', container).prop( 'checked', coalesce( cond.nocase, 1 ) !== 0 )
+                    .on( 'change.reactor', handleConditionRowChange );
                 jQuery("select.devicemenu", container).on( 'change.reactor', handleDeviceChange );
-                jQuery("i.condmore", container).on( 'click.reactor', handleExpandOptionsClick );
+                jQuery("i#condmore", container).on( 'click.reactor', handleExpandOptionsClick );
 
                 updateCurrentServiceValue( container );
                 break;
 
             case 'housemode':
+                if ( ( cond.operator || "" ) == "" ) { cond.operator = "is"; }
                 mm = jQuery('<select class="opmenu form-control form-control-sm"></select>');
                 mm.append( '<option value="is">is any of</option>' );
                 mm.append( '<option value="change">changes from</option>' );
@@ -1347,11 +1383,11 @@ var ReactorSensor = (function(api, $) {
                 container.append( mm );
                 container.append( " " );
                 // Checkboxes in their own div
-                var d = jQuery( '<fieldset id="housemodechecks" class="condfields"/>' );
+                var d = jQuery( '<fieldset id="housemodechecks" class="condfields form-inline"/>' );
                 for ( k=1; k<=4; k++ ) {
-                    mm = jQuery( '<input type="checkbox"/>' ).attr( 'value', k ).attr( 'id', 'opts' );
+                    mm = jQuery( '<input type="checkbox" class="form-check"/>' ).attr( 'value', k ).attr( 'id', 'opts' );
                     v = jQuery( '<label class="checkbox-inline" />' ).text( houseModeName[k] );
-                    v.append( mm );
+                    v.prepend( mm );
                     d.append( v );
                 }
                 container.append( d );
@@ -1563,7 +1599,7 @@ var ReactorSensor = (function(api, $) {
 
             case 'ishome':
                 container.append(
-                    '<select class="geofencecond form-control form-control-sm"><option value="is">Any selected user is home</option><option value="is not">Any selected user is NOT home</option><option value="at">Selected user in geofence</option></select>');
+                    '<select class="geofencecond form-control form-control-sm"><option value="is">Any selected user is home</option><option value="is not">Any selected user is NOT home</option><option value="at">User in geofence</option><option value="notat">User not in geofence</option></select>');
                 mm = jQuery( '<select id="userid" class="form-control form-control-sm"/>' );
                 mm.append( jQuery( '<option/>' ).val("").text('--choose user--') );
                 for ( k in userIx ) {
@@ -1582,7 +1618,7 @@ var ReactorSensor = (function(api, $) {
                     .val( cond.operator || "is" );
                 jQuery("select#userid", container).on( 'change.reactor', handleGeofenceUserChange );
                 jQuery("select#location", container).on( 'change.reactor', handleConditionRowChange );
-                if ( cond.operator == "at" ) {
+                if ( cond.operator == "at" || cond.operator == "notat" ) {
                     jQuery( 'label,input#opts', container ).hide();
                     jQuery( 'select#userid,select#location', container ).show();
                     mm = ( cond.value || "" ).split(',');
@@ -1710,24 +1746,132 @@ var ReactorSensor = (function(api, $) {
     }
 
     /**
+     * Update group controls.
+     */
+    function updateGroupControls() {
+        var myid = api.getCpanelDeviceId();
+        var cdata = iData[myid].cdata;
+        jQuery.each( cdata.conditions || [], function( ix, obj ) {
+            var grpid = obj.groupid;
+            var grpEl = jQuery( 'div.conditiongroup#' + grpid );
+            jQuery( 'i#grpmoveup', grpEl ).attr( 'disabled', ix==0 );
+            jQuery( 'i#grpmovedn', grpEl ).attr( 'disabled', ix>=( cdata.conditions.length-1 ) );
+            jQuery( 'i#grpdelete', grpEl ).attr( 'disabled', cdata.conditions.length < 2 );
+        });
+    }
+
+    /**
+     * Handle click on group organization controls
+     */
+    function handleGroupControlClick( ev ) {
+        var el = jQuery( ev.currentTarget );
+        if ( el.attr( 'disabled' ) ) { return; }
+        var grpEl = el.closest( 'div.conditiongroup' );
+        var grpId = grpEl.attr('id');
+        var action = el.attr('id');
+
+        var myid = api.getCpanelDeviceId();
+        var cdata = iData[myid].cdata;
+        var grpix = findCdataGroupIndex( grpId );
+        var grp, anch;
+        switch ( action ) {
+            case "grpenable":
+                var grpconfig = cdata.conditions[grpix];
+                if ( grpconfig.disabled ) {
+                    delete grpconfig.disabled;
+                    grpEl.removeClass( 'groupdisabled' );
+                } else {
+                    grpconfig.disabled = 1;
+                    grpEl.addClass( 'groupdisabled' );
+                }
+                el.text( grpconfig.disabled ? "sync" : "sync_disabled" );
+                configModified = true;
+                break;
+
+            case "grpdelete":
+                if ( cdata.conditions.length > 1 ) {
+                    delete iData[myid].ixGroup[ grpId ];
+                    cdata.conditions.splice( grpix, 1 );
+                    /* remove the OR divider above the group */
+                    if ( grpix > 0 ) {
+                        grpEl.prev().remove();
+                    } else {
+                        grpEl.next().remove();
+                    }
+                    /* Remove the entire conditiongroup from display. */
+                    grpEl.remove();
+
+                    configModified = true;
+                }
+                break;
+
+            case "grpmoveup":
+                /* Move up. */
+                if ( grpix > 0 ) {
+                    /* Move up in data structure */
+                    var prior = jQuery( 'div#' + cdata.conditions[grpix-1].groupid + '.conditiongroup' );
+                    grp = cdata.conditions.splice( grpix, 1 );
+                    cdata.conditions.splice( grpix-1, 0, grp[0] );
+
+                    /* Move up in display */
+                    anch = grpEl.next( 'div.row' ); /* Always a row after, either separator or "Add Group" */
+                    // not working in jQuery for UI7: var prior = grpEl.prev( 'div.conditiongroup' ); /* find prior group */
+                    grpEl.detach();
+                    grpEl.insertAfter( prior );
+                    prior.detach();
+                    prior.insertBefore( anch );
+
+                    configModified = true;
+                }
+                break;
+
+            case "grpmovedn":
+                /* Move down */
+                if ( grpix < ( cdata.conditions.length-1 ) ) {
+                    /* Move down is data structure */
+                    var next = jQuery( 'div#' + cdata.conditions[grpix+1].groupid + '.conditiongroup' );
+                    grp = cdata.conditions.splice( grpix, 1 );
+                    cdata.conditions.splice( grpix+1, 0, grp[0] );
+
+                    /* Move down in display */
+                    anch = grpEl.next( 'div.row' ); /* Always a row after, either separator or "Add Group" */
+                    // not working in jQuery for UI7: var next = grpEl.next( 'div.conditiongroup' ); /* find next row */
+                    grpEl.detach();
+                    grpEl.insertAfter( next );
+                    next.detach();
+                    next.insertBefore( anch );
+
+                    configModified = true;
+                }
+                break;
+
+            default:
+                /* Nada */
+        }
+
+        updateGroupControls();
+        updateSaveControls();
+    }
+
+    /**
      * Handle click on Add Group button.
      */
     function handleAddGroupClick( ev ) {
         var el = ev.currentTarget;
-        var row = jQuery( el ).closest('div.row'); /* add group button row */
         jQuery(el).prop('disabled', true); /* disable the (only) add group button for now */
 
         /* Create a new condition group div, assign a group ID */
         var newId = getUID("grp");
         var condgroup = jQuery('<div class="conditiongroup"/>').attr('id', newId);
-        condgroup.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span class="titletext"></span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>');
+        condgroup.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span class="titletext"/><span id="groupcontrols" /></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>');
+        jQuery( 'span#groupcontrols', condgroup ).append( '<i id="grpenable" class="material-icons md-btn md14" title="Enable/disable group">sync</i>' );
+        jQuery( 'span#groupcontrols', condgroup ).append( '<i id="grpmoveup" class="material-icons md-btn md14" title="Move group up">arrow_upward</i>' );
+        jQuery( 'span#groupcontrols', condgroup ).append( '<i id="grpmovedn" class="material-icons md-btn md14" title="Move group down">arrow_downward</i>' );
+        jQuery( 'span#groupcontrols', condgroup ).append( '<i id="grpdelete" class="material-icons md-btn md14" title="Delete group">clear</i>' );
+        jQuery( 'span#groupcontrols i', condgroup ).on( 'click.reactor', handleGroupControlClick );
         jQuery( 'span.titletext', condgroup ).text( "Group: " + newId ).on( 'click.reactor', handleTitleClick );
         jQuery("button#addgroup", condgroup).on( 'click.reactor', handleAddGroupClick );
         jQuery("button#saveconf", condgroup).on( 'click.reactor', handleSaveClick );
-
-        /* Insert a new divider with "OR" caption */
-        jQuery('<div class="row divider"><div class="col-sm-5"><hr></div><div class="col-sm-2 text-center"><h5>OR</h5></div><div class="col-sm-5"><hr></div></div>')
-            .insertBefore(row);
 
         /* Create a condition row for the first condition in the group */
         var condId = getUID("cond");
@@ -1741,7 +1885,11 @@ var ReactorSensor = (function(api, $) {
         jQuery("button.addcond", b).on( 'click.reactor', handleAddConditionClick );
         condgroup.append(b); /* Add it to the conditiongroup */
 
-        condgroup.insertBefore(row); /* Insert new conditiongroup */
+        /* Insert a new divider with "OR" caption, and then our new group. */
+        var addgroup = jQuery( 'div#conditions div#addgroupcontrol' );
+        jQuery( '<div class="row divider"><div class="col-sm-5"><hr></div><div class="col-sm-2 text-center"><h5>OR</h5></div><div class="col-sm-5"><hr></div></div>' )
+            .insertBefore( addgroup );
+        condgroup.insertBefore( addgroup );
 
         /* Add to group store and index */
         var newcond = { id: condId };
@@ -1751,7 +1899,8 @@ var ReactorSensor = (function(api, $) {
         iData[myid].cdata.conditions.push( iData[myid].ixGroup[newId] );
 
         configModified = true;
-        updateConditionRow( cel );
+        updateGroupControls();
+        updateConditionRow( cel ); /* handles updateSaveControls() */
     }
 
     /**
@@ -1759,9 +1908,8 @@ var ReactorSensor = (function(api, $) {
      */
     function handleConditionSort( ev ) {
         var el = ev.currentTarget;
-        if ( jQuery( el ).prop('disabled') ) {
-            return;
-        }
+        if ( jQuery( el ).attr( 'disabled' ) ) { return; }
+
         var row = jQuery(el).closest('div.row');
         var up = jQuery(el).hasClass('action-up');
         var grpId = row.closest('div.conditiongroup').attr('id');
@@ -1807,11 +1955,13 @@ var ReactorSensor = (function(api, $) {
      * Handle click on the condition delete tool
      */
     function handleConditionDelete( ev ) {
-        var el = ev.currentTarget;
-        var row = jQuery( el ).closest( 'div.row' );
+        var el = jQuery( ev.currentTarget );
+        var row = el.closest( 'div.row' );
         var condId = row.attr('id');
-        var grpId = jQuery( el ).closest( 'div.conditiongroup' ).attr("id");
+        var grpId = el.closest( 'div.conditiongroup' ).attr("id");
         var myid = api.getCpanelDeviceId();
+
+        if ( el.attr( 'disabled' ) ) { return; }
 
         /* See if the condition is referenced in a sequence */
         var okDelete = false;
@@ -1866,10 +2016,10 @@ var ReactorSensor = (function(api, $) {
         var el = jQuery('<div class="row conditionrow"></div>');
         el.append( '<div class="col-sm-2 condtype"><select class="form-control form-control-sm"><option value="">--choose--</option></select></div>' );
         el.append( '<div class="col-sm-9 params"></div>' );
-        el.append( '<div class="col-sm-1 controls text-right"></div>');
-        jQuery("div.controls", el).append('<i class="material-icons md-btn action-up">arrow_upward</i>');
-        jQuery("div.controls", el).append('<i class="material-icons md-btn action-down">arrow_downward</i>');
-        jQuery("div.controls", el).append('<i class="material-icons md-btn action-delete">clear</i>');
+        el.append( '<div class="col-sm-1 condcontrols text-right"></div>');
+        jQuery("div.condcontrols", el).append('<i class="material-icons md-btn md14 action-up" title="Move condition up">arrow_upward</i>');
+        jQuery("div.condcontrols", el).append('<i class="material-icons md-btn md14 action-down" title="Move condition down">arrow_downward</i>');
+        jQuery("div.condcontrols", el).append('<i class="material-icons md-btn md14 action-delete" title="Delete condition">clear</i>');
 
         [ "comment", "service", "housemode", "sun", "weekday", "trange", "interval", "ishome", "reload" ].forEach( function( k ) {
             if ( ! ( isOpenLuup && k == "ishome" ) ) {
@@ -1878,9 +2028,9 @@ var ReactorSensor = (function(api, $) {
         });
 
         jQuery('div.condtype select', el).on( 'change.reactor', handleTypeChange );
-        jQuery('div.controls i.action-up', el).on( 'click.reactor', handleConditionSort );
-        jQuery('div.controls i.action-down', el).on( 'click.reactor', handleConditionSort );
-        jQuery('div.controls i.action-delete', el).on( 'click.reactor', handleConditionDelete );
+        jQuery('div.condcontrols i.action-up', el).on( 'click.reactor', handleConditionSort );
+        jQuery('div.condcontrols i.action-down', el).on( 'click.reactor', handleConditionSort );
+        jQuery('div.condcontrols i.action-delete', el).on( 'click.reactor', handleConditionDelete );
         return el;
     }
 
@@ -1888,15 +2038,19 @@ var ReactorSensor = (function(api, $) {
      * Redraw the conditions from the current cdata
     */
     function redrawConditions() {
-        jQuery('div#conditions').empty();
+        var container = jQuery("div#conditions");
+        container.empty();
+
+        /* Insert add group button row (not a divider but looks similar) */
+        var addgroup = jQuery( '<div id="addgroupcontrol" class="row"><div class="col-sm-5"><hr></div>' +
+            '<div class="col-sm-2 text-center"><button id="addgroup" class="btn btn-sm btn-primary">Add Group</button></div>' +
+            '<div class="col-sm-5"><hr></div>' +
+            '</div>' );
+        container.append( addgroup );
+        addgroup.on( 'click.reactor', handleAddGroupClick );
 
         var myid = api.getCpanelDeviceId();
         for (var ng=0; ng<(iData[myid].cdata.conditions || []).length; ++ng) {
-            if ( ng > 0 ) {
-                /* Insert divider */
-                jQuery("div#conditions").append('<div class="row divider"><div class="col-sm-5"><hr></div><div class="col-sm-2 text-center"><h5>OR</h5></div><div class="col-sm-5"><hr></div></div>');
-            }
-
             var grp = iData[myid].cdata.conditions[ng];
             if ( grp.groupid === undefined )
                 grp.groupid = getUID("group");
@@ -1904,29 +2058,22 @@ var ReactorSensor = (function(api, $) {
 
             /* Create div.conditiongroup and add conditions */
             var gel = jQuery('<div class="conditiongroup"></div>').attr("id", grp.groupid);
-            gel.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6 form-inline"><span class="titletext"></span> <label for="grpdisable"><input id="grpdisable" type="checkbox" class="form-check">&nbsp;Disabled</form></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>');
-            jQuery( 'span.titletext', gel ).text( "Group: " + grp.groupid ).on( 'click.reactor', handleTitleClick );
-            jQuery( 'input#grpdisable', gel ).prop( 'checked', grp.disabled )
-                .on( 'change.reactor', function( ev ) {
-                    var el = jQuery( ev.currentTarget );
-                    var grpel = el.closest( 'div.conditiongroup' );
-                    var grpid = grpel.attr( 'id' );
-                    var grpconfig = iData[api.getCpanelDeviceId()].ixGroup[grpid];
-                    if ( el.prop( 'checked' ) ) {
-                        grpconfig.disabled = 1;
-                        grpel.addClass( 'groupdisabled' );
-                    } else {
-                        delete grpconfig.disabled;
-                        grpel.removeClass( 'groupdisabled' );
-                    }
-                    configModified = true;
-                    updateSaveControls();
-                });
+            gel.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6 form-inline"><span class="titletext"></span><span id="groupcontrols" /></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>');
+            jQuery( 'span#groupcontrols', gel ).append( '<i id="grpenable" class="material-icons md-btn md14" title="Enable/disable group">sync</i>' );
+            jQuery( 'span#groupcontrols', gel ).append( '<i id="grpmoveup" class="material-icons md-btn md14" title="Move group up">arrow_upward</i>' );
+            jQuery( 'span#groupcontrols', gel ).append( '<i id="grpmovedn" class="material-icons md-btn md14" title="Move group down">arrow_downward</i>' );
+            jQuery( 'span#groupcontrols', gel ).append( '<i id="grpdelete" class="material-icons md-btn md14" title="Delete group">clear</i>' );
+            jQuery( 'span#groupcontrols i', gel ).on( 'click.reactor', handleGroupControlClick );
+
+            jQuery( 'span#groupcontrols i#grpenable', gel ).text( grp.disabled ? "sync" : "sync_disabled" );
             if ( grp.disabled ) {
                 gel.addClass('groupdisabled');
             } else {
                 gel.removeClass('groupdisabled');
             }
+
+            jQuery( 'span.titletext', gel ).text( "Group: " + grp.groupid ).on( 'click.reactor', handleTitleClick );
+
             for (var nc=0; nc<(grp.groupconditions || []).length; ++nc) {
                 var cond = grp.groupconditions[nc];
                 var row = getConditionRow();
@@ -1947,10 +2094,15 @@ var ReactorSensor = (function(api, $) {
             }
 
             /* Append "Add Condition" button */
-            gel.append('<div class="row buttonrow"><div class="col-xs-12 col-sm-12"><button class="addcond btn btn-sm btn-primary">Add Condition</button></div></div>');
+            gel.append( '<div class="row buttonrow"><div class="col-xs-12 col-sm-12"><button class="addcond btn btn-sm btn-primary">Add Condition</button></div></div>' );
 
             /* Append the group */
-            jQuery("div#conditions").append(gel);
+            if ( ng > 0 ) {
+                /* Insert divider */
+                jQuery( '<div class="row divider"><div class="col-sm-5"><hr></div><div class="col-sm-2 text-center"><h5>OR</h5></div><div class="col-sm-5"><hr></div></div>' )
+                    .insertBefore( addgroup );
+            }
+            gel.insertBefore( addgroup );
 
             /* Activate the "Add Condition" button */
             jQuery("button.addcond", gel).on( 'click.reactor', handleAddConditionClick );
@@ -1959,6 +2111,7 @@ var ReactorSensor = (function(api, $) {
         jQuery("button#saveconf").on( 'click.reactor', handleSaveClick );
         jQuery("button#revertconf").on( 'click.reactor', handleRevertClick );
 
+        updateGroupControls();
         updateControls();
     }
 
@@ -2387,12 +2540,12 @@ var ReactorSensor = (function(api, $) {
         html += '<h3>Test Tools</h3>';
 
         html += '<div class="row">';
-        html += '<div class="col-sm-2 col-md-4 col-lg-3 col-xl-2"><label for="testdateenable"><input type="checkbox" value="1" id="testdateenable">&nbsp;Test&nbsp;Date:</label></div>';
+        html += '<div class="col-sm-2 col-md-4 col-lg-3 col-xl-2"><label for="testdateenable" class="checkbox-inline"><input type="checkbox" value="1" id="testdateenable">&nbsp;Test&nbsp;Date:</label></div>';
         html += '<div class="col-sm-10 col-md-8 col-lg-9 col-xl-10 form-inline"><select id="testyear" class="form-control form-control-sm"></select><select id="testmonth" class="form-control form-control-sm"></select><select class="form-control form-control-sm" id="testday"></select><input class="narrow form-control form-control-sm" id="testtime"></div>';
         html += '</div>'; /* row */
 
         html += '<div class="row">';
-        html += '<div class="col-sm-2 col-md-4 col-lg-3 col-xl-2"><label for="testhousemode"><input type="checkbox" value="1" id="testhousemode">&nbsp;Test&nbsp;House&nbsp;Mode</label></div>';
+        html += '<div class="col-sm-2 col-md-4 col-lg-3 col-xl-2"><label for="testhousemode" class="checkbox-inline"><input type="checkbox" value="1" id="testhousemode">&nbsp;Test&nbsp;House&nbsp;Mode</label></div>';
         html += '<div class="col-sm-10 col-md-8 col-lg-9 col-xl-10 form-inline"><select class="form-control form-control-sm" id="mode"><option value="1">Home</option><option value="2">Away</option><option value="3">Night</option><option value="4">Vacation</option></select></div>';
         html += '</div>'; /* row */
 
@@ -2636,7 +2789,7 @@ var ReactorSensor = (function(api, $) {
 
                     case 'ishome':
                         var t = (currentValue || "").split( /,/ );
-                        if ( "at" === cond.operator ) {
+                        if ( "at" === cond.operator || "notat" === cond.operator ) {
                             // ???
                         } else {
                             /* Replace IDs with names for display */
@@ -2827,7 +2980,7 @@ var ReactorSensor = (function(api, $) {
             updateVariableControls();
         }
     }
-    
+
     function clearGetStateOptions() {
         var container = jQuery('div#reactorvars');
         var row = jQuery( 'div#opt-state', container );
@@ -2835,14 +2988,14 @@ var ReactorSensor = (function(api, $) {
         jQuery( 'button#addvar', container ).attr( 'disabled', false );
         jQuery( 'textarea.expr,i.md-btn', container ).attr( 'disabled', false );
     }
-    
+
     function handleGetStateClear( ev ) {
         clearGetStateOptions();
     }
-    
+
     function handleGetStateInsert( ev ) {
         var row = jQuery( ev.currentTarget ).closest( 'div.row' );
-        
+
         var device = jQuery( 'select#gsdev', row ).val() || 0;
         var service = jQuery( 'select#gsvar', row ).val() || "";
         var variable = service.replace( /^[^\/]+\//, "" );
@@ -2851,7 +3004,7 @@ var ReactorSensor = (function(api, $) {
             device = '"' + jQuery( 'select#gsdev option:selected' ).text().replace( / +\(#\d+\)$/, "" ) + '"';
         }
         var str = ' getstate( ' + device + ', "' + service + '", "' + variable + '" ) ';
-        
+
         var varrow = row.prev();
         var f = jQuery( 'textarea.expr', varrow );
         var expr = f.val() || "";
@@ -2861,7 +3014,7 @@ var ReactorSensor = (function(api, $) {
         } else {
             expr = str + expr;
         }
-        expr = expr.trim()
+        expr = expr.trim();
         f.val( expr );
         f.removeClass( 'tberror' );
         var vname = varrow.attr("id");
@@ -2876,7 +3029,7 @@ var ReactorSensor = (function(api, $) {
         clearGetStateOptions();
         updateVariableControls();
     }
-    
+
     function handleGetStateOptionChange( ev ) {
         var row = jQuery( ev.currentTarget ).closest( 'div.row' );
         var f = jQuery( ev.currentTarget );
@@ -2890,22 +3043,22 @@ var ReactorSensor = (function(api, $) {
         }
         jQuery( 'button#getstateinsert', row ).prop( 'disabled', "" === f.val() );
     }
-    
+
     function handleGetStateClick( ev ) {
         var row = jQuery( ev.currentTarget ).closest( 'div.varexp' );
         var container = jQuery('div#reactorvars');
-        
+
         jQuery( 'button#addvar', container ).attr( 'disabled', true );
         jQuery( 'textarea.expr,i.md-btn', container ).attr( 'disabled', true );
-        
+
         jQuery( 'textarea.expr', row ).attr( 'disabled', false );
-        
-        el = jQuery( '<div class="col-xs-12 col-md-9 col-md-offset-2 form-inline" />' );
+
+        var el = jQuery( '<div class="col-xs-12 col-md-9 col-md-offset-2 form-inline" />' );
         el.append( makeDeviceMenu( "", "" ).attr( 'id', 'gsdev' ) );
         el.append( makeVariableMenu( parseInt( jQuery( 'select#gsdev', el ).val() ), "", "" )
             .attr( 'id', 'gsvar' ) );
         el.append(' ');
-        el.append( '<input id="usename" type="checkbox">&nbsp;Use&nbsp;Name' );
+        el.append( '<label class="checkbox-inline" for="usename"><input id="usename" type="checkbox">&nbsp;Use&nbsp;Name</label>' );
         el.append(' ');
         el.append( jQuery( '<button/>' ).attr( 'id', 'getstateinsert' )
             .addClass( "btn btn-xs btn-success" )
@@ -2914,7 +3067,7 @@ var ReactorSensor = (function(api, $) {
             .addClass( "btn btn-xs btn-default" )
             .text( 'Cancel' ) );
         jQuery( '<div id="opt-state" class="row" />' ).append( el ).insertAfter( row );
-        
+
         jQuery( 'select.devicemenu', el ).on( 'change.reactor', handleGetStateOptionChange );
         jQuery( 'button#getstateinsert', el ).prop( 'disabled', true )
             .on( 'click.reactor', handleGetStateInsert );
@@ -3084,11 +3237,17 @@ var ReactorSensor = (function(api, $) {
             html += "div#tab-conds.reactortab .color-green { color: #006040; }";
             html += 'div#tab-conds.reactortab .tberror { border: 1px solid red; }';
             html += 'div#tab-conds.reactortab .tbwarn { border: 1px solid yellow; background-color: yellow; }';
-            html += 'div#tab-conds.reactortab span#currval { font-family: "Courier New", Courier, monospace; font-size: 0.9em; }';
+            html += 'div#tab-conds.reactortab label { font-weight: normal; }';
+            html += 'div#tab-conds.reactortab fieldset#nocaseopt { display: inline-block; }';
+            html += 'div#tab-conds.reactortab div#currval { font-family: "Courier New", Courier, monospace; font-size: 0.9em; }';
             html += 'div#tab-conds.reactortab div.warning { color: red; }';
-            html += 'div#tab-conds.reactortab i.md-btn:disabled { color: #cccccc; cursor: auto; }';
-            html += 'div#tab-conds.reactortab i.md-btn[disabled] { color: #cccccc; cursor: auto; }';
-            html += 'div#tab-conds.reactortab i.md-btn { color: #004020; font-size: 14pt; cursor: pointer; }';
+            html += 'div#tab-conds.reactortab span#groupcontrols { color: white; margin-right: 8px; }';
+            html += 'div#tab-conds.reactortab div.condcontrols { color: #004020; }';
+            html += 'div#tab-conds.reactortab i.md-btn:disabled { color: #999999; cursor: auto; }';
+            html += 'div#tab-conds.reactortab i.md-btn[disabled] { color: #999999; cursor: auto; }';
+            html += 'div#tab-conds.reactortab i.md-btn { cursor: pointer; }';
+            html += 'div#tab-conds.reactortab .md12 { font-size: 12pt; }';
+            html += 'div#tab-conds.reactortab .md14 { font-size: 14pt; }';
             html += 'div#tab-conds.reactortab input.tbinvert { min-width: 16px; min-height: 16px; }';
             html += 'div#tab-conds.reactortab div.conditions { width: 100%; }';
             html += 'div#tab-conds.reactortab div.tblisttitle { background-color: #006040; color: #fff; padding: 8px; min-height: 42px; }';
@@ -3129,14 +3288,6 @@ var ReactorSensor = (function(api, $) {
 
             api.setCpanelContent(html);
 
-            /* Insert add group button row (not a divider but looks similar) */
-            var container = jQuery("div#tab-conds.reactortab");
-            container.append('<div class="row"><div class="col-sm-5"><hr></div>' +
-                '<div class="col-sm-2 text-center"><button id="addgroup" class="btn btn-sm btn-primary">Add Group</button></div>' +
-                '<div class="col-sm-5"><hr></div>' +
-                '</div>');
-            jQuery("button#addgroup", container).on( 'click.reactor', handleAddGroupClick );
-
             redrawConditions();
 
             api.registerEventHandler('on_ui_cpanel_before_close', ReactorSensor, 'onBeforeCpanelClose');
@@ -3149,6 +3300,32 @@ var ReactorSensor = (function(api, $) {
     }
 
     function doSettings() {}
+
+    function testLua( lua, el, row ) {
+        $.ajax({
+            url: api.getDataRequestURL(),
+            method: 'POST', /* data could be long */
+            data: {
+                id: "lr_Reactor",
+                action: "testlua",
+                lua: lua
+            },
+            cache: false,
+            dataType: 'json',
+            timeout: 5000
+        }).done( function( data, statusText, jqXHR ) {
+            if ( data.status ) {
+                /* Good Lua */
+                return;
+            } else if ( data.status === false ) { /* specific false, not undefined */
+                el.addClass( "tberror" );
+                jQuery( 'div.actiondata' ).prepend( '<div class="tberrmsg"/>' );
+                jQuery( 'div.tberrmsg', row ).text( data.message || "Error in Lua" );
+            }
+        }).fail( function( stat ) {
+            console.log("Failed to check Lua: " + stat);
+        });
+    }
 
     function makeSceneMenu() {
         var ud = api.getUserData();
@@ -3215,6 +3392,7 @@ var ReactorSensor = (function(api, $) {
         var actionType = jQuery('select#actiontype', row).val();
         jQuery('.tberror', row).removeClass( 'tberror' );
         row.removeClass( 'tberror' );
+        jQuery( 'div.tberrmsg', row ).remove();
 
         switch ( actionType ) {
             case "comment":
@@ -3222,7 +3400,7 @@ var ReactorSensor = (function(api, $) {
 
             case "delay":
                 var delay = jQuery( 'input#delay', row ).val() || "";
-                if ( delay.match( /\{[^}]+\}/i ) ) {
+                if ( delay.match( /\{[^}]+\}/ ) ) {
                     // Variable reference. ??? check it?
                 } else if ( delay.match( /^([0-9][0-9]?)(:[0-9][0-9]?){1,2}$/ ) ) {
                     // MM:SS or HH:MM:SS
@@ -3329,6 +3507,8 @@ var ReactorSensor = (function(api, $) {
                 // check Lua?
                 if ( lua.match( /^[\r\n\s]*$/ ) ) {
                     jQuery( 'textarea.luacode', row ).addClass( "tberror" );
+                } else {
+                    testLua( lua, jQuery( 'textarea.luacode', row ), row );
                 }
                 break;
 
@@ -4003,7 +4183,7 @@ var ReactorSensor = (function(api, $) {
                 known.append( "<option class='optheading' value='' disabled><b>---Common Actions---</b></option>" );
                 for ( j=0; j<over.length; j++ ) {
                     var devact = over[j];
-                    var fake = false
+                    var fake = false;
                     if ( undefined === deviceInfo.services[devact.service] || undefined == deviceInfo.services[devact.service].actions[devact.action] ) {
                         /* Service/action in device exception not "real". Fake it real good. */
                         deviceInfo.services[devact.service] = deviceInfo.services[devact.service] || { actions: {} };
@@ -4019,7 +4199,7 @@ var ReactorSensor = (function(api, $) {
                     }
                     if ( act.hidden ) continue;
                     key = act.service + "/" + act.action;
-                    known.append( jQuery('<option/>').val( key ).text( ( act.description || act.action ) + 
+                    known.append( jQuery('<option/>').val( key ).text( ( act.description || act.action ) +
                         ( fake ? "??(O)" : "" ) ) );
                     hasAction = true;
                     if ( undefined === actions[key] ) {
@@ -4606,6 +4786,7 @@ var ReactorSensor = (function(api, $) {
         html += "div#tab-actions.reactortab .color-green { color: #428BCA; }";
         html += 'div#tab-actions.reactortab .tberror { border: 1px solid red; }';
         html += 'div#tab-actions.reactortab .tbwarn { border: 1px solid yellow; background-color: yellow; }';
+        html += 'div#tab-actions.reactortab .tberrmsg { padding: 8px 8px 8px 8px; color: red; }';
         html += 'div#tab-actions.reactortab i.md-btn:disabled { color: #cccccc; cursor: auto; }';
         html += 'div#tab-actions.reactortab i.md-btn[disabled] { color: #cccccc; cursor: auto; }';
         html += 'div#tab-actions.reactortab i.md-btn { color: #2d6a9f; font-size: 14pt; cursor: pointer; }';
