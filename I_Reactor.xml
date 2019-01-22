@@ -188,6 +188,13 @@
         </action>
         <action>
             <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
+            <name>UpdateGeofences</name>
+            <job>
+                return Reactor.actionUpdateGeofences( lul_device )
+            </job>
+        </action>
+        <action>
+            <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
             <name>MasterClear</name>
             <job>
                 Reactor.actionMasterClear( lul_device )

@@ -79,9 +79,12 @@
           </argumentList>
         </action>
         <action>
+            <name>UpdateGeofences</name>
+            <argumentList/>
+        </action>
+        <action>
             <name>MasterClear</name>
-            <argumentList>
-            </argumentList>
+            <argumentList/>
         </action>
         <action>
             <name>GetPluginVersion</name>
