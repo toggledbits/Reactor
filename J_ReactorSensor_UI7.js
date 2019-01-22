@@ -3257,10 +3257,9 @@ var ReactorSensor = (function(api, $) {
             html += 'div#tab-conds.reactortab input.tiny { max-width: 3em; }';
             html += 'div#tab-conds.reactortab input.titleedit { font-size: 12px; height: 24px; }';
             html += 'div#tab-conds.reactortab div.conditiongroup { border-radius: 8px; border: 2px solid #006040; margin-bottom: 8px; }';
-            html += 'div#tab-conds.reactortab div.conditiongroup.groupdisabled { background-color: #ccc !important; color: #000 !important }';
-            html += 'div#tab-conds.reactortab label[for="grpdisable"] { font-size: 0.9em; }';
             html += 'div#tab-conds.reactortab div.conditiongroup .row { margin-right: 0px; margin-left: 0px; }';
-            html += 'div#tab-conds.reactortab div.conditiongroup div.conditionrow:nth-child(odd) { background-color: #e6ffe6; }';
+            html += 'div#tab-conds.reactortab div.conditiongroup:not(.groupdisabled) div.conditionrow:nth-child(odd) { background-color: #e6ffe6; }';
+            html += 'div#tab-conds.reactortab div.conditiongroup.groupdisabled { background-color: #ccc !important; color: #000 !important }';
             html += 'div#tab-conds.reactortab div.conditionrow,div.buttonrow { padding: 8px; }';
             html += 'div#tab-conds.reactortab div.conditionrow.tbmodified:not(.tberror) { border-left: 4px solid green; }';
             html += 'div#tab-conds.reactortab div.conditionrow.tberror { border-left: 4px solid red; }';
