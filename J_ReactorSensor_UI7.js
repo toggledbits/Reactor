@@ -60,6 +60,10 @@ var ReactorSensor = (function(api, $) {
     var noCaseOptPattern = /(=|<>|contains|notcontains|starts|notstarts|ends|notends|in|notin|change)/i;
     var serviceOpsIndex = {};
 
+    var msgUnsavedChanges = "You have unsaved changes! Press OK to save them, or Cancel to discard them.";
+    var msgGroupNormal = "Normal; click for inverted (false when all conditions are met)";
+    var msgGroupInvert = "Inverted; click for normal (true when all conditions are met)";
+
     /* Return footer */
     function footer() {
         var html = '';
@@ -352,7 +356,7 @@ var ReactorSensor = (function(api, $) {
             var lines = data.split( /\r?\n/ );
             var k = 0, n = 0;
             while ( n < 500 && k<lines.length ) {
-                var l = lines[k].replace( /<span [^>]*>/i, "" ).replace( /<\/span>/i, "" );
+                var l = lines[k].replace( /<span\s+[^>]*>/i, "" ).replace( /<\/span>/i, "" );
                 if ( ! l.match( /^(06)/ ) ) {
                     jQuery( 'div#logdata pre' ).append( l + "\n" );
                     n++;
@@ -1773,10 +1777,10 @@ var ReactorSensor = (function(api, $) {
         var myid = api.getCpanelDeviceId();
         var cdata = iData[myid].cdata;
         var grpix = findCdataGroupIndex( grpId );
+        var grpconfig = cdata.conditions[grpix];
         var grp, anch;
         switch ( action ) {
             case "grpenable":
-                var grpconfig = cdata.conditions[grpix];
                 if ( grpconfig.disabled ) {
                     delete grpconfig.disabled;
                     grpEl.removeClass( 'groupdisabled' );
@@ -1789,7 +1793,7 @@ var ReactorSensor = (function(api, $) {
                 break;
 
             case "grpdelete":
-                if ( cdata.conditions.length > 1 ) {
+                if ( cdata.conditions.length > 1 && confirm( 'Really delete this group (there\'s no "undo")?' ) ) {
                     delete iData[myid].ixGroup[ grpId ];
                     cdata.conditions.splice( grpix, 1 );
                     /* remove the OR divider above the group */
@@ -1845,6 +1849,17 @@ var ReactorSensor = (function(api, $) {
                 }
                 break;
 
+            case 'grpinvert':
+                if ( grpconfig.invert ) {
+                    delete grpconfig.invert;
+                    el.text( "check_circle_outline" ).attr( 'title', msgGroupNormal );
+                } else {
+                    grpconfig.invert = 1;
+                    el.text( "cancel" ).attr( 'title', msgGroupInvert );
+                }
+                configModified = true;
+                break;
+
             default:
                 /* Nada */
         }
@@ -1864,6 +1879,7 @@ var ReactorSensor = (function(api, $) {
         var newId = getUID("grp");
         var condgroup = jQuery('<div class="conditiongroup"/>').attr('id', newId);
         condgroup.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span class="titletext"/><span id="groupcontrols" /></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>');
+        jQuery( 'span#groupcontrols', condgroup ).append( jQuery( '<i id="grpinvert" class="material-icons md-btn md14">check_circle_outline</i>' ).attr( 'title', msgGroupNormal ) );
         jQuery( 'span#groupcontrols', condgroup ).append( '<i id="grpenable" class="material-icons md-btn md14" title="Enable/disable group">sync</i>' );
         jQuery( 'span#groupcontrols', condgroup ).append( '<i id="grpmoveup" class="material-icons md-btn md14" title="Move group up">arrow_upward</i>' );
         jQuery( 'span#groupcontrols', condgroup ).append( '<i id="grpmovedn" class="material-icons md-btn md14" title="Move group down">arrow_downward</i>' );
@@ -2014,9 +2030,9 @@ var ReactorSensor = (function(api, $) {
      */
     function getConditionRow() {
         var el = jQuery('<div class="row conditionrow"></div>');
-        el.append( '<div class="col-sm-2 condtype"><select class="form-control form-control-sm"><option value="">--choose--</option></select></div>' );
-        el.append( '<div class="col-sm-9 params"></div>' );
-        el.append( '<div class="col-sm-1 condcontrols text-right"></div>');
+        el.append( '<div class="col-xs-12 col-md-2 condtype"><select class="form-control form-control-sm"><option value="">--choose--</option></select></div>' );
+        el.append( '<div class="col-xs-12 col-md-6 col-lg-8 col-xl-9 params"></div>' );
+        el.append( '<div class="col-xs-12 col-md-4 col-lg-2 col-xl-1 condcontrols text-right"></div>');
         jQuery("div.condcontrols", el).append('<i class="material-icons md-btn md14 action-up" title="Move condition up">arrow_upward</i>');
         jQuery("div.condcontrols", el).append('<i class="material-icons md-btn md14 action-down" title="Move condition down">arrow_downward</i>');
         jQuery("div.condcontrols", el).append('<i class="material-icons md-btn md14 action-delete" title="Delete condition">clear</i>');
@@ -2059,6 +2075,7 @@ var ReactorSensor = (function(api, $) {
             /* Create div.conditiongroup and add conditions */
             var gel = jQuery('<div class="conditiongroup"></div>').attr("id", grp.groupid);
             gel.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6 form-inline"><span class="titletext"></span><span id="groupcontrols" /></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>');
+            jQuery( 'span#groupcontrols', gel ).append( jQuery( '<i id="grpinvert" class="material-icons md-btn md14">check_circle_outline</i>' ).attr( 'title', msgGroupNormal ) );
             jQuery( 'span#groupcontrols', gel ).append( '<i id="grpenable" class="material-icons md-btn md14" title="Enable/disable group">sync</i>' );
             jQuery( 'span#groupcontrols', gel ).append( '<i id="grpmoveup" class="material-icons md-btn md14" title="Move group up">arrow_upward</i>' );
             jQuery( 'span#groupcontrols', gel ).append( '<i id="grpmovedn" class="material-icons md-btn md14" title="Move group down">arrow_downward</i>' );
@@ -2066,6 +2083,9 @@ var ReactorSensor = (function(api, $) {
             jQuery( 'span#groupcontrols i', gel ).on( 'click.reactor', handleGroupControlClick );
 
             jQuery( 'span#groupcontrols i#grpenable', gel ).text( grp.disabled ? "sync" : "sync_disabled" );
+            if ( grp.invert ) {
+                jQuery( 'span#groupcontrols i#grpinvert', gel ).text( 'cancel' ).attr( 'title', msgGroupInvert );
+            }
             if ( grp.disabled ) {
                 gel.addClass('groupdisabled');
             } else {
@@ -2225,7 +2245,7 @@ var ReactorSensor = (function(api, $) {
     /* Closing the control panel. */
     function onBeforeCpanelClose(args) {
         console.log( 'onBeforeCpanelClose args: ' + JSON.stringify(args) );
-        if ( configModified && confirm( "You have unsaved changes! Press OK to save them, or Cancel to discard them." ) ) {
+        if ( configModified && confirm( msgUnsavedChanges ) ) {
             handleSaveClick( undefined );
         }
         configModified = false;
@@ -2521,7 +2541,7 @@ var ReactorSensor = (function(api, $) {
     {
         console.log("doTools()");
 
-        if ( configModified && confirm( "You have unsaved changes. Press OK to save them, or Cancel to discard them." ) ) {
+        if ( configModified && confirm( msgUnsavedChanges ) ) {
             handleSaveClick( undefined );
         }
 
@@ -2703,19 +2723,20 @@ var ReactorSensor = (function(api, $) {
 
         var hasVariables = false;
         var grpel;
-        for ( var nn in cdata.variables ) {
+        for ( var nn in ( cdata.variables || {} ) ) {
             if ( cdata.variables.hasOwnProperty( nn ) ) {
                 if ( ! hasVariables ) {
-                    grpel = jQuery('<div class="reactorgroup" id="variables">');
+                    grpel = jQuery( '<div class="reactorgroup" id="variables"/>' );
+                    grpel.append( '<div class="row"><div id="vartitle" class="grouptitle col-xs-12">Expressions</div></div>' );
                     hasVariables = true;
                 }
                 var vd = cdata.variables[nn];
-                el = jQuery( '<div class="row var" id="' + vd.name + '"></div>' );
+                el = jQuery( '<div class="row var" />' ).attr( 'id', vd.name );
                 var vv = api.getDeviceState( pdev, "urn:toggledbits-com:serviceId:ReactorValues", vd.name ) || "(undefined)";
                 var ve = api.getDeviceState( pdev, "urn:toggledbits-com:serviceId:ReactorValues", vd.name + "_Error" ) || "";
-                el.append( jQuery('<div class="col-sm-6 col-md-2"></div>').text(vd.name) );
-                el.append( jQuery('<div class="col-sm-12 col-md-7 tb-sm"></div>').text(vd.expression) );
-                el.append( jQuery('<div class="col-sm-6 col-md-3"></div>').text(ve !== "" ? ve : vv) );
+                el.append( jQuery('<div class="col-sm-6 col-md-2" />').text(vd.name) );
+                el.append( jQuery('<div class="col-sm-12 col-md-7 tb-sm" />').text(vd.expression) );
+                el.append( jQuery('<div class="col-sm-6 col-md-3" />').text(ve !== "" ? ve : vv) );
                 grpel.append( el );
             }
         }
@@ -2731,22 +2752,24 @@ var ReactorSensor = (function(api, $) {
                 stel.append('<div class="row divider"><div class="col-sm-5 col-md-5"><hr></div><div class="col-sm-2 col-md-2" style="text-align: center;"><h5>OR</h5></div><div class="col-sm-5 col-md-5"><hr></div></div>');
             }
 
-            grpel = jQuery('<div class="reactorgroup" id="' + grp.groupid + '">');
+            grpel = jQuery('<div class="reactorgroup" />').attr('id', grp.groupid);
             if ( grp.disabled ) {
                 grpel.addClass( 'groupdisabled' );
             } else {
                 grpel.removeClass( 'groupdisabled' );
             }
+            grpel.append('<div class="row"><div id="grptitle" class="grouptitle col-xs-12" /></div>');
+            var title = 'Group: ' + grp.groupid + ( grp.invert ? " (inverted)" : "" ) +
+                ( grp.disabled ? " (disabled)" : "" );
+            jQuery( 'div#grptitle', grpel ).text( title );
             stel.append( grpel );
-            var groupstate = true;
             for ( var j=0; j<(grp.groupconditions || []).length; j++ ) {
                 var cond = grp.groupconditions[j];
-                el = jQuery('<div class="row cond" id="' + cond.id + '"></div>');
+                el = jQuery('<div class="row cond" />').attr( 'id', cond.id );
                 var currentValue = ( cstate[cond.id] || {} ).lastvalue;
 
-                el.append('<div class="col-sm-6 col-md-2">' +
-                    ( condTypeName[ cond.type ] !== undefined ? condTypeName[ cond.type ] : cond.type ) +
-                    '</div>');
+                el.append( jQuery( '<div class="col-sm-6 col-md-2" />' )
+                    .text( condTypeName[ cond.type ] !== undefined ? condTypeName[ cond.type ] : cond.type ) );
 
                 var condDesc = makeConditionDescription( cond );
                 switch ( cond.type ) {
@@ -2813,7 +2836,7 @@ var ReactorSensor = (function(api, $) {
                         'after ' + makeConditionDescription( iData[pdev].ixCond[cond.after] ) +
                         ')';
                 }
-                el.append( jQuery('<div class="col-sm-6 col-md-6"></div>').text( condDesc ) );
+                el.append( jQuery( '<div class="col-sm-6 col-md-6" />' ).text( condDesc ) );
 
                 /* Append current value and condition state */
                 if ( cond.type !== "comment" ) {
@@ -2836,18 +2859,17 @@ var ReactorSensor = (function(api, $) {
                         } else {
                             el.addClass( "falsecond" ).removeClass("truecond");
                         }
-                        groupstate = groupstate && cs.evalstate;
                     } else {
                         el.append( '<div class="col-sm-6 col-md-4">(unknown)</div>' );
-                        groupstate = false;
                     }
                 }
 
                 grpel.append( el );
             }
 
-            if (groupstate) {
-                grpel.addClass("truestate");
+            /* Highlight groups that are "true" */
+            if ( cstate[ grp.groupid ].evalstate ) {
+                grpel.addClass( "truestate" );
             }
         }
     }
@@ -2877,7 +2899,7 @@ var ReactorSensor = (function(api, $) {
     {
         console.log("doStatusPanel()");
         /* Make sure changes are saved. */
-        if ( configModified && confirm( "You have unsaved changes! Press OK to save them, or Cancel to discard them." ) ) {
+        if ( configModified && confirm( msgUnsavedChanges ) ) {
             handleSaveClick( undefined );
         }
 
@@ -2885,14 +2907,17 @@ var ReactorSensor = (function(api, $) {
 
         /* Our styles. */
         var html = "<style>";
-        html += 'div.reactorgroup { border-radius: 8px; border: 2px solid #006040; padding: 8px; }';
-        html += 'div.reactorgroup.groupdisabled { background-color: #ccc !important; color: #000 !important }';
-        html += '.truestate { background-color: #ccffcc; }';
-        html += '.row.cond { min-height: 2em; }';
-        html += '.row.var { min-height: 2em; color: #003399; }';
-        html += '.tb-sm { font-family: Courier,Courier New,monospace; font-size: 0.9em; }';
-        html += 'div.truecond { color: #00aa00; font-weight: bold; }';
-        html += 'div.falsecond { color: #000000; }';
+        html += 'div#reactorstatus div.reactorgroup { border-radius: 8px; border: 2px solid #006040; margin-bottom: 2px; }';
+        html += 'div#reactorstatus div.reactorgroup.groupdisabled { background-color: #ccc !important; color: #000 !important }';
+        html += 'div#reactorstatus div.reactorgroup .row { margin-right: 0px; margin-left: 0px; }';
+        html += 'div#reactorstatus div.grouptitle { background-color: #006040; color: #fff; padding: 4px; min-height: 1.5em; margin-bottom: 4px; }';
+        html += 'div#reactorstatus div#vartitle { background-color: #444444; }';
+        html += 'div#reactorstatus .truestate { background-color: #ccffcc; }';
+        html += 'div#reactorstatus .row.cond { min-height: 2em; }';
+        html += 'div#reactorstatus .row.var { min-height: 2em; color: #003399; }';
+        html += 'div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size: 0.9em; }';
+        html += 'div#reactorstatus div.truecond { color: #00aa00; font-weight: bold; }';
+        html += 'div#reactorstatus div.falsecond { color: #000000; }';
         html += "</style>";
         jQuery("head").append( html );
 
@@ -3162,7 +3187,7 @@ var ReactorSensor = (function(api, $) {
         console.log("doVariables()");
         try {
             /* Make sure changes are saved. */
-            if ( configModified && confirm( "You have unsaved changes. Press OK to save them, or Cancel to discard them." ) ) {
+            if ( configModified && confirm( msgUnsavedChanges ) ) {
                 handleSaveClick( undefined );
             }
 
@@ -3222,7 +3247,7 @@ var ReactorSensor = (function(api, $) {
     {
         console.log("doConditions()");
         try {
-            if ( configModified && confirm( "You have unsaved changes. Press OK to save them, or Cancel to discard them." ) ) {
+            if ( configModified && confirm( msgUnsavedChanges) ) {
                 handleSaveClick( undefined );
             }
 
@@ -3245,7 +3270,7 @@ var ReactorSensor = (function(api, $) {
             html += 'div#tab-conds.reactortab div.condcontrols { color: #004020; }';
             html += 'div#tab-conds.reactortab i.md-btn:disabled { color: #999999; cursor: auto; }';
             html += 'div#tab-conds.reactortab i.md-btn[disabled] { color: #999999; cursor: auto; }';
-            html += 'div#tab-conds.reactortab i.md-btn { cursor: pointer; }';
+            html += 'div#tab-conds.reactortab i.md-btn { margin-left: 2px; margin-right: 2px; cursor: pointer; }';
             html += 'div#tab-conds.reactortab .md12 { font-size: 12pt; }';
             html += 'div#tab-conds.reactortab .md14 { font-size: 14pt; }';
             html += 'div#tab-conds.reactortab input.tbinvert { min-width: 16px; min-height: 16px; }';
@@ -4685,7 +4710,7 @@ var ReactorSensor = (function(api, $) {
         var myid = api.getCpanelDeviceId();
 
         try {
-            if ( configModified && confirm( "You have unsaved changes. Press OK to save them, or Cancel to discard them." ) ) {
+            if ( configModified && confirm( msgUnsavedChanges) ) {
                 handleSaveClick( undefined );
             }
 

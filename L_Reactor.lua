@@ -2212,6 +2212,9 @@ local function evaluateGroup( grp, cdata, tdev )
     end
 
     -- Save group state (create or change only).
+    if grp.invert then passed = not passed end
+    D("evaluateGroup() grp %1 conditions invert %3; new group state %2, previous %4",
+        grp.groupid, passed, grp.invert and "yes" or "no", gs.evalstate)
     if gs.evalstate == nil or gs.evalstate ~= passed then
         addEvent{dev=tdev,event='groupchange',cond=grp.groupid,oldState=gs.evalstate,newState=passed}
         gs.evalstate = passed
@@ -3347,7 +3350,9 @@ function request( lul_request, lul_parameters, lul_outputformat )
                     ng = ng + 1
                     r = r .. "    Group #" .. ng .. " <" .. gc.groupid .. "> " ..
                         ( gs.evalstate and "true" or "false" ) .. " as of " .. shortDate( gs.evalstamp ) ..
-                        ( gc.disabled and " (disabled)" or "" ) .. EOL
+                        ( gc.invert and " INVERTED" or "" ) ..
+                        ( gc.disabled and " DISABLED" or "" ) .. 
+                        EOL
                     for _,cond in ipairs( gc.groupconditions or {} ) do
                         local cs = (sensorState[tostring(n)].condState or {})[cond.id] or {}
                         r = r .. "        =" .. ( cs.evalstate and "T" or "f" )
