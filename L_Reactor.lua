@@ -696,7 +696,7 @@ local function loadScene( sceneId, pdev )
         return nil
     end
     data.loadtime = luup.attr_get("LoadTime", 0)
-    if data.groups then
+    if data.groups and not data.isReactorScene then
         table.sort( data.groups, function( a, b ) return (a.delay or 0) < (b.delay or 0) end )
     end
     D("loadScene() loaded scene %1: %2", sceneId, data)
