@@ -72,12 +72,6 @@ var ReactorSensor = (function(api, $) {
         html += '<div id="tbcopyright">Reactor ver 2.2develop &copy; 2018,2019 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
             ' All Rights Reserved. Please check out the <a href="https://github.com/toggledbits/Reactor/wiki" target="_blank">online documentation</a>' +
             ' and <a href="http://forum.micasaverde.com/index.php/board,93.0.html" target="_blank">forum board</a> for support.</div>';
-        html += '<div id="supportlinks">Support links: ' +
-            ' <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=debug" target="_blank">Toggle&nbsp;Debug</a>' +
-            ' &bull; <a id="fulllogscript" href="/cgi-bin/cmh/log.sh?Device=LuaUPnP" target="_blank">Full&nbsp;Log&nbsp;File</a>' +
-            ' &bull; <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=status" target="_blank">Plugin&nbsp;Status</a>' +
-            ' &bull; <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=summary&device=' + api.getCpanelDeviceId() + '" target="_blank">Logic&nbsp;Summary</a>' +
-            '</div>';
         return html;
     }
 
@@ -316,7 +310,7 @@ var ReactorSensor = (function(api, $) {
     }
 
     /**
-     * Convert Lua timestamp (secs since Epoch) to text; if within 24 hours, 
+     * Convert Lua timestamp (secs since Epoch) to text; if within 24 hours,
      * show time only.
      */
     function shortLuaTime( dt ) {
@@ -3291,7 +3285,7 @@ var ReactorSensor = (function(api, $) {
         updateSaveControls();
     }
 
-    /** 
+    /**
      * Given a section, update cdata to match.
      */
     function updateActionList( section ) {
@@ -3305,7 +3299,7 @@ var ReactorSensor = (function(api, $) {
             }
         }
     }
-    
+
     function changeActionRow( row ) {
         console.log("changeActionRow: updating cached config");
         configModified = true;
@@ -4854,6 +4848,18 @@ var ReactorSensor = (function(api, $) {
             html += '<div id="enhancement" class="form-inline"><h3>Submit Device Data</h3>If you have a device that is missing "Common Actions" or warns you about missing enhancement data in the Activities tab (actions in <i>italics</i>), you can submit the device data to rigpapa for evaluation. This process sends the relevant data about the device. It does not send any identifying information about you or your Vera, and the data is used only for enhancement of the device information database. <p><select id="devices"></select> <button id="submitdata" class="btn btn-sm btn-info">Submit Device Data</button></p></div>';
         }
 
+        html += '<div id="troubleshooting"><h3>Troubleshooting &amp; Support</h3>If you are having trouble working out your condition logic, or you think you have found a bug, here are some steps and tools you can use:';
+        html += '<ul><li>Check the documentation in the <a href="https://github.com/toggledbits/Reactor/wiki" target="_blank">Reactor Wiki</a>.</li><li>The <a href="http://forum.micasaverde.com/index.php/board,93.0.html" target="_blank">Reactor Board</a> in the Vera Community Forums is a great way to get support for questions, how-to\'s, etc.</li><li>Generate and examine a <a href="' +
+            api.getDataRequestURL() + '?id=lr_Reactor&action=summary&device=' + api.getCpanelDeviceId() + '" target="_blank">Logic&nbsp;Summary</a> report. This text-based report shows your ReactorSensor\'s current state, and its event list, which may tell you a lot about what led up to that state.</li>' +
+            '<li>If the logic summary is not helping you, please post it in its entirety, together with a description of what you are trying to accomplish and/or the problem you are having, to a new thread on the Reactor Board (linked above). <strong>Please do not post screenshots</strong> unless you are reporting a UI/appearance bug. Generally speaking, the logic summary is far more useful (and easier to make and post, by design).</li>';
+        if ( ! isOpenLuup ) {
+            html += '<li>If you are asked for a "debug log snippet", use this procedure (unless given other instructions in the request):<ol><li>Turn on debug by clicking this link: <a href="' +
+            api.getDataRequestURL() + '?id=lr_Reactor&action=debug&debug=1" target="_blank">Turn debug ON</a></li><li>Restart this sensor to force a re-evaluation of all conditions: <a href="' +
+            api.getDataRequestURL() + '?id=action&output_format=xml&DeviceNum=' + api.getCpanelDeviceId() + '&serviceId=' +
+            encodeURIComponent( serviceId ) + '&action=Restart" target="_blank">Restart this ReactorSensor</a></li><li><strong>Wait at least 60 seconds, not less.</strong> This is very important&mdash;proceeding too soon may result in incomplete log data.</li><li>Click this link to <a href="javascript:void();" id="grablog">generate the log snippet</a> (the relevant part the log file). It should magically appear at the bottom of this page&mdash;scroll down!</li><li>Post the log snippet to the forum thread, or email it <em>together with your logic summary report and your forum username</em> to <a href="mailto:reactor-logs@toggledbits.com" target="_blank">reactor-logs@toggledbits.com</a>. Note: this email address is for receiving logs only; do not submit questions or other requests to this address.</li></ol>';
+        }
+        html += '</ul></div>';
+
         html += footer();
 
         api.setCpanelContent( html );
@@ -4936,9 +4942,7 @@ var ReactorSensor = (function(api, $) {
 
         /* Tools get log fetcher */
         if ( ! isOpenLuup ) {
-            jQuery( '<span><a href="javascript:void();" id="grablog">Grab&nbsp;Log&nbsp;Snippet</a> &bull; </span>' )
-                .insertBefore( 'div#supportlinks a#fulllogscript' );
-            jQuery( '<div id="logdata"/>' ).insertAfter( 'div#supportlinks' );
+            jQuery( '<div id="logdata"/>' ).insertAfter( 'div#tbcopyright' );
             jQuery( 'a#grablog' ).on( 'click', grabLog );
         }
 

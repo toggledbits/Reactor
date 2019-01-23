@@ -46,7 +46,7 @@ local isOpenLuup = false
 
 local TICKOFFS = 5 -- cond tasks try to run TICKOFFS seconds after top of minute
 
-local TRUESTRINGS = ":y:yes:t:true:1:" -- strings that mean true (also numeric ~= 0)
+local TRUESTRINGS = ":y:yes:t:true:on:1:" -- strings that mean true (also numeric ~= 0)
 
 local defaultLogLevel = false -- or a number, which is (uh...) the default log level for messages
 
@@ -3276,7 +3276,11 @@ function request( lul_request, lul_parameters, lul_outputformat )
     local action = lul_parameters['action'] or lul_parameters['command'] or ""
     local deviceNum = tonumber( lul_parameters['device'], 10 )
     if action == "debug" then
-        debugMode = not debugMode
+        if lul_parameters.debug ~= nil then
+            debugMode = TRUESTRINGS:match( lul_parameters.debug )
+        else
+            debugMode = not debugMode
+        end
         D("debug set %1 by request", debugMode)
         return "Debug is now " .. ( debugMode and "on" or "off" ), "text/plain"
 
