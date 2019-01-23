@@ -90,10 +90,22 @@ var ReactorSensor = (function(api, $) {
         return ( prefix === undefined ? "" : prefix ) + newx.toString(16);
     }
 
+    function isEmpty( s ) {
+        return s === undefined || s === "";
+    }
+
+    function quot( s ) {
+        return JSON.stringify( s );
+    }
+
+    /* Return value or default if undefined */
+    function coalesce( v, d ) {
+        return ( undefined === v ) ? d : v;
+    }
+
     /* Evaluate input string as integer, strict (no non-numeric chars allowed other than leading/trailing whitespace, empty string fails). */
     function getInteger( s ) {
-        s = String(s).replace( /^\s+|\s+$/gm, '' );
-        s = s.replace( /^\+/, '' ); /* leading + is fine, ignore */
+        s = String(s).trim().replace( /^\+/, '' ); /* leading + is fine, ignore */
         if ( s.match( /^-?[0-9]+$/ ) ) {
             return parseInt( s );
         }
@@ -102,33 +114,14 @@ var ReactorSensor = (function(api, $) {
 
     /* Like getInteger(), but returns dflt if no value provided (blank/all whitespace) */
     function getOptionalInteger( s, dflt ) {
-        if ( String(s).match( /^\s*$/ ) ) {
+        if ( /^\s*$/.test( String(s) ) ) {
             return dflt;
         }
         return getInteger( s );
     }
 
-    /* Return value or default if undefined */
-    function coalesce( v, d ) {
-        return ( undefined === v ) ? d : v;
-    }
-
-    /* Get device object from userdata by device number */
-    function getDeviceObject( devnum ) {
-        if ( undefined === devnum || false === devnum || isNaN( devnum ) ) {
-            return false;
-        }
-        var ix = api.getDeviceIndex( parseInt( devnum ) );
-        if ( ix < 0 ) {
-            console.log( "getDeviceObject() API returned < 0, ix=" + String(ix) );
-            return false;
-        }
-        var ud = api.getUserData();
-        return ud.devices[ ix ];
-    }
-
     function getDeviceFriendlyName( dev ) {
-        var devobj = getDeviceObject( dev );
+        var devobj = api.getDeviceObject( dev );
         if ( undefined === devobj || false === devobj ) {
             console.log( "getDeviceFriendlyName() dev=(" + typeof(dev) + ")" + String(dev) + ", devobj=(" + typeof(devobj) + ")" + String(devobj) + ", returning false" );
             return false;
@@ -136,11 +129,17 @@ var ReactorSensor = (function(api, $) {
         return String(devobj.name) + " (#" + String(devobj.id) + ")";
     }
 
+    /* Get parent state */
+    function getParentState( varName ) {
+        var me = api.getDeviceObject( api.getCpanelDeviceId() );
+        return api.getDeviceState( me.id_parent || me.id, "urn:toggledbits-com:serviceId:Reactor", varName );
+    }
+
     /* Load configuration data. */
     function loadConfigData( myid ) {
-        var s = api.getDeviceState( myid, serviceId, "cdata" ) || "";
+        var s = api.getDeviceState( myid, serviceId, "cdata" );
         var cdata;
-        if ( s.length !== 0 ) {
+        if ( ! isEmpty( s ) ) {
             try {
                 cdata = JSON.parse( s );
             } catch (e) {
@@ -149,7 +148,7 @@ var ReactorSensor = (function(api, $) {
         }
         if ( cdata === undefined || typeof cdata !== "object" ||
                 cdata.conditions === undefined || typeof cdata.conditions !== "object" ) {
-            cdata = { version: 2, variables: {}, conditions: [
+            cdata = { version: CDATA_VERSION, variables: {}, conditions: [
                 { groupid: getUID('grp'), groupconditions: [
                     { id: getUID('cond'), type: "comment", comment: "Enter your AND conditions here" }
                     ]
@@ -162,6 +161,7 @@ var ReactorSensor = (function(api, $) {
             cdata.variables = {};
             upgraded = true;
         }
+
         /* Set up our indices. */
         var ixGroup = {};
         var ixCond = {};
@@ -187,12 +187,6 @@ var ReactorSensor = (function(api, $) {
 
         configModified = false;
         return cdata;
-    }
-
-    /* Get parent state */
-    function getParentState( varName ) {
-        var me = getDeviceObject( api.getCpanelDeviceId() );
-        return api.getDeviceState( me.id_parent || me.id, "urn:toggledbits-com:serviceId:Reactor", varName );
     }
 
     /* Initialize the module */
@@ -310,15 +304,6 @@ var ReactorSensor = (function(api, $) {
         return undefined;
     }
 
-    function isEmpty( s ) {
-        return s === undefined || s === "";
-    }
-
-    function quot( s ) {
-        if ( typeof(s) != "string" ) s = String(s);
-        return '"' + s.replace( /"/g, "\\\"" ) + '"';
-    }
-
     function textDateTime( y, m, d, hh, mm, isEnd ) {
         hh = parseInt( hh || "0" );
         mm = parseInt( mm || "0" );
@@ -330,43 +315,155 @@ var ReactorSensor = (function(api, $) {
         return monthName[m] + ' ' + d + ( isEmpty( y ) ? '' : ' ' + y ) + ' ' + tstr;
     }
 
-    function grabLog( ev ) {
-        jQuery( 'div#logdata' ).empty();
-        var url = api.getDataRequestURL();
-        url = url.replace( /(:3480|\/port_3480).*/, "" );
-        url = url + "/cgi-bin/cmh/log.sh?Device=LuaUPnP";
-        jQuery( 'div#logdata' ).append( jQuery( '<p/>' ).text( 'Fetching ' + url ) );
-        $.ajax({
-            url: url,
-            data: {},
-            cache: false,
-            dataType: 'text'
-        }).done( function( data, statusText, jqXHR ) {
-            var keypat = new RegExp( "Reactor\\(debug\\): startSensor\\(" + api.getCpanelDeviceId() + "," );
-            var pos = data.search( keypat );
-            if ( pos < 0 ) {
-                jQuery( 'div#logdata' ).append( '<b>SUBJECT DATA NOT FOUND. RESTART THIS REACTOR SENSOR AFTER ENABLING DEBUG.</b>' );
-                return;
+    /**
+     * Convert Lua timestamp (secs since Epoch) to text; if within 24 hours, 
+     * show time only.
+     */
+    function shortLuaTime( dt ) {
+        if ( ( dt || 0 ) === 0 ) {
+            return "";
+        }
+        var dtms = dt * 1000;
+        var ago = Math.floor( ( Date.now() - dtms ) / 1000 );
+        if ( ago < 86400 ) {
+            return new Date(dtms).toLocaleTimeString();
+        }
+        return new Date(dtms).toLocaleString();
+    }
+
+    /**
+     * Update save/revert buttons (separate, because we use in two diff tabs
+     */
+    function updateSaveControls() {
+        var errors = jQuery('.tberror');
+        jQuery('button#saveconf').prop('disabled', ! ( configModified && errors.length === 0 ) );
+        jQuery('button#revertconf').prop('disabled', !configModified);
+    }
+
+    /**
+     * Handle revert button click: restore setting to last saved and redisplay.
+     */
+    function handleRevertClick( ev ) {
+        if ( ! confirm( "Discard changes and revert to last saved configuration?" ) ) {
+            return;
+        }
+
+        loadConfigData( api.getCpanelDeviceId() );
+        configModified = false;
+
+        /* Be careful about which tab we're on here. */
+        var ctx = jQuery( ev.currentTarget ).closest('div.reactortab').attr('id');
+        if ( ctx === "tab-vars" ) {
+            redrawVariables();
+        } else if ( ctx === "tab-conds" ) {
+            redrawConditions();
+        } else if ( ctx === "tab-actions" ) {
+            redrawActivities();
+        } else {
+            alert("OK, I did the revert, but now I'm lost. Go to the Status tab, and then come back to this tab.");
+        }
+    }
+
+    /**
+     * Remove all properies on condition except those in the exclusion list.
+     * The id and type properties are always preserved.
+     */
+    function removeConditionProperties( cond, excl ) {
+        var elist = (excl || "").split(/,/);
+        var emap = { id: true, type: true }; /* never remove these */
+        for ( var ix=0; ix<elist.length; ++ix ) {
+            emap[elist[ix]] = true;
+        }
+        for ( var prop in cond ) {
+            if ( cond.hasOwnProperty( prop ) && emap[prop] === undefined ) {
+                delete cond[prop];
             }
-            while ( pos >= 0 ) {
-                data = data.substring( pos+16 );
-                pos = data.search( keypat );
-            }
-            jQuery( 'div#logdata' ).empty().append( '<pre/>' );
-            var lines = data.split( /\r?\n/ );
-            var k = 0, n = 0;
-            while ( n < 500 && k<lines.length ) {
-                var l = lines[k].replace( /<span\s+[^>]*>/i, "" ).replace( /<\/span>/i, "" );
-                if ( ! l.match( /^(06)/ ) ) {
-                    jQuery( 'div#logdata pre' ).append( l + "\n" );
-                    n++;
+        }
+    }
+
+    /**
+     * Attempt to remove variables that are no longer used.
+     */
+    function clearUnusedVariables() {
+        var myid = api.getCpanelDeviceId();
+        var ud = api.getUserData();
+        var dx = api.getDeviceIndex( myid );
+        var deleted = {};
+        var configVars = iData[myid].cdata.variables || {};
+        for ( var k=0; k<(ud.devices[dx].states || []).length; ++k) {
+            var state = ud.devices[dx].states[k];
+            if ( state.service.match( /:ReactorValues$/i ) ) {
+                if ( state.variable.match( /_Error$/i ) ) {
+                    if ( undefined === configVars[ state.variable.replace( /_Error$/i, "" ) ] ) {
+                        deleted[state.variable] = state;
+                    }
+                } else if ( undefined === configVars[state.variable] ) {
+                    deleted[state.variable] = state;
                 }
-                k++;
             }
-        }).fail( function() {
-            jQuery( 'div#logdata' ).empty().append("<b>Hmm, that didn't go well. Try again in a few moments.</b>");
+        }
+        for ( var vn in deleted ) {
+            if ( deleted.hasOwnProperty( vn ) ) {
+                console.log("Removing unused state variable for deleted expression " + vn);
+                $.ajax({
+                    url: api.getDataRequestURL(),
+                    data: {
+                        id: "variableset",
+                        DeviceNum: myid,
+                        serviceId: deleted[vn].service,
+                        Variable: vn,
+                        Value: ""
+                    }
+                }).done( function( data, statusText, jqXHR ) {
+                    /* nothing */
+                });
+            }
+        }
+    }
+
+    /**
+     * Handle save click: save the current configuration.
+     */
+    function handleSaveClick( ev, fnext, fargs ) {
+        var myid = api.getCpanelDeviceId();
+
+        /* Save to persistent state */
+        iData[myid].cdata.timestamp = Math.floor( Date.now() / 1000 );
+        api.setDeviceStateVariablePersistent( myid, serviceId, "cdata", JSON.stringify( iData[myid].cdata ),
+        {
+            'onSuccess' : function() {
+                configModified = false;
+                if ( undefined !== fnext ) {
+                    fnext.apply( null, fargs );
+                }
+                updateSaveControls();
+                clearUnusedVariables();
+            },
+            'onFailure' : function() {
+                alert('There was a problem saving the configuration. Vera/Luup may have been restarting. Please try hitting the "Save" button again.');
+                configModified = true;
+                if ( undefined !== fnext ) {
+                    fnext.apply( null, fargs );
+                }
+                updateSaveControls();
+            }
         });
     }
+
+    /* Closing the control panel. */
+    function onBeforeCpanelClose(args) {
+        // console.log( 'onBeforeCpanelClose args: ' + JSON.stringify(args) );
+        if ( configModified && confirm( msgUnsavedChanges ) ) {
+            handleSaveClick( undefined );
+        }
+        configModified = false;
+    }
+
+/** ***************************************************************************
+ *
+ * S T A T U S
+ *
+ ** **************************************************************************/
 
     function makeConditionDescription( cond ) {
         if ( cond === undefined ) {
@@ -438,14 +535,14 @@ var ReactorSensor = (function(api, $) {
 
             case 'weekday':
                 var wmap = { "1": "first", "2": "second", "3": "third", "4": "fourth", "5": "fifth", "last": "last" };
-                if ( ( cond.operator || "" ) === "" ) {
+                if ( isEmpty( cond.operator ) ) {
                     str = "every";
                 } else if ( wmap[cond.operator] ) {
                     str = 'on the ' + wmap[cond.operator];
                 } else {
                     str = cond.operator;
                 }
-                if ( ( cond.value || "" ) === "" ) {
+                if ( isEmpty( cond.value ) ) {
                     str += " day";
                 } else {
                     t = ( cond.value || "" ).split(/,/);
@@ -515,7 +612,7 @@ var ReactorSensor = (function(api, $) {
                 if ( cond.mins > 0 ) {
                     str += " " + String(cond.mins) + " minutes";
                 }
-                if ( "" != (cond.basetime || "") ) {
+                if ( ! isEmpty( cond.basetime ) ) {
                     t = cond.basetime.split(/,/);
                     str += " (relative to ";
                     str += t[0] + ":" + t[1];
@@ -567,6 +664,251 @@ var ReactorSensor = (function(api, $) {
     }
 
     /**
+     * Update status display.
+     */
+    function updateStatus( pdev ) {
+        var el;
+        console.log("**** updateStatus() ****");
+        var stel = jQuery('div#reactorstatus');
+        if ( stel.length === 0 || !inStatusPanel ) {
+            /* If not displayed, do nothing. */
+            return;
+        }
+        stel.empty();
+
+        var cdata = loadConfigData( pdev );
+        if ( undefined === cdata ) {
+            console.log("cdata unavailable");
+            return;
+        }
+
+        var s = api.getDeviceState( pdev, serviceId, "cstate" );
+        var cstate = {};
+        if ( ! isEmpty( s ) ) {
+            try {
+                cstate = JSON.parse( s );
+            } catch (e) {
+                console.log("cstate cannot be parsed: " + String(e));
+            }
+        } else {
+            console.log("cstate unavailable");
+        }
+
+        var hasVariables = false;
+        var grpel;
+        for ( var nn in ( cdata.variables || {} ) ) {
+            if ( cdata.variables.hasOwnProperty( nn ) ) {
+                if ( ! hasVariables ) {
+                    grpel = jQuery( '<div class="reactorgroup" id="variables"/>' );
+                    grpel.append( '<div class="row"><div id="vartitle" class="grouptitle col-xs-12">Expressions</div></div>' );
+                    hasVariables = true;
+                }
+                var vd = cdata.variables[nn];
+                el = jQuery( '<div class="row var" />' ).attr( 'id', vd.name );
+                var vv = api.getDeviceState( pdev, "urn:toggledbits-com:serviceId:ReactorValues", vd.name ) || "(undefined)";
+                var ve = api.getDeviceState( pdev, "urn:toggledbits-com:serviceId:ReactorValues", vd.name + "_Error" ) || "";
+                el.append( jQuery('<div class="col-sm-6 col-md-2" />').text(vd.name) );
+                el.append( jQuery('<div class="col-sm-12 col-md-7 tb-sm" />').text(vd.expression) );
+                el.append( jQuery('<div class="col-sm-6 col-md-3" />').text(ve !== "" ? ve : vv) );
+                grpel.append( el );
+            }
+        }
+        if ( hasVariables ) {
+            stel.append( grpel );
+        }
+
+        for ( var i=0; i<(cdata.conditions || []).length; i++ ) {
+            var grp = cdata.conditions[i];
+
+            if ( i > 0 ) {
+                /* Insert a divider */
+                stel.append('<div class="row divider"><div class="col-sm-5 col-md-5"><hr></div><div class="col-sm-2 col-md-2" style="text-align: center;"><h5>OR</h5></div><div class="col-sm-5 col-md-5"><hr></div></div>');
+            }
+
+            grpel = jQuery('<div class="reactorgroup" />').attr('id', grp.groupid);
+            if ( grp.disabled ) {
+                grpel.addClass( 'groupdisabled' );
+            } else {
+                grpel.removeClass( 'groupdisabled' );
+            }
+            grpel.append('<div class="row"><div id="grptitle" class="grouptitle col-xs-12" /></div>');
+            var title = 'Group: ' + grp.groupid + ( grp.invert ? " (inverted)" : "" ) +
+                ( grp.disabled ? " (disabled)" : "" );
+            jQuery( 'div#grptitle', grpel ).text( title );
+            stel.append( grpel );
+            for ( var j=0; j<(grp.groupconditions || []).length; j++ ) {
+                var cond = grp.groupconditions[j];
+                el = jQuery('<div class="row cond" />').attr( 'id', cond.id );
+                var currentValue = ( cstate[cond.id] || {} ).lastvalue;
+
+                el.append( jQuery( '<div class="col-sm-6 col-md-2" />' )
+                    .text( condTypeName[ cond.type ] !== undefined ? condTypeName[ cond.type ] : cond.type ) );
+
+                var condDesc = makeConditionDescription( cond );
+                switch ( cond.type ) {
+                    case 'service':
+                        if ( ( cond.repeatcount || 0 ) > 1 ) {
+                            condDesc += " repeats " + cond.repeatcount +
+                                " times within " + ( cond.repeatwithin || 60 ) + " secs";
+                        } else if ( ( cond.duration || 0 ) > 0 ) {
+                            condDesc += " for " +
+                                ( cond.duration_op === "lt" ? "less than " : "at least " ) +
+                                cond.duration + " secs";
+                        }
+                        if ( ( cond.latch || 0 ) != 0 ) {
+                            condDesc += " (latching)";
+                        }
+                        break;
+
+                    case 'weekday':
+                        if ( currentValue !== undefined && weekDayName[ currentValue ] !== undefined ) {
+                            currentValue = weekDayName[ currentValue ];
+                        }
+                        break;
+
+                    case 'housemode':
+                        if ( currentValue !== undefined && houseModeName[ currentValue ] !== undefined ) {
+                            currentValue = houseModeName[ currentValue ];
+                        }
+                        break;
+
+                    case 'sun':
+                    case 'trange':
+                        if ( currentValue !== undefined ) {
+                            currentValue = shortLuaTime( currentValue );
+                        }
+                        break;
+
+                    case 'interval':
+                        currentValue = shortLuaTime( currentValue );
+                        break;
+
+                    case 'ishome':
+                        var t = (currentValue || "").split( /,/ );
+                        if ( "at" === cond.operator || "notat" === cond.operator ) {
+                            // ???
+                        } else {
+                            /* Replace IDs with names for display */
+                            if ( t.length > 0 && t[0] !== "" ) {
+                                for ( var k=0; k<t.length; ++k ) {
+                                    t[k] = userIx[t[k]] ? userIx[t[k]].name : ( t[k] + '?' );
+                                }
+                                currentValue = t.join(', ');
+                            } else {
+                                currentValue = "";
+                            }
+                        }
+                        break;
+
+                    default:
+                        /* Nada */
+                }
+                if ( cond.after !== undefined ) {
+                    condDesc += ' (' +
+                        ( (cond.aftertime||0) > 0 ? 'within ' + cond.aftertime + ' secs ' : '' ) +
+                        'after ' + makeConditionDescription( iData[pdev].ixCond[cond.after] ) +
+                        ')';
+                }
+                el.append( jQuery( '<div class="col-sm-6 col-md-6" />' ).text( condDesc ) );
+
+                /* Append current value and condition state */
+                if ( cond.type !== "comment" ) {
+                    if ( currentValue !== undefined ) {
+                        var cs = cstate[cond.id];
+                        el.append('<div class="currentvalue col-sm-6 col-md-4">(' +
+                            currentValue + ') ' +
+                            ( cs.laststate ? "true" : "false" ) +
+                            ' as of ' + shortLuaTime( cs.statestamp ) +
+                            ( ( cond.latch || false ) && cs.evalstate && !cs.laststate ? " (latched true)" : "" ) +
+                            '</div>' );
+                        if ( "service" === cond.type && ( cond.repeatcount || 0 ) > 1 ) {
+                            if ( cs.repeats !== undefined && cs.repeats.length > 1 ) {
+                                var dtime = cs.repeats[ cs.repeats.length - 1 ] - cs.repeats[0];
+                                jQuery("div.currentvalue", el).append( " (last " + cs.repeats.length + " span " + dtime + " secs)" );
+                            }
+                        }
+                        if ( cs.evalstate ) {
+                            el.addClass( "truecond" ).removeClass("falsecond");
+                        } else {
+                            el.addClass( "falsecond" ).removeClass("truecond");
+                        }
+                    } else {
+                        el.append( '<div class="col-sm-6 col-md-4">(unknown)</div>' );
+                    }
+                }
+
+                grpel.append( el );
+            }
+
+            /* Highlight groups that are "true" */
+            if ( cstate[ grp.groupid ].evalstate ) {
+                grpel.addClass( "truestate" );
+            }
+        }
+    }
+
+    function onUIDeviceStatusChanged( args ) {
+        if ( !inStatusPanel ) {
+            return;
+        }
+        var pdev = api.getCpanelDeviceId();
+        var doUpdate = false;
+        if ( args.id == pdev ) {
+            for ( var k=0; k<(args.states || []).length; ++k ) {
+                if ( args.states[k].variable.match( /^(cdata|cstate|Tripped|Armed)$/ ) ||
+                        args.states[k].service == "urn:toggledbits-com:serviceId:ReactorValues" ) {
+                    doUpdate = true;
+                    break;
+                    // console.log( args.states[k].service + '/' + args.states[k].variable + " updated!");
+                }
+            }
+            if ( doUpdate ) {
+                updateStatus( pdev );
+            }
+        }
+    }
+
+    function doStatusPanel()
+    {
+        console.log("doStatusPanel()");
+        /* Make sure changes are saved. */
+        if ( configModified && confirm( msgUnsavedChanges ) ) {
+            handleSaveClick( undefined );
+        }
+
+        initModule();
+
+        /* Our styles. */
+        var html = "<style>";
+        html += 'div#reactorstatus div.reactorgroup { border-radius: 8px; border: 2px solid #006040; margin-bottom: 2px; }';
+        html += 'div#reactorstatus div.reactorgroup.groupdisabled { background-color: #ccc !important; color: #000 !important }';
+        html += 'div#reactorstatus div.reactorgroup .row { margin-right: 0px; margin-left: 0px; }';
+        html += 'div#reactorstatus div.grouptitle { background-color: #006040; color: #fff; padding: 4px; min-height: 1.5em; margin-bottom: 4px; }';
+        html += 'div#reactorstatus div#vartitle { background-color: #444444; }';
+        html += 'div#reactorstatus .truestate { background-color: #ccffcc; }';
+        html += 'div#reactorstatus .row.cond { min-height: 2em; }';
+        html += 'div#reactorstatus .row.var { min-height: 2em; color: #003399; }';
+        html += 'div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size: 0.9em; }';
+        html += 'div#reactorstatus div.truecond { color: #00aa00; font-weight: bold; }';
+        html += 'div#reactorstatus div.falsecond { color: #000000; }';
+        html += "</style>";
+        jQuery("head").append( html );
+
+        api.setCpanelContent( '<div id="reactorstatus" class="reactortab"></div>' );
+
+        api.registerEventHandler('on_ui_deviceStatusChanged', ReactorSensor, 'onUIDeviceStatusChanged');
+        inStatusPanel = true; /* Tell the event handler it's OK */
+
+        updateStatus( api.getCpanelDeviceId() );
+    }
+
+/** ***************************************************************************
+ *
+ * C O N D I T I O N S
+ *
+ ** **************************************************************************/
+
+     /**
      * Create a device menu from available devices, sorted alpha with room
      * names sorted alpha.
      */
@@ -614,7 +956,7 @@ var ReactorSensor = (function(api, $) {
     function makeVariableMenu( device, service, variable ) {
         var el = jQuery('<select class="varmenu form-control form-control-sm"></select>');
         var myid = api.getCpanelDeviceId();
-        var devobj = getDeviceObject( device );
+        var devobj = api.getDeviceObject( device );
         if ( devobj ) {
             var mm = {}, ms = [];
             for ( var k=0; k<( devobj.states || []).length; ++k ) {
@@ -653,7 +995,7 @@ var ReactorSensor = (function(api, $) {
             }
         }
 
-        if ( ( service || "" ) !== "" && ( variable || "" ) !== "" ) {
+        if ( ! ( isEmpty( service ) || isEmpty( variable ) ) ) {
             var opt = jQuery( 'option[value="' + service + '/' + variable + '"]', el );
             if ( opt.length === 0 ) {
                 el.append( '<option value="' + service + '/' + variable + '" selected>' + service + '/' + variable + ' *</option>' );
@@ -688,16 +1030,7 @@ var ReactorSensor = (function(api, $) {
         return el;
     }
 
-    /**
-     * Update save/revert buttons (separate, because we use in two diff tabs
-     */
-    function updateSaveControls() {
-        var errors = jQuery('.tberror');
-        jQuery('button#saveconf').prop('disabled', ! ( configModified && errors.length === 0 ) );
-        jQuery('button#revertconf').prop('disabled', !configModified);
-    }
-
-    /**
+     /**
      * Update controls for current conditions.
      */
     function updateControls() {
@@ -761,8 +1094,8 @@ var ReactorSensor = (function(api, $) {
                 if ( "change" == cond.operator ) {
                     // Join simple two value list, but don't save "," on its own.
                     cond.value = jQuery( 'input#val1', row ).val() || "";
-                    val = jQuery( 'input#val2', row ).val() || "";
-                    if ( "" !== val ) {
+                    val = jQuery( 'input#val2', row ).val();
+                    if ( ! isEmpty( val ) ) {
                         cond.value += "," + val;
                     }
                 } else {
@@ -793,8 +1126,8 @@ var ReactorSensor = (function(api, $) {
                 if ( "change" === cond.operator ) {
                     // Join simple two value list, but don't save "," on its own.
                     cond.value = jQuery( 'select#frommode', row ).val() || "";
-                    val = jQuery( 'select#tomode', row ).val() || "";
-                    if ( "" !== val ) {
+                    val = jQuery( 'select#tomode', row ).val();
+                    if ( ! isEmpty( val ) ) {
                         cond.value += "," + val;
                     }
                 } else {
@@ -831,8 +1164,8 @@ var ReactorSensor = (function(api, $) {
                 /* Fetch and load */
                 cond.operator = jQuery("div.params select.opmenu", row).val() || "bet";
                 res = [];
-                var mon = jQuery("div.start select.monthmenu", row).val() || "";
-                if ( mon !== "" ) {
+                var mon = jQuery("div.start select.monthmenu", row).val();
+                if ( ! isEmpty( mon ) ) {
                     res.push( jQuery("div.start input.year", row).val() || "" );
                     res.push( jQuery("div.start select.monthmenu", row).val() || "" );
                     res.push( jQuery("div.start select.daymenu", row).val() || "1" );
@@ -845,7 +1178,7 @@ var ReactorSensor = (function(api, $) {
                     Array.prototype.push.apply( res, ["","","","",""] );
                 } else {
                     jQuery('div.end', row).show();
-                    if ( mon !== "" ) {
+                    if ( ! isEmpty( mon ) ) {
                         res.push( jQuery("div.end input.year", row).val() || "" );
                         res.push( jQuery("div.end select.monthmenu", row).val() || "" );
                         res.push( jQuery("div.end select.daymenu", row).val() || "1" );
@@ -934,10 +1267,10 @@ var ReactorSensor = (function(api, $) {
                 if ( "at" === cond.operator || "notat" === cond.operator ) {
                     res[0] = jQuery( 'select#userid', row ).val() || "";
                     res[1] = jQuery( 'select#location', row ).val() || "";
-                    if ( "" === res[0] ) {
+                    if ( isEmpty( res[0] ) ) {
                         jQuery( 'select#userid', row ).addClass( 'tberror' );
                     }
-                    if ( "" === res[1] ) {
+                    if ( isEmpty( res[1] ) ) {
                         jQuery( 'select#location', row ).addClass( 'tberror' );
                     }
                 } else {
@@ -966,10 +1299,10 @@ var ReactorSensor = (function(api, $) {
      * Handler for row change (generic)
      */
     function handleConditionRowChange( ev ) {
-        var el = ev.currentTarget;
-        var row = jQuery( el ).closest('div.conditionrow');
+        var el = jQuery( ev.currentTarget );
+        var row = el.closest('div.conditionrow');
         configModified = true;
-        updateConditionRow( row, jQuery( el ) );
+        updateConditionRow( row, el );
     }
 
     /**
@@ -981,7 +1314,7 @@ var ReactorSensor = (function(api, $) {
         var variable = service.replace( /^[^\/]+\//, "" );
         service = service.replace( /\/.*$/, "" );
         var blk = jQuery( 'div#currval', row );
-        if ( !isNaN(device) && "" !== service && "" != variable ) {
+        if ( ! ( isNaN(device) || isEmpty( service ) || isEmpty( variable ) ) ) {
             var val = api.getDeviceState( device, service, variable );
             if ( undefined === val || false === val ) {
                 blk.text( 'Current value: (not set)' ).attr( 'title', "This variable is not present in the device state." );
@@ -998,14 +1331,14 @@ var ReactorSensor = (function(api, $) {
      * Handler for variable change.
      */
     function handleConditionVarChange( ev ) {
-        var el = ev.currentTarget;
-        var row = jQuery( el ).closest('div.conditionrow');
+        var el = jQuery( ev.currentTarget );
+        var row = el.closest('div.conditionrow');
 
         updateCurrentServiceValue( row );
 
         /* Same closing as handleConditionRowChange() */
         configModified = true;
-        updateConditionRow( row, jQuery( el ) );
+        updateConditionRow( row, el );
     }
 
     /**
@@ -1067,14 +1400,14 @@ var ReactorSensor = (function(api, $) {
      * Handler for device change
      */
     function handleDeviceChange( ev ) {
-        var el = ev.currentTarget;
-        var newDev = jQuery(el).val();
-        var row = jQuery( el ).closest('div.conditionrow');
+        var el = jQuery( ev.currentTarget );
+        var newDev = el.val();
+        var row = el.closest('div.conditionrow');
         var condId = row.attr('id');
         var cond = iData[api.getCpanelDeviceId()].ixCond[condId];
         if ( undefined !== cond.device ) {
             cond.device = parseInt(newDev);
-            var dobj = getDeviceObject( cond.device );
+            var dobj = api.getDeviceObject( cond.device );
             cond.devicename = dobj ? dobj.name : ("#"+String(cond.device)+"?");
             configModified = true;
         }
@@ -1089,8 +1422,7 @@ var ReactorSensor = (function(api, $) {
     }
 
     function handleOptionChange( ev ) {
-        var el = ev.currentTarget;
-        var row = jQuery( el ).closest('div.conditionrow');
+        var row = jQuery( ev.currentTarget ).closest('div.conditionrow');
         var cond = iData[api.getCpanelDeviceId()].ixCond[ row.attr("id") ];
 
         var pred = jQuery('select#pred', row);
@@ -1205,8 +1537,7 @@ var ReactorSensor = (function(api, $) {
     }
 
     function handleCloseOptionsClick( ev ) {
-        var el = ev.currentTarget;
-        var row = jQuery( el ).closest('div.conditionrow');
+        var row = jQuery( ev.currentTarget ).closest('div.conditionrow');
 
         /* Remove the options block */
         jQuery('div.params div.condopts', row).remove();
@@ -1216,14 +1547,14 @@ var ReactorSensor = (function(api, $) {
     }
 
     function handleExpandOptionsClick( ev ) {
-        var el = ev.currentTarget;
-        var row = jQuery( el ).closest('div.conditionrow');
+        var el = jQuery( ev.currentTarget );
+        var row = el.closest('div.conditionrow');
         var myid = api.getCpanelDeviceId();
         var cond = iData[myid].ixCond[ row.attr("id") ];
         var grp = iData[myid].ixGroup[ row.closest('div.conditiongroup').attr('id') ];
 
         /* Remove the open tool */
-        jQuery( el ).hide();
+        el.hide();
 
         /* Create the options container and add options */
         var container = jQuery('<div class="condopts"></div>');
@@ -1313,8 +1644,9 @@ var ReactorSensor = (function(api, $) {
      *
      */
     function handleGeofenceOperatorChange( ev ) {
-        var row = jQuery( ev.currentTarget ).closest( 'div.conditionrow' );
-        var val = jQuery( ev.currentTarget ).val() || "is";
+        var el = jQuery( ev.currentTarget );
+        var row = el.closest( 'div.conditionrow' );
+        var val = el.val() || "is";
         if ( "at" === val || "notat" === val ) {
             jQuery( 'select#userid,select#location', row ).show();
             jQuery( 'label,input#opts', row ).hide();
@@ -1349,7 +1681,7 @@ var ReactorSensor = (function(api, $) {
                 /* Fix-up: makeDeviceMenu will display current userdata name
                            for device, but if that's changed from what we've stored,
                            we need to update our store. */
-                var dobj = getDeviceObject( cond.device );
+                var dobj = api.getDeviceObject( cond.device );
                 if ( dobj && dobj.name !== cond.devicename ) {
                     cond.devicename = dobj.name;
                     configModified = true;
@@ -1593,7 +1925,7 @@ var ReactorSensor = (function(api, $) {
                 jQuery( "#days", container ).val( cond.days || 0 );
                 jQuery( "#hours", container ).val( cond.hours===undefined ? 1 : cond.hours );
                 jQuery( "#mins", container ).val( cond.mins || 0 );
-                if ( "" != ( cond.basetime || "" ) ) {
+                if ( ! isEmpty( cond.basetime ) ) {
                     mm = cond.basetime.split(/,/);
                     jQuery( '#relhour', container ).val( mm[0] || '00' );
                     jQuery( '#relmin', container ).val( mm[1] || '00' );
@@ -1655,9 +1987,9 @@ var ReactorSensor = (function(api, $) {
      * Type menu selection change handler.
      */
     function handleTypeChange( ev ) {
-        var el = ev.currentTarget;
-        var newType = jQuery(el).val();
-        var row = jQuery( el ).closest('div.conditionrow');
+        var el = jQuery( ev.currentTarget );
+        var newType = el.val();
+        var row = el.closest('div.conditionrow');
         var condId = row.attr('id');
         var myid = api.getCpanelDeviceId();
         if ( iData[myid].ixCond[condId] === undefined ) {
@@ -1675,12 +2007,12 @@ var ReactorSensor = (function(api, $) {
      * Handle click on Add Condition button.
      */
     function handleAddConditionClick( ev ) {
-        var el = ev.currentTarget;
-        var row = jQuery( el ).closest('div.row'); /* button row */
-        var grp = jQuery( el ).closest('div.conditiongroup');
+        var el = jQuery( ev.currentTarget );
+        var row = el.closest('div.row'); /* button row */
+        var grp = el.closest('div.conditiongroup');
 
         /* Disable the add button for now. */
-        jQuery(el).prop('disabled', true);
+        el.prop('disabled', true);
 
         /* Create a new condition row, assign an ID, and insert it before the button */
         var newId = getUID("cond");
@@ -1923,11 +2255,11 @@ var ReactorSensor = (function(api, $) {
      * Handle click of sort (up/down) button on condition row.
      */
     function handleConditionSort( ev ) {
-        var el = ev.currentTarget;
-        if ( jQuery( el ).attr( 'disabled' ) ) { return; }
+        var el = jQuery( ev.currentTarget );
+        if ( el.attr( 'disabled' ) ) { return; }
 
-        var row = jQuery(el).closest('div.row');
-        var up = jQuery(el).hasClass('action-up');
+        var row = el.closest('div.row');
+        var up = el.hasClass('action-up');
         var grpId = row.closest('div.conditiongroup').attr('id');
         var grp = iData[api.getCpanelDeviceId()].ixGroup[grpId];
         var condix = findCdataConditionIndex( row.attr('id'), grpId );
@@ -2029,10 +2361,10 @@ var ReactorSensor = (function(api, $) {
      * Create an empty condition row. Only type selector is pre-populated.
      */
     function getConditionRow() {
-        var el = jQuery('<div class="row conditionrow"></div>');
+        var el = jQuery('<div class="row conditionrow" />');
         el.append( '<div class="col-xs-12 col-md-2 condtype"><select class="form-control form-control-sm"><option value="">--choose--</option></select></div>' );
-        el.append( '<div class="col-xs-12 col-md-6 col-lg-8 col-xl-9 params"></div>' );
-        el.append( '<div class="col-xs-12 col-md-4 col-lg-2 col-xl-1 condcontrols text-right"></div>');
+        el.append( '<div class="col-xs-12 col-md-6 col-lg-8 col-xl-9 params" />' );
+        el.append( '<div class="col-xs-12 col-md-4 col-lg-2 col-xl-1 condcontrols text-right" />');
         jQuery("div.condcontrols", el).append('<i class="material-icons md-btn md14 action-up" title="Move condition up">arrow_upward</i>');
         jQuery("div.condcontrols", el).append('<i class="material-icons md-btn md14 action-down" title="Move condition down">arrow_downward</i>');
         jQuery("div.condcontrols", el).append('<i class="material-icons md-btn md14 action-delete" title="Delete condition">clear</i>');
@@ -2073,7 +2405,7 @@ var ReactorSensor = (function(api, $) {
             iData[myid].ixGroup[grp.groupid] = grp;
 
             /* Create div.conditiongroup and add conditions */
-            var gel = jQuery('<div class="conditiongroup"></div>').attr("id", grp.groupid);
+            var gel = jQuery('<div class="conditiongroup" />').attr("id", grp.groupid);
             gel.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6 form-inline"><span class="titletext"></span><span id="groupcontrols" /></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>');
             jQuery( 'span#groupcontrols', gel ).append( jQuery( '<i id="grpinvert" class="material-icons md-btn md14">check_circle_outline</i>' ).attr( 'title', msgGroupNormal ) );
             jQuery( 'span#groupcontrols', gel ).append( '<i id="grpenable" class="material-icons md-btn md14" title="Enable/disable group">sync</i>' );
@@ -2135,799 +2467,91 @@ var ReactorSensor = (function(api, $) {
         updateControls();
     }
 
-    /**
-     * Handle revert button click: restore setting to last saved and redisplay.
-     */
-    function handleRevertClick( ev ) {
-        if ( ! confirm( "Discard changes and revert to last saved configuration?" ) ) {
-            return;
-        }
-
-        loadConfigData( api.getCpanelDeviceId() );
-        configModified = false;
-
-        /* Be careful about which tab we're on here. */
-        var ctx = jQuery( ev.currentTarget ).closest('div.reactortab').attr('id');
-        if ( ctx === "tab-vars" ) {
-            redrawVariables();
-        } else if ( ctx === "tab-conds" ) {
-            redrawConditions();
-        } else if ( ctx === "tab-actions" ) {
-            redrawActivities();
-        } else {
-            alert("OK, I did the revert, but now I'm lost. Go to the Status tab, and then come back to this tab.");
-        }
-    }
-
-    /**
-     * Remove all properies on condition except those in the exclusion list.
-     * The id and type properties are always preserved.
-     */
-    function removeConditionProperties( cond, excl ) {
-        var elist = (excl || "").split(/,/);
-        var emap = { id: true, type: true };
-        for ( var ix=0; ix<elist.length; ++ix ) {
-            emap[elist[ix]] = true;
-        }
-        for ( var prop in cond ) {
-            if ( cond.hasOwnProperty( prop ) && emap[prop] === undefined ) {
-                delete cond[prop];
-            }
-        }
-    }
-
-    function clearUnusedVariables() {
-        var myid = api.getCpanelDeviceId();
-        var ud = api.getUserData();
-        var dx = api.getDeviceIndex( myid );
-        var deleted = {};
-        var configVars = iData[myid].cdata.variables || {};
-        for ( var k=0; k<(ud.devices[dx].states || []).length; ++k) {
-            var state = ud.devices[dx].states[k];
-            if ( state.service.match( /:ReactorValues$/i ) ) {
-                if ( state.variable.match( /_Error$/i ) ) {
-                    if ( undefined === configVars[ state.variable.replace( /_Error$/i, "" ) ] ) {
-                        deleted[state.variable] = state;
-                    }
-                } else if ( undefined === configVars[state.variable] ) {
-                    deleted[state.variable] = state;
-                }
-            }
-        }
-        for ( var vn in deleted ) {
-            if ( deleted.hasOwnProperty( vn ) ) {
-                console.log("Removing unused state variable for deleted expression " + vn);
-                $.ajax({
-                    url: api.getDataRequestURL(),
-                    data: {
-                        id: "variableset",
-                        DeviceNum: myid,
-                        serviceId: deleted[vn].service,
-                        Variable: vn,
-                        Value: ""
-                    }
-                }).done( function( data, statusText, jqXHR ) {
-                    /* nothing */
-                });
-            }
-        }
-    }
-
-    /**
-     * Handle save click: save the current configuration.
-     */
-    function handleSaveClick( ev, fnext, fargs ) {
-        var myid = api.getCpanelDeviceId();
-
-        /* Save to persistent state */
-        iData[myid].cdata.timestamp = Math.floor( Date.now() / 1000 );
-        api.setDeviceStateVariablePersistent( myid, serviceId, "cdata", JSON.stringify( iData[myid].cdata ),
-        {
-            'onSuccess' : function() {
-                configModified = false;
-                if ( undefined !== fnext ) {
-                    fnext.apply( null, fargs );
-                }
-                updateSaveControls();
-                clearUnusedVariables();
-            },
-            'onFailure' : function() {
-                alert('There was a problem saving the configuration. Vera/Luup may have been restarting. Please try hitting the "Save" button again.');
-                configModified = true;
-                if ( undefined !== fnext ) {
-                    fnext.apply( null, fargs );
-                }
-                updateSaveControls();
-            }
-        });
-    }
-
-    /* Closing the control panel. */
-    function onBeforeCpanelClose(args) {
-        console.log( 'onBeforeCpanelClose args: ' + JSON.stringify(args) );
-        if ( configModified && confirm( msgUnsavedChanges ) ) {
-            handleSaveClick( undefined );
-        }
-        configModified = false;
-    }
-
-    function relativeTime( dt ) {
-        if ( 0 === dt || undefined === dt ) {
-            return "";
-        }
-        var dtms = dt * 1000;
-        var ago = Math.floor( ( Date.now() - dtms ) / 1000 );
-        if ( ago < 86400 ) {
-            return new Date(dtms).toLocaleTimeString();
-        }
-        return new Date(dtms).toLocaleString();
-    }
-
-    function handleTestChange( ev ) {
-        var container = jQuery('div#reactortools.reactortab');
-        var el = jQuery('input#testdateenable', container);
-        var vv = "";
-        if ( el.prop('checked') ) {
-            jQuery('select,input#testtime', el.closest('div.row')).prop('disabled', false);
-            var t = new Date();
-            t.setFullYear( jQuery('select#testyear', container).val() );
-            t.setMonth( parseInt( jQuery('select#testmonth', container).val() ) - 1 );
-            t.setDate( jQuery('select#testday', container).val() );
-            t.setSeconds( 0 );
-            var s = jQuery('input#testtime', container).val();
-            var p = ( s || "0:00" ).match( /^(\d+):(\d+)(:(\d+))?$/ );
-            if ( p !== null ) {
-                t.setHours( p[1] );
-                t.setMinutes( p[2] );
-                if ( p.length >= 5 && p[5] !== undefined ) {
-                    t.setSeconds( p[4] );
-                }
-            }
-            t.setMilliseconds( 0 );
-            vv = Math.floor( t.getTime() / 1000 );
-            if ( isNaN(vv) ) {
-                vv = "";
-            }
-        } else {
-            jQuery('select,input#testtime', el.closest('div.row')).prop('disabled', true);
-        }
-        api.setDeviceStateVariablePersistent( api.getCpanelDeviceId(), serviceId, "TestTime", vv );
-
-        el = jQuery('input#testhousemode', container);
-        if ( el.prop('checked') ) {
-            jQuery('select#mode', container).prop('disabled', false);
-            vv = jQuery('select#mode').val();
-        } else {
-            jQuery('select#mode', container).prop('disabled', true);
-            vv = "";
-        }
-        api.setDeviceStateVariablePersistent( api.getCpanelDeviceId(), serviceId, "TestHouseMode", vv );
-    }
-
-    function processServiceFile( dd, serviceId, scpdurl ) {
-        var jqXHR = jQuery.ajax({
-            url: scpdurl,
-            dataType: "xml",
-            timeout: 5000
-        });
-
-        jqXHR.done( function( serviceData, statusText ) {
-            console.log("Got service data for " + serviceId);
-            var sd = { service: serviceId, stateVariables: {}, actions: {} };
-            var svs = $(serviceData).find( 'stateVariable' );
-            svs.each( function() {
-                var name = $('name', this).text();
-                var type = $('dataType', this).text();
-                sd.stateVariables[name] = { name: name, type: type };
-                if ( $('defaultValue', this).length > 0 ) sd.stateVariables[name].default = $('defaultValue', this).text();
-                if ( $('shortCode', this).length > 0 ) sd.stateVariables[name].shortcode = $('shortCode', this).text();
-                if ( $('Optional', this).length > 0 ) sd.stateVariables[name].optional = true;
-                if ( $(this).attr('sendEvents') === "yes" ) sd.stateVariables[name].events = true;
-                if ( $('sendEventsAttribute', this).text() === "yes" ) sd.stateVariables[name].events = true;
-                if ( $('allowedValueRange', this).length > 0 ) {
-                    var min = $(this).find('minimum').text();
-                    var max = $(this).find('maximum').text();
-                    sd.stateVariables[name].min = min;
-                    sd.stateVariables[name].max = max;
-                }
-                var vals = $(this).find( 'allowedValue' );
-                if ( vals.length ) {
-                    sd.stateVariables[name].values = [];
-                    vals.each( function() {
-                        sd.stateVariables[name].values.push( $(this).text() );
-                    });
-                }
-            });
-            svs = $(serviceData).find( 'action' );
-            svs.each( function() {
-                var actname = $(this).children('name').text();
-                sd.actions[actname] = { name: actname };
-                var args = $(this).find( 'argument' );
-                if ( args.length > 0 ) {
-                    sd.actions[actname].parameters = [];
-                    args.each( function() {
-                        var name = $('name', this).text();
-                        var dir = $('direction', this).text() || "?";
-                        var po = { name: name, direction: dir };
-                        if ( $('relatedStateVariable', this).length == 0 ) {
-                            po.type = "string";
-                        } else {
-                            var rel = $('relatedStateVariable', this).text();
-                            po.related = rel;
-                            po.type = (sd.stateVariables[rel] || {}).type || "string";
-                        }
-                        if ( $('retval', this).length > 0 ) po.retval = true;
-                        sd.actions[actname].parameters.push( po );
-                    });
-                }
-            });
-            dd.services[ sd.service ] = sd;
-        });
-
-        jqXHR.fail( function( jqXHR, textStatus, err ) {
-            console.log(String(err));
-        });
-
-        return jqXHR.promise();
-    }
-
-    function sendDeviceData( device ) {
-        /* Fetch the device file */
-        jQuery.ajax({
-            url: api.getDataRequestURL(),
-            data: {
-                id: "lu_device",
-                output_format: "xml"
-            },
-            dataType: "xml",
-            timeout: 15000
-        }).done( function( data, statusText, jqXHR ) {
-            var devs = jQuery( data ).find( "device" );
-            devs.each( function() {
-                var devid = $(this).children('Device_Num').text();
-                if ( devid == device ) {
-
-                    // https://stackoverflow.com/questions/13651243/how-do-i-chain-a-sequence-of-deferred-functions-in-jquery-1-8-x#24041521
-                    var copy = function(a) { return Array.prototype.slice.call(a); };
-                    $.sequence = function( chain, continueOnFailure ) {
-                        var handleStep, handleResult,
-                            steps = copy(chain),
-                            def = new $.Deferred(),
-                            defs = [],
-                            results = [];
-                        handleStep = function () {
-                            if (!steps.length) {
-                                def.resolveWith(defs, [ results ]);
-                                return;
-                            }
-                            var step = steps.shift(),
-                                result = step();
-                            handleResult(
-                                $.when(result).always(function () {
-                                    defs.push(this);
-                                }).done(function () {
-                                    results.push({ resolved: copy(arguments) });
-                                }).fail(function () {
-                                    results.push({ rejected: copy(arguments) });
-                                })
-                            );
-                        };
-                        handleResult = continueOnFailure ?
-                            function (result) {
-                                result.always(function () {
-                                    handleStep();
-                                });
-                            } :
-                            function (result) {
-                                result.done(handleStep)
-                                    .fail(function () {
-                                        def.rejectWith(defs, [ results ]);
-                                    });
-                            };
-                        handleStep();
-                        return def.promise();
-                    };
-
-                    var typ = $('deviceType', this).first().text();
-                    var chain = [];
-
-                    /* Send device data */
-                    var dd = { version: 1, timestamp: Date.now(), devicetype: typ, services: {} };
-                    dd.manufacturer = $( 'manufacturer', this ).text();
-                    dd.modelname = $( 'modelName', this ).text();
-                    dd.modelnum = $( 'modelNumber', this ).text();
-                    dd.modeldesc = $( 'modelDescription', this ).text();
-                    dd.category = $( 'Category_Num', this).text();
-                    dd.subcat = $( 'Subcategory_Num', this).text();
-
-                    /* Handle services */
-                    var rp = api.getDataRequestURL().replace( /\/data_request.*$/i, "" );
-                    var sl = $(this).find('serviceList');
-                    var services = sl.find('service');
-                    services.each( function() {
-                        console.log( $('serviceId',this).text() + " at " + $("SCPDURL",this).text() );
-                        var serviceId = $('serviceId', this).text();
-                        var scpdurl = $("SCPDURL", this).text();
-                        chain.push( function() { return processServiceFile( dd, serviceId, rp + scpdurl ); } );
-                    });
-
-                    chain.push( function() {
-                        var jd = JSON.stringify( dd );
-                        console.log("Sending " + jd);
-                        return jQuery.ajax({
-                            type: "POST",
-                            url: api.getDataRequestURL(),
-                            data: {
-                                id: "lr_Reactor",
-                                action: "submitdevice",
-                                data: jd
-                            },
-                            dataType: 'json'
-                        }).promise();
-                    });
-
-                    $.sequence( chain ).done( function() {
-                        alert("Thank you! Your data has been submitted.");
-                    }).fail( function() {
-                        alert("Something went wrong and the data could not be submitted.");
-                    });
-                }
-            });
-        }).fail( function( jqXHR, textStatus, errorThrown ) {
-            // Bummer.
-            alert("Unable to request data from Vera. Try again in a moment; it may be reloading or busy.");
-            console.log("Failed to load lu_device data: " + textStatus + " " + String(errorThrown));
-            console.log(jqXHR.responseText);
-        });
-    }
-
-    function handleSendDeviceDataClick( ev ) {
-        var ct = jQuery( ev.currentTarget ).closest( 'div' );
-        var device = jQuery( 'select#devices', ct ).val() || "";
-        if ( "" === device ) {
-            alert("Please select a device first.");
-            return;
-        }
-        sendDeviceData( device );
-        /* If device has a parent, or has children, send them as well */
-        var dobj = getDeviceObject( device );
-        if ( dobj && dobj.id_parent != 0 ) {
-            sendDeviceData( dobj.id_parent ); /* parent */
-        }
-        var typs = {};
-        /* ??? only one level deep */
-        var ud = api.getUserData();
-        for ( var ix=0; ix<ud.devices.length; ix++ ) {
-            if ( ud.devices[ix].id_parent == device && undefined === typs[ ud.devices[ix].device_type ] ) {
-                sendDeviceData( ud.devices[ix].id );
-                typs[ ud.devices[ix].device_type ] = true;
-            }
-        }
-    }
-
-    function updateToolsVersionDisplay() {
-        jQuery.ajax({
-            url: "https://www.toggledbits.com/deviceinfo/checkupdate.php",
-            data: {
-                "v": ( deviceInfo || {}).serial || "",
-                "fw": ""
-            },
-            dataType: "jsonp",
-            jsonp: "callback",
-            crossDomain: true
-        }).done( function( respData, statusText, jqXHR ) {
-            // console.log("Response from server is " + JSON.stringify(respData));
-            if ( undefined !== respData.serial ) {
-                var msg = "The latest version is " + String( respData.serial ) + ".";
-                if ( undefined !== ( deviceInfo || {}).serial ) {
-                    msg += " You are currently using " + String(deviceInfo.serial) + ".";
-                    if ( respData.serial > deviceInfo.serial ) {
-                        msg = "<b>" + msg + " You should update now.</b>";
-                    } else {
-                        msg += " No update is needed.";
-                    }
-                } else {
-                    msg += " Information about the version you are using has not yet been loaded (that is normal if you haven't yet been on the Activites tab). If you go to the Activities tab, the database will be loaded, and if an update is available, an alert will show.";
-                }
-                jQuery( 'span#di-ver-info' ).html( msg );
-            }
-        }).fail( function( jqXHR, textStatus, errorThrown ) {
-            jQuery( 'span#di-ver-info' ).text( "Information about the current version is not available." );
-            console.log( "deviceInfo version check failed: " + String(errorThrown) );
-        });
-    }
-
-    function doTools()
+    function doConditions()
     {
-        console.log("doTools()");
-
-        if ( configModified && confirm( msgUnsavedChanges ) ) {
-            handleSaveClick( undefined );
-        }
-
-        initModule();
-
-        var html = "";
-
-        html = '<style>';
-        html += 'div#reactortools.reactortab input.narrow { max-width: 8em; }';
-        html += 'div#tbcopyright { display: block; margin: 12px 0 12px 0; }';
-        html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
-        html += '</style>';
-        jQuery('head').append( html );
-
-        html = '<div id="reactortools" class="reactortab">';
-        html += '<h3>Test Tools</h3>';
-
-        html += '<div class="row">';
-        html += '<div class="col-sm-2 col-md-4 col-lg-3 col-xl-2"><label for="testdateenable" class="checkbox-inline"><input type="checkbox" value="1" id="testdateenable">&nbsp;Test&nbsp;Date:</label></div>';
-        html += '<div class="col-sm-10 col-md-8 col-lg-9 col-xl-10 form-inline"><select id="testyear" class="form-control form-control-sm"></select><select id="testmonth" class="form-control form-control-sm"></select><select class="form-control form-control-sm" id="testday"></select><input class="narrow form-control form-control-sm" id="testtime"></div>';
-        html += '</div>'; /* row */
-
-        html += '<div class="row">';
-        html += '<div class="col-sm-2 col-md-4 col-lg-3 col-xl-2"><label for="testhousemode" class="checkbox-inline"><input type="checkbox" value="1" id="testhousemode">&nbsp;Test&nbsp;House&nbsp;Mode</label></div>';
-        html += '<div class="col-sm-10 col-md-8 col-lg-9 col-xl-10 form-inline"><select class="form-control form-control-sm" id="mode"><option value="1">Home</option><option value="2">Away</option><option value="3">Night</option><option value="4">Vacation</option></select></div>';
-        html += '</div>'; /* row */
-
-        html += '<div class="row">';
-        html += '<div class="col-sm-12 col-md-12">' +
-            'These settings do not change system configuration.' +
-            ' They override the system values when your ReactorSensor requests them, allowing you to more easily test your conditions.' +
-            ' For example, turn on the "Test Date" checkbox above' +
-            ' and use the controls to set a date, then go back to the "Control" tab and press the "Restart" button to force a re-evaluation of the sensor state' +
-            ' using your selected date/time. <b>Remember to turn these settings off when you have finished testing!</b></div>';
-        html += '</div>'; /* row */
-
-        html += '</div>'; /* .reactortab */
-
+        console.log("doConditions()");
         try {
-            html += '<div id="sundata">';
-            html += "Today's sun timing is: ";
-            var sd = getParentState( "sundata" );
-            var sundata = JSON.parse( sd );
-            html += " sunrise/sunset=" + ( new Date(sundata.sunrise*1000) ).toLocaleTimeString() + "/" + ( new Date(sundata.sunset*1000) ).toLocaleTimeString();
-            html += ", civil dawn/dusk=" + ( new Date(sundata.civdawn*1000) ).toLocaleTimeString() + "/" + ( new Date(sundata.civdusk*1000) ).toLocaleTimeString();
-            html += ", nautical dawn/dusk=" + ( new Date(sundata.nautdawn*1000) ).toLocaleTimeString() + "/" + ( new Date(sundata.nautdusk*1000) ).toLocaleTimeString();
-            html += ", astronomical dawn/dusk=" + ( new Date(sundata.astrodawn*1000) ).toLocaleTimeString() + "/" + ( new Date(sundata.astrodusk*1000) ).toLocaleTimeString();
-            html += '.';
-            html += '</div>';
-        } catch (exc) {
-            html += "<div>Can't display sun data: " + exc.toString() + "</div>";
-        }
-
-        html += '<div><h3>Update Device Information Database</h3>The device information database contains information to help smooth out the user interface for device actions. The "Activities" tab will notify you when an update is available. You may update by clicking the button below; this process does not require a Luup restart or browser refresh. The updates are shared by all ReactorSensors, so updating any one of them updates all of them. This process sends information about the versions of your Vera firmware, this plugin, and the current database, but no personally-identifying information. This information is used to select the correct database for your configuration; it is not used for tracking you. <span id="di-ver-info"/><p><button id="updateinfo" class="btn btn-sm btn-success">Update Device Info</button> <span id="status"/></p>';
-
-        /* This features doesn't work on openLuup -- old form of lu_device request isn't implemented */
-        if ( !isOpenLuup ) {
-            html += '<div id="enhancement" class="form-inline"><h3>Submit Device Data</h3>If you have a device that is missing "Common Actions" or warns you about missing enhancement data in the Activities tab (actions in <i>italics</i>), you can submit the device data to rigpapa for evaluation. This process sends the relevant data about the device. It does not send any identifying information about you or your Vera, and the data is used only for enhancement of the device information database. <p><select id="devices"></select> <button id="submitdata" class="btn btn-sm btn-info">Submit Device Data</button></p></div>';
-        }
-
-        html += footer();
-
-        api.setCpanelContent( html );
-
-        var container = jQuery('div#reactortools.reactortab');
-        var el = jQuery('select#testyear', container);
-        var i, vv;
-        var now = new Date();
-        vv = now.getFullYear() - 2;
-        for ( i=0; i<12; i++, vv++ ) {
-            el.append('<option value="' + vv + '">' + vv + '</option>');
-        }
-        el = jQuery('select#testmonth', container);
-        for ( i=1; i<=12; i++) {
-            el.append('<option value="' + i + '">' + monthName[ i ] + '</option>');
-        }
-        el = jQuery('select#testday', container);
-        for ( i=1; i<=31; i++) {
-            el.append('<option value="' + i + '">' + i + '</option>');
-        }
-
-        /* Restore test date */
-        var s = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "TestTime" );
-        jQuery('input#testdateenable', container).prop('checked', false);
-        jQuery('select#testyear,select#testmonth,select#testday,input#testtime', container).prop('disabled', true);
-        if ( s !== "" ) {
-            s = parseInt( s );
-            if ( ! isNaN( s ) ) {
-                /* Test time spec overrides now */
-                now = new Date( s * 1000 );
-                jQuery('input#testdateenable', container).prop('checked', true);
-                jQuery('select#testyear,select#testmonth,select#testday,input#testtime', container).prop('disabled', false);
-            }
-        }
-        jQuery('select#testyear', container).on( 'change.reactor', handleTestChange ).val( now.getFullYear() );
-        jQuery('select#testmonth', container).on( 'change.reactor', handleTestChange ).val( now.getMonth() + 1 );
-        jQuery('select#testday', container).on( 'change.reactor', handleTestChange ).val( now.getDate() );
-        var mm = now.getMinutes();
-        jQuery('input#testtime', container).on( 'change.reactor', handleTestChange ).val( now.getHours() + ":" + ( mm < 10 ? '0' + mm : mm ) );
-        jQuery('input#testdateenable', container).on( 'click.reactor', handleTestChange );
-
-        /* Restore test house mode */
-        var mode = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "TestHouseMode" );
-        jQuery('input#testhousemode', container).prop('checked', false);
-        jQuery('select#mode', container).prop('disabled', true);
-        if ( mode !== "" ) {
-            mode = parseInt( mode );
-            if ( ! isNaN( mode ) ) {
-                jQuery('input#testhousemode', container).prop('checked', true);
-                jQuery('select#mode', container).prop('disabled', false).val( mode );
-            }
-        }
-        jQuery('input#testhousemode,select#mode', container).on( 'change.reactor', handleTestChange );
-
-        var deviceMenu = makeDeviceMenu( "", "" );
-        deviceMenu.attr('id', 'devices');
-        jQuery( 'div#enhancement select#devices' ).replaceWith( deviceMenu );
-        jQuery( 'div#enhancement button#submitdata' ).on( 'click.reactor', handleSendDeviceDataClick );
-
-        jQuery( 'button#updateinfo' ).on( 'click.reactor', function( ) {
-            var msg = jQuery( 'button#updateinfo' ).parent().find('span#status');
-            msg.text("Please wait, downloading update...");
-            $.ajax({
-                url: api.getDataRequestURL(),
-                data: {
-                    id: "lr_Reactor",
-                    action: "infoupdate",
-                    infov: deviceInfo.serial || 0
-                },
-                dataType: 'json'
-            }).done( function( respData, respText, jqXHR ) {
-                msg.text( "Update successful! The changes take effect immediately; no restart necessary." );
-                // don't call updateToolsVersionDisplay() again because we'd need to reload devinfo to
-                // get the right message.
-                jQuery( 'span#di-ver-info' ).html( "Your database is up to date!" );
-            }).fail( function( x, y, z ) {
-                msg.text( "The update failed; Vera busy/restarting. Try again in a moment." );
-            });
-        });
-
-        /* Tools get log fetcher */
-        if ( ! isOpenLuup ) {
-            jQuery( '<span><a href="javascript:void();" id="grablog">Grab&nbsp;Log&nbsp;Snippet</a> &bull; </span>' )
-                .insertBefore( 'div#supportlinks a#fulllogscript' );
-            jQuery( '<div id="logdata"/>' ).insertAfter( 'div#supportlinks' );
-            jQuery( 'a#grablog' ).on( 'click', grabLog );
-        }
-
-        updateToolsVersionDisplay();
-    }
-
-    function updateStatus( pdev ) {
-        var el;
-        console.log("**** updateStatus() ****");
-        var stel = jQuery('div#reactorstatus');
-        if ( stel.length === 0 || !inStatusPanel ) {
-            /* If not displayed, do nothing. */
-            return;
-        }
-        stel.empty();
-
-        var cdata = loadConfigData( pdev );
-        if ( undefined === cdata ) {
-            console.log("cdata unavailable");
-            return;
-        }
-
-        var s = api.getDeviceState( pdev, serviceId, "cstate" ) || "";
-        var cstate = {};
-        if ( "" !== s ) {
-            try {
-                cstate = JSON.parse( s );
-            } catch (e) {
-                console.log("cstate cannot be parsed: " + String(e));
-            }
-        } else {
-            console.log("cstate unavailable");
-        }
-
-        var hasVariables = false;
-        var grpel;
-        for ( var nn in ( cdata.variables || {} ) ) {
-            if ( cdata.variables.hasOwnProperty( nn ) ) {
-                if ( ! hasVariables ) {
-                    grpel = jQuery( '<div class="reactorgroup" id="variables"/>' );
-                    grpel.append( '<div class="row"><div id="vartitle" class="grouptitle col-xs-12">Expressions</div></div>' );
-                    hasVariables = true;
-                }
-                var vd = cdata.variables[nn];
-                el = jQuery( '<div class="row var" />' ).attr( 'id', vd.name );
-                var vv = api.getDeviceState( pdev, "urn:toggledbits-com:serviceId:ReactorValues", vd.name ) || "(undefined)";
-                var ve = api.getDeviceState( pdev, "urn:toggledbits-com:serviceId:ReactorValues", vd.name + "_Error" ) || "";
-                el.append( jQuery('<div class="col-sm-6 col-md-2" />').text(vd.name) );
-                el.append( jQuery('<div class="col-sm-12 col-md-7 tb-sm" />').text(vd.expression) );
-                el.append( jQuery('<div class="col-sm-6 col-md-3" />').text(ve !== "" ? ve : vv) );
-                grpel.append( el );
-            }
-        }
-        if ( hasVariables ) {
-            stel.append( grpel );
-        }
-
-        for ( var i=0; i<(cdata.conditions || []).length; i++ ) {
-            var grp = cdata.conditions[i];
-
-            if ( i > 0 ) {
-                /* Insert a divider */
-                stel.append('<div class="row divider"><div class="col-sm-5 col-md-5"><hr></div><div class="col-sm-2 col-md-2" style="text-align: center;"><h5>OR</h5></div><div class="col-sm-5 col-md-5"><hr></div></div>');
+            if ( configModified && confirm( msgUnsavedChanges) ) {
+                handleSaveClick( undefined );
             }
 
-            grpel = jQuery('<div class="reactorgroup" />').attr('id', grp.groupid);
-            if ( grp.disabled ) {
-                grpel.addClass( 'groupdisabled' );
-            } else {
-                grpel.removeClass( 'groupdisabled' );
-            }
-            grpel.append('<div class="row"><div id="grptitle" class="grouptitle col-xs-12" /></div>');
-            var title = 'Group: ' + grp.groupid + ( grp.invert ? " (inverted)" : "" ) +
-                ( grp.disabled ? " (disabled)" : "" );
-            jQuery( 'div#grptitle', grpel ).text( title );
-            stel.append( grpel );
-            for ( var j=0; j<(grp.groupconditions || []).length; j++ ) {
-                var cond = grp.groupconditions[j];
-                el = jQuery('<div class="row cond" />').attr( 'id', cond.id );
-                var currentValue = ( cstate[cond.id] || {} ).lastvalue;
+            initModule();
 
-                el.append( jQuery( '<div class="col-sm-6 col-md-2" />' )
-                    .text( condTypeName[ cond.type ] !== undefined ? condTypeName[ cond.type ] : cond.type ) );
+            /* Load material design icons */
+            jQuery("head").append('<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">');
 
-                var condDesc = makeConditionDescription( cond );
-                switch ( cond.type ) {
-                    case 'service':
-                        if ( ( cond.repeatcount || 0 ) > 1 ) {
-                            condDesc += " repeats " + cond.repeatcount +
-                                " times within " + ( cond.repeatwithin || 60 ) + " secs";
-                        } else if ( ( cond.duration || 0 ) > 0 ) {
-                            condDesc += " for " +
-                                ( cond.duration_op === "lt" ? "less than " : "at least " ) +
-                                cond.duration + " secs";
-                        }
-                        if ( ( cond.latch || 0 ) != 0 ) {
-                            condDesc += " (latching)";
-                        }
-                        break;
+            /* Our styles. */
+            var html = "<style>";
+            html += "div#tab-conds.reactortab .tb-about { margin-top: 24px; }";
+            html += "div#tab-conds.reactortab .color-green { color: #006040; }";
+            html += 'div#tab-conds.reactortab .tberror { border: 1px solid red; }';
+            html += 'div#tab-conds.reactortab .tbwarn { border: 1px solid yellow; background-color: yellow; }';
+            html += 'div#tab-conds.reactortab label { font-weight: normal; }';
+            html += 'div#tab-conds.reactortab fieldset#nocaseopt { display: inline-block; }';
+            html += 'div#tab-conds.reactortab div#currval { font-family: "Courier New", Courier, monospace; font-size: 0.9em; }';
+            html += 'div#tab-conds.reactortab div.warning { color: red; }';
+            html += 'div#tab-conds.reactortab span#groupcontrols { color: white; margin-right: 8px; }';
+            html += 'div#tab-conds.reactortab div.condcontrols { color: #004020; }';
+            html += 'div#tab-conds.reactortab i.md-btn:disabled { color: #999999; cursor: auto; }';
+            html += 'div#tab-conds.reactortab i.md-btn[disabled] { color: #999999; cursor: auto; }';
+            html += 'div#tab-conds.reactortab i.md-btn { margin-left: 2px; margin-right: 2px; cursor: pointer; }';
+            html += 'div#tab-conds.reactortab .md12 { font-size: 12pt; }';
+            html += 'div#tab-conds.reactortab .md14 { font-size: 14pt; }';
+            html += 'div#tab-conds.reactortab input.tbinvert { min-width: 16px; min-height: 16px; }';
+            html += 'div#tab-conds.reactortab div.conditions { width: 100%; }';
+            html += 'div#tab-conds.reactortab div.tblisttitle { background-color: #006040; color: #fff; padding: 8px; min-height: 42px; }';
+            html += 'div#tab-conds.reactortab div.tblisttitle span.titletext { font-size: 16px; font-weight: bold; margin-right: 4em; }';
+            html += 'div#tab-conds.reactortab fieldset.condfields { display: inline-block; }';
+            html += 'div#tab-conds.reactortab input.narrow { max-width: 8em; }';
+            html += 'div#tab-conds.reactortab input.tiny { max-width: 3em; }';
+            html += 'div#tab-conds.reactortab input.titleedit { font-size: 12px; height: 24px; }';
+            html += 'div#tab-conds.reactortab div.conditiongroup { border-radius: 8px; border: 2px solid #006040; margin-bottom: 8px; }';
+            html += 'div#tab-conds.reactortab div.conditiongroup .row { margin-right: 0px; margin-left: 0px; }';
+            html += 'div#tab-conds.reactortab div.conditiongroup:not(.groupdisabled) div.conditionrow:nth-child(odd) { background-color: #e6ffe6; }';
+            html += 'div#tab-conds.reactortab div.conditiongroup.groupdisabled { background-color: #ccc !important; color: #000 !important }';
+            html += 'div#tab-conds.reactortab div.conditionrow,div.buttonrow { padding: 8px; }';
+            html += 'div#tab-conds.reactortab div.conditionrow.tbmodified:not(.tberror) { border-left: 4px solid green; }';
+            html += 'div#tab-conds.reactortab div.conditionrow.tberror { border-left: 4px solid red; }';
+            html += 'div#tab-conds.reactortab div.divider h5 { font-size: 24px; font-weight: bold; }';
+            html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
+            html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
+            html += "</style>";
+            jQuery("head").append( html );
 
-                    case 'weekday':
-                        if ( currentValue !== undefined && weekDayName[ currentValue ] !== undefined ) {
-                            currentValue = weekDayName[ currentValue ];
-                        }
-                        break;
+            /* Body content */
+            html = '<div id="tab-conds" class="reactortab">';
+            html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>Conditions</h3></div></div>';
+            html += '<div class="row"><div class="col-xs-12 col-sm-12">Conditions within a group are "AND", and groups are "OR". That is, the sensor will trip when any group succeeds, and for a group to succeed, all conditions in the group must be met.</div></div>';
 
-                    case 'housemode':
-                        if ( currentValue !== undefined && houseModeName[ currentValue ] !== undefined ) {
-                            currentValue = houseModeName[ currentValue ];
-                        }
-                        break;
-
-                    case 'sun':
-                    case 'trange':
-                        if ( currentValue !== undefined ) {
-                            currentValue = new Date( currentValue * 1000 ).toLocaleString();
-                        }
-                        break;
-
-                    case 'interval':
-                        currentValue = new Date( currentValue * 1000 ).toLocaleString();
-                        break;
-
-                    case 'ishome':
-                        var t = (currentValue || "").split( /,/ );
-                        if ( "at" === cond.operator || "notat" === cond.operator ) {
-                            // ???
-                        } else {
-                            /* Replace IDs with names for display */
-                            if ( t.length > 0 && t[0] !== "" ) {
-                                for ( var k=0; k<t.length; ++k ) {
-                                    t[k] = userIx[t[k]] ? userIx[t[k]].name : ( t[k] + '?' );
-                                }
-                                currentValue = t.join(', ');
-                            } else {
-                                currentValue = "";
-                            }
-                        }
-                        break;
-
-                    default:
-                        /* Nada */
-                }
-                if ( cond.after !== undefined ) {
-                    condDesc += ' (' +
-                        ( (cond.aftertime||0) > 0 ? 'within ' + cond.aftertime + ' secs ' : '' ) +
-                        'after ' + makeConditionDescription( iData[pdev].ixCond[cond.after] ) +
-                        ')';
-                }
-                el.append( jQuery( '<div class="col-sm-6 col-md-6" />' ).text( condDesc ) );
-
-                /* Append current value and condition state */
-                if ( cond.type !== "comment" ) {
-                    if ( currentValue !== undefined ) {
-                        var cs = cstate[cond.id];
-                        el.append('<div class="currentvalue col-sm-6 col-md-4">(' +
-                            currentValue + ') ' +
-                            ( cs.laststate ? "true" : "false" ) +
-                            ' as of ' + relativeTime( cs.statestamp ) +
-                            ( ( cond.latch || false ) && cs.evalstate && !cs.laststate ? " (latched true)" : "" ) +
-                            '</div>' );
-                        if ( "service" === cond.type && ( cond.repeatcount || 0 ) > 1 ) {
-                            if ( cs.repeats !== undefined && cs.repeats.length > 1 ) {
-                                var dtime = cs.repeats[ cs.repeats.length - 1 ] - cs.repeats[0];
-                                jQuery("div.currentvalue", el).append( " (last " + cs.repeats.length + " span " + dtime + " secs)" );
-                            }
-                        }
-                        if ( cs.evalstate ) {
-                            el.addClass( "truecond" ).removeClass("falsecond");
-                        } else {
-                            el.addClass( "falsecond" ).removeClass("truecond");
-                        }
-                    } else {
-                        el.append( '<div class="col-sm-6 col-md-4">(unknown)</div>' );
-                    }
-                }
-
-                grpel.append( el );
+            var rr = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "Retrigger" ) || "0";
+            if ( rr !== "0" ) {
+                html += '<div class="row"><div class="warning col-xs-12 col-sm-12">WARNING! Retrigger is on! You should avoid using time-related conditions in this ReactorSensor, as they may cause retriggers frequent retriggers!</div></div>';
             }
 
-            /* Highlight groups that are "true" */
-            if ( cstate[ grp.groupid ].evalstate ) {
-                grpel.addClass( "truestate" );
-            }
+            html += '<div id="conditions"/>';
+
+            html += '</div>'; /* #tab-conds */
+
+            html += footer();
+
+            api.setCpanelContent(html);
+
+            redrawConditions();
+
+            api.registerEventHandler('on_ui_cpanel_before_close', ReactorSensor, 'onBeforeCpanelClose');
+        }
+        catch (e)
+        {
+            console.log( 'Error in ReactorSensor.doConditions(): ' + String( e ) );
+            alert( e.stack );
         }
     }
 
-    function onUIDeviceStatusChanged( args ) {
-        if ( !inStatusPanel ) {
-            return;
-        }
-        var pdev = api.getCpanelDeviceId();
-        var doUpdate = false;
-        if ( args.id == pdev ) {
-            for ( var k=0; k<(args.states || []).length; ++k ) {
-                if ( args.states[k].variable.match( /^(cdata|cstate|Tripped|Armed)$/ ) ||
-                        args.states[k].service == "urn:toggledbits-com:serviceId:ReactorValues" ) {
-                    doUpdate = true;
-                    break;
-                    // console.log( args.states[k].service + '/' + args.states[k].variable + " updated!");
-                }
-            }
-            if ( doUpdate ) {
-                updateStatus( pdev );
-            }
-        }
-    }
-
-    function doStatusPanel()
-    {
-        console.log("doStatusPanel()");
-        /* Make sure changes are saved. */
-        if ( configModified && confirm( msgUnsavedChanges ) ) {
-            handleSaveClick( undefined );
-        }
-
-        initModule();
-
-        /* Our styles. */
-        var html = "<style>";
-        html += 'div#reactorstatus div.reactorgroup { border-radius: 8px; border: 2px solid #006040; margin-bottom: 2px; }';
-        html += 'div#reactorstatus div.reactorgroup.groupdisabled { background-color: #ccc !important; color: #000 !important }';
-        html += 'div#reactorstatus div.reactorgroup .row { margin-right: 0px; margin-left: 0px; }';
-        html += 'div#reactorstatus div.grouptitle { background-color: #006040; color: #fff; padding: 4px; min-height: 1.5em; margin-bottom: 4px; }';
-        html += 'div#reactorstatus div#vartitle { background-color: #444444; }';
-        html += 'div#reactorstatus .truestate { background-color: #ccffcc; }';
-        html += 'div#reactorstatus .row.cond { min-height: 2em; }';
-        html += 'div#reactorstatus .row.var { min-height: 2em; color: #003399; }';
-        html += 'div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size: 0.9em; }';
-        html += 'div#reactorstatus div.truecond { color: #00aa00; font-weight: bold; }';
-        html += 'div#reactorstatus div.falsecond { color: #000000; }';
-        html += "</style>";
-        jQuery("head").append( html );
-
-        api.setCpanelContent( '<div id="reactorstatus" class="reactortab"></div>' );
-
-        api.registerEventHandler('on_ui_deviceStatusChanged', ReactorSensor, 'onUIDeviceStatusChanged');
-        inStatusPanel = true; /* Tell the event handler it's OK */
-
-        updateStatus( api.getCpanelDeviceId() );
-    }
+/** ***************************************************************************
+ *
+ * E X P R E S S I O N S
+ *
+ ** **************************************************************************/
 
     function updateVariableControls() {
         var container = jQuery('div#reactorvars');
@@ -2951,7 +2575,7 @@ var ReactorSensor = (function(api, $) {
             var vname = row.attr("id");
             if ( undefined === vname ) return;
             var expr = ( jQuery('textarea.expr', row).val() || "" ).trim();
-            if ( "" === expr ) {
+            if ( isEmpty( expr ) ) {
                 jQuery('textarea.expr', row).addClass('tberror');
             }
             if ( cd.variables[vname] === undefined ) {
@@ -3243,87 +2867,12 @@ var ReactorSensor = (function(api, $) {
         }
     }
 
-    function doConditions()
-    {
-        console.log("doConditions()");
-        try {
-            if ( configModified && confirm( msgUnsavedChanges) ) {
-                handleSaveClick( undefined );
-            }
 
-            initModule();
-
-            /* Load material design icons */
-            jQuery("head").append('<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">');
-
-            /* Our styles. */
-            var html = "<style>";
-            html += "div#tab-conds.reactortab .tb-about { margin-top: 24px; }";
-            html += "div#tab-conds.reactortab .color-green { color: #006040; }";
-            html += 'div#tab-conds.reactortab .tberror { border: 1px solid red; }';
-            html += 'div#tab-conds.reactortab .tbwarn { border: 1px solid yellow; background-color: yellow; }';
-            html += 'div#tab-conds.reactortab label { font-weight: normal; }';
-            html += 'div#tab-conds.reactortab fieldset#nocaseopt { display: inline-block; }';
-            html += 'div#tab-conds.reactortab div#currval { font-family: "Courier New", Courier, monospace; font-size: 0.9em; }';
-            html += 'div#tab-conds.reactortab div.warning { color: red; }';
-            html += 'div#tab-conds.reactortab span#groupcontrols { color: white; margin-right: 8px; }';
-            html += 'div#tab-conds.reactortab div.condcontrols { color: #004020; }';
-            html += 'div#tab-conds.reactortab i.md-btn:disabled { color: #999999; cursor: auto; }';
-            html += 'div#tab-conds.reactortab i.md-btn[disabled] { color: #999999; cursor: auto; }';
-            html += 'div#tab-conds.reactortab i.md-btn { margin-left: 2px; margin-right: 2px; cursor: pointer; }';
-            html += 'div#tab-conds.reactortab .md12 { font-size: 12pt; }';
-            html += 'div#tab-conds.reactortab .md14 { font-size: 14pt; }';
-            html += 'div#tab-conds.reactortab input.tbinvert { min-width: 16px; min-height: 16px; }';
-            html += 'div#tab-conds.reactortab div.conditions { width: 100%; }';
-            html += 'div#tab-conds.reactortab div.tblisttitle { background-color: #006040; color: #fff; padding: 8px; min-height: 42px; }';
-            html += 'div#tab-conds.reactortab div.tblisttitle span.titletext { font-size: 16px; font-weight: bold; margin-right: 4em; }';
-            html += 'div#tab-conds.reactortab fieldset.condfields { display: inline-block; }';
-            html += 'div#tab-conds.reactortab input.narrow { max-width: 8em; }';
-            html += 'div#tab-conds.reactortab input.tiny { max-width: 3em; }';
-            html += 'div#tab-conds.reactortab input.titleedit { font-size: 12px; height: 24px; }';
-            html += 'div#tab-conds.reactortab div.conditiongroup { border-radius: 8px; border: 2px solid #006040; margin-bottom: 8px; }';
-            html += 'div#tab-conds.reactortab div.conditiongroup .row { margin-right: 0px; margin-left: 0px; }';
-            html += 'div#tab-conds.reactortab div.conditiongroup:not(.groupdisabled) div.conditionrow:nth-child(odd) { background-color: #e6ffe6; }';
-            html += 'div#tab-conds.reactortab div.conditiongroup.groupdisabled { background-color: #ccc !important; color: #000 !important }';
-            html += 'div#tab-conds.reactortab div.conditionrow,div.buttonrow { padding: 8px; }';
-            html += 'div#tab-conds.reactortab div.conditionrow.tbmodified:not(.tberror) { border-left: 4px solid green; }';
-            html += 'div#tab-conds.reactortab div.conditionrow.tberror { border-left: 4px solid red; }';
-            html += 'div#tab-conds.reactortab div.divider h5 { font-size: 24px; font-weight: bold; }';
-            html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
-            html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
-            html += "</style>";
-            jQuery("head").append( html );
-
-            /* Body content */
-            html = '<div id="tab-conds" class="reactortab">';
-            html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>Conditions</h3></div></div>';
-            html += '<div class="row"><div class="col-xs-12 col-sm-12">Conditions within a group are "AND", and groups are "OR". That is, the sensor will trip when any group succeeds, and for a group to succeed, all conditions in the group must be met.</div></div>';
-
-            var rr = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "Retrigger" ) || "0";
-            if ( rr !== "0" ) {
-                html += '<div class="row"><div class="warning col-xs-12 col-sm-12">WARNING! Retrigger is on! You should avoid using time-related conditions in this ReactorSensor, as they may cause retriggers frequent retriggers!</div></div>';
-            }
-
-            html += '<div id="conditions"/>';
-
-            html += '</div>'; /* #tab-conds */
-
-            html += footer();
-
-            api.setCpanelContent(html);
-
-            redrawConditions();
-
-            api.registerEventHandler('on_ui_cpanel_before_close', ReactorSensor, 'onBeforeCpanelClose');
-        }
-        catch (e)
-        {
-            console.log( 'Error in ReactorSensor.doConditions(): ' + String( e ) );
-            alert( e.stack );
-        }
-    }
-
-    function doSettings() {}
+ /** ***************************************************************************
+ *
+ * A C T I V I T I E S
+ *
+ ** **************************************************************************/
 
     function testLua( lua, el, row ) {
         $.ajax({
@@ -3437,13 +2986,13 @@ var ReactorSensor = (function(api, $) {
                 break;
 
             case "device":
-                var dev = jQuery( 'select.devicemenu', row ).val() || "";
-                if ( "" === dev ) {
+                var dev = jQuery( 'select.devicemenu', row ).val();
+                if ( isEmpty( dev ) ) {
                     jQuery( 'select.devicemenu', row ).addClass( 'tberror' );
                 } else {
                     var devnum = parseInt( dev );
-                    var sact = jQuery('select#actionmenu', row).val() || "";
-                    if ( "" === sact ) {
+                    var sact = jQuery('select#actionmenu', row).val();
+                    if ( isEmpty( sact ) ) {
                         jQuery( 'select#actionmenu', row ).addClass( "tberror" );
                     } else {
                         // check parameters, with value/type check when available?
@@ -3520,8 +3069,8 @@ var ReactorSensor = (function(api, $) {
                 break;
 
             case "runscene":
-                var sc = jQuery( 'select#scene', row ).val() || "";
-                if ( "" === sc ) {
+                var sc = jQuery( 'select#scene', row ).val();
+                if ( isEmpty( sc ) ) {
                     jQuery( 'select#scene', row ).addClass( "tberror" );
                 }
                 break;
@@ -3553,7 +3102,7 @@ var ReactorSensor = (function(api, $) {
         scene.groups.push( group );
         var firstScene = true;
         jQuery( 'div.actionrow', root ).each( function( ix ) {
-            var row = $( this );
+            var row = jQuery( this );
             var actionType = jQuery( 'select#actiontype', row ).val();
             var action = { type: actionType, index: ix+1 };
             var k, pt, t;
@@ -3597,7 +3146,7 @@ var ReactorSensor = (function(api, $) {
 
                 case "device":
                     action.device = parseInt( jQuery( 'select.devicemenu', row ).val() );
-                    var dobj = getDeviceObject( action.device );
+                    var dobj = api.getDeviceObject( action.device );
                     action.deviceName = dobj ? dobj.name : '#' + String( action.device ) + '?';
                     t = jQuery( 'select#actionmenu', row ).val() || "";
                     pt = t.split( /\//, 2 );
@@ -3616,9 +3165,9 @@ var ReactorSensor = (function(api, $) {
                             } else {
                                 /* Ignore default here, it's assumed to be valid when needed */
                                 t = jQuery( '#' + ai.parameters[k].name, row ).val() || "";
-                                if ( "" === t ) {
+                                if ( isEmpty( t ) ) {
                                     if ( ai.parameters[k].optional ) {
-                                        continue; /* skip it, not even on the list */
+                                        continue; /* skip it, not even put on the list */
                                     }
                                     console.log("buildActionList: " + action.service + "/" +
                                         action.action + " required parameter " +
@@ -3634,8 +3183,8 @@ var ReactorSensor = (function(api, $) {
                         /* No action info; build using fields directly */
                         console.log( "Can't find actioninfo for " + t );
                         jQuery( '.argument', row ).each( function() {
-                            var val = jQuery( this ).val() || "";
-                            if ( val !== "" ) {
+                            var val = jQuery( this ).val();
+                            if ( ! isEmpty( val ) ) {
                                 action.parameters.push( { name: jQuery( this ).attr('id'), value: val } );
                             }
                         });
@@ -3742,6 +3291,21 @@ var ReactorSensor = (function(api, $) {
         updateSaveControls();
     }
 
+    /** 
+     * Given a section, update cdata to match.
+     */
+    function updateActionList( section ) {
+        var sn = section.attr('id');
+        if ( !isEmpty( sn ) ) {
+            var scene = buildActionList( section );
+            if ( scene ) {
+                var myid = api.getCpanelDeviceId();
+                iData[myid].cdata[sn] = scene;
+                configModified = true;
+            }
+        }
+    }
+    
     function changeActionRow( row ) {
         console.log("changeActionRow: updating cached config");
         configModified = true;
@@ -3749,13 +3313,7 @@ var ReactorSensor = (function(api, $) {
         jQuery( 'div.actionlist' ).addClass( "tbmodified" ); // all lists, because save saves all.
         validateActionRow( row );
         var section = row.closest( 'div.actionlist' );
-        var scene = buildActionList( section );
-        if ( scene ) {
-            var sn = section.attr('id');
-            var myid = api.getCpanelDeviceId();
-            iData[myid].cdata[sn] = scene;
-        }
-
+        updateActionList( section );
         updateActionControls();
     }
 
@@ -3783,7 +3341,7 @@ var ReactorSensor = (function(api, $) {
     function changeActionAction( row, newVal ) {
         var ct = jQuery( 'div.actiondata', row );
         jQuery( 'label,.argument', ct ).remove();
-        if ( ( newVal || "" ) === "" ) {
+        if ( isEmpty( newVal ) ) {
             return;
         }
         var action = actions[newVal];
@@ -3994,7 +3552,7 @@ var ReactorSensor = (function(api, $) {
 
     /* Find an override for a device. */
     function getDeviceOverride( devnum ) {
-        var devobj = getDeviceObject( devnum );
+        var devobj = api.getDeviceObject( devnum );
         if ( devobj ) {
             var mytype = devobj.device_type || "?";
             var base = deviceInfo.devices[mytype] || deviceInfo.devices[ 'type:' + mytype ];
@@ -4032,7 +3590,7 @@ var ReactorSensor = (function(api, $) {
                                 /* Does not change stack, but switches reference device to parent */
                                 if ( 0 !== devobj.id_parent ) {
                                     refdev = devobj.id_parent;
-                                    devobj = getDeviceObject( refdev );
+                                    devobj = api.getDeviceObject( refdev );
                                     if ( !devobj ) { /* no device, immediate failure */
                                         match = false;
                                         break;
@@ -4283,11 +3841,11 @@ var ReactorSensor = (function(api, $) {
         });
         /* Apply options from state if set */
         var myid = api.getCpanelDeviceId();
-        var exopts = api.getDeviceState( myid, serviceId, "AceOptions" ) || "";
-        if ( "" == exopts ) {
+        var exopts = api.getDeviceState( myid, serviceId, "AceOptions" );
+        if ( isEmpty( exopts ) ) {
             exopts = getParentState( "AceOptions" ) || "";
         }
-        if ( exopts !== "" ) {
+        if ( ! isEmpty( exopts ) ) {
             try {
                 var opts = JSON.parse( exopts );
                 if ( opts !== undefined ) {
@@ -4403,8 +3961,11 @@ var ReactorSensor = (function(api, $) {
                 break;
 
             case "action-delete":
+                var list = row.closest( 'div.actionlist' );
                 row.remove();
-                changeActionRow( row );
+                jQuery( 'div.actionlist' ).addClass( "tbmodified" ); // all lists, because save saves all.
+                updateActionList( list );
+                updateActionControls(); /* handles save controls too */
                 break;
 
             case "action-try":
@@ -4506,7 +4067,7 @@ var ReactorSensor = (function(api, $) {
                     }).done( function( data, statusText, jqXHR ) {
                         var pred = row;
                         var newRow;
-                        if ( "" !== (data.lua || "") ) {
+                        if ( ! isEmpty( data.lua ) ) {
                             /* Insert Lua */
                             var lua = (data.encoded_lua || 0) != 0 ? atob(data.lua) : data.lua;
                             newRow = getActionRow();
@@ -4721,8 +4282,8 @@ var ReactorSensor = (function(api, $) {
             var cd = iData[myid].cdata;
 
             /* Restore old-style selected scenes */
-            var rr = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "Scenes" ) || "";
-            if ( rr !== "" ) {
+            var rr = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "Scenes" );
+            if ( ! isEmpty( rr ) ) {
                 var selected = rr.split( /,/ );
                 var ts = parseInt( selected.shift() );
                 var us = selected.length > 0 ? parseInt( selected.shift() ) : NaN;
@@ -4910,7 +4471,487 @@ var ReactorSensor = (function(api, $) {
         });
     }
 
-    console.log("Initializing ReactorSensor module");
+ /** ***************************************************************************
+ *
+ * T O O L S
+ *
+ ** **************************************************************************/
+
+    function grabLog( ev ) {
+        jQuery( 'div#logdata' ).empty();
+        var url = api.getDataRequestURL();
+        url = url.replace( /(:3480|\/port_3480).*/, "" );
+        url = url + "/cgi-bin/cmh/log.sh?Device=LuaUPnP";
+        jQuery( 'div#logdata' ).append( jQuery( '<p/>' ).text( 'Fetching ' + url ) );
+        $.ajax({
+            url: url,
+            data: {},
+            cache: false,
+            dataType: 'text'
+        }).done( function( data, statusText, jqXHR ) {
+            var keypat = new RegExp( "Reactor\\(debug\\): startSensor\\(" + api.getCpanelDeviceId() + "," );
+            var pos = data.search( keypat );
+            if ( pos < 0 ) {
+                jQuery( 'div#logdata' ).append( '<b>SUBJECT DATA NOT FOUND. RESTART THIS REACTOR SENSOR AFTER ENABLING DEBUG.</b>' );
+                return;
+            }
+            while ( pos >= 0 ) {
+                data = data.substring( pos+16 );
+                pos = data.search( keypat );
+            }
+            jQuery( 'div#logdata' ).empty().append( '<pre/>' );
+            var lines = data.split( /\r?\n/ );
+            var k = 0, n = 0;
+            while ( n < 500 && k<lines.length ) {
+                var l = lines[k].replace( /<span\s+[^>]*>/i, "" ).replace( /<\/span>/i, "" );
+                if ( ! l.match( /^(06)/ ) ) {
+                    jQuery( 'div#logdata pre' ).append( l + "\n" );
+                    n++;
+                }
+                k++;
+            }
+        }).fail( function() {
+            jQuery( 'div#logdata' ).empty().append("<b>Hmm, that didn't go well. Try again in a few moments.</b>");
+        });
+    }
+
+    function handleTestChange( ev ) {
+        var container = jQuery('div#reactortools.reactortab');
+        var el = jQuery('input#testdateenable', container);
+        var vv = "";
+        if ( el.prop('checked') ) {
+            jQuery('select,input#testtime', el.closest('div.row')).prop('disabled', false);
+            var t = new Date();
+            t.setFullYear( jQuery('select#testyear', container).val() );
+            t.setMonth( parseInt( jQuery('select#testmonth', container).val() ) - 1 );
+            t.setDate( jQuery('select#testday', container).val() );
+            t.setSeconds( 0 );
+            var s = jQuery('input#testtime', container).val();
+            var p = ( s || "0:00" ).match( /^(\d+):(\d+)(:(\d+))?$/ );
+            if ( p !== null ) {
+                t.setHours( p[1] );
+                t.setMinutes( p[2] );
+                if ( p.length >= 5 && p[5] !== undefined ) {
+                    t.setSeconds( p[4] );
+                }
+            }
+            t.setMilliseconds( 0 );
+            vv = Math.floor( t.getTime() / 1000 );
+            if ( isNaN(vv) ) {
+                vv = "";
+            }
+        } else {
+            jQuery('select,input#testtime', el.closest('div.row')).prop('disabled', true);
+        }
+        api.setDeviceStateVariablePersistent( api.getCpanelDeviceId(), serviceId, "TestTime", vv );
+
+        el = jQuery('input#testhousemode', container);
+        if ( el.prop('checked') ) {
+            jQuery('select#mode', container).prop('disabled', false);
+            vv = jQuery('select#mode').val();
+        } else {
+            jQuery('select#mode', container).prop('disabled', true);
+            vv = "";
+        }
+        api.setDeviceStateVariablePersistent( api.getCpanelDeviceId(), serviceId, "TestHouseMode", vv );
+    }
+
+    function processServiceFile( dd, serviceId, scpdurl ) {
+        var jqXHR = jQuery.ajax({
+            url: scpdurl,
+            dataType: "xml",
+            timeout: 5000
+        });
+
+        jqXHR.done( function( serviceData, statusText ) {
+            console.log("Got service data for " + serviceId);
+            var sd = { service: serviceId, stateVariables: {}, actions: {} };
+            var svs = $(serviceData).find( 'stateVariable' );
+            svs.each( function() {
+                var name = $('name', this).text();
+                var type = $('dataType', this).text();
+                sd.stateVariables[name] = { name: name, type: type };
+                if ( $('defaultValue', this).length > 0 ) sd.stateVariables[name].default = $('defaultValue', this).text();
+                if ( $('shortCode', this).length > 0 ) sd.stateVariables[name].shortcode = $('shortCode', this).text();
+                if ( $('Optional', this).length > 0 ) sd.stateVariables[name].optional = true;
+                if ( $(this).attr('sendEvents') === "yes" ) sd.stateVariables[name].events = true;
+                if ( $('sendEventsAttribute', this).text() === "yes" ) sd.stateVariables[name].events = true;
+                if ( $('allowedValueRange', this).length > 0 ) {
+                    var min = $(this).find('minimum').text();
+                    var max = $(this).find('maximum').text();
+                    sd.stateVariables[name].min = min;
+                    sd.stateVariables[name].max = max;
+                }
+                var vals = $(this).find( 'allowedValue' );
+                if ( vals.length ) {
+                    sd.stateVariables[name].values = [];
+                    vals.each( function() {
+                        sd.stateVariables[name].values.push( $(this).text() );
+                    });
+                }
+            });
+            svs = $(serviceData).find( 'action' );
+            svs.each( function() {
+                var actname = $(this).children('name').text();
+                sd.actions[actname] = { name: actname };
+                var args = $(this).find( 'argument' );
+                if ( args.length > 0 ) {
+                    sd.actions[actname].parameters = [];
+                    args.each( function() {
+                        var name = $('name', this).text();
+                        var dir = $('direction', this).text() || "?";
+                        var po = { name: name, direction: dir };
+                        if ( $('relatedStateVariable', this).length == 0 ) {
+                            po.type = "string";
+                        } else {
+                            var rel = $('relatedStateVariable', this).text();
+                            po.related = rel;
+                            po.type = (sd.stateVariables[rel] || {}).type || "string";
+                        }
+                        if ( $('retval', this).length > 0 ) po.retval = true;
+                        sd.actions[actname].parameters.push( po );
+                    });
+                }
+            });
+            dd.services[ sd.service ] = sd;
+        });
+
+        jqXHR.fail( function( jqXHR, textStatus, err ) {
+            console.log(String(err));
+        });
+
+        return jqXHR.promise();
+    }
+
+    function sendDeviceData( device ) {
+        /* Fetch the device file */
+        jQuery.ajax({
+            url: api.getDataRequestURL(),
+            data: {
+                id: "lu_device",
+                output_format: "xml"
+            },
+            dataType: "xml",
+            timeout: 15000
+        }).done( function( data, statusText, jqXHR ) {
+            var devs = jQuery( data ).find( "device" );
+            devs.each( function() {
+                var devid = $(this).children('Device_Num').text();
+                if ( devid == device ) {
+
+                    // https://stackoverflow.com/questions/13651243/how-do-i-chain-a-sequence-of-deferred-functions-in-jquery-1-8-x#24041521
+                    var copy = function(a) { return Array.prototype.slice.call(a); };
+                    $.sequence = function( chain, continueOnFailure ) {
+                        var handleStep, handleResult,
+                            steps = copy(chain),
+                            def = new $.Deferred(),
+                            defs = [],
+                            results = [];
+                        handleStep = function () {
+                            if (!steps.length) {
+                                def.resolveWith(defs, [ results ]);
+                                return;
+                            }
+                            var step = steps.shift(),
+                                result = step();
+                            handleResult(
+                                $.when(result).always(function () {
+                                    defs.push(this);
+                                }).done(function () {
+                                    results.push({ resolved: copy(arguments) });
+                                }).fail(function () {
+                                    results.push({ rejected: copy(arguments) });
+                                })
+                            );
+                        };
+                        handleResult = continueOnFailure ?
+                            function (result) {
+                                result.always(function () {
+                                    handleStep();
+                                });
+                            } :
+                            function (result) {
+                                result.done(handleStep)
+                                    .fail(function () {
+                                        def.rejectWith(defs, [ results ]);
+                                    });
+                            };
+                        handleStep();
+                        return def.promise();
+                    };
+
+                    var typ = $('deviceType', this).first().text();
+                    var chain = [];
+
+                    /* Send device data */
+                    var dd = { version: 1, timestamp: Date.now(), devicetype: typ, services: {} };
+                    dd.manufacturer = $( 'manufacturer', this ).text();
+                    dd.modelname = $( 'modelName', this ).text();
+                    dd.modelnum = $( 'modelNumber', this ).text();
+                    dd.modeldesc = $( 'modelDescription', this ).text();
+                    dd.category = $( 'Category_Num', this).text();
+                    dd.subcat = $( 'Subcategory_Num', this).text();
+
+                    /* Handle services */
+                    var rp = api.getDataRequestURL().replace( /\/data_request.*$/i, "" );
+                    var sl = $(this).find('serviceList');
+                    var services = sl.find('service');
+                    services.each( function() {
+                        console.log( $('serviceId',this).text() + " at " + $("SCPDURL",this).text() );
+                        var serviceId = $('serviceId', this).text();
+                        var scpdurl = $("SCPDURL", this).text();
+                        chain.push( function() { return processServiceFile( dd, serviceId, rp + scpdurl ); } );
+                    });
+
+                    chain.push( function() {
+                        var jd = JSON.stringify( dd );
+                        console.log("Sending " + jd);
+                        return jQuery.ajax({
+                            type: "POST",
+                            url: api.getDataRequestURL(),
+                            data: {
+                                id: "lr_Reactor",
+                                action: "submitdevice",
+                                data: jd
+                            },
+                            dataType: 'json'
+                        }).promise();
+                    });
+
+                    $.sequence( chain ).done( function() {
+                        alert("Thank you! Your data has been submitted.");
+                    }).fail( function() {
+                        alert("Something went wrong and the data could not be submitted.");
+                    });
+                }
+            });
+        }).fail( function( jqXHR, textStatus, errorThrown ) {
+            // Bummer.
+            alert("Unable to request data from Vera. Try again in a moment; it may be reloading or busy.");
+            console.log("Failed to load lu_device data: " + textStatus + " " + String(errorThrown));
+            console.log(jqXHR.responseText);
+        });
+    }
+
+    function handleSendDeviceDataClick( ev ) {
+        var ct = jQuery( ev.currentTarget ).closest( 'div' );
+        var device = jQuery( 'select#devices', ct ).val();
+        if ( isEmpty( device ) ) {
+            alert("Please select a device first.");
+            return;
+        }
+        sendDeviceData( device );
+        /* If device has a parent, or has children, send them as well */
+        var dobj = api.getDeviceObject( device );
+        if ( dobj && dobj.id_parent != 0 ) {
+            sendDeviceData( dobj.id_parent ); /* parent */
+        }
+        var typs = {};
+        /* ??? only one level deep */
+        var ud = api.getUserData();
+        for ( var ix=0; ix<ud.devices.length; ix++ ) {
+            if ( ud.devices[ix].id_parent == device && undefined === typs[ ud.devices[ix].device_type ] ) {
+                sendDeviceData( ud.devices[ix].id );
+                typs[ ud.devices[ix].device_type ] = true;
+            }
+        }
+    }
+
+    function updateToolsVersionDisplay() {
+        jQuery.ajax({
+            url: "https://www.toggledbits.com/deviceinfo/checkupdate.php",
+            data: {
+                "v": ( deviceInfo || {}).serial || "",
+                "fw": ""
+            },
+            dataType: "jsonp",
+            jsonp: "callback",
+            crossDomain: true
+        }).done( function( respData, statusText, jqXHR ) {
+            // console.log("Response from server is " + JSON.stringify(respData));
+            if ( undefined !== respData.serial ) {
+                var msg = "The latest version is " + String( respData.serial ) + ".";
+                if ( undefined !== ( deviceInfo || {}).serial ) {
+                    msg += " You are currently using " + String(deviceInfo.serial) + ".";
+                    if ( respData.serial > deviceInfo.serial ) {
+                        msg = "<b>" + msg + " You should update now.</b>";
+                    } else {
+                        msg += " No update is needed.";
+                    }
+                } else {
+                    msg += " Information about the version you are using has not yet been loaded (that is normal if you haven't yet been on the Activites tab). If you go to the Activities tab, the database will be loaded, and if an update is available, an alert will show.";
+                }
+                jQuery( 'span#di-ver-info' ).html( msg );
+            }
+        }).fail( function( jqXHR, textStatus, errorThrown ) {
+            jQuery( 'span#di-ver-info' ).text( "Information about the current version is not available." );
+            console.log( "deviceInfo version check failed: " + String(errorThrown) );
+        });
+    }
+
+    function doTools()
+    {
+        console.log("doTools()");
+
+        if ( configModified && confirm( msgUnsavedChanges ) ) {
+            handleSaveClick( undefined );
+        }
+
+        initModule();
+
+        var html = "";
+
+        html = '<style>';
+        html += 'div#reactortools.reactortab input.narrow { max-width: 8em; }';
+        html += 'div#tbcopyright { display: block; margin: 12px 0 12px 0; }';
+        html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
+        html += '</style>';
+        jQuery('head').append( html );
+
+        html = '<div id="reactortools" class="reactortab">';
+        html += '<h3>Test Tools</h3>';
+
+        html += '<div class="row">';
+        html += '<div class="col-sm-2 col-md-4 col-lg-3 col-xl-2"><label for="testdateenable" class="checkbox-inline"><input type="checkbox" value="1" id="testdateenable">&nbsp;Test&nbsp;Date:</label></div>';
+        html += '<div class="col-sm-10 col-md-8 col-lg-9 col-xl-10 form-inline"><select id="testyear" class="form-control form-control-sm"></select><select id="testmonth" class="form-control form-control-sm"></select><select class="form-control form-control-sm" id="testday"></select><input class="narrow form-control form-control-sm" id="testtime"></div>';
+        html += '</div>'; /* row */
+
+        html += '<div class="row">';
+        html += '<div class="col-sm-2 col-md-4 col-lg-3 col-xl-2"><label for="testhousemode" class="checkbox-inline"><input type="checkbox" value="1" id="testhousemode">&nbsp;Test&nbsp;House&nbsp;Mode</label></div>';
+        html += '<div class="col-sm-10 col-md-8 col-lg-9 col-xl-10 form-inline"><select class="form-control form-control-sm" id="mode"><option value="1">Home</option><option value="2">Away</option><option value="3">Night</option><option value="4">Vacation</option></select></div>';
+        html += '</div>'; /* row */
+
+        html += '<div class="row">';
+        html += '<div class="col-sm-12 col-md-12">' +
+            'These settings do not change system configuration.' +
+            ' They override the system values when your ReactorSensor requests them, allowing you to more easily test your conditions.' +
+            ' For example, turn on the "Test Date" checkbox above' +
+            ' and use the controls to set a date, then go back to the "Control" tab and press the "Restart" button to force a re-evaluation of the sensor state' +
+            ' using your selected date/time. <b>Remember to turn these settings off when you have finished testing!</b></div>';
+        html += '</div>'; /* row */
+
+        html += '</div>'; /* .reactortab */
+
+        try {
+            html += '<div id="sundata">';
+            html += "Today's sun timing is: ";
+            var sd = getParentState( "sundata" );
+            var sundata = JSON.parse( sd );
+            html += " sunrise/sunset=" + shortLuaTime( sundata.sunrise ) + "/" + shortLuaTime( sundata.sunset );
+            html += ", civil dawn/dusk=" + shortLuaTime( sundata.civdawn ) + "/" + shortLuaTime( sundata.civdusk );
+            html += ", nautical dawn/dusk=" + shortLuaTime( sundata.nautdawn ) + "/" + shortLuaTime( sundata.nautdusk );
+            html += ", astronomical dawn/dusk=" + shortLuaTime( sundata.astrodawn ) + "/" + shortLuaTime( sundata.astrodusk );
+            html += '.';
+            html += '</div>';
+        } catch (exc) {
+            html += "<div>Can't display sun data: " + exc.toString() + "</div>";
+        }
+
+        html += '<div><h3>Update Device Information Database</h3>The device information database contains information to help smooth out the user interface for device actions. The "Activities" tab will notify you when an update is available. You may update by clicking the button below; this process does not require a Luup restart or browser refresh. The updates are shared by all ReactorSensors, so updating any one of them updates all of them. This process sends information about the versions of your Vera firmware, this plugin, and the current database, but no personally-identifying information. This information is used to select the correct database for your configuration; it is not used for tracking you. <span id="di-ver-info"/><p><button id="updateinfo" class="btn btn-sm btn-success">Update Device Info</button> <span id="status"/></p>';
+
+        /* This feature doesn't work on openLuup -- old form of lu_device request isn't implemented */
+        if ( !isOpenLuup ) {
+            html += '<div id="enhancement" class="form-inline"><h3>Submit Device Data</h3>If you have a device that is missing "Common Actions" or warns you about missing enhancement data in the Activities tab (actions in <i>italics</i>), you can submit the device data to rigpapa for evaluation. This process sends the relevant data about the device. It does not send any identifying information about you or your Vera, and the data is used only for enhancement of the device information database. <p><select id="devices"></select> <button id="submitdata" class="btn btn-sm btn-info">Submit Device Data</button></p></div>';
+        }
+
+        html += footer();
+
+        api.setCpanelContent( html );
+
+        var container = jQuery('div#reactortools.reactortab');
+        var el = jQuery('select#testyear', container);
+        var i, vv;
+        var now = new Date();
+        vv = now.getFullYear() - 2;
+        for ( i=0; i<12; i++, vv++ ) {
+            el.append('<option value="' + vv + '">' + vv + '</option>');
+        }
+        el = jQuery('select#testmonth', container);
+        for ( i=1; i<=12; i++) {
+            el.append('<option value="' + i + '">' + monthName[ i ] + '</option>');
+        }
+        el = jQuery('select#testday', container);
+        for ( i=1; i<=31; i++) {
+            el.append('<option value="' + i + '">' + i + '</option>');
+        }
+
+        /* Restore test date */
+        var s = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "TestTime" );
+        jQuery('input#testdateenable', container).prop('checked', false);
+        jQuery('select#testyear,select#testmonth,select#testday,input#testtime', container).prop('disabled', true);
+        if ( s !== "" ) {
+            s = parseInt( s );
+            if ( ! isNaN( s ) ) {
+                /* Test time spec overrides now */
+                now = new Date( s * 1000 );
+                jQuery('input#testdateenable', container).prop('checked', true);
+                jQuery('select#testyear,select#testmonth,select#testday,input#testtime', container).prop('disabled', false);
+            }
+        }
+        jQuery('select#testyear', container).on( 'change.reactor', handleTestChange ).val( now.getFullYear() );
+        jQuery('select#testmonth', container).on( 'change.reactor', handleTestChange ).val( now.getMonth() + 1 );
+        jQuery('select#testday', container).on( 'change.reactor', handleTestChange ).val( now.getDate() );
+        var mm = now.getMinutes();
+        jQuery('input#testtime', container).on( 'change.reactor', handleTestChange ).val( now.getHours() + ":" + ( mm < 10 ? '0' + mm : mm ) );
+        jQuery('input#testdateenable', container).on( 'click.reactor', handleTestChange );
+
+        /* Restore test house mode */
+        var mode = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "TestHouseMode" );
+        jQuery('input#testhousemode', container).prop('checked', false);
+        jQuery('select#mode', container).prop('disabled', true);
+        if ( mode !== "" ) {
+            mode = parseInt( mode );
+            if ( ! isNaN( mode ) ) {
+                jQuery('input#testhousemode', container).prop('checked', true);
+                jQuery('select#mode', container).prop('disabled', false).val( mode );
+            }
+        }
+        jQuery('input#testhousemode,select#mode', container).on( 'change.reactor', handleTestChange );
+
+        var deviceMenu = makeDeviceMenu( "", "" );
+        deviceMenu.attr('id', 'devices');
+        jQuery( 'div#enhancement select#devices' ).replaceWith( deviceMenu );
+        jQuery( 'div#enhancement button#submitdata' ).on( 'click.reactor', handleSendDeviceDataClick );
+
+        jQuery( 'button#updateinfo' ).on( 'click.reactor', function( ) {
+            var msg = jQuery( 'button#updateinfo' ).parent().find('span#status');
+            msg.text("Please wait, downloading update...");
+            $.ajax({
+                url: api.getDataRequestURL(),
+                data: {
+                    id: "lr_Reactor",
+                    action: "infoupdate",
+                    infov: deviceInfo.serial || 0
+                },
+                dataType: 'json'
+            }).done( function( respData, respText, jqXHR ) {
+                msg.text( "Update successful! The changes take effect immediately; no restart necessary." );
+                // don't call updateToolsVersionDisplay() again because we'd need to reload devinfo to
+                // get the right message.
+                jQuery( 'span#di-ver-info' ).html( "Your database is up to date!" );
+            }).fail( function( x, y, z ) {
+                msg.text( "The update failed; Vera busy/restarting. Try again in a moment." );
+            });
+        });
+
+        /* Tools get log fetcher */
+        if ( ! isOpenLuup ) {
+            jQuery( '<span><a href="javascript:void();" id="grablog">Grab&nbsp;Log&nbsp;Snippet</a> &bull; </span>' )
+                .insertBefore( 'div#supportlinks a#fulllogscript' );
+            jQuery( '<div id="logdata"/>' ).insertAfter( 'div#supportlinks' );
+            jQuery( 'a#grablog' ).on( 'click', grabLog );
+        }
+
+        updateToolsVersionDisplay();
+    }
+
+/** ***************************************************************************
+ *
+ * C L O S I N G
+ *
+ ** **************************************************************************/
+
+    console.log("Initializing ReactorSensor (UI7) module");
 
     myModule = {
         uuid: uuid,
@@ -4918,7 +4959,6 @@ var ReactorSensor = (function(api, $) {
         onBeforeCpanelClose: onBeforeCpanelClose,
         onUIDeviceStatusChanged: onUIDeviceStatusChanged,
         doTools: doTools,
-        doSettings: doSettings,
         doActivities: preloadActivities,
         doConditions: doConditions,
         doVariables: doVariables,
