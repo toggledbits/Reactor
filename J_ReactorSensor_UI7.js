@@ -2551,7 +2551,7 @@ var ReactorSensor = (function(api, $) {
 
         html = '<style>';
         html += 'div#reactortools.reactortab input.narrow { max-width: 8em; }';
-        html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
+        html += 'div#tbcopyright { display: block; margin: 12px 0 12px 0; }';
         html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
         html += '</style>';
         jQuery('head').append( html );
