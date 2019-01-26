@@ -2,8 +2,9 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
-## Version 2.2stable-19020 (stable branch)
+## Version 2.2stable-19026 (stable branch)
 
+* Enhancement: Allow invert of group state (i.e. return false when all conditions are met); makes some logic simpler for users.
 * Enhancement: Groups can now be moved up and down (like conditions), just for organizational purposes (order has no meaning to the logic). It's also possible to delete a group directly (previously you had to delete all of its conditions one-by-one, and that would then delete the group). The enable/disable control was made an icon in the same control group as the foregoing tools for consistency and better appearance.
 * Enhancement: When editing variable expressions, a new "insert getstate" tool is available to more easily fetch device state variable values into the expression.
 * Enhancement: Reactor will check "Run Lua" fragments by putting them through Lua loadstring(), as an early check for syntax errors.
