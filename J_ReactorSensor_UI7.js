@@ -2119,7 +2119,7 @@ var ReactorSensor = (function(api, $) {
                 break;
 
             case "grpdelete":
-                if ( cdata.conditions.length > 1 && confirm( 'Really delete this group (there\'s no "undo")?' ) ) {
+                if ( cdata.conditions.length > 1 && confirm( 'Really delete this group?' ) ) {
                     delete iData[myid].ixGroup[ grpId ];
                     cdata.conditions.splice( grpix, 1 );
                     /* remove the OR divider above the group */
