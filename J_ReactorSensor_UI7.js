@@ -131,7 +131,7 @@ var ReactorSensor = (function(api, $) {
 
     /* Load configuration data. */
     function loadConfigData( myid ) {
-        var s = api.getDeviceState( myid, serviceId, "cdata" );
+        var s = api.getDeviceState( myid, serviceId, "cdata" ) || "";
         var cdata;
         if ( ! isEmpty( s ) ) {
             try {
@@ -676,7 +676,7 @@ var ReactorSensor = (function(api, $) {
             return;
         }
 
-        var s = api.getDeviceState( pdev, serviceId, "cstate" );
+        var s = api.getDeviceState( pdev, serviceId, "cstate" ) || "";
         var cstate = {};
         if ( ! isEmpty( s ) ) {
             try {
@@ -808,7 +808,7 @@ var ReactorSensor = (function(api, $) {
                 /* Append current value and condition state */
                 if ( cond.type !== "comment" ) {
                     if ( currentValue !== undefined ) {
-                        var cs = cstate[cond.id];
+                        var cs = cstate[cond.id] || {};
                         el.append('<div class="currentvalue col-sm-6 col-md-4">(' +
                             currentValue + ') ' +
                             ( cs.laststate ? "true" : "false" ) +
@@ -835,7 +835,7 @@ var ReactorSensor = (function(api, $) {
             }
 
             /* Highlight groups that are "true" */
-            if ( cstate[ grp.groupid ].evalstate ) {
+            if ( ( cstate[ grp.groupid ] || {} ).evalstate ) {
                 grpel.addClass( "truestate" );
             }
         }
@@ -3835,7 +3835,7 @@ var ReactorSensor = (function(api, $) {
         });
         /* Apply options from state if set */
         var myid = api.getCpanelDeviceId();
-        var exopts = api.getDeviceState( myid, serviceId, "AceOptions" );
+        var exopts = api.getDeviceState( myid, serviceId, "AceOptions" ) || "";
         if ( isEmpty( exopts ) ) {
             exopts = getParentState( "AceOptions" ) || "";
         }
@@ -4276,7 +4276,7 @@ var ReactorSensor = (function(api, $) {
             var cd = iData[myid].cdata;
 
             /* Restore old-style selected scenes */
-            var rr = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "Scenes" );
+            var rr = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "Scenes" ) || "";
             if ( ! isEmpty( rr ) ) {
                 var selected = rr.split( /,/ );
                 var ts = parseInt( selected.shift() );
@@ -4829,7 +4829,7 @@ var ReactorSensor = (function(api, $) {
         try {
             html += '<div id="sundata">';
             html += "Today's sun timing is: ";
-            var sd = getParentState( "sundata" );
+            var sd = getParentState( "sundata" ) || "";
             var sundata = JSON.parse( sd );
             html += " sunrise/sunset=" + shortLuaTime( sundata.sunrise ) + "/" + shortLuaTime( sundata.sunset );
             html += ", civil dawn/dusk=" + shortLuaTime( sundata.civdawn ) + "/" + shortLuaTime( sundata.civdusk );
@@ -4882,10 +4882,10 @@ var ReactorSensor = (function(api, $) {
         }
 
         /* Restore test date */
-        var s = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "TestTime" );
+        var s = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "TestTime" ) || "";
         jQuery('input#testdateenable', container).prop('checked', false);
         jQuery('select#testyear,select#testmonth,select#testday,input#testtime', container).prop('disabled', true);
-        if ( s !== "" ) {
+        if ( ! isEmpty( s ) ) {
             s = parseInt( s );
             if ( ! isNaN( s ) ) {
                 /* Test time spec overrides now */
@@ -4902,10 +4902,10 @@ var ReactorSensor = (function(api, $) {
         jQuery('input#testdateenable', container).on( 'click.reactor', handleTestChange );
 
         /* Restore test house mode */
-        var mode = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "TestHouseMode" );
+        var mode = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "TestHouseMode" ) || "";
         jQuery('input#testhousemode', container).prop('checked', false);
         jQuery('select#mode', container).prop('disabled', true);
-        if ( mode !== "" ) {
+        if ( ! isEmpty( mode ) ) {
             mode = parseInt( mode );
             if ( ! isNaN( mode ) ) {
                 jQuery('input#testhousemode', container).prop('checked', true);
