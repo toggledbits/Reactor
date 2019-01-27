@@ -63,15 +63,20 @@ var ReactorSensor = (function(api, $) {
     var msgUnsavedChanges = "You have unsaved changes! Press OK to save them, or Cancel to discard them.";
     var msgGroupNormal = "Normal; click for inverted (false when all conditions are met)";
     var msgGroupInvert = "Inverted; click for normal (true when all conditions are met)";
-
+    var msgGroupIdChange = "Click to change group ID";
+    
     /* Return footer */
     function footer() {
         var html = '';
         html += '<div class="clearfix">';
         html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
-        html += '<div id="tbcopyright">Reactor ver 2.2stable-19027 &copy; 2018,2019 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
+        html += '<div id="tbcopyright">Reactor ver 2.2 &copy; 2018,2019 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
             ' All Rights Reserved. Please check out the <a href="https://github.com/toggledbits/Reactor/wiki" target="_blank">online documentation</a>' +
             ' and <a href="http://forum.micasaverde.com/index.php/board,93.0.html" target="_blank">forum board</a> for support.</div>';
+        try {
+            html += '<div id="browserident">' + navigator.userAgent + '</div>';
+        } catch( e ) {}
+        
         return html;
     }
 
@@ -551,7 +556,7 @@ var ReactorSensor = (function(api, $) {
                 if ( opName[ cond.operator ] !== undefined ) {
                     str += opName[ cond.operator ];
                 } else {
-                    str += cond.operator + '???';
+                    str += cond.operator + '?';
                 }
                 function sunrange( spec ) {
                     var names = { 'sunrise': 'sunrise', 'sunset': 'sunset',
@@ -561,7 +566,7 @@ var ReactorSensor = (function(api, $) {
                         };
                     k = spec.match( /^([^+-]+)(.*)/ );
                     if ( k === null || k.length !== 3 ) {
-                        return spec + '???';
+                        return spec + '?';
                     } else {
                         var offs = parseInt( k[2] );
                         var str = ' ';
@@ -586,7 +591,7 @@ var ReactorSensor = (function(api, $) {
                 if ( opName[ cond.operator ] !== undefined ) {
                     str += opName[ cond.operator ];
                 } else {
-                    str += cond.operator + '???';
+                    str += cond.operator + '?';
                 }
                 t = ( cond.value || "" ).split(/,/);
                 str += ' ' + textDateTime( t[0], t[1], t[2], t[3], t[4], false );
@@ -780,7 +785,7 @@ var ReactorSensor = (function(api, $) {
                     case 'ishome':
                         var t = (currentValue || "").split( /,/ );
                         if ( "at" === cond.operator || "notat" === cond.operator ) {
-                            // ???
+                            /* Nada */
                         } else {
                             /* Replace IDs with names for display */
                             if ( t.length > 0 && t[0] !== "" ) {
@@ -977,7 +982,6 @@ var ReactorSensor = (function(api, $) {
                 }
             }
             var r = ms.sort( function( a, b ) {
-                /* ??? <=> */
                 if ( a.text.toLowerCase() === b.text.toLowerCase() ) return 0;
                 return a.text.toLowerCase() < b.text.toLowerCase() ? -1 : 1;
             });
@@ -2033,7 +2037,7 @@ var ReactorSensor = (function(api, $) {
         if ( newid == grpid ) {
             /* No change */
             span.empty().text( 'Group: ' + grpid ).on( 'click.reactor', handleTitleClick )
-                .addClass( 'titletext' );
+                .addClass( 'titletext' ).attr( 'title', msgGroupIdChange );
             return;
         }
         /* Group name check */
@@ -2062,7 +2066,7 @@ var ReactorSensor = (function(api, $) {
         /* Remove input field and replace text */
         span.closest( 'div.conditiongroup' ).attr( 'id', newid );
         span.empty().text( 'Group: ' + newid ).on( 'click.reactor', handleTitleClick )
-            .addClass( 'titletext' );
+            .addClass( 'titletext' ).attr( 'title', msgGroupIdChange );
         updateSaveControls();
     }
 
@@ -2211,7 +2215,7 @@ var ReactorSensor = (function(api, $) {
         jQuery( 'span#groupcontrols', condgroup ).append( '<i id="grpmovedn" class="material-icons md-btn md14" title="Move group down">arrow_downward</i>' );
         jQuery( 'span#groupcontrols', condgroup ).append( '<i id="grpdelete" class="material-icons md-btn md14" title="Delete group">clear</i>' );
         jQuery( 'span#groupcontrols i', condgroup ).on( 'click.reactor', handleGroupControlClick );
-        jQuery( 'span.titletext', condgroup ).text( "Group: " + newId ).on( 'click.reactor', handleTitleClick );
+        jQuery( 'span.titletext', condgroup ).text( "Group: " + newId ).on( 'click.reactor', handleTitleClick ).attr( 'title', msgGroupIdChange );
         jQuery("button#addgroup", condgroup).on( 'click.reactor', handleAddGroupClick );
         jQuery("button#saveconf", condgroup).on( 'click.reactor', handleSaveClick );
 
@@ -2418,7 +2422,7 @@ var ReactorSensor = (function(api, $) {
                 gel.removeClass('groupdisabled');
             }
 
-            jQuery( 'span.titletext', gel ).text( "Group: " + grp.groupid ).on( 'click.reactor', handleTitleClick );
+            jQuery( 'span.titletext', gel ).text( "Group: " + grp.groupid ).on( 'click.reactor', handleTitleClick ).attr( 'title', msgGroupIdChange );
 
             for (var nc=0; nc<(grp.groupconditions || []).length; ++nc) {
                 var cond = grp.groupconditions[nc];
@@ -2508,7 +2512,7 @@ var ReactorSensor = (function(api, $) {
             html += 'div#tab-conds.reactortab div.conditionrow.tberror { border-left: 4px solid red; }';
             html += 'div#tab-conds.reactortab div.divider h5 { font-size: 24px; font-weight: bold; }';
             html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
-            html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
+            html += 'div#tbbegging { display: block; color: #ff6600; margin-top: 12px; }';
             html += "</style>";
             jQuery("head").append( html );
 
@@ -2835,7 +2839,7 @@ var ReactorSensor = (function(api, $) {
             html += 'div#tab-vars.reactortab div.varexp.tberror { border-left: 4px solid red; }';
             html += 'div#tab-vars.reactortab textarea.expr { font-family: monospace; resize: vertical; width: 100% !important; }';
             html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
-            html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
+            html += 'div#tbbegging { display: block; color: #ff6600; margin-top: 12px; }';
             html += "</style>";
             jQuery("head").append( html );
 
@@ -2958,6 +2962,7 @@ var ReactorSensor = (function(api, $) {
     function validateActionRow( row ) {
         var actionType = jQuery('select#actiontype', row).val();
         jQuery('.tberror', row).removeClass( 'tberror' );
+        jQuery('.tbwarn', row).removeClass( 'tbwarn' );
         row.removeClass( 'tberror' );
         jQuery( 'div.tberrmsg', row ).remove();
 
@@ -3020,12 +3025,12 @@ var ReactorSensor = (function(api, $) {
                                         continue;
                                     }
                                     /* Not optional, flag error. */
-                                    field.addClass( 'tberror' );
+                                    field.addClass( 'tbwarn' );
                                 } else if ( v.match( /\{[^}]+\}/ ) ) {
                                     /* Variable reference, do nothing, can't check */
                                 } else {
                                     // check value type, range?
-                                    // ??? subtypes? like RGB
+                                    // ??? subtypes? like RGB; validation pattern(s) from data?
                                     var typ = p.type || p.dataType || "string";
                                     if ( "int" === typ || typ.match( /^u?i[124]$/i ) ) {
                                         /* Integer. Watch for RGB spec of form #xxx or #xxxxxx */
@@ -3036,17 +3041,17 @@ var ReactorSensor = (function(api, $) {
                                             console.log( "validateActionRow: no type data for " + typ );
                                         } else if ( isNaN(v) || ( v < inttypes[typ].min ) || ( v > inttypes[typ].max ) ||
                                             ( undefined !== p.min && v < p.min ) || ( undefined != p.max && v > p.max ) ) {
-                                            field.addClass( 'tberror' ); // ???explain why?
+                                            field.addClass( 'tbwarn' ); // ???explain why?
                                         }
                                     } else if ( typ.match( /(r4|r8|float|number)/i ) ) {
                                         /* Float */
                                         v = parseFloat( v );
                                         if ( isNaN( v ) || ( undefined !== p.min && v < p.min ) || ( undefined !== p.max && v > p.max ) ) {
-                                            field.addClass( 'tberror' );
+                                            field.addClass( 'tbwarn' );
                                         }
                                     } else if ( "boolean" === typ ) {
                                         if ( ! v.match( /^(0|1|true|false|yes|no)$/i ) ) {
-                                            field.addClass( 'tberror' );
+                                            field.addClass( 'tbwarn' );
                                         }
                                     } else if ( "string" !== typ ) {
                                         /* Known unsupported/TBD: date/dateTime/dateTime.tz/time/time.tz (ISO8601), bin.base64, bin.hex, uri, uuid, char, fixed.lll.rrr */
@@ -3166,8 +3171,7 @@ var ReactorSensor = (function(api, $) {
                                     console.log("buildActionList: " + action.service + "/" +
                                         action.action + " required parameter " +
                                         ai.parameters[k].name + " has no value");
-                                    scene = false;
-                                    return false;
+                                    /* fall through and accept empty */
                                 }
                                 pt.value = t;
                             }
@@ -3620,7 +3624,7 @@ var ReactorSensor = (function(api, $) {
                                 v = stack.pop() || null;
                                 stack.push( v === null );
                             } else if ( "dup" === seg ) {
-                                v = stack.pop() || null; /* peek??? */
+                                v = stack.pop() || null; /* sloppy peek??? */
                                 stack.push( v );
                                 stack.push( v );
                             } else if ( seg.match( /^(<|<=|>|>=|=|==|!=|~=)$/ ) ) {
@@ -3716,7 +3720,6 @@ var ReactorSensor = (function(api, $) {
                     } else {
                         /* No extended data; copy what we got from lu_actions */
                         nodata = true;
-                        jQuery( 'div.supportlinks p#noenh' ).show();
                         ai = { service: service.serviceId, action: actname, parameters: service.actionList[j].arguments };
                         for ( var ip=0; ip < (service.actionList[j].arguments || []).length; ++ip ) {
                             var p = service.actionList[j].arguments[ip];
@@ -3914,7 +3917,7 @@ var ReactorSensor = (function(api, $) {
                 break;
 
             default:
-                ct.append('<div class="tberror">Type ' + newVal + '???</div>');
+                ct.append('<div class="tberror">Type ' + newVal + '?</div>');
         }
     }
 
@@ -3984,9 +3987,14 @@ var ReactorSensor = (function(api, $) {
                             if ( undefined !== p.value ) {
                                 /* Fixed value */
                                 param[p.name] = p.value;
-                                actionText += "{"+p.name+"="+String(p.value)+"}, ";
+                                actionText += "{" + p.name + "=" + String(p.value) + "}, ";
                             } else {
-                                var v = jQuery( '#' + p.name, row ).val() || "";
+                                var v = (jQuery( '#' + p.name, row ).val() || "").trim();
+                                var vn = v.match( /\{([^}]+)\}/ );
+                                if ( vn && vn.length == 2 ) {
+                                    /* Variable reference, get current value. */
+                                    v = api.getDeviceState( api.getCpanelDeviceId(), "urn:toggledbits-com:serviceId:ReactorValues", vn[1] ) || "";
+                                }
                                 if ( "" === v && undefined !== p.default ) v = p.default;
                                 if ( "" === v && p.optional ) continue;
                                 param[p.name] = v;
@@ -4263,15 +4271,16 @@ var ReactorSensor = (function(api, $) {
     {
         console.log("doActivities()");
         var myid = api.getCpanelDeviceId();
+        
+        try {
+            jQuery( 'div#tbcopyright' ).append('<span> Reactor device info ver ' + String(deviceInfo.serial) + '</span>');
+        }
+        catch (e) {}
 
         try {
             if ( configModified && confirm( msgUnsavedChanges) ) {
                 handleSaveClick( undefined );
             }
-
-            jQuery( 'div#tbcopyright' ).append( ' <span id="deviceinfoinfo">Device Info serial ' + deviceInfo.serial + '</span>' );
-            jQuery( 'div.supportlinks' ).append( '<p id="noenh">[1] This device/action does not have enhancement data available. Please report this device in the Reactor forum thread for device reports.</p>' );
-            jQuery( 'div.supportlinks p#noenh' ).hide();
 
             var cd = iData[myid].cdata;
 
@@ -4364,12 +4373,11 @@ var ReactorSensor = (function(api, $) {
         html += "div#tab-actions.reactortab .tb-about { margin-top: 24px; }";
         html += "div#tab-actions.reactortab .color-green { color: #428BCA; }";
         html += 'div#tab-actions.reactortab .tberror { border: 1px solid red; }';
-        html += 'div#tab-actions.reactortab .tbwarn { border: 1px solid yellow; background-color: yellow; }';
+        html += 'div#tab-actions.reactortab .tbwarn { border: 2px solid yellow; }';
         html += 'div#tab-actions.reactortab .tberrmsg { padding: 8px 8px 8px 8px; color: red; }';
         html += 'div#tab-actions.reactortab i.md-btn:disabled { color: #cccccc; cursor: auto; }';
         html += 'div#tab-actions.reactortab i.md-btn[disabled] { color: #cccccc; cursor: auto; }';
         html += 'div#tab-actions.reactortab i.md-btn { color: #2d6a9f; font-size: 14pt; cursor: pointer; }';
-        html += "div#tab-actions.reactortab p#noenh { font-weight: bold; color: #996600; }";
         html += 'div#tab-actions.reactortab input.tbinvert { min-width: 16px; min-height: 16px; }';
         html += 'div#tab-actions.reactortab input.narrow { max-width: 8em; }';
         html += 'div#tab-actions.reactortab div.actionlist { border-radius: 8px; border: 2px solid #428BCA; margin-bottom: 16px; }';
@@ -4388,7 +4396,7 @@ var ReactorSensor = (function(api, $) {
         html += 'div#tab-actions.reactortab div.editor { width: 100%; min-height: 240px; }';
         html += 'div#tab-actions.reactortab div.tbhint { font-size: 90%; font-weight: normal; }';
         html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
-        html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
+        html += 'div#tbbegging { display: block; color: #ff6600; margin-top: 12px; }';
         html += 'div#tab-actions.reactortab div.warning { color: red; }';
         html += 'div#tab-actions.reactortab option.optheading { font-weight: bold; }';
         html += 'div#tab-actions.reactortab option.nodata { font-style: italic; }';
@@ -4798,7 +4806,7 @@ var ReactorSensor = (function(api, $) {
         html = '<style>';
         html += 'div#reactortools.reactortab input.narrow { max-width: 8em; }';
         html += 'div#tbcopyright { display: block; margin: 12px 0 12px 0; }';
-        html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
+        html += 'div#tbbegging { display: block; color: #ff6600; margin-top: 12px; }';
         html += '</style>';
         jQuery('head').append( html );
 
