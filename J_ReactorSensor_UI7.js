@@ -73,6 +73,10 @@ var ReactorSensor = (function(api, $) {
         html += '<div id="tbcopyright">Reactor ver 2.2develop &copy; 2018,2019 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
             ' All Rights Reserved. Please check out the <a href="https://github.com/toggledbits/Reactor/wiki" target="_blank">online documentation</a>' +
             ' and <a href="http://forum.micasaverde.com/index.php/board,93.0.html" target="_blank">forum board</a> for support.</div>';
+        try {
+            html += '<div id="browserident">' + navigator.userAgent + '</div>';
+        } catch( e ) {}
+        
         return html;
     }
 
@@ -2508,7 +2512,7 @@ var ReactorSensor = (function(api, $) {
             html += 'div#tab-conds.reactortab div.conditionrow.tberror { border-left: 4px solid red; }';
             html += 'div#tab-conds.reactortab div.divider h5 { font-size: 24px; font-weight: bold; }';
             html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
-            html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
+            html += 'div#tbbegging { display: block; color: #ff6600; margin-top: 12px; }';
             html += "</style>";
             jQuery("head").append( html );
 
@@ -2835,7 +2839,7 @@ var ReactorSensor = (function(api, $) {
             html += 'div#tab-vars.reactortab div.varexp.tberror { border-left: 4px solid red; }';
             html += 'div#tab-vars.reactortab textarea.expr { font-family: monospace; resize: vertical; width: 100% !important; }';
             html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
-            html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
+            html += 'div#tbbegging { display: block; color: #ff6600; margin-top: 12px; }';
             html += "</style>";
             jQuery("head").append( html );
 
@@ -3716,7 +3720,6 @@ var ReactorSensor = (function(api, $) {
                     } else {
                         /* No extended data; copy what we got from lu_actions */
                         nodata = true;
-                        jQuery( 'div.supportlinks p#noenh' ).show();
                         ai = { service: service.serviceId, action: actname, parameters: service.actionList[j].arguments };
                         for ( var ip=0; ip < (service.actionList[j].arguments || []).length; ++ip ) {
                             var p = service.actionList[j].arguments[ip];
@@ -3984,9 +3987,14 @@ var ReactorSensor = (function(api, $) {
                             if ( undefined !== p.value ) {
                                 /* Fixed value */
                                 param[p.name] = p.value;
-                                actionText += "{"+p.name+"="+String(p.value)+"}, ";
+                                actionText += "{" + p.name + "=" + String(p.value) + "}, ";
                             } else {
-                                var v = jQuery( '#' + p.name, row ).val() || "";
+                                var v = (jQuery( '#' + p.name, row ).val() || "").trim();
+                                var vn = v.match( /\{([^}]+)\}/ );
+                                if ( vn && vn.length == 2 ) {
+                                    /* Variable reference, get current value. */
+                                    v = api.getDeviceState( api.getCpanelDeviceId(), "urn:toggledbits-com:serviceId:ReactorValues", vn[1] ) || "";
+                                }
                                 if ( "" === v && undefined !== p.default ) v = p.default;
                                 if ( "" === v && p.optional ) continue;
                                 param[p.name] = v;
@@ -4263,15 +4271,16 @@ var ReactorSensor = (function(api, $) {
     {
         console.log("doActivities()");
         var myid = api.getCpanelDeviceId();
+        
+        try {
+            jQuery( 'div#tbcopyright' ).append('<span> Reactor device info ver ' + String(deviceInfo.serial) + '</span>');
+        }
+        catch (e) {}
 
         try {
             if ( configModified && confirm( msgUnsavedChanges) ) {
                 handleSaveClick( undefined );
             }
-
-            jQuery( 'div#tbcopyright' ).append( ' <span id="deviceinfoinfo">Device Info serial ' + deviceInfo.serial + '</span>' );
-            jQuery( 'div.supportlinks' ).append( '<p id="noenh">[1] This device/action does not have enhancement data available. Please report this device in the Reactor forum thread for device reports.</p>' );
-            jQuery( 'div.supportlinks p#noenh' ).hide();
 
             var cd = iData[myid].cdata;
 
@@ -4369,7 +4378,6 @@ var ReactorSensor = (function(api, $) {
         html += 'div#tab-actions.reactortab i.md-btn:disabled { color: #cccccc; cursor: auto; }';
         html += 'div#tab-actions.reactortab i.md-btn[disabled] { color: #cccccc; cursor: auto; }';
         html += 'div#tab-actions.reactortab i.md-btn { color: #2d6a9f; font-size: 14pt; cursor: pointer; }';
-        html += "div#tab-actions.reactortab p#noenh { font-weight: bold; color: #996600; }";
         html += 'div#tab-actions.reactortab input.tbinvert { min-width: 16px; min-height: 16px; }';
         html += 'div#tab-actions.reactortab input.narrow { max-width: 8em; }';
         html += 'div#tab-actions.reactortab div.actionlist { border-radius: 8px; border: 2px solid #428BCA; margin-bottom: 16px; }';
@@ -4388,7 +4396,7 @@ var ReactorSensor = (function(api, $) {
         html += 'div#tab-actions.reactortab div.editor { width: 100%; min-height: 240px; }';
         html += 'div#tab-actions.reactortab div.tbhint { font-size: 90%; font-weight: normal; }';
         html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
-        html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
+        html += 'div#tbbegging { display: block; color: #ff6600; margin-top: 12px; }';
         html += 'div#tab-actions.reactortab div.warning { color: red; }';
         html += 'div#tab-actions.reactortab option.optheading { font-weight: bold; }';
         html += 'div#tab-actions.reactortab option.nodata { font-style: italic; }';
@@ -4798,7 +4806,7 @@ var ReactorSensor = (function(api, $) {
         html = '<style>';
         html += 'div#reactortools.reactortab input.narrow { max-width: 8em; }';
         html += 'div#tbcopyright { display: block; margin: 12px 0 12px 0; }';
-        html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
+        html += 'div#tbbegging { display: block; color: #ff6600; margin-top: 12px; }';
         html += '</style>';
         jQuery('head').append( html );
 
