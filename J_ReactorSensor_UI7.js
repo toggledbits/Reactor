@@ -63,7 +63,8 @@ var ReactorSensor = (function(api, $) {
     var msgUnsavedChanges = "You have unsaved changes! Press OK to save them, or Cancel to discard them.";
     var msgGroupNormal = "Normal; click for inverted (false when all conditions are met)";
     var msgGroupInvert = "Inverted; click for normal (true when all conditions are met)";
-
+    var msgGroupIdChange = "Click to change group ID";
+    
     /* Return footer */
     function footer() {
         var html = '';
@@ -551,7 +552,7 @@ var ReactorSensor = (function(api, $) {
                 if ( opName[ cond.operator ] !== undefined ) {
                     str += opName[ cond.operator ];
                 } else {
-                    str += cond.operator + '???';
+                    str += cond.operator + '?';
                 }
                 function sunrange( spec ) {
                     var names = { 'sunrise': 'sunrise', 'sunset': 'sunset',
@@ -561,7 +562,7 @@ var ReactorSensor = (function(api, $) {
                         };
                     k = spec.match( /^([^+-]+)(.*)/ );
                     if ( k === null || k.length !== 3 ) {
-                        return spec + '???';
+                        return spec + '?';
                     } else {
                         var offs = parseInt( k[2] );
                         var str = ' ';
@@ -586,7 +587,7 @@ var ReactorSensor = (function(api, $) {
                 if ( opName[ cond.operator ] !== undefined ) {
                     str += opName[ cond.operator ];
                 } else {
-                    str += cond.operator + '???';
+                    str += cond.operator + '?';
                 }
                 t = ( cond.value || "" ).split(/,/);
                 str += ' ' + textDateTime( t[0], t[1], t[2], t[3], t[4], false );
@@ -780,7 +781,7 @@ var ReactorSensor = (function(api, $) {
                     case 'ishome':
                         var t = (currentValue || "").split( /,/ );
                         if ( "at" === cond.operator || "notat" === cond.operator ) {
-                            // ???
+                            /* Nada */
                         } else {
                             /* Replace IDs with names for display */
                             if ( t.length > 0 && t[0] !== "" ) {
@@ -977,7 +978,6 @@ var ReactorSensor = (function(api, $) {
                 }
             }
             var r = ms.sort( function( a, b ) {
-                /* ??? <=> */
                 if ( a.text.toLowerCase() === b.text.toLowerCase() ) return 0;
                 return a.text.toLowerCase() < b.text.toLowerCase() ? -1 : 1;
             });
@@ -2033,7 +2033,7 @@ var ReactorSensor = (function(api, $) {
         if ( newid == grpid ) {
             /* No change */
             span.empty().text( 'Group: ' + grpid ).on( 'click.reactor', handleTitleClick )
-                .addClass( 'titletext' );
+                .addClass( 'titletext' ).attr( 'title', msgGroupIdChange );
             return;
         }
         /* Group name check */
@@ -2062,7 +2062,7 @@ var ReactorSensor = (function(api, $) {
         /* Remove input field and replace text */
         span.closest( 'div.conditiongroup' ).attr( 'id', newid );
         span.empty().text( 'Group: ' + newid ).on( 'click.reactor', handleTitleClick )
-            .addClass( 'titletext' );
+            .addClass( 'titletext' ).attr( 'title', msgGroupIdChange );
         updateSaveControls();
     }
 
@@ -2211,7 +2211,7 @@ var ReactorSensor = (function(api, $) {
         jQuery( 'span#groupcontrols', condgroup ).append( '<i id="grpmovedn" class="material-icons md-btn md14" title="Move group down">arrow_downward</i>' );
         jQuery( 'span#groupcontrols', condgroup ).append( '<i id="grpdelete" class="material-icons md-btn md14" title="Delete group">clear</i>' );
         jQuery( 'span#groupcontrols i', condgroup ).on( 'click.reactor', handleGroupControlClick );
-        jQuery( 'span.titletext', condgroup ).text( "Group: " + newId ).on( 'click.reactor', handleTitleClick );
+        jQuery( 'span.titletext', condgroup ).text( "Group: " + newId ).on( 'click.reactor', handleTitleClick ).attr( 'title', msgGroupIdChange );
         jQuery("button#addgroup", condgroup).on( 'click.reactor', handleAddGroupClick );
         jQuery("button#saveconf", condgroup).on( 'click.reactor', handleSaveClick );
 
@@ -2418,7 +2418,7 @@ var ReactorSensor = (function(api, $) {
                 gel.removeClass('groupdisabled');
             }
 
-            jQuery( 'span.titletext', gel ).text( "Group: " + grp.groupid ).on( 'click.reactor', handleTitleClick );
+            jQuery( 'span.titletext', gel ).text( "Group: " + grp.groupid ).on( 'click.reactor', handleTitleClick ).attr( 'title', msgGroupIdChange );
 
             for (var nc=0; nc<(grp.groupconditions || []).length; ++nc) {
                 var cond = grp.groupconditions[nc];
@@ -3025,7 +3025,7 @@ var ReactorSensor = (function(api, $) {
                                     /* Variable reference, do nothing, can't check */
                                 } else {
                                     // check value type, range?
-                                    // ??? subtypes? like RGB
+                                    // ??? subtypes? like RGB; validation pattern(s) from data?
                                     var typ = p.type || p.dataType || "string";
                                     if ( "int" === typ || typ.match( /^u?i[124]$/i ) ) {
                                         /* Integer. Watch for RGB spec of form #xxx or #xxxxxx */
@@ -3620,7 +3620,7 @@ var ReactorSensor = (function(api, $) {
                                 v = stack.pop() || null;
                                 stack.push( v === null );
                             } else if ( "dup" === seg ) {
-                                v = stack.pop() || null; /* peek??? */
+                                v = stack.pop() || null; /* sloppy peek??? */
                                 stack.push( v );
                                 stack.push( v );
                             } else if ( seg.match( /^(<|<=|>|>=|=|==|!=|~=)$/ ) ) {
@@ -3914,7 +3914,7 @@ var ReactorSensor = (function(api, $) {
                 break;
 
             default:
-                ct.append('<div class="tberror">Type ' + newVal + '???</div>');
+                ct.append('<div class="tberror">Type ' + newVal + '?</div>');
         }
     }
 
