@@ -1,7 +1,19 @@
 # Change Log #
 
-## Version 2.1-hotfix (hotfixes since 2.1 release)
+NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
+## Version 2.2 (released)
+
+* Enhancement: Allow invert of group state (i.e. return false when all conditions are met); makes some logic simpler for users.
+* Enhancement: Groups can now be moved up and down (like conditions), just for organizational purposes (order has no meaning to the logic). It's also possible to delete a group directly (previously you had to delete all of its conditions one-by-one, and that would then delete the group). The enable/disable control was made an icon in the same control group as the foregoing tools for consistency and better appearance.
+* Enhancement: When editing variable expressions, a new "insert getstate" tool is available to more easily fetch device state variable values into the expression.
+* Enhancement: Reactor will check "Run Lua" fragments by putting them through Lua loadstring(), as an early check for syntax errors.
+* Enhancement: Reactor now implements service SwitchPower1, which mirrors the SecuritySensor1 state (i.e. the binary light is on when the ReactorSensor is tripped; off when it is untripped); this allows facilities that don't support SecuritySensor1 but can support SwitchPower1 to sense and manipulate the ReactorSensor.
+* Enhancement: New condition type "geofence" lets you react to one or more users being home, or not at home, or in one of the user's configured locations.
+* Enhancement: Show current value of state variable when selecting configuring service conditions (conditions that test service state variables). The display value will be truncated to 64 characters. Hovering over the displayed value or "Current value" label will display the entire string.
+* Enhancement: RunLua actions can now use Reactor.dump() to display the content of tables (e.g. `print(Reactor.dump(luup.scenes))`).
+* Enhancement: attempt to load the ACE editor if it is not loaded, so it can be used to edit RunLua code with syntax highlighting under both UI7 and AltUI (AltUI loads ACE for us). Note: ACE is disabled by default currently on UI7, as there is some issue with Chrome/Mac; it seems to work for other browsers, so if you want to try/use it, set the `UseACE` state variable to "1" on the Reactor master device.
+* Enhancement: "change" operator now supports "from" and "to" values, so a condition can test more than just if the value changes at all, but also if it changes from/to specific value (e.g. house mode changes from Away to Home).
 * Fix an issue where cache expiry of condition state data may cause trip/untrip manual action buttons to fail to execute Lua fragments in the activities. This does not affect the normal, automatic operation of trip/untrip in response to conditions, only manual.
 
 ## Version 2.1 (released)
@@ -14,11 +26,10 @@ This is primarily a fix release that corrects a number of UI errors that people 
 * Fix: error checking on RunScene action was affecting rows other than that being edited.
 * Fix: import of a scene containing only Lua (no groups) did nothing previously; now imports a single Lua action.
 * Fix: test tools not enabling when checked (reported by pukka).
+* Fix: notification_only scenes can have null room IDs, which breaks sorting (fixed).
 * Fix: Fix problem with "unsaved changes" prompt coming up again on re-entry to cpanel after prior cpanel exit when save is declined.
 
 ## Version 2.0 (released) ##
-
-Note to OpenLuup Users: openLuup 2018.11.21 is required to run this version and higher.
 
 * Move all documentation to the project wiki; lots of doc improvements (and still work to do, particularly on the Activities page). Contributers are welcome. Wiki: https://github.com/toggledbits/Reactor/wiki
 * Allow renaming of condition groups, so you can give them functional names rather than the unique IDs automatically assigned. Valid group names must start with a letter with alphanumeric (and underscore) allowed to follow.

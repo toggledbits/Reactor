@@ -38,6 +38,14 @@ Documentation for Reactor can be found in the wiki for the project: https://gith
 
 Please see the CHANGELOG.md file for release notes.
 
+## Github Branches
+
+My branching strategy for Reactor includes four branches, as follows:
+* master - The current full release. This is the same code (hopefully) that you get when you download the plugin from the Vera plugin marketplace or AltAppStore.
+* hotfix - Branched from master, this is the current full release plus any significant fixes that have been introduced since release.
+* develop - Branched from master, this is the development code, with all of the latest fixes, features, debug statements, and bugs. Not for the timid. Or the wise. Commits here are more about checkpoints for completed development than verification.
+* stable - Branched from develop, this is the current development release with some testing and shakedown completed. Things are believed to work here. This is the branch to use if you want to track the latest new features going in.
+
 ## License ##
 
 Reactor currently is copyrighted and all rights are reserved. Although the source code is visible for public

@@ -1,494 +1,543 @@
 {
-    "__comment": "D_ReactorSensor_UI7.json",
-    "default_icon": "https://www.toggledbits.com/assets/reactor/reactorsensor-default.png",
-    "state_icons": [{
-        "img": "https://www.toggledbits.com/assets/reactor/reactorsensor-disabled.png",
-        "conditions": [{
-            "service": "urn:toggledbits-com:serviceId:ReactorSensor",
-            "variable": "Enabled",
-            "operator": "!=",
-            "value": "1"
-        }]
-    },{
-        "img": "https://www.toggledbits.com/assets/reactor/reactorsensor-tripped.png",
-        "conditions": [{
-            "service": "urn:micasaverde-com:serviceId:SecuritySensor1",
-            "variable": "Tripped",
-            "operator": "!=",
-            "value": "0"
-        }]
-    }],
-    "x": 2,
-    "y": 4,
-    "inScene": 1,
-    "Tabs": [{
-            "Label": {
-                "lang_tag": "tabname_status",
-                "text": "Status"
-            },
-            "Position": 0,
-            "TabType": "flash",
-            "TopNavigationTab": 1,
-            "AfterInit": {
-                "ScriptName": "J_ReactorSensor_UI7.js",
-                "Function": "ReactorSensor.doStatusPanel"
-            },
-            "ControlGroup": [{
-                    "id": 1,
-                    "scenegroup": 1
-                },
-                {
-                    "id": 2,
-                    "scenegroup": 2
-                }
-            ],
-            "SceneGroup": [{
-                    "id": 1,
-                    "top": 0,
-                    "left": 0,
-                    "x": 4,
-                    "y": 2
-                },
-                {
-                    "id": 2,
-                    "top": 1,
-                    "left": 0,
-                    "x": 2,
-                    "y": 2
-                }
-            ],
-            "Control": [{
-                    "ControlType": "label",
-                    "top": 0,
-                    "left": 0,
-                    "Label": {
-                        "lang_tag": "tb_reactor_tag",
-                        "text": "Manual Control"
-                    },
-                    "Display": {
-                        "Top": 8,
-                        "Left": 30,
-                        "Width": 100,
-                        "Height": 25
-                    }
-                },
-                {
-                    "ControlGroup": 1,
-                    "ControlType": "button",
-                    "top": 0,
-                    "left": 0,
-                    "Label": {
-                        "lang_tag": "cmd_reset",
-                        "text": "Reset"
-                    },
-                    "Display": {
-                        "Top": 30,
-                        "Left": 50,
-                        "Width": 75,
-                        "Height": 20,
-                        "Service": "urn:micasaverde-com:serviceId:SecuritySensor1",
-                        "Variable": "Tripped",
-                        "Value": "0"
-                    },
-                    "Command": {
-                        "Service": "urn:toggledbits-com:serviceId:ReactorSensor",
-                        "Action": "Reset",
-                        "Parameters": []
-                    },
-                    "ControlCode": "reset"
-                },
-                {
-                    "ControlGroup": 1,
-                    "ControlType": "button",
-                    "top": 0,
-                    "left": 1,
-                    "Label": {
-                        "lang_tag": "cmd_trip",
-                        "text": "Trip"
-                    },
-                    "Display": {
-                        "Top": 30,
-                        "Left": 150,
-                        "Width": 75,
-                        "Height": 20,
-                        "Service": "urn:micasaverde-com:serviceId:SecuritySensor1",
-                        "Variable": "Tripped",
-                        "Value": "1"
-                    },
-                    "Command": {
-                        "Service": "urn:toggledbits-com:serviceId:ReactorSensor",
-                        "Action": "Trip",
-                        "Parameters": []
-                    },
-                    "ControlCode": "trip"
-                },
-                {
-                    "ControlGroup": 1,
-                    "ControlType": "multi_state_button",
-                    "top": 0,
-                    "left": 3,
-                    "Display": {
-                        "Top": 30,
-                        "Left": 255,
-                        "Width": 70,
-                        "Height": 24
-                    },
-                    "states": [{
-                            "Label": {
-                                "lang_tag": "tb_enabled",
-                                "text": "Enabled"
-                            },
-                            "Display": {
-                                "Service": "urn:toggledbits-com:serviceId:ReactorSensor",
-                                "Variable": "Enabled",
-                                "Value": "1"
-                            },
-                            "Command": {
-                                "Service": "urn:toggledbits-com:serviceId:ReactorSensor",
-                                "Action": "SetEnabled",
-                                "Parameters": [{
-                                    "Name": "newEnabledValue",
-                                    "Value": "1"
-                                }]
-                            },
-                            "ControlCode": "tbcmd_enable"
-                        },
-                        {
-                            "Label": {
-                                "lang_tag": "tb_disabled",
-                                "text": "Disabled"
-                            },
-                            "Display": {
-                                "Service": "urn:toggledbits-com:serviceId:ReactorSensor",
-                                "Variable": "Enabled",
-                                "Value": "0"
-                            },
-                            "Command": {
-                                "Service": "urn:toggledbits-com:serviceId:ReactorSensor",
-                                "Action": "SetEnabled",
-                                "Parameters": [{
-                                    "Name": "newEnabledValue",
-                                    "Value": "0"
-                                }]
-                            },
-                            "ControlCode": "tbcmd_disable"
-                        }
-                    ]
-                },
-                {
-                    "ControlGroup": 1,
-                    "ControlType": "multi_state_button",
-                    "top": 0,
-                    "left": 4,
-                    "Display": {
-                        "Top": 30,
-                        "Left": 320,
-                        "Width": 70,
-                        "Height": 24
-                    },
-                    "states": [{
-                            "Label": {
-                                "lang_tag": "ui7_cmd_arm",
-                                "text": "Armed"
-                            },
-                            "Display": {
-                                "Service": "urn:micasaverde-com:serviceId:SecuritySensor1",
-                                "Variable": "Armed",
-                                "Value": "1"
-                            },
-                            "Command": {
-                                "Service": "urn:micasaverde-com:serviceId:SecuritySensor1",
-                                "Action": "SetArmed",
-                                "Parameters": [{
-                                    "Name": "newArmedValue",
-                                    "Value": "1"
-                                }]
-                            },
-                            "ControlCode": "arm_armed"
-                        },
-                        {
-                            "Label": {
-                                "lang_tag": "ui7_cmd_bypass",
-                                "text": "Disarmed"
-                            },
-                            "Display": {
-                                "Service": "urn:micasaverde-com:serviceId:SecuritySensor1",
-                                "Variable": "Armed",
-                                "Value": "0"
-                            },
-                            "Command": {
-                                "Service": "urn:micasaverde-com:serviceId:SecuritySensor1",
-                                "Action": "SetArmed",
-                                "Parameters": [{
-                                    "Name": "newArmedValue",
-                                    "Value": "0"
-                                }]
-                            },
-                            "ControlCode": "arm_disarmed"
-                        }
-                    ]
-                },
-                {
-                    "ControlGroup": 1,
-                    "ControlType": "line_break"
-                },
-                {
-                    "ControlGroup": 1,
-                    "ControlType": "variable",
-                    "top": 1,
-                    "left": 0,
-                    "Display": {
-                        "Top": 60,
-                        "Left": 60,
-                        "Width": 240,
-                        "Height": 25,
-                        "Service": "urn:toggledbits-com:serviceId:ReactorSensor",
-                        "Variable": "Message"
-                    },
-                    "ControlCode": "message"
-                },
-                {
-                    "ControlType": "button",
-                    "top": 3,
-                    "left": 1,
-                    "Label": {
-                        "lang_tag": "cmd_restart",
-                        "text": "Restart"
-                    },
-                    "Display": {
-                        "Top": 90,
-                        "Left": 50,
-                        "Width": 90,
-                        "Height": 20
-                    },
-                    "Command": {
-                        "Service": "urn:toggledbits-com:serviceId:ReactorSensor",
-                        "Action": "Restart",
-                        "Parameters": []
-                    },
-                    "ControlCode": "restart"
-                }
-            ]
-        },
-        {
-            "Label": {
-                "lang_tag": "tb_reactorsensor_doConditions",
-                "text": "Conditions"
-            },
-            "Position": 1,
-            "TabType": "javascript",
-            "TopNavigationTab": 1,
-            "ScriptName": "J_ReactorSensor_UI7.js",
-            "Function": "ReactorSensor.doConditions"
-        },
-        {
-            "Label": {
-                "lang_tag": "tb_reactorsensor_doVariables",
-                "text": "Expressions"
-            },
-            "Position": 2,
-            "TabType": "javascript",
-            "TopNavigationTab": 1,
-            "ScriptName": "J_ReactorSensor_UI7.js",
-            "Function": "ReactorSensor.doVariables"
-        },
-        {
-            "Label": {
-                "lang_tag": "tb_reactorsensor_doActivities",
-                "text": "Activities"
-            },
-            "Position": 3,
-            "TabType": "javascript",
-            "TopNavigationTab": 1,
-            "ScriptName": "J_ReactorSensor_UI7.js",
-            "Function": "ReactorSensor.doActivities"
-        },
-        {
-            "Label": {
-                "lang_tag": "tb_reactorsensor_doTools",
-                "text": "Tools"
-            },
-            "Position": 4,
-            "TabType": "javascript",
-            "TopNavigationTab": 1,
-            "ScriptName": "J_ReactorSensor_UI7.js",
-            "Function": "ReactorSensor.doTools"
-        },
-        {
-            "Label": {
-                "lang_tag": "ui7_advanced",
-                "text": "Advanced"
-            },
-            "Position": 5,
-            "TabType": "javascript",
-            "ScriptName": "shared.js",
-            "Function": "advanced_device"
-        },
-        {
-            "Label": {
-                "lang_tag": "ui7_logs",
-                "text": "Logs"
-            },
-            "Position": 6,
-            "TabType": "javascript",
-            "ScriptName": "shared.js",
-            "Function": "device_logs"
-        },
-        {
-            "Label": {
-                "lang_tag": "ui7_notifications",
-                "text": "Notifications"
-            },
-            "Position": 7,
-            "TabType": "javascript",
-            "ScriptName": "shared.js",
-            "Function": "device_notifications"
-        },
-        {
-            "Label": {
-                "lang_tag": "ui7_device_scenes",
-                "text": "Scenes"
-            },
-            "Position": 8,
-            "TabType": "javascript",
-            "ScriptName": "shared.js",
-            "Function": "device_scenes"
-        }
-    ],
-    "eventList2": [{
-            "id": 1,
-            "label": {
-                "lang_tag": "tb_an_armed_sitesensor_is_tripped",
-                "text": "Is armed and tripped"
-            },
-            "serviceId": "urn:micasaverde-com:serviceId:SecuritySensor1",
-            "serviceStateTable": {
-                "Armed": {
-                    "value": "1",
-                    "comparisson": "="
-                },
-                "Tripped": {
-                    "value": "1",
-                    "comparisson": "="
-                }
-            }
-        },
-        {
-            "id": 2,
-            "label": {
-                "lang_tag": "tb_an_armed_sitesensor_is_not_tripped",
-                "text": "Is armed and restores from tripped"
-            },
-            "serviceId": "urn:micasaverde-com:serviceId:SecuritySensor1",
-            "serviceStateTable": {
-                "Armed": {
-                    "value": "1",
-                    "comparisson": "="
-                },
-                "Tripped": {
-                    "value": "0",
-                    "comparisson": "="
-                }
-            }
-        },
-        {
-            "id": 3,
-            "label": {
-                "lang_tag": "tb_sitesensor_is_tripped",
-                "text": "Is tripped whether it is armed or disarmed"
-            },
-            "serviceId": "urn:micasaverde-com:serviceId:SecuritySensor1",
-            "serviceStateTable": {
-                "Tripped": {
-                    "value": "1",
-                    "comparisson": "="
-                }
-            }
-        },
-        {
-            "id": 4,
-            "label": {
-                "lang_tag": "tb_sitesensor_is_not_tripped",
-                "text": "Restores from tripped whether it is armed or disarmed"
-            },
-            "serviceId": "urn:micasaverde-com:serviceId:SecuritySensor1",
-            "serviceStateTable": {
-                "Tripped": {
-                    "value": "0",
-                    "comparisson": "="
-                }
-            }
-        },
-        {
-            "id": 5,
-            "label": {
-                "lang_tag": "tb_armed_changes",
-                "text": "Arming state changes"
-            },
-            "serviceId": "urn:micasaverde-com:serviceId:SecuritySensor1",
-            "argumentList": [{
-                "id": 1,
-                "name": "Armed",
-                "comparisson": "=",
-                "dataType": "string",
-                "defaultValue": "1",
-                "allowedValueList": [{
-                        "enabled": "1",
-                        "HumanFriendlyText": {
-                            "lang_tag": "tb_armed",
-                            "text": "Armed"
-                        }
-                    },
-                    {
-                        "disabled": "0",
-                        "HumanFriendlyText": {
-                            "lang_tag": "tb_disarmed",
-                            "text": "Disarmed"
-                        }
-                    }
-                ],
-                "prefix": {
-                    "lang_tag": "tb_arm_to",
-                    "text": "To:"
-                },
-                "suffix": {}
-            }]
-        },
-        {
-            "id": 6,
-            "label": {
-                "lang_tag": "tb_enabled_changes",
-                "text": "Enabled state changes"
-            },
-            "serviceId": "urn:toggledbits-com:serviceId:ReactorSensor",
-            "argumentList": [{
-                "id": 1,
-                "name": "Enabled",
-                "comparisson": "=",
-                "dataType": "string",
-                "defaultValue": "1",
-                "allowedValueList": [{
-                        "enabled": "1",
-                        "HumanFriendlyText": {
-                            "lang_tag": "tb_ost_enabled",
-                            "text": "Enabled"
-                        }
-                    },
-                    {
-                        "disabled": "0",
-                        "HumanFriendlyText": {
-                            "lang_tag": "tb_ost_disabled",
-                            "text": "Disabled"
-                        }
-                    }
-                ],
-                "prefix": {
-                    "lang_tag": "tb_state_to",
-                    "text": "To:"
-                },
-                "suffix": {}
-            }]
-        }
-    ],
-    "device_type": "urn:schemas-toggledbits-com:device:ReactorSensor:1"
+	"__comment": "D_ReactorSensor_UI7.json",
+	"default_icon": "https://www.toggledbits.com/assets/reactor/reactorsensor-default.png",
+	"state_icons": [{
+			"img": "https://www.toggledbits.com/assets/reactor/reactorsensor-disabled.png",
+			"conditions": [{
+				"service": "urn:toggledbits-com:serviceId:ReactorSensor",
+				"variable": "Enabled",
+				"operator": "!=",
+				"value": "1"
+			}]
+		}, {
+			"img": "https://www.toggledbits.com/assets/reactor/reactorsensor-tripped.png",
+			"conditions": [{
+				"service": "urn:micasaverde-com:serviceId:SecuritySensor1",
+				"variable": "Tripped",
+				"operator": "!=",
+				"value": "0",
+				"category_num": 4
+			}]
+		}, {
+			"img": "binary_light_off.png",
+			"conditions": [{
+				"service": "urn:upnp-org:serviceId:SwitchPower1",
+				"variable": "Status",
+				"operator": "==",
+				"value": 0,
+				"category_num": 3
+			}]
+		},
+		{
+			"img": "binary_light_on.png",
+			"conditions": [{
+				"service": "urn:upnp-org:serviceId:SwitchPower1",
+				"variable": "Status",
+				"operator": "==",
+				"value": 1,
+				"category_num": 3
+			}]
+		}
+	],
+	"x": 2,
+	"y": 4,
+	"inScene": 1,
+	"Tabs": [{
+			"Label": {
+				"lang_tag": "tabname_status",
+				"text": "Status"
+			},
+			"Position": 0,
+			"TabType": "flash",
+			"TopNavigationTab": 1,
+			"AfterInit": {
+				"ScriptName": "J_ReactorSensor_UI7.js",
+				"Function": "ReactorSensor.doStatusPanel"
+			},
+			"ControlGroup": [{
+					"id": 1,
+					"scenegroup": 1
+				},
+				{
+					"id": 2,
+					"scenegroup": 2
+				}
+			],
+			"SceneGroup": [{
+					"id": 1,
+					"top": 0,
+					"left": 0,
+					"x": 4,
+					"y": 2
+				},
+				{
+					"id": 2,
+					"top": 1,
+					"left": 0,
+					"x": 2,
+					"y": 2
+				}
+			],
+			"Control": [{
+					"ControlType": "label",
+					"top": 0,
+					"left": 0,
+					"Label": {
+						"lang_tag": "tb_reactor_tag",
+						"text": "Manual Control"
+					},
+					"Display": {
+						"Top": 8,
+						"Left": 30,
+						"Width": 100,
+						"Height": 25
+					}
+				},
+				{
+					"ControlGroup": 1,
+					"ControlType": "button",
+					"top": 0,
+					"left": 0,
+					"Label": {
+						"lang_tag": "cmd_reset",
+						"text": "Reset"
+					},
+					"Display": {
+						"Top": 30,
+						"Left": 50,
+						"Width": 75,
+						"Height": 20,
+						"Service": "urn:micasaverde-com:serviceId:SecuritySensor1",
+						"Variable": "Tripped",
+						"Value": "0"
+					},
+					"Command": {
+						"Service": "urn:toggledbits-com:serviceId:ReactorSensor",
+						"Action": "Reset",
+						"Parameters": []
+					},
+					"ControlCode": "reset"
+				},
+				{
+					"ControlGroup": 1,
+					"ControlType": "button",
+					"top": 0,
+					"left": 1,
+					"Label": {
+						"lang_tag": "cmd_trip",
+						"text": "Trip"
+					},
+					"Display": {
+						"Top": 30,
+						"Left": 150,
+						"Width": 75,
+						"Height": 20,
+						"Service": "urn:micasaverde-com:serviceId:SecuritySensor1",
+						"Variable": "Tripped",
+						"Value": "1"
+					},
+					"Command": {
+						"Service": "urn:toggledbits-com:serviceId:ReactorSensor",
+						"Action": "Trip",
+						"Parameters": []
+					},
+					"ControlCode": "trip"
+				},
+				{
+					"ControlGroup": 1,
+					"ControlType": "multi_state_button",
+					"top": 0,
+					"left": 3,
+					"Display": {
+						"Top": 30,
+						"Left": 255,
+						"Width": 70,
+						"Height": 24
+					},
+					"states": [{
+							"Label": {
+								"lang_tag": "tb_enabled",
+								"text": "Enabled"
+							},
+							"Display": {
+								"Service": "urn:toggledbits-com:serviceId:ReactorSensor",
+								"Variable": "Enabled",
+								"Value": "1"
+							},
+							"Command": {
+								"Service": "urn:toggledbits-com:serviceId:ReactorSensor",
+								"Action": "SetEnabled",
+								"Parameters": [{
+									"Name": "newEnabledValue",
+									"Value": "1"
+								}]
+							},
+							"ControlCode": "tbcmd_enable"
+						},
+						{
+							"Label": {
+								"lang_tag": "tb_disabled",
+								"text": "Disabled"
+							},
+							"Display": {
+								"Service": "urn:toggledbits-com:serviceId:ReactorSensor",
+								"Variable": "Enabled",
+								"Value": "0"
+							},
+							"Command": {
+								"Service": "urn:toggledbits-com:serviceId:ReactorSensor",
+								"Action": "SetEnabled",
+								"Parameters": [{
+									"Name": "newEnabledValue",
+									"Value": "0"
+								}]
+							},
+							"ControlCode": "tbcmd_disable"
+						}
+					]
+				},
+				{
+					"ControlGroup": 1,
+					"ControlType": "multi_state_button",
+					"top": 0,
+					"left": 4,
+					"Display": {
+						"Top": 30,
+						"Left": 320,
+						"Width": 70,
+						"Height": 24
+					},
+					"states": [{
+							"Label": {
+								"lang_tag": "ui7_cmd_arm",
+								"text": "Armed"
+							},
+							"Display": {
+								"Service": "urn:micasaverde-com:serviceId:SecuritySensor1",
+								"Variable": "Armed",
+								"Value": "1"
+							},
+							"Command": {
+								"Service": "urn:micasaverde-com:serviceId:SecuritySensor1",
+								"Action": "SetArmed",
+								"Parameters": [{
+									"Name": "newArmedValue",
+									"Value": "1"
+								}]
+							},
+							"ControlCode": "arm_armed"
+						},
+						{
+							"Label": {
+								"lang_tag": "ui7_cmd_bypass",
+								"text": "Disarmed"
+							},
+							"Display": {
+								"Service": "urn:micasaverde-com:serviceId:SecuritySensor1",
+								"Variable": "Armed",
+								"Value": "0"
+							},
+							"Command": {
+								"Service": "urn:micasaverde-com:serviceId:SecuritySensor1",
+								"Action": "SetArmed",
+								"Parameters": [{
+									"Name": "newArmedValue",
+									"Value": "0"
+								}]
+							},
+							"ControlCode": "arm_disarmed"
+						}
+					]
+				},
+				{
+					"ControlGroup": 1,
+					"ControlType": "line_break"
+				},
+				{
+					"ControlGroup": 1,
+					"ControlType": "variable",
+					"top": 1,
+					"left": 0,
+					"Display": {
+						"Top": 60,
+						"Left": 60,
+						"Width": 240,
+						"Height": 25,
+						"Service": "urn:toggledbits-com:serviceId:ReactorSensor",
+						"Variable": "Message"
+					},
+					"ControlCode": "message"
+				},
+				{
+					"ControlType": "button",
+					"top": 3,
+					"left": 1,
+					"Label": {
+						"lang_tag": "cmd_restart",
+						"text": "Restart"
+					},
+					"Display": {
+						"Top": 90,
+						"Left": 50,
+						"Width": 90,
+						"Height": 20
+					},
+					"Command": {
+						"Service": "urn:toggledbits-com:serviceId:ReactorSensor",
+						"Action": "Restart",
+						"Parameters": []
+					},
+					"ControlCode": "restart"
+				}
+			]
+		},
+		{
+			"Label": {
+				"lang_tag": "tb_reactorsensor_doConditions",
+				"text": "Conditions"
+			},
+			"Position": 1,
+			"TabType": "javascript",
+			"TopNavigationTab": 1,
+			"ScriptName": "J_ReactorSensor_UI7.js",
+			"Function": "ReactorSensor.doConditions"
+		},
+		{
+			"Label": {
+				"lang_tag": "tb_reactorsensor_doVariables",
+				"text": "Expressions"
+			},
+			"Position": 2,
+			"TabType": "javascript",
+			"TopNavigationTab": 1,
+			"ScriptName": "J_ReactorSensor_UI7.js",
+			"Function": "ReactorSensor.doVariables"
+		},
+		{
+			"Label": {
+				"lang_tag": "tb_reactorsensor_doActivities",
+				"text": "Activities"
+			},
+			"Position": 3,
+			"TabType": "javascript",
+			"TopNavigationTab": 1,
+			"ScriptName": "J_ReactorSensor_UI7.js",
+			"Function": "ReactorSensor.doActivities"
+		},
+		{
+			"Label": {
+				"lang_tag": "tb_reactorsensor_doTools",
+				"text": "Tools"
+			},
+			"Position": 4,
+			"TabType": "javascript",
+			"TopNavigationTab": 1,
+			"ScriptName": "J_ReactorSensor_UI7.js",
+			"Function": "ReactorSensor.doTools"
+		},
+		{
+			"Label": {
+				"lang_tag": "ui7_advanced",
+				"text": "Advanced"
+			},
+			"Position": 5,
+			"TabType": "javascript",
+			"ScriptName": "shared.js",
+			"Function": "advanced_device"
+		},
+		{
+			"Label": {
+				"lang_tag": "ui7_logs",
+				"text": "Logs"
+			},
+			"Position": 6,
+			"TabType": "javascript",
+			"ScriptName": "shared.js",
+			"Function": "device_logs"
+		},
+		{
+			"Label": {
+				"lang_tag": "ui7_notifications",
+				"text": "Notifications"
+			},
+			"Position": 7,
+			"TabType": "javascript",
+			"ScriptName": "shared.js",
+			"Function": "device_notifications"
+		},
+		{
+			"Label": {
+				"lang_tag": "ui7_device_scenes",
+				"text": "Scenes"
+			},
+			"Position": 8,
+			"TabType": "javascript",
+			"ScriptName": "shared.js",
+			"Function": "device_scenes"
+		}
+	],
+	"eventList2": [{
+			"id": 1,
+			"label": {
+				"lang_tag": "tb_reactor_tripped",
+				"text": "Trips (conditions met, whether armed or disarmed)"
+			},
+			"serviceId": "urn:micasaverde-com:serviceId:SecuritySensor1",
+			"serviceStateTable": {
+				"Tripped": {
+					"value": "1",
+					"comparisson": "="
+				}
+			}
+		},
+		{
+			"id": 2,
+			"label": {
+				"lang_tag": "tb_reactor_untripped",
+				"text": "Un-trips (conditions not met, whether armed or disarmed)"
+			},
+			"serviceId": "urn:micasaverde-com:serviceId:SecuritySensor1",
+			"serviceStateTable": {
+				"Tripped": {
+					"value": "0",
+					"comparisson": "="
+				}
+			}
+		}, {
+			"id": 3,
+			"label": {
+				"lang_tag": "tb_armed_reactor_tripped",
+				"text": "Trips while armed (conditions met)"
+			},
+			"serviceId": "urn:micasaverde-com:serviceId:SecuritySensor1",
+			"serviceStateTable": {
+				"Armed": {
+					"value": "1",
+					"comparisson": "="
+				},
+				"Tripped": {
+					"value": "1",
+					"comparisson": "="
+				}
+			}
+		},
+		{
+			"id": 4,
+			"label": {
+				"lang_tag": "tb_armed_reactor_untripped",
+				"text": "Un-trips while armed (conditions not met)"
+			},
+			"serviceId": "urn:micasaverde-com:serviceId:SecuritySensor1",
+			"serviceStateTable": {
+				"Armed": {
+					"value": "1",
+					"comparisson": "="
+				},
+				"Tripped": {
+					"value": "0",
+					"comparisson": "="
+				}
+			}
+		},
+		{
+			"id": 5,
+			"label": {
+				"lang_tag": "tb_reactor_switch_on",
+				"text": "Switch state changes to ON (conditions met, same as trip)"
+			},
+			"serviceId": "urn:upnp-org:serviceId:SwitchPower1",
+			"serviceStateTable": {
+				"Status": {
+					"value": "1",
+					"comparisson": "="
+				}
+			}
+		},
+		{
+			"id": 6,
+			"label": {
+				"lang_tag": "tb_reactor_switch_off",
+				"text": "Switch state changes to OFF (conditions not met, same as untrip)"
+			},
+			"serviceId": "urn:upnp-org:serviceId:SwitchPower1",
+			"serviceStateTable": {
+				"Status": {
+					"value": "0",
+					"comparisson": "="
+				}
+			}
+		},
+		{
+			"id": 7,
+			"label": {
+				"lang_tag": "tb_reactor_arming",
+				"text": "Arming state changes"
+			},
+			"serviceId": "urn:micasaverde-com:serviceId:SecuritySensor1",
+			"argumentList": [{
+				"id": 1,
+				"name": "Armed",
+				"comparisson": "=",
+				"dataType": "string",
+				"defaultValue": "1",
+				"allowedValueList": [{
+						"enabled": "1",
+						"HumanFriendlyText": {
+							"lang_tag": "tb_armed",
+							"text": "Armed"
+						}
+					},
+					{
+						"disabled": "0",
+						"HumanFriendlyText": {
+							"lang_tag": "tb_disarmed",
+							"text": "Disarmed"
+						}
+					}
+				],
+				"prefix": {
+					"lang_tag": "tb_arm_to",
+					"text": "To:"
+				},
+				"suffix": {}
+			}]
+		},
+		{
+			"id": 8,
+			"label": {
+				"lang_tag": "tb_enabled_changes",
+				"text": "Enabled state changes"
+			},
+			"serviceId": "urn:toggledbits-com:serviceId:ReactorSensor",
+			"argumentList": [{
+				"id": 1,
+				"name": "Enabled",
+				"comparisson": "=",
+				"dataType": "string",
+				"defaultValue": "1",
+				"allowedValueList": [{
+						"enabled": "1",
+						"HumanFriendlyText": {
+							"lang_tag": "tb_ost_enabled",
+							"text": "Enabled"
+						}
+					},
+					{
+						"disabled": "0",
+						"HumanFriendlyText": {
+							"lang_tag": "tb_ost_disabled",
+							"text": "Disabled"
+						}
+					}
+				],
+				"prefix": {
+					"lang_tag": "tb_state_to",
+					"text": "To:"
+				},
+				"suffix": {}
+			}]
+		}
+	],
+	"DeviceType": "urn:schemas-toggledbits-com:device:ReactorSensor:1",
+	"device_type": "urn:schemas-toggledbits-com:device:ReactorSensor:1"
 }

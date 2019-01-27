@@ -70,6 +70,31 @@
             </run>
         </action>
         <action>
+            <serviceId>urn:upnp-org:serviceId:SwitchPower1</serviceId>
+            <name>SetTarget</name>
+            <run>
+                if tostring(lul_settings.newTargetValue) ~= "0" then
+                    Reactor.actionTrip( lul_device )
+                else
+                    Reactor.actionReset( lul_device )
+                end
+                return true
+            </run>
+        </action>
+        <action>
+            <serviceId>urn:micasaverde-com:serviceId:HaDevice1</serviceId>
+            <name>ToggleState</name>
+            <run>
+                local t = luup.variable_get( "urn:micasaverde-com:serviceId:SecuritySensor1", "Tripped", lul_device ) or "0"
+                if t == "0" then
+                    Reactor.actionTrip( lul_device )
+                else
+                    Reactor.actionReset( lul_device )
+                end
+                return true
+            </run>
+        </action>
+        <action>
             <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
             <name>AddSensor</name>
             <job>
@@ -159,6 +184,13 @@
             <job>
                 -- Set group enabled state.
                 return Reactor.actionSetGroupEnabled( lul_settings.GroupId, lul_settings.newEnabledValue, lul_device )
+            </job>
+        </action>
+        <action>
+            <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
+            <name>UpdateGeofences</name>
+            <job>
+                return Reactor.actionUpdateGeofences( lul_device )
             </job>
         </action>
         <action>
