@@ -734,9 +734,9 @@ local function getSceneData( sceneId, tdev )
 
     -- Special scene?
     local skey = tostring(sceneId)
-    if skey == "__trip" or skey == "__untrip" then
+    if skey:match( "^__[un]*trip") then -- patterns not very sophisticaed in Lua, so (overly) simple test
         -- For these special scenes, they're already in config ready to go.
-        local pt = (skey=="__untrip") and "untripactions" or "tripactions"
+        local pt = skey:match("^__un") and "untripactions" or "tripactions"
         local r = sensorState[tostring(tdev)].configData[pt]
         if r then r.id = skey r.name = skey end
         return r
@@ -841,7 +841,9 @@ local function execLua( fname, luafragment, extarg, tdev )
             luup.log( "Reactor: " .. err .. "\n" .. luafragment, 1 )
             return false, err -- flag error
         end
-        luaFunc[fname] = fnc
+        if getVarNumeric( "SuppressLuaCaching", 0, pluginDevice, MYSID ) == 0 then
+            luaFunc[fname] = fnc
+        end
     end
     -- We use a single environment for all Lua scripts, which allows modules loaded
     -- to be shared among them. This, of course, has some inherent dangers, and
@@ -1290,14 +1292,14 @@ local function trip( state, tdev )
     if not state then
         -- Luup keeps (SecuritySensor1/)LastTrip, but we also keep LastReset
         luup.variable_set( RSSID, "LastReset", os.time(), tdev )
-        -- Run the reset scene, if we have one.
-        local scd = getSceneData( '__untrip', tdev )
+        -- Run the reset scene, if we have one. Scene ID must be unique across sensors!
+        local scd = getSceneData( '__untrip' .. tostring(tdev), tdev )
         if scd then execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=true } ) end
     else
         -- Count a trip.
         luup.variable_set( RSSID, "TripCount", getVarNumeric( "TripCount", 0, tdev, RSSID ) + 1, tdev )
-        -- Run the trip scene, if we have one.
-        local scd = getSceneData( '__trip', tdev )
+        -- Run the trip scene, if we have one. Scene ID must be unique across sensors!
+        local scd = getSceneData( '__trip' .. tostring(tdev), tdev )
         if scd then execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=true } ) end
     end
 end
@@ -1414,7 +1416,7 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
         ctx[vname] = result
         -- Canonify booleans by converting to number for storage as state variable
         if type(result) == "boolean" then result = result and "1" or "0" end
-        if type(result) == "table" then 
+        if type(result) == "table" then
             for ix,v in ipairs( result ) do
                 if type(v) ~= "number" then
                     result[ix] = string.format( "%q", tostring(v) )
@@ -1654,12 +1656,12 @@ local function evaluateCondition( cond, grp, tdev )
                 -- re-eval, go back further in history for prior value.
                 local prior = ( cond.laststate.lastvalue == vv ) and
                     cond.laststate.priorvalue or cond.laststate.lastvalue
-                D("evaluateCondition() service change op, currval=%1, prior=%2, term=%3", vv, prior, ar)
+                D("evaluateCondition() service change op with terms, currval=%1, prior=%2, term=%3", vv, prior, ar)
                 if #ar > 0 and ar[1] ~= "" and prior ~= ar[1] then return vv,false end
                 if #ar > 1 and ar[2] ~= "" and vv ~= ar[2] then return vv,false end
                 return vv,true
             end
-            D("evaluateCondition() service change op, currval=%1, prior=%2, term=%3",
+            D("evaluateCondition() service change op without terms, currval=%1, prior=%2, term=%3",
                 vv, cond.laststate.lastvalue, cv)
             if vv == cond.laststate.lastvalue then return vv,false end
             -- Changed without terminal values, pulse.
@@ -1669,6 +1671,7 @@ local function evaluateCondition( cond, grp, tdev )
             L({level=1,msg="evaluateCondition() unknown op %1 in cond %2"}, op, cv)
             return vv,false
         end
+        D("evaluateCondition() default true exit for cond %1, new value=%2", cond.id, vv)
         return vv,true
     elseif cond.type == "housemode" then
         -- Add watch on parent if we don't already have one.
@@ -2684,7 +2687,7 @@ function actionUpdateGeofences( pdev )
         end
         ishome.version = 2
     end
-    if ishome.version ~= 2 then 
+    if ishome.version ~= 2 then
         L({level=2,msg="resetting IsHome data, old version %1"}, ishome.version)
         ishome = { users={} }
     end
@@ -3055,11 +3058,11 @@ local function sensorWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
     D("sensorWatch(%1,%2,%3,%4,%5,%6,%7)", dev, sid, var, oldVal, newVal, tdev, pdev)
     -- Watched variable has changed. Re-evaluate conditons.
     if dev == pdev then
-        addEvent{ dev=tdev, event='devicewatch', device=dev, 
+        addEvent{ dev=tdev, event='devicewatch', device=dev,
             name=(luup.devices[dev] or {}).description, var=var }
     else
-        addEvent{ dev=tdev, event='devicewatch', device=dev, 
-            name=(luup.devices[dev] or {}).description, var=sid .. "/" .. var, 
+        addEvent{ dev=tdev, event='devicewatch', device=dev,
+            name=(luup.devices[dev] or {}).description, var=sid .. "/" .. var,
             old=string.format("%q", tostring(oldVal):sub(1,64)),
             new=string.format("%q", tostring(newVal):sub(1,64)) }
     end
@@ -3253,18 +3256,18 @@ local function showGeofenceData( r )
     r = r or ""
     local data = getVarJSON( "IsHome", {}, pluginDevice, MYSID )
     r = r .. "  Geofence: running in " .. (geofenceMode < 0 and "long" or "quick") .. " mode" ..
-        ", last update " .. shortDate( data.since ) .. 
+        ", last update " .. shortDate( data.since ) ..
         ", data version " .. tostring(data.version) ..
         EOL
     for user,udata in pairs( data.users ) do
         r = r .. "            User " .. tostring(user) .. " ishome=" .. tostring(udata.ishome) ..
             " inlist=" .. table.concat( udata.inlist or {} ) .. " since=" .. shortDate( udata.since ) .. EOL
         for _,tdata in pairs( udata.tags or {} ) do
-            r = r .. "            " .. string.format("|%5d %q type=%q status=%q since=%s", 
-                tdata.id, tdata.name or "", 
-                (tdata.homeloc or 0)~=0 and "home" or "other", 
-                tdata.status or "", 
-                tdata.since ~= nil and shortDate( tdata.since ) or "n/a") .. 
+            r = r .. "            " .. string.format("|%5d %q type=%q status=%q since=%s",
+                tdata.id, tdata.name or "",
+                (tdata.homeloc or 0)~=0 and "home" or "other",
+                tdata.status or "",
+                tdata.since ~= nil and shortDate( tdata.since ) or "n/a") ..
                 EOL
         end
     end
@@ -3355,7 +3358,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
                     r = r .. "    Group #" .. ng .. " <" .. gc.groupid .. "> " ..
                         ( gs.evalstate and "true" or "false" ) .. " as of " .. shortDate( gs.evalstamp ) ..
                         ( gc.invert and " INVERTED" or "" ) ..
-                        ( gc.disabled and " DISABLED" or "" ) .. 
+                        ( gc.disabled and " DISABLED" or "" ) ..
                         EOL
                     for _,cond in ipairs( gc.groupconditions or {} ) do
                         local cs = (sensorState[tostring(n)].condState or {})[cond.id] or {}
