@@ -701,6 +701,12 @@ local function loadScene( sceneId, pdev )
     end
     D("loadScene() loaded scene %1: %2", sceneId, data)
 
+    --[[ ??? POST 2.2
+    -- Clear the startup Lua for this scene from the Lua cache
+    local starter = string.format("scene%s_start", tostring(data.id or ""))
+    if luaFunc[starter] then luaFunc[starter] = nil end
+    --]]
+
     -- Keep cached
     if next(sceneData) == nil then
         sceneData = json.decode( luup.variable_get( MYSID, "scenedata", pluginDevice ) or "{}" ) or {}
@@ -748,7 +754,8 @@ local function getSceneData( sceneId, tdev )
     end
 
     -- Still a valid Vera scene?
-    if luup.scenes[sceneId] == nil then
+    local scid = tonumber( sceneId ) or -1
+    if luup.scenes[scid] == nil then
         -- Nope.
         L({level=1,msg="Scene %1 in configuration for %3 (%2) is no longer available!"}, sceneId,
             tdev, luup.devices[tdev].description)
@@ -762,18 +769,18 @@ local function getSceneData( sceneId, tdev )
         if tostring(scd.loadtime or 0) ~= luup.attr_get("LoadTime", 0) then
             -- Reload since cached, queue for refresh.
             D("getSceneData() reload since scene last cached, queueing update")
-            sceneWaiting[skey] = sceneId
+            sceneWaiting[skey] = scid
             scheduleDelay( { id="sceneLoader", func=loadWaitingScenes, owner=pluginDevice }, 5 )
         end
         D("getSceneData() returning cached: %1", scd)
         return scd -- return cached
     end
 
-    local data = loadScene( sceneId, pluginDevice )
+    local data = loadScene( scid, pluginDevice )
     if data == nil then
         -- Couldn't get it. Try again later.
-        D("getSceneData() queueing later scene load for scene %1", sceneId)
-        sceneWaiting[skey] = sceneId
+        D("getSceneData() queueing later scene load for scene %1", scid)
+        sceneWaiting[skey] = scid
         scheduleDelay( { id="sceneLoader", func=loadWaitingScenes, owner=pluginDevice }, 5 )
         return nil
     end
@@ -800,7 +807,8 @@ end
 local function getValue( val, ctx, tdev )
     D("getValue(%1,%2,%3)", val, ctx, tdev)
     ctx = ctx or sensorState[tostring(tdev)].ctx
-    val = val or ""
+    if type(val) == "number" then return tostring(val), val end
+    val = tostring(val) or ""
     if #val >=2 and val:byte(1) == 34 and val:byte(-1) == 34 then
         -- Dequote quoted string and return
         return val:sub( 2, -2 ), nil
