@@ -2958,6 +2958,7 @@ var ReactorSensor = (function(api, $) {
     function validateActionRow( row ) {
         var actionType = jQuery('select#actiontype', row).val();
         jQuery('.tberror', row).removeClass( 'tberror' );
+        jQuery('.tbwarn', row).removeClass( 'tbwarn' );
         row.removeClass( 'tberror' );
         jQuery( 'div.tberrmsg', row ).remove();
 
@@ -3020,7 +3021,7 @@ var ReactorSensor = (function(api, $) {
                                         continue;
                                     }
                                     /* Not optional, flag error. */
-                                    field.addClass( 'tberror' );
+                                    field.addClass( 'tbwarn' );
                                 } else if ( v.match( /\{[^}]+\}/ ) ) {
                                     /* Variable reference, do nothing, can't check */
                                 } else {
@@ -3036,17 +3037,17 @@ var ReactorSensor = (function(api, $) {
                                             console.log( "validateActionRow: no type data for " + typ );
                                         } else if ( isNaN(v) || ( v < inttypes[typ].min ) || ( v > inttypes[typ].max ) ||
                                             ( undefined !== p.min && v < p.min ) || ( undefined != p.max && v > p.max ) ) {
-                                            field.addClass( 'tberror' ); // ???explain why?
+                                            field.addClass( 'tbwarn' ); // ???explain why?
                                         }
                                     } else if ( typ.match( /(r4|r8|float|number)/i ) ) {
                                         /* Float */
                                         v = parseFloat( v );
                                         if ( isNaN( v ) || ( undefined !== p.min && v < p.min ) || ( undefined !== p.max && v > p.max ) ) {
-                                            field.addClass( 'tberror' );
+                                            field.addClass( 'tbwarn' );
                                         }
                                     } else if ( "boolean" === typ ) {
                                         if ( ! v.match( /^(0|1|true|false|yes|no)$/i ) ) {
-                                            field.addClass( 'tberror' );
+                                            field.addClass( 'tbwarn' );
                                         }
                                     } else if ( "string" !== typ ) {
                                         /* Known unsupported/TBD: date/dateTime/dateTime.tz/time/time.tz (ISO8601), bin.base64, bin.hex, uri, uuid, char, fixed.lll.rrr */
@@ -3166,8 +3167,7 @@ var ReactorSensor = (function(api, $) {
                                     console.log("buildActionList: " + action.service + "/" +
                                         action.action + " required parameter " +
                                         ai.parameters[k].name + " has no value");
-                                    scene = false;
-                                    return false;
+                                    /* fall through and accept empty */
                                 }
                                 pt.value = t;
                             }
@@ -4364,7 +4364,7 @@ var ReactorSensor = (function(api, $) {
         html += "div#tab-actions.reactortab .tb-about { margin-top: 24px; }";
         html += "div#tab-actions.reactortab .color-green { color: #428BCA; }";
         html += 'div#tab-actions.reactortab .tberror { border: 1px solid red; }';
-        html += 'div#tab-actions.reactortab .tbwarn { border: 1px solid yellow; background-color: yellow; }';
+        html += 'div#tab-actions.reactortab .tbwarn { border: 2px solid yellow; }';
         html += 'div#tab-actions.reactortab .tberrmsg { padding: 8px 8px 8px 8px; color: red; }';
         html += 'div#tab-actions.reactortab i.md-btn:disabled { color: #cccccc; cursor: auto; }';
         html += 'div#tab-actions.reactortab i.md-btn[disabled] { color: #cccccc; cursor: auto; }';
