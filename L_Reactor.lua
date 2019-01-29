@@ -2669,11 +2669,11 @@ function actionUpdateGeofences( pdev )
     -- userdata, which can be very large. Shame that it comes back as JSON-
     -- formatted text that we need to decode; I'm sure the action had to encode
     -- it that way, and all we're going to do is decode back.
-    L("Checking geofences...")
     local forcedMode = getVarNumeric( "ForceGeofenceMode", 0, pdev, MYSID )
     if forcedMode ~= 0 then
         geofenceMode = forcedMode
     end
+    L("Checking geofences (%1)...", geofenceMode >= 0 and "quick" or "long")
     local ishome = getVarJSON( "IsHome", {}, pdev, MYSID )
     if type(ishome) ~= "table" then
         D("actionUpdateGeofences() IsHome data type invalid (%1)", type(ishome))
@@ -2709,7 +2709,7 @@ function actionUpdateGeofences( pdev )
         -- decode of that we need, rather than all of user_data, which is
         -- massive even on small installations.
         ra = tostring( ra.UserData )
-        if geofenceMode > 0 then
+        if geofenceMode >= 0 then
             local mm = ra:match( '("users_settings": *%[[^]]*%])' )
             if mm then
                 D("actionUpdateGeofences() found element in UserData (%1 bytes); using short decode", #ra)
