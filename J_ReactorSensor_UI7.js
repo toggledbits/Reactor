@@ -64,7 +64,7 @@ var ReactorSensor = (function(api, $) {
     var msgGroupNormal = "Normal; click for inverted (false when all conditions are met)";
     var msgGroupInvert = "Inverted; click for normal (true when all conditions are met)";
     var msgGroupIdChange = "Click to change group ID";
-    
+
     /* Return footer */
     function footer() {
         var html = '';
@@ -76,7 +76,7 @@ var ReactorSensor = (function(api, $) {
         try {
             html += '<div id="browserident">' + navigator.userAgent + '</div>';
         } catch( e ) {}
-        
+
         return html;
     }
 
@@ -263,16 +263,25 @@ var ReactorSensor = (function(api, $) {
         for ( ix=0; ix<(ud.users || []).length; ++ix ) {
             userIx[ud.users[ix].id] = { name: ud.users[ix].Name || ud.users[ix].id };
         }
-        jQuery.each( ud.usergeofences || [], function( ix, fobj ) {
-            userIx[ fobj.iduser ].tags = {};
-            jQuery.each( fobj.geotags || [], function( iy, gobj ) {
-                userIx[ fobj.iduser ].tags[ gobj.id ] = {
-                    id: gobj.id,
-                    ishome: gobj.ishome,
-                    name: gobj.name
-                };
+        try {
+            jQuery.each( ud.usergeofences || [], function( ix, fobj ) {
+                /* Logically, there should not be a usergeofences[] entry for a user that
+                   doesn't exist in users[], but Vera says "hold my beer" apparently. */
+                if ( undefined === userIx[ fobj.iduser ] ) userIx[ fobj.iduser ] = { name: String(fobj.iduser) + '?' };
+                userIx[ fobj.iduser ].tags = {};
+                jQuery.each( fobj.geotags || [], function( iy, gobj ) {
+                    userIx[ fobj.iduser ].tags[ gobj.id ] = {
+                        id: gobj.id,
+                        ishome: gobj.ishome,
+                        name: gobj.name
+                    };
+                });
             });
-        });
+        }
+        catch (e) {
+            console.log("Error applying usergeofences to userIx: " + String(e));
+            console.log( e.stack )
+        }
     }
 
     /**
@@ -4271,7 +4280,7 @@ var ReactorSensor = (function(api, $) {
     {
         console.log("doActivities()");
         var myid = api.getCpanelDeviceId();
-        
+
         try {
             jQuery( 'div#tbcopyright' ).append('<span> Reactor device info ver ' + String(deviceInfo.serial) + '</span>');
         }
