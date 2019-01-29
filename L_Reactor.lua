@@ -701,11 +701,9 @@ local function loadScene( sceneId, pdev )
     end
     D("loadScene() loaded scene %1: %2", sceneId, data)
 
-    --[[ ??? POST 2.2
-    -- Clear the startup Lua for this scene from the Lua cache
+    -- Clear the startup Lua for this scene from the Lua chunk cache
     local starter = string.format("scene%s_start", tostring(data.id or ""))
     if luaFunc[starter] then luaFunc[starter] = nil end
-    --]]
 
     -- Keep cached
     if next(sceneData) == nil then
