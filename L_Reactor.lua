@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "2.2"
+local _PLUGIN_VERSION = "2.2hotfix"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _CONFIGVERSION = 00206
 
@@ -2015,8 +2015,9 @@ local function evaluateCondition( cond, grp, tdev )
         local op = cond.operator or "is"
         local ishome = getVarJSON( "IsHome", {}, pluginDevice, MYSID )
         if ishome.version ~= 2 then
-            scheduleDelay( { id=tdev }, 60 )
-            error("Rescheduling geofence check; IsHome data needs format update by master device. This notice is advisory only; recovery will occur, no action required.")
+            geofenceMode = -1 -- force full update
+            L{level=2,msg="Geofence data needs update; deferring evaluation until master devices updates."}
+            return "not-ready",false
         end
         local userlist = split( cond.value or "" )
         D("evaluateCondition() ishome op=%1 %3; ishome=%2", op, ishome, userlist)
