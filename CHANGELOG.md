@@ -2,6 +2,12 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
+## Version 2.3 (development)
+
+* Fix: improve handling of startup for geofencing when not previously used (hotfix-19029-01).
+* Fix: fix a problem with geofencing data gathering crashing UI if user_data contains a geofence entry for a user that is not in the users list (hotfix-19029-02).
+* Fix: Reverse order change made to eventList2 as 2.2 pending further investigation of template id vs ordinal position (hotfix-19029-03).
+
 ## Version 2.2 (released)
 
 * Enhancement: Allow invert of group state (i.e. return false when all conditions are met); makes some logic simpler for users.
