@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "2.2"
+local _PLUGIN_VERSION = "2.4develop"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _CONFIGVERSION = 00206
 
@@ -701,11 +701,9 @@ local function loadScene( sceneId, pdev )
     end
     D("loadScene() loaded scene %1: %2", sceneId, data)
 
-    --[[ ??? POST 2.2
-    -- Clear the startup Lua for this scene from the Lua cache
+    -- Clear the startup Lua for this scene from the Lua chunk cache
     local starter = string.format("scene%s_start", tostring(data.id or ""))
     if luaFunc[starter] then luaFunc[starter] = nil end
-    --]]
 
     -- Keep cached
     if next(sceneData) == nil then
@@ -1042,17 +1040,19 @@ local function execSceneGroups( tdev, taskid, scd )
             if delaytype == "start" or not scd.isReactorScene then
                 tt = sst.starttime + delay
             else
-                tt = (sst.lastgrouptime or now) + delay
+                tt = (sst.lastgrouptime or sst.starttime) + delay
             end
             if tt > now then
                 -- It's not time yet. Schedule task to continue.
                 D("execSceneGroups() scene group %1 must delay to %2", nextGroup, tt)
+                addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, notice="Scene delay until "..os.date("%X", tt) }
                 scheduleTick( { id=sst.taskid, owner=sst.owner, func=execSceneGroups, args={} }, tt )
                 return taskid
             end
         end
 
         -- Run this group.
+        addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, notice="Starting scene group "..nextGroup }
         for ix,action in ipairs( scd.groups[nextGroup].actions or {} ) do
             if not scd.isReactorScene then
                 -- Genuine Vera/Luup scene (just has device actions)
@@ -1128,8 +1128,8 @@ local function execSceneGroups( tdev, taskid, scd )
                     -- Not running as job here because we want in-line execution of scene actions (the Reactor way).
                     runScene( scene, tdev, { contextDevice=sst.options.contextDevice, stopPriorScenes=false } )
                 elseif action.type == "runlua" then
-                    D("execSceneGroups() running Lua for %1", scd.id)
-                    local fname = string.format("scene%s_action%d", tostring(scd.id), ix )
+                    local fname = string.format("scene%s_group%d_action%d", tostring(scd.id), nextGroup, ix )
+                    D("execSceneGroups() running Lua for %1 (chunk name %2)", scd.id, fname)
                     local lua = action.lua
                     if ( action.encoded_lua or 0 ) ~= 0 then
                         local mime = require('mime')
@@ -1236,10 +1236,12 @@ local function execScene( scd, tdev, options )
 
     -- We are going to run groups. Set up for it.
     D("execScene() setting up to run groups for scene")
+    local now = os.time()
     sceneState[taskid] = {
         scene=scd.id,   -- scene ID
-        starttime=os.time(),  -- original start time for scene
+        starttime=now,  -- original start time for scene
         lastgroup=0,    -- last group to finish
+        lastgrouptime=now,
         taskid=taskid,  -- timer task ID
         context=ctx,    -- context device (device requesting scene run)
         options=options,    -- options
@@ -2015,8 +2017,9 @@ local function evaluateCondition( cond, grp, tdev )
         local op = cond.operator or "is"
         local ishome = getVarJSON( "IsHome", {}, pluginDevice, MYSID )
         if ishome.version ~= 2 then
-            scheduleDelay( { id=tdev }, 60 )
-            error("Rescheduling geofence check; IsHome data needs format update by master device. This notice is advisory only; recovery will occur, no action required.")
+            geofenceMode = -1 -- force full update
+            L{level=2,msg="Geofence data needs update; deferring evaluation until master device updates."}
+            return "not-ready",false
         end
         local userlist = split( cond.value or "" )
         D("evaluateCondition() ishome op=%1 %3; ishome=%2", op, ishome, userlist)
@@ -2670,11 +2673,11 @@ function actionUpdateGeofences( pdev )
     -- userdata, which can be very large. Shame that it comes back as JSON-
     -- formatted text that we need to decode; I'm sure the action had to encode
     -- it that way, and all we're going to do is decode back.
-    L("Checking geofences...")
     local forcedMode = getVarNumeric( "ForceGeofenceMode", 0, pdev, MYSID )
     if forcedMode ~= 0 then
         geofenceMode = forcedMode
     end
+    L("Checking geofences (%1)...", geofenceMode >= 0 and "quick" or "long")
     local ishome = getVarJSON( "IsHome", {}, pdev, MYSID )
     if type(ishome) ~= "table" then
         D("actionUpdateGeofences() IsHome data type invalid (%1)", type(ishome))
@@ -2710,7 +2713,7 @@ function actionUpdateGeofences( pdev )
         -- decode of that we need, rather than all of user_data, which is
         -- massive even on small installations.
         ra = tostring( ra.UserData )
-        if geofenceMode > 0 then
+        if geofenceMode >= 0 then
             local mm = ra:match( '("users_settings": *%[[^]]*%])' )
             if mm then
                 D("actionUpdateGeofences() found element in UserData (%1 bytes); using short decode", #ra)

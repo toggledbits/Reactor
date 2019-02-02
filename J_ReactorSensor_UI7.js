@@ -14,6 +14,8 @@ var ReactorSensor = (function(api, $) {
 
     /* unique identifier for this plugin... */
     var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
+    
+    var pluginVersion = '2.4develop';
 
     var DEVINFO_MINSERIAL = 2.88;
 
@@ -64,19 +66,19 @@ var ReactorSensor = (function(api, $) {
     var msgGroupNormal = "Normal; click for inverted (false when all conditions are met)";
     var msgGroupInvert = "Inverted; click for normal (true when all conditions are met)";
     var msgGroupIdChange = "Click to change group ID";
-    
+
     /* Return footer */
     function footer() {
         var html = '';
         html += '<div class="clearfix">';
         html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
-        html += '<div id="tbcopyright">Reactor ver 2.2 &copy; 2018,2019 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
+        html += '<div id="tbcopyright">Reactor ver ' + pluginVersion + ' &copy; 2018,2019 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
             ' All Rights Reserved. Please check out the <a href="https://github.com/toggledbits/Reactor/wiki" target="_blank">online documentation</a>' +
             ' and <a href="http://forum.micasaverde.com/index.php/board,93.0.html" target="_blank">forum board</a> for support.</div>';
         try {
             html += '<div id="browserident">' + navigator.userAgent + '</div>';
         } catch( e ) {}
-        
+
         return html;
     }
 
@@ -263,16 +265,25 @@ var ReactorSensor = (function(api, $) {
         for ( ix=0; ix<(ud.users || []).length; ++ix ) {
             userIx[ud.users[ix].id] = { name: ud.users[ix].Name || ud.users[ix].id };
         }
-        jQuery.each( ud.usergeofences || [], function( ix, fobj ) {
-            userIx[ fobj.iduser ].tags = {};
-            jQuery.each( fobj.geotags || [], function( iy, gobj ) {
-                userIx[ fobj.iduser ].tags[ gobj.id ] = {
-                    id: gobj.id,
-                    ishome: gobj.ishome,
-                    name: gobj.name
-                };
+        try {
+            jQuery.each( ud.usergeofences || [], function( ix, fobj ) {
+                /* Logically, there should not be a usergeofences[] entry for a user that
+                   doesn't exist in users[], but Vera says "hold my beer" apparently. */
+                if ( undefined === userIx[ fobj.iduser ] ) userIx[ fobj.iduser ] = { name: String(fobj.iduser) + '?' };
+                userIx[ fobj.iduser ].tags = {};
+                jQuery.each( fobj.geotags || [], function( iy, gobj ) {
+                    userIx[ fobj.iduser ].tags[ gobj.id ] = {
+                        id: gobj.id,
+                        ishome: gobj.ishome,
+                        name: gobj.name
+                    };
+                });
             });
-        });
+        }
+        catch (e) {
+            console.log("Error applying usergeofences to userIx: " + String(e));
+            console.log( e.stack )
+        }
     }
 
     /**
@@ -4185,7 +4196,7 @@ var ReactorSensor = (function(api, $) {
                 jQuery( "select#actiontype", newRow ).val( "delay" );
                 changeActionType( newRow, "delay" );
                 jQuery( "input#delay", newRow ).val( gr.delay );
-                jQuery( "select#delaytype", newRow ).val( gr.delayType || "inline" );
+                jQuery( "select#delaytype", newRow ).val( gr.delaytype || "inline" );
                 newRow.insertBefore( jQuery( '.buttonrow', section ) );
             }
             for ( var k=0; k < (gr.actions || []).length; k++ ) {
@@ -4271,7 +4282,7 @@ var ReactorSensor = (function(api, $) {
     {
         console.log("doActivities()");
         var myid = api.getCpanelDeviceId();
-        
+
         try {
             jQuery( 'div#tbcopyright' ).append('<span> Reactor device info ver ' + String(deviceInfo.serial) + '</span>');
         }
