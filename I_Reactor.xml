@@ -205,9 +205,6 @@
             <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
             <name>GetPluginVersion</name>
             <run>
-                -- Ugly hack. Luup seems to only be able to return values from related state variables (see S_), so use a temp
-                -- one to store the result we want to pass back. Blech. C'mon guys. Amateur hour. Add an extra return argument
-                -- for a table of return values or something, please?
                 local vs, vn = Reactor.getPluginVersion()
                 luup.variable_set("urn:toggledbits-com:serviceId:Reactor", "TempStorage", vs, lul_device)
                 return true

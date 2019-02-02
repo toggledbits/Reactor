@@ -379,33 +379,6 @@
 	"eventList2": [{
 			"id": 1,
 			"label": {
-				"lang_tag": "tb_reactor_tripped",
-				"text": "Trips (conditions met, whether armed or disarmed)"
-			},
-			"serviceId": "urn:micasaverde-com:serviceId:SecuritySensor1",
-			"serviceStateTable": {
-				"Tripped": {
-					"value": "1",
-					"comparisson": "="
-				}
-			}
-		},
-		{
-			"id": 2,
-			"label": {
-				"lang_tag": "tb_reactor_untripped",
-				"text": "Un-trips (conditions not met, whether armed or disarmed)"
-			},
-			"serviceId": "urn:micasaverde-com:serviceId:SecuritySensor1",
-			"serviceStateTable": {
-				"Tripped": {
-					"value": "0",
-					"comparisson": "="
-				}
-			}
-		}, {
-			"id": 3,
-			"label": {
 				"lang_tag": "tb_armed_reactor_tripped",
 				"text": "Trips while armed (conditions met)"
 			},
@@ -422,7 +395,7 @@
 			}
 		},
 		{
-			"id": 4,
+			"id": 2,
 			"label": {
 				"lang_tag": "tb_armed_reactor_untripped",
 				"text": "Un-trips while armed (conditions not met)"
@@ -438,37 +411,34 @@
 					"comparisson": "="
 				}
 			}
-		},
-		{
-			"id": 5,
+		},{
+			"id": 3,
 			"label": {
-				"lang_tag": "tb_reactor_switch_on",
-				"text": "Switch state changes to ON (conditions met, same as trip)"
+				"lang_tag": "tb_reactor_tripped",
+				"text": "Trips (conditions met, whether armed or disarmed)"
 			},
-			"serviceId": "urn:upnp-org:serviceId:SwitchPower1",
+			"serviceId": "urn:micasaverde-com:serviceId:SecuritySensor1",
 			"serviceStateTable": {
-				"Status": {
+				"Tripped": {
 					"value": "1",
 					"comparisson": "="
 				}
 			}
-		},
-		{
-			"id": 6,
+		},{
+			"id": 4,
 			"label": {
-				"lang_tag": "tb_reactor_switch_off",
-				"text": "Switch state changes to OFF (conditions not met, same as untrip)"
+				"lang_tag": "tb_reactor_untripped",
+				"text": "Un-trips (conditions not met, whether armed or disarmed)"
 			},
-			"serviceId": "urn:upnp-org:serviceId:SwitchPower1",
+			"serviceId": "urn:micasaverde-com:serviceId:SecuritySensor1",
 			"serviceStateTable": {
-				"Status": {
+				"Tripped": {
 					"value": "0",
 					"comparisson": "="
 				}
 			}
-		},
-		{
-			"id": 7,
+		},{
+			"id": 5,
 			"label": {
 				"lang_tag": "tb_reactor_arming",
 				"text": "Arming state changes"
@@ -501,9 +471,8 @@
 				},
 				"suffix": {}
 			}]
-		},
-		{
-			"id": 8,
+		},{
+			"id": 6,
 			"label": {
 				"lang_tag": "tb_enabled_changes",
 				"text": "Enabled state changes"
@@ -536,6 +505,32 @@
 				},
 				"suffix": {}
 			}]
+		},{
+			"id": 7,
+			"label": {
+				"lang_tag": "tb_reactor_switch_on",
+				"text": "Switch state changes to ON (conditions met, same as trip)"
+			},
+			"serviceId": "urn:upnp-org:serviceId:SwitchPower1",
+			"serviceStateTable": {
+				"Status": {
+					"value": "1",
+					"comparisson": "="
+				}
+			}
+		},{
+			"id": 8,
+			"label": {
+				"lang_tag": "tb_reactor_switch_off",
+				"text": "Switch state changes to OFF (conditions not met, same as untrip)"
+			},
+			"serviceId": "urn:upnp-org:serviceId:SwitchPower1",
+			"serviceStateTable": {
+				"Status": {
+					"value": "0",
+					"comparisson": "="
+				}
+			}
 		}
 	],
 	"DeviceType": "urn:schemas-toggledbits-com:device:ReactorSensor:1",

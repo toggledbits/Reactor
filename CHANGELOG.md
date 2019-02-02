@@ -2,6 +2,16 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
+## Version 2.2 (hotfix, as of 2019-02-01, aka 19032)
+
+Currently, to capture all hotfixes below, you need to update THREE files: J_ReactorSensor_UI7.js, L_Reactor.lua, and D_ReactorSensor_UI7.json.
+
+* Fix 19032-02: a problem where the delay type is not restoring to the UI properly when editing existing action (reported by Vpow).
+* Fix 19032-01: an initial "inline" delay can lose it's time reference and go into a loop, never executing the actions (only when the delay starts the activity; also reported by Vpow).
+* Fix 19029-03: Revert eventList2 back to prior order until we can properly sort out how to handle making the scene trigger list more user-friendly without disrupting existing scene triggers (which I did; reported by dJOS).
+* Fix 19029-02: if the usergeofences array contained a reference to a user not in the users array of user_data, the UI would crash attempting to load (reported by Fanan).
+* Fix 19029-01: fix to geofence condition so that first-time users don't have sensor crash before master device has properly populated the initial data (reported by connormacleod).
+
 ## Version 2.2 (released)
 
 * Enhancement: Allow invert of group state (i.e. return false when all conditions are met); makes some logic simpler for users.
