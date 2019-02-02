@@ -70,7 +70,7 @@ var ReactorSensor = (function(api, $) {
         var html = '';
         html += '<div class="clearfix">';
         html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
-        html += '<div id="tbcopyright">Reactor ver 2.2hotfix-19029 &copy; 2018,2019 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
+        html += '<div id="tbcopyright">Reactor ver 2.2hotfix-19032 &copy; 2018,2019 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
             ' All Rights Reserved. Please check out the <a href="https://github.com/toggledbits/Reactor/wiki" target="_blank">online documentation</a>' +
             ' and <a href="http://forum.micasaverde.com/index.php/board,93.0.html" target="_blank">forum board</a> for support.</div>';
         try {
@@ -4194,7 +4194,7 @@ var ReactorSensor = (function(api, $) {
                 jQuery( "select#actiontype", newRow ).val( "delay" );
                 changeActionType( newRow, "delay" );
                 jQuery( "input#delay", newRow ).val( gr.delay );
-                jQuery( "select#delaytype", newRow ).val( gr.delayType || "inline" );
+                jQuery( "select#delaytype", newRow ).val( gr.delaytype || "inline" );
                 newRow.insertBefore( jQuery( '.buttonrow', section ) );
             }
             for ( var k=0; k < (gr.actions || []).length; k++ ) {
