@@ -4196,7 +4196,7 @@ var ReactorSensor = (function(api, $) {
                 jQuery( "select#actiontype", newRow ).val( "delay" );
                 changeActionType( newRow, "delay" );
                 jQuery( "input#delay", newRow ).val( gr.delay );
-                jQuery( "select#delaytype", newRow ).val( gr.delayType || "inline" );
+                jQuery( "select#delaytype", newRow ).val( gr.delaytype || "inline" );
                 newRow.insertBefore( jQuery( '.buttonrow', section ) );
             }
             for ( var k=0; k < (gr.actions || []).length; k++ ) {

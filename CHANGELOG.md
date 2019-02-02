@@ -4,9 +4,11 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 2.3 (development)
 
-* Fix: improve handling of startup for geofencing when not previously used (hotfix-19029-01).
-* Fix: fix a problem with geofencing data gathering crashing UI if user_data contains a geofence entry for a user that is not in the users list (hotfix-19029-02).
-* Fix: Reverse order change made to eventList2 as 2.2 pending further investigation of template id vs ordinal position (hotfix-19029-03).
+* Fix (hotfix19032-02): a problem where the delay type is not restoring to the UI properly when editing existing action (reported by Vpow).
+* Fix (hotfix19032-01): an initial "inline" delay can lose it's time reference and go into a loop, never executing the actions (only when the delay starts the activity; also reported by Vpow).
+* Fix (hotfix19029-03): Revert eventList2 back to prior order until we can properly sort out how to handle making the scene trigger list more user-friendly without disrupting existing scene triggers (which I did; reported by dJOS).
+* Fix (hotfix19029-02): if the usergeofences array contained a reference to a user not in the users array of user_data, the UI would crash attempting to load (reported by Fanan).
+* Fix (hotfix19029-01): fix to geofence condition so that first-time users don't have sensor crash before master device has properly populated the initial data (reported by connormacleod).
 
 ## Version 2.2 (released)
 
