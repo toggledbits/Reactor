@@ -2,7 +2,9 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
-## Version 2.3 (development)
+## Version 2.4 (development)
+
+## Version 2.3 (released)
 
 * Fix (hotfix19032-02): a problem where the delay type is not restoring to the UI properly when editing existing action (reported by Vpow).
 * Fix (hotfix19032-01): an initial "inline" delay can lose it's time reference and go into a loop, never executing the actions (only when the delay starts the activity; also reported by Vpow).
