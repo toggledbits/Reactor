@@ -2020,7 +2020,7 @@ local function evaluateCondition( cond, grp, tdev )
         local ishome = getVarJSON( "IsHome", {}, pluginDevice, MYSID )
         if ishome.version ~= 2 then
             geofenceMode = -1 -- force full update
-            L{level=2,msg="Geofence data needs update; deferring evaluation until master devices updates."}
+            L{level=2,msg="Geofence data needs update; deferring evaluation until master device updates."}
             return "not-ready",false
         end
         local userlist = split( cond.value or "" )
