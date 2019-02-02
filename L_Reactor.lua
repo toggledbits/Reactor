@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "2.2"
+local _PLUGIN_VERSION = "2.3"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _CONFIGVERSION = 00206
 
@@ -1042,17 +1042,19 @@ local function execSceneGroups( tdev, taskid, scd )
             if delaytype == "start" or not scd.isReactorScene then
                 tt = sst.starttime + delay
             else
-                tt = (sst.lastgrouptime or now) + delay
+                tt = (sst.lastgrouptime or sst.starttime) + delay
             end
             if tt > now then
                 -- It's not time yet. Schedule task to continue.
                 D("execSceneGroups() scene group %1 must delay to %2", nextGroup, tt)
+                addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, notice="Scene delay until "..os.date("%X", tt) }
                 scheduleTick( { id=sst.taskid, owner=sst.owner, func=execSceneGroups, args={} }, tt )
                 return taskid
             end
         end
 
         -- Run this group.
+        addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, notice="Starting scene group "..nextGroup }
         for ix,action in ipairs( scd.groups[nextGroup].actions or {} ) do
             if not scd.isReactorScene then
                 -- Genuine Vera/Luup scene (just has device actions)
@@ -1128,8 +1130,8 @@ local function execSceneGroups( tdev, taskid, scd )
                     -- Not running as job here because we want in-line execution of scene actions (the Reactor way).
                     runScene( scene, tdev, { contextDevice=sst.options.contextDevice, stopPriorScenes=false } )
                 elseif action.type == "runlua" then
-                    D("execSceneGroups() running Lua for %1", scd.id)
-                    local fname = string.format("scene%s_action%d", tostring(scd.id), ix )
+                    local fname = string.format("scene%s_group%d_action%d", tostring(scd.id), nextGroup, ix )
+                    D("execSceneGroups() running Lua for %1 (chunk name %2)", scd.id, fname)
                     local lua = action.lua
                     if ( action.encoded_lua or 0 ) ~= 0 then
                         local mime = require('mime')
@@ -1236,10 +1238,12 @@ local function execScene( scd, tdev, options )
 
     -- We are going to run groups. Set up for it.
     D("execScene() setting up to run groups for scene")
+    local now = os.time()
     sceneState[taskid] = {
         scene=scd.id,   -- scene ID
-        starttime=os.time(),  -- original start time for scene
+        starttime=now,  -- original start time for scene
         lastgroup=0,    -- last group to finish
+        lastgrouptime=now,
         taskid=taskid,  -- timer task ID
         context=ctx,    -- context device (device requesting scene run)
         options=options,    -- options
@@ -2015,8 +2019,9 @@ local function evaluateCondition( cond, grp, tdev )
         local op = cond.operator or "is"
         local ishome = getVarJSON( "IsHome", {}, pluginDevice, MYSID )
         if ishome.version ~= 2 then
-            scheduleDelay( { id=tdev }, 60 )
-            error("Rescheduling geofence check; IsHome data needs format update by master device. This notice is advisory only; recovery will occur, no action required.")
+            geofenceMode = -1 -- force full update
+            L{level=2,msg="Geofence data needs update; deferring evaluation until master device updates."}
+            return "not-ready",false
         end
         local userlist = split( cond.value or "" )
         D("evaluateCondition() ishome op=%1 %3; ishome=%2", op, ishome, userlist)
