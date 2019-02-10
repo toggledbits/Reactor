@@ -4,7 +4,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 2.4 (development)
 
-* Fix: Add missing pre-init/stub-init for execLua environment's Reactor sub-context, which was causing a spurious error from the __newindex handler on later creation, but oddly was only reported as an issue on openLuup (or perhaps, only as yet).
+* Fix hotfix-19040-01: Fix missing pre-init of context variable that causes later spurious error (reported on openLuup).
 * Change: Remove deprecated execLua context values "reactor_device" and "reactor_ext_arg"
 
 ## Version 2.3 (released)
