@@ -863,10 +863,8 @@ local function execLua( fname, luafragment, extarg, tdev )
         luaEnv.http = nil
         luaEnv.https = nil
         luaEnv.luaxp = nil
-        -- Pre-declare these to keep metamethods from griping later
-        luaEnv.reactor_device = false
-        luaEnv.reactor_ext_arg = ""
-        -- These stubs are replaced per-run
+        -- Pre-declare these to keep metamethods from griping later; these are replaced per-run.
+        luaEnv.Reactor = {}
         luaEnv.__reactor_getdevice = function() end
         luaEnv.__reactor_getscript = function() end
         luaEnv.print =  function( ... )  -- luacheck: ignore 212
@@ -897,7 +895,7 @@ local function execLua( fname, luafragment, extarg, tdev )
                 local dev = t.__reactor_getdevice()
                 local fn = t.__reactor_getscript()
                 L({level=2,msg="%1 (%2) runLua action: %3 makes assignment to global %4 (missing 'local' declaration?)"},
-                    luup.devices[dev].description, dev, fn, n)
+                    ( luup.devices[dev] or {}).description, dev, fn, n)
                 addEvent{ event="lua", dev=dev, script=fn, message="WARNING: Assignment to global "..n.." (missing 'local' declaration?)" }
             end
             rawset(t, n, v)
@@ -909,7 +907,7 @@ local function execLua( fname, luafragment, extarg, tdev )
                 local dev = t.__reactor_getdevice()
                 local fn = t.__reactor_getscript()
                 L({level=1,msg="%1 (%2) runLua action: %3 accesses undeclared/uninitialized global %4"},
-                    luup.devices[dev].description, dev, fn, n)
+                    ( luup.devices[dev] or {} ).description, dev, fn, n)
                 addEvent{ event="lua", dev=dev, script=fn, message="ERROR: Using uninitialized global variable "..n }
             end
             return v
@@ -922,7 +920,9 @@ local function execLua( fname, luafragment, extarg, tdev )
     -- The trip and untrip maps contain those groups that most-recently changed
     -- (i.e. those that would cause an overall state change of the ReactorSensor).
     -- They are maps, rather than just arrays, for quicker access.
-    local _R = { id=tdev, groups={}, trip={}, untrip={}, variables={}, script=fname }
+    local _R = { id=tdev, groups={}, trip={}, untrip={}, variables={},
+        script=fname, version=_PLUGIN_VERSION }
+    _R.dump = stringify -- handy
     for _,grp in ipairs( sensorState[tostring(tdev)].configData.conditions or {} ) do
         local gs = sensorState[tostring(tdev)].condState[grp.groupid] or {}
         _R.groups[grp.groupid] = { state=gs.evalstate, since=gs.evalstamp }
@@ -943,7 +943,8 @@ local function execLua( fname, luafragment, extarg, tdev )
     -- iterator.
     local rmt = {}
     rmt.__newindex =    function(t, n, v) -- luacheck: ignore 212
-                            error("Cannot set " .. tostring(n) .. " in Reactor.variables -- this is a read-only data structure")
+                            addEvent{ dev=tdev, event="lua", script=fname, message="WARNING: Reactor.variables is read-only and cannot be modified! The attempt to modify key "..
+                                n.." will be ignored!" }
                         end
     rmt.__index =   function(t, n)
                         -- Always fetch, because it could be changing dynamically
@@ -960,12 +961,8 @@ local function execLua( fname, luafragment, extarg, tdev )
     rmt.__next =    function(t, k) return luaEnv.rawnxt( getmetatable(t).__vars, k ) end
     rmt.__vars = vars
     setmetatable( _R.variables, rmt )
-    -- Finally. Post our device environment and run the code.
-    -- Add reactor_device and reactor_ext_arg for backwards compatibility
+    -- Finally. post our device environment and run the code.
     luaEnv.Reactor = _R
-    luaEnv.Reactor.dump = stringify -- handy
-    luaEnv.reactor_device = tdev -- legacy ???unused?
-    luaEnv.reactor_ext_arg = extarg or "" -- legacy ???unused?
     luaEnv.__reactor_getdevice = function() return tdev end
     luaEnv.__reactor_getscript = function() return fname end
     local oldenv = getfenv(fnc)
@@ -2484,7 +2481,7 @@ local function waitSystemReady( pdev )
             local sysStatus = luup.variable_get( "urn:micasaverde-com:serviceId:ZWaveNetwork1", "NetStatusID", n )
             if sysStatus ~= nil and sysStatus ~= "1" then
                 -- Z-Wave not yet ready
-                D("Waiting for Z-Wave ready, status %1", sysStatus)
+                L("Waiting for Z-Wave ready, status %1", sysStatus)
                 luup.variable_set( MYSID, "Message", "Waiting for Z-Wave ready", pdev )
                 scheduleDelay( { id=tostring(pdev), func=waitSystemReady, owner=pluginDevice }, 5 )
                 return
@@ -2494,6 +2491,7 @@ local function waitSystemReady( pdev )
     end
 
     -- System is now ready. Finish initialization and start timers.
+    L("Z-Wave ready, starting ReactorSensors.")
     luup.variable_set( MYSID, "Message", "Starting ReactorSensors...", pdev )
 
     -- Start the master tick
@@ -3270,7 +3268,7 @@ local function showGeofenceData( r )
         ", last update " .. shortDate( data.since ) ..
         ", data version " .. tostring(data.version) ..
         EOL
-    for user,udata in pairs( data.users ) do
+    for user,udata in pairs( data.users or {} ) do
         r = r .. "            User " .. tostring(user) .. " ishome=" .. tostring(udata.ishome) ..
             " inlist=" .. table.concat( udata.inlist or {} ) .. " since=" .. shortDate( udata.since ) .. EOL
         for _,tdata in pairs( udata.tags or {} ) do
@@ -3320,7 +3318,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
             if status then
                 r = r .. p
             else
-                r = r .. "            ? " .. tostring(p) .. EOL
+                r = r .. "  Geofence: parse error, " .. tostring(p) .. EOL
             end
         else
             r = r .. "  Geofence: not running" .. EOL

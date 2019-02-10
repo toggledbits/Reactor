@@ -4845,21 +4845,6 @@ var ReactorSensor = (function(api, $) {
 
         html += '</div>'; /* .reactortab */
 
-        try {
-            html += '<div id="sundata">';
-            html += "Today's sun timing is: ";
-            var sd = getParentState( "sundata" ) || "";
-            var sundata = JSON.parse( sd );
-            html += " sunrise/sunset=" + shortLuaTime( sundata.sunrise ) + "/" + shortLuaTime( sundata.sunset );
-            html += ", civil dawn/dusk=" + shortLuaTime( sundata.civdawn ) + "/" + shortLuaTime( sundata.civdusk );
-            html += ", nautical dawn/dusk=" + shortLuaTime( sundata.nautdawn ) + "/" + shortLuaTime( sundata.nautdusk );
-            html += ", astronomical dawn/dusk=" + shortLuaTime( sundata.astrodawn ) + "/" + shortLuaTime( sundata.astrodusk );
-            html += '.';
-            html += '</div>';
-        } catch (exc) {
-            html += "<div>Can't display sun data: " + exc.toString() + "</div>";
-        }
-
         html += '<div><h3>Update Device Information Database</h3>The device information database contains information to help smooth out the user interface for device actions. The "Activities" tab will notify you when an update is available. You may update by clicking the button below; this process does not require a Luup restart or browser refresh. The updates are shared by all ReactorSensors, so updating any one of them updates all of them. This process sends information about the versions of your Vera firmware, this plugin, and the current database, but no personally-identifying information. This information is used to select the correct database for your configuration; it is not used for tracking you. <span id="di-ver-info"/><p><button id="updateinfo" class="btn btn-sm btn-success">Update Device Info</button> <span id="status"/></p>';
 
         /* This feature doesn't work on openLuup -- old form of lu_device request isn't implemented */
