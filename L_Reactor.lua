@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "2.4stable-19033"
+local _PLUGIN_VERSION = "2.4stable-19041"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _CONFIGVERSION = 00206
 
