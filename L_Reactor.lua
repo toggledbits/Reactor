@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "2.3"
+local _PLUGIN_VERSION = "2.3hotfix-19040"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _CONFIGVERSION = 00206
 
@@ -866,6 +866,7 @@ local function execLua( fname, luafragment, extarg, tdev )
         luaEnv.https = nil
         luaEnv.luaxp = nil
         -- Pre-declare these to keep metamethods from griping later
+        luaEnv.Reactor = {}
         luaEnv.reactor_device = false
         luaEnv.reactor_ext_arg = ""
         -- These stubs are replaced per-run

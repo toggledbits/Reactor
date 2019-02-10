@@ -2,6 +2,10 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
+## Version 2.3 (hotfix branch)
+
+* Fix hotfix-19040-01: Fix missing pre-init of context variable that causes later spurious error (reported on openLuup).
+
 ## Version 2.3 (released)
 
 * Fix hotfix-19032-02: a problem where the delay type is not restoring to the UI properly when editing existing action (reported by Vpow).
