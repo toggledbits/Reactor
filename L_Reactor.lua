@@ -857,6 +857,7 @@ local function execLua( fname, luafragment, extarg, tdev )
     if luaEnv == nil then
         D("execLua() creating new Lua environment")
         luaEnv = shallowCopy(_G)
+        luaEnv._G = luaEnv
         -- Clear what we don't need
         luaEnv.json = nil
         luaEnv.ltn12 = nil
@@ -2573,9 +2574,9 @@ function startPlugin( pdev )
     -- Check for ALTUI and OpenLuup
     local failmsg = false
     for k,v in pairs(luup.devices) do
-        if v.device_type == "urn:schemas-upnp-org:device:altui:1" and v.device_num_parent == 0 then
-            D("start() detected ALTUI at %1", k)
-            isALTUI = true
+        if not isALTUI and v.device_type == "urn:schemas-upnp-org:device:altui:1" and v.device_num_parent == 0 then
+            D("startPlugin() detected ALTUI at %1", k)
+            isALTUI = k
             local rc,rs,jj,ra = luup.call_action("urn:upnp-org:serviceId:altui1", "RegisterPlugin",
                 {
                     newDeviceType=RSTYPE,
@@ -2584,7 +2585,7 @@ function startPlugin( pdev )
                     -- newControlPanelFunc="ReactorSensor_ALTUI.controlPanelDraw",
                     newStyleFunc="ReactorSensor_ALTUI.getStyle"
                 }, k )
-            D("startSensor() ALTUI's RegisterPlugin action for %5 returned resultCode=%1, resultString=%2, job=%3, returnArguments=%4", rc,rs,jj,ra, RSTYPE)
+            D("startPlugin() ALTUI's RegisterPlugin action for %5 returned resultCode=%1, resultString=%2, job=%3, returnArguments=%4", rc,rs,jj,ra, RSTYPE)
             rc,rs,jj,ra = luup.call_action("urn:upnp-org:serviceId:altui1", "RegisterPlugin",
                 {
                     newDeviceType=MYTYPE,
@@ -2592,10 +2593,10 @@ function startPlugin( pdev )
                     newDeviceDrawFunc="Reactor_ALTUI.deviceDraw",
                     newStyleFunc="Reactor_ALTUI.getStyle"
                 }, k )
-            D("startSensor() ALTUI's RegisterPlugin action for %5 returned resultCode=%1, resultString=%2, job=%3, returnArguments=%4", rc,rs,jj,ra, MYTYPE)
-        elseif v.device_type == "openLuup" then
-            D("start() detected openLuup")
-            isOpenLuup = true
+            D("startPlugin() ALTUI's RegisterPlugin action for %5 returned resultCode=%1, resultString=%2, job=%3, returnArguments=%4", rc,rs,jj,ra, MYTYPE)
+        elseif not isOpenLuup and v.device_type == "openLuup" then
+            D("startPlugin() detected openLuup")
+            isOpenLuup = k
             local vv = getVarNumeric( "Vnumber", 0, k, v.device_type )
             if vv < 181121 then
                 L({level=1,msg="OpenLuup version must be at least 181121; you have %1. Can't continue."}, vv)
@@ -2603,6 +2604,17 @@ function startPlugin( pdev )
                 luup.set_failure( 1, pdev )
                 failmsg = "Incompatible openLuup ver " .. tostring(vv)
             end
+            vv = (_G or {})._VERSION or ""
+            D("startPlugin() Lua interpreter is %1", vv)
+            local n = vv:match( "^Lua +(.*)$")
+            if type(n) == "string" and not n:match( "^5.1" ) then
+                L({level=1,msg="Invalid Lua version: %1"}, vv)
+                luup.variable_set( MYSID, "Message", "Unsupported Lua interpreter " .. tostring(vv), pdev )
+                luup.set_failure( 1, pdev )
+                failmsg = "Incompatible Lua interpreter " .. tostring(vv)
+            else
+                L({level=2,msg="Can't check Lua interpreter version, returned version string is %1"}, vv)
+            end                
         elseif v.device_type == RSTYPE then
             luup.variable_set( RSSID, "Message", "Stopped", k )
         end
@@ -3310,6 +3322,26 @@ function request( lul_request, lul_parameters, lul_outputformat )
         local r = ""
         r = r .. string.rep("*", 51) .. " REACTOR LOGIC SUMMARY REPORT " .. string.rep("*", 51) .. EOL
         r = r .. "   Version: " .. tostring(_PLUGIN_VERSION) .. " config " .. tostring(_CONFIGVERSION) .. " pluginDevice " .. pluginDevice .. EOL
+        r = r .. "    System:"
+        if isOpenLuup then
+            local v = getVarNumeric( "Vnumber", 0, isOpenLuup, "openLuup" )
+            r = r .. " openLuup version " .. tostring(v)
+            local p = io.popen( "uname -a" )
+            if p then
+                v = p:read("*l")
+                p:close()
+                r = r .. " on " .. tostring(v)
+            end
+        else
+            r = r .. " Vera " .. tostring(luup.attr_get("model",0)) .. " firmware " .. tostring(luup.version)
+        end
+        if isALTUI then
+            r = r .. "; ALTUI"
+            local v = luup.variable_get( "urn:upnp-org:serviceId:altui1", "Version", isALTUI )
+            r = r .. " " .. tostring(v)
+        end
+        r = r .. "; " .. tostring((_G or {})._VERSION)
+        r = r .. EOL
         r = r .. "Local time: " .. os.date("%Y-%m-%dT%H:%M:%S%z") .. ", DST=" .. tostring(luup.variable_get( MYSID, "LastDST", pluginDevice ) or "") .. EOL
         r = r .. "House mode: " .. tostring(luup.variable_get( MYSID, "HouseMode", pluginDevice ) or "") .. EOL
         r = r .. "  Sun data: " .. tostring(luup.variable_get( MYSID, "sundata", pluginDevice ) or "") .. EOL
@@ -3586,7 +3618,9 @@ function request( lul_request, lul_parameters, lul_outputformat )
             system = {
                 version=luup.version,
                 isOpenLuup=isOpenLuup,
-                isALTUI=isALTUI
+                isALTUI=isALTUI,
+                hardware=luup.attr_get("model",0),
+                lua=tostring((_G or {})._VERSION)
             },
             devices={}
         }
