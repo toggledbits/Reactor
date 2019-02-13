@@ -51,6 +51,7 @@ local TRUESTRINGS = ":y:yes:t:true:on:1:" -- strings that mean true (also numeri
 local defaultLogLevel = false -- or a number, which is (uh...) the default log level for messages
 
 local json = require("dkjson")
+local mime = require("mime")
 local luaxp -- will only be loaded if needed
 
 local function dump(t, seen)
@@ -705,6 +706,13 @@ local function loadScene( sceneId, pdev )
     local starter = string.format("scene%s_start", tostring(data.id or ""))
     if luaFunc[starter] then luaFunc[starter] = nil end
 
+    -- Force-encode the scene lua. This is an openLuup issue, as it does not do this by default. Doing so prevents potential JSON issues.
+    if (data.lua or "") ~= "" and (data.encoded_lua or 0) == 0 and getVarNumeric("ForceEncodedLua", 1, pluginDevice, MYSID) ~= 0 then
+        D("loadScene() force-encoding unencoded lua")
+        data.lua = mime.b64( data.lua )
+        data.encoded_lua = true
+    end
+
     -- Keep cached
     if next(sceneData) == nil then
         sceneData = json.decode( luup.variable_get( MYSID, "scenedata", pluginDevice ) or "{}" ) or {}
@@ -1137,7 +1145,6 @@ local function execSceneGroups( tdev, taskid, scd )
                     D("execSceneGroups() running Lua for %1 (chunk name %2)", scd.id, fname)
                     local lua = action.lua
                     if ( action.encoded_lua or 0 ) ~= 0 then
-                        local mime = require('mime')
                         lua = mime.unb64( lua )
                         if lua == nil then
                             addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, ['error']="Aborting; unable to decode Lua for action #" .. tostring(ix) }
@@ -1210,7 +1217,6 @@ local function execScene( scd, tdev, options )
         D("execScene() handling scene (global) Lua")
         local luafragment
         if ( scd.encoded_lua or 0 ) ~= 0 then
-            local mime = require('mime')
             luafragment = mime.unb64( scd.lua )
             if luafragment == nil then
                 addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, ['error']="Aborting; unable to decode scene Lua" }
@@ -3184,7 +3190,6 @@ local function getReactorScene( t, s )
                 if act.type == "comment" then
                     resp = resp .. pfx .. "Comment: " .. tostring(act.comment)
                 elseif act.type == "runlua" then
-                    local mime = require('mime')
                     local lua = ((act.encoded_lua or 0) ~= 0) and mime.unb64( act.lua ) or act.lua
                     lua = (lua or ""):gsub( "\r\n", "\n" )
                     lua = lua:gsub( "\r", "\n" )
