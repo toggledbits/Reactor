@@ -62,6 +62,8 @@ var ReactorSensor = (function(api, $) {
     var noCaseOptPattern = /(=|<>|contains|notcontains|starts|notstarts|ends|notends|in|notin|change)/i;
     var serviceOpsIndex = {};
 
+    var varRefPattern = /^\{[^}]+\}\s*$/;
+
     var msgUnsavedChanges = "You have unsaved changes! Press OK to save them, or Cancel to discard them.";
     var msgGroupNormal = "Normal; click for inverted (false when all conditions are met)";
     var msgGroupInvert = "Inverted; click for normal (true when all conditions are met)";
@@ -475,6 +477,13 @@ var ReactorSensor = (function(api, $) {
  *
  ** **************************************************************************/
 
+    function conditionValueText( v ) {
+        if ( "number" === typeof(v) ) return v;
+        v = String(v);
+        if ( v.match( varRefPattern ) ) return v;
+        return JSON.stringify( v );
+    }
+    
     function makeConditionDescription( cond ) {
         if ( cond === undefined ) {
             return "(undefined)";
@@ -495,13 +504,13 @@ var ReactorSensor = (function(api, $) {
                         if ( "change" == t.op ) {
                             k = ( cond.value || "" ).split( /,/ );
                             if ( k.length > 0 && k[0] !== "" ) {
-                                str += " from " + k[0];
+                                str += " from " + conditionValueText( k[0] );
                             }
                             if ( k.length > 1 && k[1] !== "" ) {
-                                str += " to " + k[1];
+                                str += " to " + conditionValueText( k[1] );
                             }
                         } else {
-                            str += ' ' + ( t.numeric ? cond.value : JSON.stringify( cond.value ) );
+                            str += ' ' + conditionValueText( cond.value );
                         }
                     }
                 }
@@ -625,7 +634,11 @@ var ReactorSensor = (function(api, $) {
                 if ( ! isEmpty( cond.basetime ) ) {
                     t = cond.basetime.split(/,/);
                     str += " (relative to ";
-                    str += t[0] + ":" + t[1];
+                    if ( t.length == 2 ) {
+                        str += t[0] + ":" + t[1];
+                    } else {
+                        str += String( cond.basetime );
+                    }
                     str += ")";
                 }
                 break;
@@ -1111,7 +1124,7 @@ var ReactorSensor = (function(api, $) {
                     cond.value = jQuery("input#value", row).val() || "";
                 }
                 /* For numeric op, check that value is parseable as a number (unless var ref) */
-                if ( op && op.numeric && ! cond.value.match( /\{[^}]+\}/ ) ) {
+                if ( op && op.numeric && ! cond.value.match( varRefPattern ) ) {
                     var n = parseFloat( cond.value );
                     if ( isNaN( n ) ) {
                         jQuery( 'input#value', row ).addClass( 'tberror' );
@@ -1238,26 +1251,47 @@ var ReactorSensor = (function(api, $) {
 
             case 'interval':
                 removeConditionProperties( cond, "days,hours,mins,basetime" );
-                var v = getOptionalInteger( jQuery('div.params #days', row).val(), 0 );
-                if ( isNaN(v) || v < 0 ) {
-                    jQuery( 'div.params #days', row ).addClass( 'tberror' );
-                } else {
+                var nmin = 0;
+                var v = jQuery('div.params #days', row).val();
+                if ( v.match( varRefPattern ) ) {
                     cond.days = v;
-                }
-                v = getOptionalInteger( jQuery('div.params #hours', row).val(), 0 );
-                if ( isNaN(v) || v < 0 ) {
-                    jQuery( 'div.params #hours', row ).addClass( 'tberror' );
+                    nmin = 1440;
                 } else {
+                    v = getOptionalInteger( v, 0 );
+                    if ( isNaN(v) || v < 0 ) {
+                        jQuery( 'div.params #days', row ).addClass( 'tberror' );
+                    } else {
+                        cond.days = v;
+                        nmin = nmin + 1440 * v;
+                    }
+                } 
+                jQuery('div.params #hours', row).val();
+                if ( v.match( varRefPattern ) ) {
                     cond.hours = v;
-                }
-                v = getOptionalInteger( jQuery('div.params #mins', row).val(), 0 );
-                if ( isNaN(v) || v < 0 ) {
-                    jQuery( 'div.params #mins', row ).addClass( 'tberror' );
+                    nmin = 60;
                 } else {
-                    cond.mins = v;
+                    v = getOptionalInteger( v, 0 );
+                    if ( isNaN(v) || v < 0 ) {
+                        jQuery( 'div.params #hours', row ).addClass( 'tberror' );
+                    } else {
+                        cond.hours = v;
+                        nmin = nmin + 60 * v;
+                    }
                 }
-                var t = cond.days * 1440 + cond.hours * 60 + cond.mins;
-                if ( 0 == t ) {
+                v = jQuery('div.params #mins', row).val();
+                if ( v.match( varRefPattern ) ) {
+                    cond.mins = v;
+                    nmin = 1;
+                } else {
+                    v = getOptionalInteger( v, 0 );
+                    if ( isNaN(v) || v < 0 ) {
+                        jQuery( 'div.params #mins', row ).addClass( 'tberror' );
+                    } else {
+                        cond.mins = v;
+                        nmin = nmin + v;
+                    }
+                }
+                if ( nmin <= 0 ) {
                     jQuery( 'div.params select', row ).addClass( 'tberror' );
                 }
                 var rh = jQuery( 'div.params select#relhour' ).val() || "00";
@@ -1369,7 +1403,7 @@ var ReactorSensor = (function(api, $) {
                 jQuery( 'fieldset#housemodeselects', row ).hide();
             }
         } else if ( "service" === cond.type ) {
-            var inp = jQuery( 'input#value', row ) || "=";
+            var inp = jQuery( 'input#value', row );
             if ( val == "change" ) {
                 if ( inp.length > 0 ) {
                     // Change single input field to double fields.
@@ -1697,7 +1731,7 @@ var ReactorSensor = (function(api, $) {
                 }
                 container.append( makeVariableMenu( cond.device, cond.service, cond.variable ) );
                 container.append( makeServiceOpMenu( cond.operator || "=" ) );
-                container.append('<input type="text" id="value" class="form-control form-control-sm" autocomplete="off">');
+                container.append('<input type="text" id="value" class="form-control form-control-sm" autocomplete="off" list="reactorvarlist">');
                 container.append(' ');
                 container.append('<fieldset id="nocaseopt"><label class="checkbox-inline" for="nocase"><input id="nocase" type="checkbox" class="form-check">Ignore&nbsp;case</label></fieldset>');
                 container.append(' ');
@@ -2485,6 +2519,8 @@ var ReactorSensor = (function(api, $) {
             }
 
             initModule();
+            
+            var myid = api.getCpanelDeviceId();
 
             /* Load material design icons */
             jQuery("head").append('<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">');
@@ -2532,7 +2568,7 @@ var ReactorSensor = (function(api, $) {
             html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>Conditions</h3></div></div>';
             html += '<div class="row"><div class="col-xs-12 col-sm-12">Conditions within a group are "AND", and groups are "OR". That is, the sensor will trip when any group succeeds, and for a group to succeed, all conditions in the group must be met.</div></div>';
 
-            var rr = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "Retrigger" ) || "0";
+            var rr = api.getDeviceState( myid, serviceId, "Retrigger" ) || "0";
             if ( rr !== "0" ) {
                 html += '<div class="row"><div class="warning col-xs-12 col-sm-12">WARNING! Retrigger is on! You should avoid using time-related conditions in this ReactorSensor, as they may cause retriggers frequent retriggers!</div></div>';
             }
@@ -2544,6 +2580,19 @@ var ReactorSensor = (function(api, $) {
             html += footer();
 
             api.setCpanelContent(html);
+
+            /* Set up a data list with our variables */
+            var cd = iData[myid].cdata;
+            var dl = jQuery('<datalist id="reactorvarlist"></datalist>');
+            if ( cd.variables ) {
+                for ( var vname in cd.variables ) {
+                    if ( cd.variables.hasOwnProperty( vname ) ) {
+                        var opt = jQuery( '<option/>' ).val( '{'+vname+'}' ).text( '{'+vname+'}' );
+                        dl.append( opt );
+                    }
+                }
+            }
+            jQuery( 'div#tab-conds.reactortab' ).append( dl );
 
             redrawConditions();
 
@@ -2983,7 +3032,7 @@ var ReactorSensor = (function(api, $) {
 
             case "delay":
                 var delay = jQuery( 'input#delay', row ).val() || "";
-                if ( delay.match( /\{[^}]+\}/ ) ) {
+                if ( delay.match( varRefPattern ) ) {
                     // Variable reference. ??? check it?
                 } else if ( delay.match( /^([0-9][0-9]?)(:[0-9][0-9]?){1,2}$/ ) ) {
                     // MM:SS or HH:MM:SS
@@ -3037,7 +3086,7 @@ var ReactorSensor = (function(api, $) {
                                     }
                                     /* Not optional, flag error. */
                                     field.addClass( 'tbwarn' );
-                                } else if ( v.match( /\{[^}]+\}/ ) ) {
+                                } else if ( v.match( varRefPattern ) ) {
                                     /* Variable reference, do nothing, can't check */
                                 } else {
                                     // check value type, range?
@@ -3124,7 +3173,7 @@ var ReactorSensor = (function(api, $) {
 
                 case "delay":
                     t = jQuery( 'input#delay', row ).val() || "0";
-                    if ( t.match( /^\{[^}]+\}$/ ) ) {
+                    if ( t.match( varRefPattern ) ) {
                         /* Variable reference is OK as is. */
                     } else {
                         if ( t.indexOf( ':' ) >= 0 ) {
@@ -4001,7 +4050,7 @@ var ReactorSensor = (function(api, $) {
                                 actionText += "{" + p.name + "=" + String(p.value) + "}, ";
                             } else {
                                 var v = (jQuery( '#' + p.name, row ).val() || "").trim();
-                                var vn = v.match( /\{([^}]+)\}/ );
+                                var vn = v.match( varRefPattern );
                                 if ( vn && vn.length == 2 ) {
                                     /* Variable reference, get current value. */
                                     v = api.getDeviceState( api.getCpanelDeviceId(), "urn:toggledbits-com:serviceId:ReactorValues", vn[1] ) || "";
