@@ -1469,7 +1469,6 @@ local function getExpressionContext( cdata, tdev )
         if n == nil then return luaxp.NULL end
         return n
     end
-    ctx.__functions.random = function( args ) return math.random( unpack( args ) ) end
     ctx.__functions.getstate = function( args )
         local dev, svc, var = unpack( args )
         local vn = finddevice( dev )
