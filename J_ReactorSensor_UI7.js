@@ -284,7 +284,7 @@ var ReactorSensor = (function(api, $) {
         }
         catch (e) {
             console.log("Error applying usergeofences to userIx: " + String(e));
-            console.log( e.stack )
+            console.log( e.stack );
         }
     }
 
@@ -3289,7 +3289,7 @@ var ReactorSensor = (function(api, $) {
                         delete action.encoded_lua;
                         action.lua = "";
                     } else {
-                        action.encoded_lua = true;
+                        action.encoded_lua = 1;
                         action.lua = btoa( lua );
                     }
                     break;
@@ -4300,7 +4300,7 @@ var ReactorSensor = (function(api, $) {
                     case "runlua":
                         var lua = "";
                         if ( act.lua ) {
-                            lua = act.encoded_lua ? atob( act.lua ) : act.lua;
+                            lua = (act.encoded_lua || 0) != 0 ? atob( act.lua ) : act.lua;
                         }
                         jQuery( 'textarea.luacode', newRow ).val( lua ).trigger( 'reactorinit' );
                         break;
