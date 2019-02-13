@@ -2629,7 +2629,7 @@ function startPlugin( pdev )
                 failmsg = "Incompatible Lua interpreter " .. tostring(vv)
             else
                 L({level=2,msg="Can't check Lua interpreter version, returned version string is %1"}, vv)
-            end                
+            end
         elseif v.device_type == RSTYPE then
             luup.variable_set( RSSID, "Message", "Stopped", k )
         end
@@ -3185,7 +3185,7 @@ local function getReactorScene( t, s )
                     resp = resp .. pfx .. "Comment: " .. tostring(act.comment)
                 elseif act.type == "runlua" then
                     local mime = require('mime')
-                    local lua = (act.encoded_lua or 0) and mime.unb64( act.lua ) or act.lua
+                    local lua = ((act.encoded_lua or 0) ~= 0) and mime.unb64( act.lua ) or act.lua
                     lua = (lua or ""):gsub( "\r\n", "\n" )
                     lua = lua:gsub( "\r", "\n" )
                     lua = lua:gsub( "\n", EOL .. pfx .. "    " )
