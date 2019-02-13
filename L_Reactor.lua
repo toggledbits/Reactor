@@ -880,8 +880,9 @@ local function execLua( fname, luafragment, extarg, tdev )
                                 "] " .. msg)
                             addEvent{ dev=dev, event="lua", script=luaEnv.__reactor_getscript(), message=msg }
                         end
-        -- Override next and pairs specifically so that variables proxy table can
-        -- iterate. This is a 5.1-ism. See http://lua-users.org/wiki/GeneralizedPairsAndIpairs
+        -- Override next and pairs specifically so that variables proxy table can iterate.
+        -- This version checks for a meta __next function and uses in preference if found.
+        -- This is a 5.1-ism. See http://lua-users.org/wiki/GeneralizedPairsAndIpairs
         luaEnv.rawnxt = luaEnv.next
         luaEnv.next =   function( t, k )
                             local m = getmetatable(t)
@@ -891,27 +892,32 @@ local function execLua( fname, luafragment, extarg, tdev )
         -- Redefining pairs() this way allows metamethod override for iteration.
         luaEnv.pairs =  function( t ) return luaEnv.next, t, nil end
         local mt = { }
-        mt.__newindex = function (t, n, v)
-            if rawget(t, n) == nil and debug.getinfo(2, "S").what ~= "C" then
-                local dev = t.__reactor_getdevice()
-                local fn = t.__reactor_getscript()
-                L({level=2,msg="%1 (%2) runLua action: %3 makes assignment to global %4 (missing 'local' declaration?)"},
-                    ( luup.devices[dev] or {}).description, dev, fn, n)
-                addEvent{ event="lua", dev=dev, script=fn, message="WARNING: Assignment to global "..n.." (missing 'local' declaration?)" }
+        if getVarNumeric( "SuppressLuaGlobalWarnings", 0, pluginDevice, MYSID ) == 0 then
+            mt.__newindex = function(t, n, v)
+                local what = debug.getinfo(2, "S")
+                D("luaEnv.mt.__newindex(%1,%2,%3) new index; luaEnv=%4; debuginfo=%5", tostring(t), n, tostring(v), tostring(luaEnv), what)
+                if what.what ~= "C" then
+                    local dev = t.__reactor_getdevice()
+                    local fn = t.__reactor_getscript() or tostring(what.source)
+                    L({level=2,msg="%1 (%2) runLua action: %3 makes assignment to global %4 (missing 'local' declaration?) at %5"},
+                        ( luup.devices[dev] or {}).description, dev, fn, n, what)
+                    addEvent{ event="lua", dev=dev, script=fn, message="WARNING: Assignment to global "..n.." (missing 'local' declaration?)" }
+                end
+                rawset(t, n, v)
             end
-            rawset(t, n, v)
-        end
-        mt.__index = function(t, n) -- luacheck: ignore 212
-            if ( ( ( t.package or {} ).loaded or {} )[n] ) then return t.package.loaded[n] end -- hmmm
-            local v = rawget(t, n)
-            if v == nil and debug.getinfo(2, "S").what ~= "C" then
-                local dev = t.__reactor_getdevice()
-                local fn = t.__reactor_getscript()
-                L({level=1,msg="%1 (%2) runLua action: %3 accesses undeclared/uninitialized global %4"},
-                    ( luup.devices[dev] or {} ).description, dev, fn, n)
-                addEvent{ event="lua", dev=dev, script=fn, message="ERROR: Using uninitialized global variable "..n }
+            mt.__index = function(t, n) -- luacheck: ignore 212
+                local what = debug.getinfo(2, "S")
+                D("luaEnv.mt.__index(%1,%2) key miss; luaEnv=%3; debuginfo=%4", tostring(t), n, tostring(luaEnv), what)
+                if ( ( ( t.package or {} ).loaded or {} )[n] ) then return t.package.loaded[n] end -- hmmm, Vera Luup
+                if what.what ~= "C" then
+                    local dev = t.__reactor_getdevice()
+                    local fn = t.__reactor_getscript() or tostring(what.source)
+                    L({level=1,msg="%1 (%2) runLua action: %3 accesses undeclared/uninitialized global %4"},
+                        ( luup.devices[dev] or {} ).description, dev, fn, n)
+                    addEvent{ event="lua", dev=dev, script=fn, message="ERROR: Using uninitialized global variable "..n }
+                end
+                return rawget(t, n)
             end
-            return v
         end
         mt.__metatable = false -- prevent client tampering
         setmetatable( luaEnv, mt )
@@ -959,8 +965,9 @@ local function execLua( fname, luafragment, extarg, tdev )
                         end
                         return v
                     end
+    -- Define __next meta so env-standard next() accesses proxy table.
     rmt.__next =    function(t, k) return luaEnv.rawnxt( getmetatable(t).__vars, k ) end
-    rmt.__vars = vars
+    rmt.__vars = vars -- this is the proxy table
     setmetatable( _R.variables, rmt )
     -- Finally. post our device environment and run the code.
     luaEnv.Reactor = _R
@@ -1665,8 +1672,14 @@ local function evaluateCondition( cond, grp, tdev )
                 local prior = ( cond.laststate.lastvalue == vv ) and
                     cond.laststate.priorvalue or cond.laststate.lastvalue
                 D("evaluateCondition() service change op with terms, currval=%1, prior=%2, term=%3", vv, prior, ar)
-                if #ar > 0 and ar[1] ~= "" and prior ~= ar[1] then return vv,false end
-                if #ar > 1 and ar[2] ~= "" and vv ~= ar[2] then return vv,false end
+                if #ar > 0 and ar[1] ~= "" then
+                    cv = getValue( ar[1], nil, tdev )
+                    if prior ~= cv then return vv,false end
+                end
+                if #ar > 1 and ar[2] ~= "" then
+                    cv = getValue( ar[2], nil, tdev )
+                    if vv ~= cv then return vv,false end
+                end
                 return vv,true
             end
             D("evaluateCondition() service change op without terms, currval=%1, prior=%2, term=%3",
@@ -1943,10 +1956,13 @@ local function evaluateCondition( cond, grp, tdev )
         -- Return timer flag true when reloaded is true, so we get a reset shortly after.
         return reloaded,reloaded,reloaded
     elseif cond.type == "interval" then
-        local interval = 60 * (cond.days * 1440 + cond.hours * 60 + cond.mins)
+        local _,nmins = getValue( cond.mins, nil, tdev )
+        local _,nhours = getValue( cond.hours, nil, tdev )
+        local _,ndays = getValue( cond.days, nil, tdev )
+        local interval = 60 * ((ndays or 0) * 1440 + (nhours or 0) * 60 + (nmins or 0))
         if interval < 60 then interval = 60 end -- "can never happen" (yeah, hold my beer)
         -- Get our base time and make it a real time
-        local pt = split( cond.basetime or "" )
+        local pt = split( ( getValue( cond.basetime, nil, tdev ) ) or "" )
         if #pt == 2 then
             ndt.hour = tonumber(pt[1]) or 0
             ndt.min = tonumber(pt[2]) or 0
