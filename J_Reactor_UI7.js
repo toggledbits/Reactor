@@ -132,28 +132,18 @@ var Reactor = (function(api, $) {
         
         /* Write new (old/restored) config */
         /* Writing cdata restarts the sensor, so no explicit action call needed after. */
-        api.setDeviceStateVariablePersistent( dev.id, serviceId, 
+        api.setDeviceStateVariablePersistent( dev.id, "urn:toggledbits-com:serviceId:ReactorSensor", 
             "cdata", JSON.stringify( backupInfo.sensors[item].config || {} ),
             {
                 'onSuccess' : function() {
-                    jQuery( '.reactortab div#restorestatus p#' + String(item) ).append( " config restored, restarting" );
-                    api.performActionOnDevice( dev.id,  "urn:toggledbits-com:serviceId:ReactorSensor", 
-                        "Restart", { actionArguments: { SceneNum: 0, contextDevice: dev.id },
-                            onSuccess: function() {
-                                jQuery( '.reactortab div#restorestatus p#' + String(item) ).append(", done!");
-                            },
-                            onFailure: function() {
-                                jQuery( '.reactortab div#restorestatus p#' + String(item) ).append("--failed, restart sensor manually.");
-                            } 
-                        } );
-                    
+                    jQuery( '.reactortab div#restorestatus p#' + String(item) ).append( " succeeded." );
                 },
                 'onFailure' : function() {
                     if ( tries < 12 ) {
                         jQuery( '.reactortab div#restorestatus p#' + String(item) ).append(".");
-                        setTimeout( function() { restore( item, dev, tries ); }, 5000 );
+                        setTimeout( function() { restore( item, dev, tries+1 ); }, 5000 );
                     } else {
-                        jQuery( '.reactortab div#restorestatus p#' + String(item) ).text( backupInfo.sensors[item].name + ' restore failed!' );
+                        jQuery( '.reactortab div#restorestatus p#' + String(item) ).append( ' <b>FAILED!</b>' );
                     }
                 }
             });
