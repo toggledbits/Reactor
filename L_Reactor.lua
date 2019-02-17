@@ -1100,9 +1100,10 @@ local function execSceneGroups( tdev, taskid, scd )
                 D("execSceneGroups() %3 step %1: %2", ix, action, scd.id)
                 if action.type == "comment" then
                     -- If first char is asterisk, emit comment to log file
-                    if ( action.comment or ""):sub(1,1) == "*" then
+                    if ( action.comment or ""):byte(1) == 42 then
                         L("%2 (%1) %3 [%4:%5]", tdev, luup.devices[tdev].description,
                             action.comment, scd.id, ix)
+                        addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, message=action.comment or "" }
                     end
                 elseif action.type == "device" then
                     local devnum = tonumber( action.device )
