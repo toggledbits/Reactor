@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "2.4develop"
+local _PLUGIN_VERSION = "2.4develop-19048"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _CONFIGVERSION = 00206
 
@@ -744,8 +744,12 @@ end
 local function getSceneData( sceneId, tdev )
     D("getSceneData(%1,%2)", sceneId, tdev )
 
-    -- Special scene?
-    local skey = tostring(sceneId)
+    -- Check for activity (ReactorScene)
+    local skey = tostring(sceneId):lower()
+    local cd = sensorState[tostring(tdev)].configData
+    if ( cd.activities or {} )[skey] then
+        return cd.activities[skey]
+    end
     if skey:match( "^__[un]*trip") then -- patterns not very sophisticaed in Lua, so (overly) simple test
         -- For these special scenes, they're already in config ready to go.
         local pt = skey:match("^__un") and "untripactions" or "tripactions"
@@ -754,7 +758,7 @@ local function getSceneData( sceneId, tdev )
         return r
     end
 
-    -- Load persistent scene data to cache if cache empty
+    -- Load persistent (Vera) scene data to cache if cache empty
     if next(sceneData) == nil then
         sceneData = getVarJSON( "scenedata", {}, pluginDevice, MYSID )
     end
@@ -859,19 +863,19 @@ local function execLua( fname, luafragment, extarg, tdev )
             luaFunc[fname] = fnc
         end
     end
-    -- We use a single environment for all Lua scripts, which allows modules loaded
+    -- We use a single sandbox for all Lua scripts, which allows modules loaded
     -- to be shared among them. This, of course, has some inherent dangers, and
     -- people's bad habits with globals may be exposed. Issue warnings to assist.
     if luaEnv == nil then
         D("execLua() creating new Lua environment")
         luaEnv = shallowCopy(_G)
+        luaEnv._RG = _G -- The unsandboxed plugin environment. Shhh! Secret!
         luaEnv._G = luaEnv
-        -- Clear what we don't need
+        -- Clear what we don't want to expose.
         luaEnv.json = nil
         luaEnv.ltn12 = nil
         luaEnv.http = nil
         luaEnv.https = nil
-        luaEnv.luaxp = nil
         -- Pre-declare these to keep metamethods from griping later; these are replaced per-run.
         luaEnv.Reactor = {}
         luaEnv.__reactor_getdevice = function() end
@@ -904,6 +908,15 @@ local function execLua( fname, luafragment, extarg, tdev )
             mt.__newindex = function(t, n, v)
                 local what = debug.getinfo(2, "S")
                 D("luaEnv.mt.__newindex(%1,%2,%3) new index; luaEnv=%4; debuginfo=%5", tostring(t), n, tostring(v), tostring(luaEnv), what)
+                if type(v) == "function" then 
+                    --[[ 
+                        This special handling for functions allows luup callbacks to work.
+                        The callbacks have to be defined in the plugin environment (outside
+                        the sandbox) for Luup to find them by name later.
+                    --]]
+                    rawset(t._RG, n, v)
+                    return rawset(t, n, v)
+                end
                 if what.what ~= "C" then
                     local dev = t.__reactor_getdevice()
                     local fn = t.__reactor_getscript() or tostring(what.source)
@@ -1384,8 +1397,10 @@ local function loadSensorConfig( tdev )
     end
     -- Special meta to control encode rendering when needed.
     local mt = { __jsontype="object" } -- empty tables render as object
-    mt.__index = function(t, n) if debugMode then L({level=1,msg="access to %1 in cdata, which is undefined!"},n) end return rawget(t,n) end
-    mt.__newindex = function(t, n, v) rawset(t,n,v) if debugMode then L({level=2,msg="setting %1=%2 in cdata"}, n, v) end end
+    if debugMode then
+        mt.__index = function(t, n) if debugMode then L({level=1,msg="access to %1 in cdata, which is undefined!"},n) end return rawget(t,n) end
+        mt.__newindex = function(t, n, v) rawset(t,n,v) if debugMode then L({level=2,msg="setting %1=%2 in cdata"}, n, v) end end
+    end
     setmetatable( cdata, mt )
     -- Check old-style scene runners, fix.
     s = luup.variable_get( RSSID, "Scenes", tdev ) or ""
@@ -3179,7 +3194,22 @@ local function getDevice( dev, pdev, v )
     return devinfo
 end
 
-local function getReactorScene( t, s )
+local function getLuaSummary( lua, encoded, fmt )
+    if ( encoded or 0 ) ~= 0 then
+        lua = mime.unb64( lua )
+        if lua == nil then return string.format( fmt, 0, "Can't unb64 lua block" ) .. EOL end
+    end
+    local r = ""
+    lua = lua:gsub( "\r\n", "\n" ):gsub( "\r", "\n" )
+    local lines = split( lua, "\n" )
+    for ix=1,#lines do
+        r = r .. string.format( fmt, ix, lines[ix] ) .. EOL
+    end
+    return r
+end
+
+local function getReactorScene( t, s, tdev, runscenes )
+    runscenes = runscenes or {}
     local resp = "    " .. t .. ( s and "" or " (none)" ) .. EOL
     local pfx = "        "
     if s then
@@ -3189,15 +3219,13 @@ local function getReactorScene( t, s )
             end
             for _,act in ipairs( gr.actions or {} ) do
                 if act.type == "comment" then
-                    resp = resp .. pfx .. "Comment: " .. tostring(act.comment)
+                    resp = resp .. pfx .. "Comment: " .. tostring(act.comment) .. EOL
                 elseif act.type == "runlua" then
-                    local lua = ((act.encoded_lua or 0) ~= 0) and mime.unb64( act.lua ) or act.lua
-                    lua = (lua or ""):gsub( "\r\n", "\n" )
-                    lua = lua:gsub( "\r", "\n" )
-                    lua = lua:gsub( "\n", EOL .. pfx .. "    " )
-                    resp = resp .. pfx .. "Run Lua:" .. EOL .. pfx .."    " .. tostring(lua)
+                    resp = resp .. pfx .. "Run Lua:" .. EOL
+                    resp = resp .. getLuaSummary( act.lua, act.encoded_lua, pfx .. "%6d: %s" )
                 elseif act.type == "runscene" then
-                    resp = resp .. pfx .. "Run scene " .. tostring(act.scene) .. " " .. ((luup.scenes[act.scene] or {}).description or (act.sceneName or "").."?")
+                    resp = resp .. pfx .. "Run scene " .. tostring(act.scene) .. " " .. ((luup.scenes[act.scene] or {}).description or (act.sceneName or "").."?") .. EOL
+                    runscenes[tostring(act.scene)] = getSceneData( act.scene, tdev )
                 elseif act.type == "device" then
                     local p = {}
                     for _,pp in ipairs( act.parameters or {} ) do
@@ -3208,8 +3236,9 @@ local function getReactorScene( t, s )
                         ((luup.devices[act.device or 0] or {}).description or (act.deviceName or "").."?") ..
                         ") action " .. (act.service or "?") .. "/" ..
                         (act.action or "?") .. "( " .. p .. " )"
+                    resp = resp .. EOL
                 elseif act.type == "housemode" then
-                    resp = resp .. pfx .. "Change house mode to " .. tostring(act.housemode)
+                    resp = resp .. pfx .. "Change house mode to " .. tostring(act.housemode) .. EOL
                 else
                     resp = resp .. pfx .. "Action type " .. act.type .. "?"
                     local arr = {}
@@ -3219,12 +3248,12 @@ local function getReactorScene( t, s )
                         end
                     end
                     if #arr then resp = resp .. " " .. table.concat( arr, ", " ) end
+                    resp = resp .. EOL
                 end
-                resp = resp .. EOL
             end
         end
     end
-    return resp
+    return resp, runscenes
 end
 
 local function getEvents( deviceNum )
@@ -3294,6 +3323,42 @@ local function shortDate( d )
     return os.date("%Y-%m-%d.%X", d)
 end
 
+local function getLuupSceneSummary( scid, scd )
+    local r = EOL
+    if ( scd.lua or "" ) ~= "" then
+        r = r .. "    Scene Lua:" .. EOL
+        r = r .. getLuaSummary( scd.lua, scd.encoded_lua, "      %6d: %s" )
+    end
+    for ix,gr in ipairs( scd.groups or {} ) do
+        r = r .. string.format( "    Group %d", ix )
+        if ( gr.delay or 0 ) > 0 then
+            r = r .. string.format( " delay %d", gr.delay )
+        end
+        r = r .. EOL
+        for _,ac in ipairs( gr.actions or {} ) do
+            r = r .. string.format( " action dev #%d (%s) action %s/%s ",
+                ac.device,
+                (luup.devices[ac.device] or {}).description or "?missing?",
+                ac.service, ac.action )
+            local pp = {}
+            for iz,p in ipairs( ac.arguments or {} ) do
+                table.insert( pp, "%s=%q", p.name or tostring(iz), tostring(p.value) )
+            end
+            r = r .. table.concat( pp, "," ) .. EOL
+        end
+    end
+    return r
+end
+
+local function showStartupLua()
+    local lua = luup.attr_get( "StartupCode", 0 ) or ""
+    if lua == "" then return "" end
+    local encoded = luup.attr_get( "encoded_lua", 0 ) or 0
+    local r = "Startup Lua:" .. EOL
+    r = r .. getLuaSummary( lua, encoded, "  %6d: %s" )
+    return r
+end
+
 local function showGeofenceData( r )
     r = r or ""
     local data = getVarJSON( "IsHome", {}, pluginDevice, MYSID )
@@ -3340,6 +3405,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
         return json.encode( { status=status,message=msg } ), "application/json"
 
     elseif action == "summary" then
+        -- ??? Need to show startup Lua, and scene data (incl lua) for scenes named
         local r = ""
         r = r .. string.rep("*", 51) .. " REACTOR LOGIC SUMMARY REPORT " .. string.rep("*", 51) .. EOL
         r = r .. "   Version: " .. tostring(_PLUGIN_VERSION) .. " config " .. tostring(_CONFIGVERSION) .. " pluginDevice " .. pluginDevice .. EOL
@@ -3380,6 +3446,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
             r = r .. "     Power: " .. tostring(luup.variable_get( MYSID, "SystemPowerSource", pluginDevice ) or "")
             r = r .. ", battery level " .. tostring(luup.variable_get( MYSID, "SystemBatteryLevel", pluginDevice ) or "") .. EOL
         end
+        local scenesUsed = {}
         for n,d in pairs( luup.devices ) do
             if d.device_type == RSTYPE and ( deviceNum==nil or n==deviceNum ) then
                 sensorState[tostring(n)].condState = loadCleanState( n )
@@ -3472,11 +3539,25 @@ function request( lul_request, lul_parameters, lul_outputformat )
                         r = r .. EOL
                     end
                 end
-                r = r .. getReactorScene( "Trip Actions", cdata.tripactions );
-                r = r .. getReactorScene( "Untrip Actions", cdata.untripactions );
+                local t
+                t, scenesUsed = getReactorScene( "Trip Actions", cdata.tripactions, n, scenesUsed )
+                r = r .. t
+                t, scenesUsed = getReactorScene( "Untrip Actions", cdata.untripactions, n, scenesUsed )
+                r = r .. t
                 r = r .. getEvents( n )
             end
         end
+        r = r .. string.rep( "=", 132 ) .. EOL
+        for scid, scd in pairs( scenesUsed ) do
+            r = r .. 'Scene #' .. scid .. " " .. tostring(scd.name)
+            local success, t = pcall( getLuupSceneSummary, scid, scd )
+            if success and t then
+                r = r .. t
+            else
+                r = r .. " - summary not available: " .. tostring(t) .. EOL
+            end
+        end
+        r = r .. showStartupLua()
         return r, "text/plain"
 
     elseif action == "tryexpression" then
