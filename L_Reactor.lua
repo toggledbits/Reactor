@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "2.4develop-19048"
+local _PLUGIN_VERSION = "2.4develop-19049"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _CONFIGVERSION = 00206
 
@@ -689,15 +689,15 @@ local function loadScene( sceneId, pdev )
     local success, body, httpStatus = luup.inet.wget(req)
     if not success then
         D("loadScene() failed scene request %2: %1", httpStatus, req)
-        return nil
+        return false
     end
     local data, pos, err = json.decode(body)
     if err then
         L("Can't decode JSON response for scene %1: %2 at %3 in %4", sceneId, err, pos, body)
-        return nil
+        return false
     end
-    data.loadtime = luup.attr_get("LoadTime", 0)
-    if data.groups and not data.isReactorScene then
+    data.loadtime = luup.attr_get("LoadTime", 0) or "0"
+    if data.groups then
         table.sort( data.groups, function( a, b ) return (a.delay or 0) < (b.delay or 0) end )
     end
     D("loadScene() loaded scene %1: %2", sceneId, data)
@@ -726,8 +726,26 @@ end
 local function loadWaitingScenes( pdev, ptask )
     D("loadWaitingScenes(%1)", pdev)
     local done = {}
-    for sk,sceneId in pairs(sceneWaiting) do
-        if loadScene( sceneId, pdev ) ~= nil then
+    local maxtries = getVarNumeric( "MaxSceneLoadRetries", 10, pluginDevice, MYSID )
+    for sk,sw in pairs(sceneWaiting) do
+        if luup.scenes[sw.id] then
+            sw.tries = (sw.tries or 0) + 1
+            local scd = loadScene( sw.id, pdev )
+            D("loadWaitingScenes() load #%1 attempt %2 returned %3", sw.id, sw.tries, tostring(scd))
+            if scd then
+                -- Got it! loadScene() puts it in cache for us.
+                table.insert( done, sk )
+            elseif sw.tries >= maxtries then
+                -- Too many retries, but we know scene exists. Remove from refresh
+                -- queue and leave any cached entry intact.
+                L({level=2,msg="Failed to load scene %1 in %2 attempts"},
+                    sw.id, sw.tries)
+                table.insert( done, sk )
+            end
+        else
+            -- Scene no longer exists. Remove from refresh queue and cache.
+            L({level=2,msg="Load scene #%1 failed, scene no longer exists."}, sw.id)
+            sceneData[sk] = nil
             table.insert( done, sk )
         end
     end
@@ -736,8 +754,13 @@ local function loadWaitingScenes( pdev, ptask )
     end
     if next(sceneWaiting) ~= nil then
         -- More to do, schedule it.
-        scheduleDelay( ptask, 60 )
+        scheduleDelay( ptask, 5 )
     end
+end
+
+local function refreshScene( sceneId )
+    sceneWaiting[tostring(sceneId)] = { id= sceneId, since=os.time(), tries=0 }
+    scheduleDelay( { id="sceneloader", owner=pluginDevice, func=loadWaitingScenes }, 1 )
 end
 
 -- Get scene data from cache or Luup. Queue fetch/refetch if needed.
@@ -776,22 +799,22 @@ local function getSceneData( sceneId, tdev )
     -- See if we can return from cache
     local scd = sceneData[skey]
     if scd ~= nil then
-        if tostring(scd.loadtime or 0) ~= luup.attr_get("LoadTime", 0) then
+        local llt = tostring( luup.attr_get( "LoadTime", 0 ) or 0 )
+        if tostring(scd.loadtime or 0) ~= llt then
             -- Reload since cached, queue for refresh.
             D("getSceneData() reload since scene last cached, queueing update")
-            sceneWaiting[skey] = scid
-            scheduleDelay( { id="sceneLoader", func=loadWaitingScenes, owner=pluginDevice }, 5 )
+            refreshScene( scid )
         end
         D("getSceneData() returning cached: %1", scd)
         return scd -- return cached
     end
 
+    -- We've got nothing. We have to fetch it.
     local data = loadScene( scid, pluginDevice )
-    if data == nil then
+    if not data then
         -- Couldn't get it. Try again later.
         D("getSceneData() queueing later scene load for scene %1", scid)
-        sceneWaiting[skey] = scid
-        scheduleDelay( { id="sceneLoader", func=loadWaitingScenes, owner=pluginDevice }, 5 )
+        refreshScene( scid )
         return nil
     end
     sceneWaiting[skey] = nil -- remove any fetch queue entry
@@ -904,43 +927,43 @@ local function execLua( fname, luafragment, extarg, tdev )
         -- Redefining pairs() this way allows metamethod override for iteration.
         luaEnv.pairs =  function( t ) return luaEnv.next, t, nil end
         local mt = { }
-        if getVarNumeric( "SuppressLuaGlobalWarnings", 0, pluginDevice, MYSID ) == 0 then
-            mt.__newindex = function(t, n, v)
-                local what = debug.getinfo(2, "S")
-                D("luaEnv.mt.__newindex(%1,%2,%3) new index; luaEnv=%4; debuginfo=%5", tostring(t), n, tostring(v), tostring(luaEnv), what)
-                if type(v) == "function" then 
-                    --[[ 
-                        This special handling for functions allows luup callbacks to work.
-                        The callbacks have to be defined in the plugin environment (outside
-                        the sandbox) for Luup to find them by name later.
-                    --]]
-                    rawset(t._RG, n, v)
-                    return rawset(t, n, v)
+        mt.__newindex = function(t, n, v)
+            local what = debug.getinfo(2, "S")
+            D("luaEnv.mt.__newindex(%1,%2,%3) new index; luaEnv=%4; debuginfo=%5", tostring(t), n, tostring(v), tostring(luaEnv), what)
+            local dev = t.__reactor_getdevice()
+            local fn = t.__reactor_getscript() or tostring(what.source)
+            if type(v) == "function" then 
+                --[[ 
+                    This special handling for functions allows luup callbacks to work.
+                    The callbacks have to be defined in the plugin environment (outside
+                    the sandbox) for Luup to find them by name later.
+                --]]
+                if t._RG[n] and t._RG[n] ~= v then
+                    addEvent{ event="lua", dev=dev, script=fn, message="WARNING: Declaration of non-local function "..n.." overwrites previous definition" }
                 end
-                if what.what ~= "C" then
-                    local dev = t.__reactor_getdevice()
-                    local fn = t.__reactor_getscript() or tostring(what.source)
-                    L({level=2,msg="%1 (%2) runLua action: %3 makes assignment to global %4 (missing 'local' declaration?) at %5"},
-                        ( luup.devices[dev] or {}).description, dev, fn, n, what)
-                    addEvent{ event="lua", dev=dev, script=fn, message="WARNING: Assignment to global "..n.." (missing 'local' declaration?)" }
-                end
-                rawset(t, n, v)
+                return rawset(t._RG, n, v)
             end
-            mt.__index = function(t, n) -- luacheck: ignore 212
-                local what = debug.getinfo(2, "S")
-                D("luaEnv.mt.__index(%1,%2) key miss; luaEnv=%3; debuginfo=%4", tostring(t), n, tostring(luaEnv), what)
-                if ( ( ( t.package or {} ).loaded or {} )[n] ) then return t.package.loaded[n] end -- hmmm, Vera Luup
-                if what.what ~= "C" then
-                    local dev = t.__reactor_getdevice()
-                    local fn = t.__reactor_getscript() or tostring(what.source)
-                    L({level=1,msg="%1 (%2) runLua action: %3 accesses undeclared/uninitialized global %4"},
-                        ( luup.devices[dev] or {} ).description, dev, fn, n)
-                    addEvent{ event="lua", dev=dev, script=fn, message="ERROR: Using uninitialized global variable "..n }
-                end
-                return rawget(t, n)
+            if what.what ~= "C" and getVarNumeric( "SuppressLuaGlobalWarnings", 0, pluginDevice, MYSID ) == 0 then
+                L({level=2,msg="%1 (%2) runLua action: %3 makes assignment to global %4 (missing 'local' declaration?) at %5"},
+                    ( luup.devices[dev] or {}).description, dev, fn, n, what)
+                addEvent{ event="lua", dev=dev, script=fn, message="WARNING: Assignment to global "..n.." (missing 'local' declaration?)" }
             end
+            rawset(t, n, v) -- save in sandbox table
         end
-        mt.__metatable = false -- prevent client tampering
+        mt.__index = function(t, n) -- luacheck: ignore 212
+            local v = t._RG[n]; if v then return v end -- quickly return something known to parent table.
+            local what = debug.getinfo(2, "S")
+            D("luaEnv.mt.__index(%1,%2) key miss; luaEnv=%3; debuginfo=%4", tostring(t), n, tostring(luaEnv), what)
+            if ( ( ( t.package or {} ).loaded or {} )[n] ) then return t.package.loaded[n] end -- hmmm, Vera Luup
+            if what.what ~= "C" and getVarNumeric( "SuppressLuaGlobalWarnings", 0, pluginDevice, MYSID ) == 0 then
+                local dev = t.__reactor_getdevice()
+                local fn = t.__reactor_getscript() or tostring(what.source)
+                L({level=1,msg="%1 (%2) runLua action: %3 accesses undeclared/uninitialized global %4"},
+                    ( luup.devices[dev] or {} ).description, dev, fn, n)
+                addEvent{ event="lua", dev=dev, script=fn, message="ERROR: Using uninitialized global variable "..n }
+            end
+            return rawget(t, n) -- uhhh... isn't this always nil???
+        end
         setmetatable( luaEnv, mt )
     end
     -- Set up reactor context. This creates three important maps: groups, trip
@@ -2601,6 +2624,7 @@ function startPlugin( pdev )
     sceneWaiting = {}
     sceneState = {}
     luaEnv = nil
+    runStamp = 1
 
     -- Debug?
     if getVarNumeric( "DebugMode", 0, pdev, MYSID ) ~= 0 then
@@ -2673,11 +2697,17 @@ function startPlugin( pdev )
 
     -- More inits
     maxEvents = getVarNumeric( "MaxEvents", 50, pdev, MYSID )
+    
+    -- Queue all scenes cached for refresh
+    local sd = luup.variable_get( MYSID, "scenedata", pdev ) or "{}"
+    sceneData = json.decode( sd ) or {}
+    for _,scd in pairs( sceneData ) do
+        refreshScene( scd.id )
+    end
 
-    -- Initialize and start the plugin timer and master tick
-    runStamp = 1
+    -- Do this after scene queue refresh for optimal timer handling.
     scheduleDelay( { id=tostring(pdev), func=waitSystemReady, owner=pdev }, 5 )
-
+    
     -- Return success
     luup.set_failure( 0, pdev )
     return true, "Ready", _PLUGIN_NAME
@@ -3323,7 +3353,7 @@ local function shortDate( d )
     return os.date("%Y-%m-%d.%X", d)
 end
 
-local function getLuupSceneSummary( scid, scd )
+local function getLuupSceneSummary( scd )
     local r = EOL
     if ( scd.lua or "" ) ~= "" then
         r = r .. "    Scene Lua:" .. EOL
@@ -3550,7 +3580,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
         r = r .. string.rep( "=", 132 ) .. EOL
         for scid, scd in pairs( scenesUsed ) do
             r = r .. 'Scene #' .. scid .. " " .. tostring(scd.name)
-            local success, t = pcall( getLuupSceneSummary, scid, scd )
+            local success, t = pcall( getLuupSceneSummary, scd )
             if success and t then
                 r = r .. t
             else
