@@ -15,9 +15,9 @@ var ReactorSensor = (function(api, $) {
     /* unique identifier for this plugin... */
     var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
     
-    var pluginVersion = '2.4stable-19033';
+    var pluginVersion = '2.4stable-19051';
 
-    var DEVINFO_MINSERIAL = 2.88;
+    var DEVINFO_MINSERIAL = 71.222;
 
     var CDATA_VERSION = 19012;
 
@@ -61,6 +61,8 @@ var ReactorSensor = (function(api, $) {
     ];
     var noCaseOptPattern = /(=|<>|contains|notcontains|starts|notstarts|ends|notends|in|notin|change)/i;
     var serviceOpsIndex = {};
+
+    var varRefPattern = /^\{[^}]+\}\s*$/;
 
     var msgUnsavedChanges = "You have unsaved changes! Press OK to save them, or Cancel to discard them.";
     var msgGroupNormal = "Normal; click for inverted (false when all conditions are met)";
@@ -138,6 +140,7 @@ var ReactorSensor = (function(api, $) {
 
     /* Load configuration data. */
     function loadConfigData( myid ) {
+        var upgraded = false;
         var s = api.getDeviceState( myid, serviceId, "cdata" ) || "";
         var cdata;
         if ( ! isEmpty( s ) ) {
@@ -145,21 +148,45 @@ var ReactorSensor = (function(api, $) {
                 cdata = JSON.parse( s );
             } catch (e) {
                 console.log("Unable to parse cdata: " + String(e));
+                throw e;
             }
         }
         if ( cdata === undefined || typeof cdata !== "object" ||
                 cdata.conditions === undefined || typeof cdata.conditions !== "object" ) {
-            cdata = { version: CDATA_VERSION, variables: {}, conditions: [
-                { groupid: getUID('grp'), groupconditions: [
-                    { id: getUID('cond'), type: "comment", comment: "Enter your AND conditions here" }
-                    ]
-                }
-            ]};
+            console.log("Initializing new config for " + String(myid));
+            cdata = { 
+                version: CDATA_VERSION, 
+                variables: {},
+                conditions: [
+                    { 
+                        groupid: getUID('grp'), groupconditions: [
+                            { id: getUID('cond'), type: "comment", comment: "Enter your AND conditions here" }
+                        ]
+                    }
+                ]
+            };
+            upgraded = true;
         }
-        var upgraded = false;
+        
+        /* Check for upgrade tasks from prior versions */
         if ( undefined === cdata.variables ) {
             /* Fixup v2 */
             cdata.variables = {};
+            upgraded = true;
+        }
+        if ( false && undefined === cdata.activities ) {
+            /* later... */
+            cdata.activites = {};
+            if ( undefined !== cdata.tripactions ) {
+                cdata.activities.__trip = cdata.tripactions;
+                cdata.activities.__trip.id = '__trip';
+                delete cdata.tripactions;
+            }
+            if ( undefined !== cdata.untripactions ) {
+                cdata.activities.__untrip = cdata.untripactions;
+                cdata.activities.__untrip.id = '__untrip';
+                delete cdata.untripactions;
+            }
             upgraded = true;
         }
 
@@ -181,6 +208,7 @@ var ReactorSensor = (function(api, $) {
         cdata.device = myid;
         if ( upgraded ) {
             /* Write updated config. We don't care if it fails, as nothing we can't redo would be lost. */
+            console.log('Re-writing upgraded config data');
             api.setDeviceStateVariablePersistent( myid, serviceId, "cdata", JSON.stringify( cdata ) );
         }
 
@@ -282,7 +310,7 @@ var ReactorSensor = (function(api, $) {
         }
         catch (e) {
             console.log("Error applying usergeofences to userIx: " + String(e));
-            console.log( e.stack )
+            console.log( e.stack );
         }
     }
 
@@ -475,6 +503,13 @@ var ReactorSensor = (function(api, $) {
  *
  ** **************************************************************************/
 
+    function conditionValueText( v ) {
+        if ( "number" === typeof(v) ) return v;
+        v = String(v);
+        if ( v.match( varRefPattern ) ) return v;
+        return JSON.stringify( v );
+    }
+    
     function makeConditionDescription( cond ) {
         if ( cond === undefined ) {
             return "(undefined)";
@@ -495,13 +530,13 @@ var ReactorSensor = (function(api, $) {
                         if ( "change" == t.op ) {
                             k = ( cond.value || "" ).split( /,/ );
                             if ( k.length > 0 && k[0] !== "" ) {
-                                str += " from " + k[0];
+                                str += " from " + conditionValueText( k[0] );
                             }
                             if ( k.length > 1 && k[1] !== "" ) {
-                                str += " to " + k[1];
+                                str += " to " + conditionValueText( k[1] );
                             }
                         } else {
-                            str += ' ' + ( t.numeric ? cond.value : JSON.stringify( cond.value ) );
+                            str += ' ' + conditionValueText( cond.value );
                         }
                     }
                 }
@@ -625,7 +660,11 @@ var ReactorSensor = (function(api, $) {
                 if ( ! isEmpty( cond.basetime ) ) {
                     t = cond.basetime.split(/,/);
                     str += " (relative to ";
-                    str += t[0] + ":" + t[1];
+                    if ( t.length == 2 ) {
+                        str += t[0] + ":" + t[1];
+                    } else {
+                        str += String( cond.basetime );
+                    }
                     str += ")";
                 }
                 break;
@@ -1111,7 +1150,7 @@ var ReactorSensor = (function(api, $) {
                     cond.value = jQuery("input#value", row).val() || "";
                 }
                 /* For numeric op, check that value is parseable as a number (unless var ref) */
-                if ( op && op.numeric && ! cond.value.match( /\{[^}]+\}/ ) ) {
+                if ( op && op.numeric && ! cond.value.match( varRefPattern ) ) {
                     var n = parseFloat( cond.value );
                     if ( isNaN( n ) ) {
                         jQuery( 'input#value', row ).addClass( 'tberror' );
@@ -1238,26 +1277,47 @@ var ReactorSensor = (function(api, $) {
 
             case 'interval':
                 removeConditionProperties( cond, "days,hours,mins,basetime" );
-                var v = getOptionalInteger( jQuery('div.params #days', row).val(), 0 );
-                if ( isNaN(v) || v < 0 ) {
-                    jQuery( 'div.params #days', row ).addClass( 'tberror' );
-                } else {
+                var nmin = 0;
+                var v = jQuery('div.params #days', row).val();
+                if ( v.match( varRefPattern ) ) {
                     cond.days = v;
-                }
-                v = getOptionalInteger( jQuery('div.params #hours', row).val(), 0 );
-                if ( isNaN(v) || v < 0 ) {
-                    jQuery( 'div.params #hours', row ).addClass( 'tberror' );
+                    nmin = 1440;
                 } else {
+                    v = getOptionalInteger( v, 0 );
+                    if ( isNaN(v) || v < 0 ) {
+                        jQuery( 'div.params #days', row ).addClass( 'tberror' );
+                    } else {
+                        cond.days = v;
+                        nmin = nmin + 1440 * v;
+                    }
+                } 
+                jQuery('div.params #hours', row).val();
+                if ( v.match( varRefPattern ) ) {
                     cond.hours = v;
-                }
-                v = getOptionalInteger( jQuery('div.params #mins', row).val(), 0 );
-                if ( isNaN(v) || v < 0 ) {
-                    jQuery( 'div.params #mins', row ).addClass( 'tberror' );
+                    nmin = 60;
                 } else {
-                    cond.mins = v;
+                    v = getOptionalInteger( v, 0 );
+                    if ( isNaN(v) || v < 0 ) {
+                        jQuery( 'div.params #hours', row ).addClass( 'tberror' );
+                    } else {
+                        cond.hours = v;
+                        nmin = nmin + 60 * v;
+                    }
                 }
-                var t = cond.days * 1440 + cond.hours * 60 + cond.mins;
-                if ( 0 == t ) {
+                v = jQuery('div.params #mins', row).val();
+                if ( v.match( varRefPattern ) ) {
+                    cond.mins = v;
+                    nmin = 1;
+                } else {
+                    v = getOptionalInteger( v, 0 );
+                    if ( isNaN(v) || v < 0 ) {
+                        jQuery( 'div.params #mins', row ).addClass( 'tberror' );
+                    } else {
+                        cond.mins = v;
+                        nmin = nmin + v;
+                    }
+                }
+                if ( nmin <= 0 ) {
                     jQuery( 'div.params select', row ).addClass( 'tberror' );
                 }
                 var rh = jQuery( 'div.params select#relhour' ).val() || "00";
@@ -1369,7 +1429,7 @@ var ReactorSensor = (function(api, $) {
                 jQuery( 'fieldset#housemodeselects', row ).hide();
             }
         } else if ( "service" === cond.type ) {
-            var inp = jQuery( 'input#value', row ) || "=";
+            var inp = jQuery( 'input#value', row );
             if ( val == "change" ) {
                 if ( inp.length > 0 ) {
                     // Change single input field to double fields.
@@ -1697,7 +1757,7 @@ var ReactorSensor = (function(api, $) {
                 }
                 container.append( makeVariableMenu( cond.device, cond.service, cond.variable ) );
                 container.append( makeServiceOpMenu( cond.operator || "=" ) );
-                container.append('<input type="text" id="value" class="form-control form-control-sm" autocomplete="off">');
+                container.append('<input type="text" id="value" class="form-control form-control-sm" autocomplete="off" list="reactorvarlist">');
                 container.append(' ');
                 container.append('<fieldset id="nocaseopt"><label class="checkbox-inline" for="nocase"><input id="nocase" type="checkbox" class="form-check">Ignore&nbsp;case</label></fieldset>');
                 container.append(' ');
@@ -2485,6 +2545,8 @@ var ReactorSensor = (function(api, $) {
             }
 
             initModule();
+            
+            var myid = api.getCpanelDeviceId();
 
             /* Load material design icons */
             jQuery("head").append('<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">');
@@ -2532,7 +2594,7 @@ var ReactorSensor = (function(api, $) {
             html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>Conditions</h3></div></div>';
             html += '<div class="row"><div class="col-xs-12 col-sm-12">Conditions within a group are "AND", and groups are "OR". That is, the sensor will trip when any group succeeds, and for a group to succeed, all conditions in the group must be met.</div></div>';
 
-            var rr = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "Retrigger" ) || "0";
+            var rr = api.getDeviceState( myid, serviceId, "Retrigger" ) || "0";
             if ( rr !== "0" ) {
                 html += '<div class="row"><div class="warning col-xs-12 col-sm-12">WARNING! Retrigger is on! You should avoid using time-related conditions in this ReactorSensor, as they may cause retriggers frequent retriggers!</div></div>';
             }
@@ -2544,6 +2606,19 @@ var ReactorSensor = (function(api, $) {
             html += footer();
 
             api.setCpanelContent(html);
+
+            /* Set up a data list with our variables */
+            var cd = iData[myid].cdata;
+            var dl = jQuery('<datalist id="reactorvarlist"></datalist>');
+            if ( cd.variables ) {
+                for ( var vname in cd.variables ) {
+                    if ( cd.variables.hasOwnProperty( vname ) ) {
+                        var opt = jQuery( '<option/>' ).val( '{'+vname+'}' ).text( '{'+vname+'}' );
+                        dl.append( opt );
+                    }
+                }
+            }
+            jQuery( 'div#tab-conds.reactortab' ).append( dl );
 
             redrawConditions();
 
@@ -2983,7 +3058,7 @@ var ReactorSensor = (function(api, $) {
 
             case "delay":
                 var delay = jQuery( 'input#delay', row ).val() || "";
-                if ( delay.match( /\{[^}]+\}/ ) ) {
+                if ( delay.match( varRefPattern ) ) {
                     // Variable reference. ??? check it?
                 } else if ( delay.match( /^([0-9][0-9]?)(:[0-9][0-9]?){1,2}$/ ) ) {
                     // MM:SS or HH:MM:SS
@@ -3037,7 +3112,7 @@ var ReactorSensor = (function(api, $) {
                                     }
                                     /* Not optional, flag error. */
                                     field.addClass( 'tbwarn' );
-                                } else if ( v.match( /\{[^}]+\}/ ) ) {
+                                } else if ( v.match( varRefPattern ) ) {
                                     /* Variable reference, do nothing, can't check */
                                 } else {
                                     // check value type, range?
@@ -3124,7 +3199,7 @@ var ReactorSensor = (function(api, $) {
 
                 case "delay":
                     t = jQuery( 'input#delay', row ).val() || "0";
-                    if ( t.match( /^\{[^}]+\}$/ ) ) {
+                    if ( t.match( varRefPattern ) ) {
                         /* Variable reference is OK as is. */
                     } else {
                         if ( t.indexOf( ':' ) >= 0 ) {
@@ -3240,7 +3315,7 @@ var ReactorSensor = (function(api, $) {
                         delete action.encoded_lua;
                         action.lua = "";
                     } else {
-                        action.encoded_lua = true;
+                        action.encoded_lua = 1;
                         action.lua = btoa( lua );
                     }
                     break;
@@ -3258,20 +3333,27 @@ var ReactorSensor = (function(api, $) {
     }
 
     function handleActionsSaveClick( ev ) {
+        var myid = api.getCpanelDeviceId();
         var tcf = buildActionList( jQuery( 'div#tripactions') );
         var ucf = buildActionList( jQuery( 'div#untripactions') );
+        var cd = iData[myid].cdata;
+        if ( undefined !== cd.activities ) {
+            delete cd.activities.__trip;
+            delete cd.activities.__untrip;
+        }
         if ( tcf && ucf ) {
-            var myid = api.getCpanelDeviceId();
-            /* If either "scene" has no actions, just delete the config */
+            /* If either "scene" has no actions, just delete its config */
             if ( tcf.groups.length == 1 && tcf.groups[0].actions.length == 0 ) {
-                delete iData[myid].cdata.tripactions;
+                delete cd.tripactions;
             } else {
-                iData[myid].cdata.tripactions = tcf;
+                tcf.id = '__trip';
+                cd.tripactions = tcf;
             }
             if ( ucf.groups.length == 1 && ucf.groups[0].actions.length == 0 ) {
-                delete iData[myid].cdata.untripactions;
+                delete cd.untripactions;
             } else {
-                iData[myid].cdata.untripactions = ucf;
+                ucf.id = '__untrip';
+                cd.untripactions = ucf;
             }
             /* Save has async action, so use callback to complete. */
             handleSaveClick( ev, function() {
@@ -4001,7 +4083,7 @@ var ReactorSensor = (function(api, $) {
                                 actionText += "{" + p.name + "=" + String(p.value) + "}, ";
                             } else {
                                 var v = (jQuery( '#' + p.name, row ).val() || "").trim();
-                                var vn = v.match( /\{([^}]+)\}/ );
+                                var vn = v.match( varRefPattern );
                                 if ( vn && vn.length == 2 ) {
                                     /* Variable reference, get current value. */
                                     v = api.getDeviceState( api.getCpanelDeviceId(), "urn:toggledbits-com:serviceId:ReactorValues", vn[1] ) || "";
@@ -4251,7 +4333,7 @@ var ReactorSensor = (function(api, $) {
                     case "runlua":
                         var lua = "";
                         if ( act.lua ) {
-                            lua = act.encoded_lua ? atob( act.lua ) : act.lua;
+                            lua = (act.encoded_lua || 0) != 0 ? atob( act.lua ) : act.lua;
                         }
                         jQuery( 'textarea.luacode', newRow ).val( lua ).trigger( 'reactorinit' );
                         break;
@@ -4271,9 +4353,9 @@ var ReactorSensor = (function(api, $) {
     function redrawActivities() {
         var cd = iData[api.getCpanelDeviceId()].cdata;
         jQuery( 'div#tripactions div.actionrow' ).remove();
-        loadActions( 'tripactions', cd.tripactions || {} );
+        loadActions( 'tripactions', cd.tripactions || (cd.activites || {}).__trip || {} );
         jQuery( 'div#untripactions div.actionrow' ).remove();
-        loadActions( 'untripactions', cd.untripactions || {} );
+        loadActions( 'untripactions', cd.untripactions || (cd.activities || {}).__untrip || {} );
         updateActionControls();
     }
 
@@ -4435,7 +4517,7 @@ var ReactorSensor = (function(api, $) {
                 "ms), timestamp=" + String(data.timestamp) + ", serial=" +
                 String(data.serial));
             if ( (data.serial || 0) < DEVINFO_MINSERIAL ) {
-                jQuery("div#loading").empty().append( '<h3>Update Required</h3>Your D_ReactorDeviceInfo.json file needs to be at least serial ' + String(DEVINFO_MINSERIAL) + '. Please <a href="/port_3480/data_request?id=lr_Reactor&action=infoupdate" target="_blank">click here to update the file</a>, then go back to the Status tab and then come back here.<p><em>PRIVACY NOTICE:</em> Clicking this link will send the firmware version information and plugin version to the server. This information is used to select the correct file for your configuration, and is not used for tracking, authentication, or access control.</p>' );
+                jQuery("div#loading").empty().append( '<h3>Update Required</h3>Your device information database file needs to be at least serial ' + String(DEVINFO_MINSERIAL) + ' to run with this version of Reactor. Please go to the Tools tab to update it, then come back here.' );
                 return;
             }
 
