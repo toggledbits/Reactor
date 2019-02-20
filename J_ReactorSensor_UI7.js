@@ -15,11 +15,11 @@ var ReactorSensor = (function(api, $) {
     /* unique identifier for this plugin... */
     var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
     
-    var pluginVersion = '2.4develop';
+    var pluginVersion = '2.4groupactions';
 
     var DEVINFO_MINSERIAL = 71.222;
 
-    var CDATA_VERSION = 19012;
+    var CDATA_VERSION = 19051;
 
     var myModule = {};
 
@@ -100,6 +100,10 @@ var ReactorSensor = (function(api, $) {
     function quot( s ) {
         return JSON.stringify( s );
     }
+    
+    function idSelector( id ) {
+        return id.replace( /([^A-Z0-9_])/ig, "\\$1" );
+    }
 
     /* Return value or default if undefined */
     function coalesce( v, d ) {
@@ -174,17 +178,17 @@ var ReactorSensor = (function(api, $) {
             cdata.variables = {};
             upgraded = true;
         }
-        if ( false && undefined === cdata.activities ) {
-            /* later... */
-            cdata.activites = {};
+        if ( undefined === cdata.activities ) {
+            /* Fixup v19051 */
+            cdata.activities = {};
             if ( undefined !== cdata.tripactions ) {
                 cdata.activities.__trip = cdata.tripactions;
-                cdata.activities.__trip.id = '__trip';
+                cdata.activities.__trip.id = cdata.activities.__trip.name = '__trip';
                 delete cdata.tripactions;
             }
             if ( undefined !== cdata.untripactions ) {
                 cdata.activities.__untrip = cdata.untripactions;
-                cdata.activities.__untrip.id = '__untrip';
+                cdata.activities.__untrip.id = cdata.activities.__untrip.name = '__untrip';
                 delete cdata.untripactions;
             }
             upgraded = true;
@@ -3182,8 +3186,9 @@ var ReactorSensor = (function(api, $) {
             return false;
         }
         /* Set up scene framework and first group with no delay */
-        var scene = { isReactorScene: true, name: root.attr('id'), groups: [] };
-        var group = { actions: [] };
+        var id = root.attr( 'id' );
+        var scene = { isReactorScene: true, id: id, name: id, groups: [] };
+        var group = { groupid: "grp0", actions: [] };
         scene.groups.push( group );
         var firstScene = true;
         jQuery( 'div.actionrow', root ).each( function( ix ) {
@@ -3334,34 +3339,29 @@ var ReactorSensor = (function(api, $) {
 
     function handleActionsSaveClick( ev ) {
         var myid = api.getCpanelDeviceId();
-        var tcf = buildActionList( jQuery( 'div#tripactions') );
-        var ucf = buildActionList( jQuery( 'div#untripactions') );
         var cd = iData[myid].cdata;
-        if ( undefined !== cd.activities ) {
-            delete cd.activities.__trip;
-            delete cd.activities.__untrip;
-        }
-        if ( tcf && ucf ) {
-            /* If either "scene" has no actions, just delete its config */
-            if ( tcf.groups.length == 1 && tcf.groups[0].actions.length == 0 ) {
-                delete cd.tripactions;
+        var errors = false;
+        jQuery( 'div.actionrow' ).each( function() {
+            var id = jQuery( this ).attr( 'id' );
+            var scene = buildActionList( jQuery( this ) );
+            if ( scene ) {
+                if ( scene.groups.length == 1 && scene.groups[0].actions.length == 0 ) {
+                    delete cd.activities[id];
+                } else {
+                    cd.activities[id] = scene;
+                }
             } else {
-                tcf.id = '__trip';
-                cd.tripactions = tcf;
+                errors = true;
+                return false; /* break */
             }
-            if ( ucf.groups.length == 1 && ucf.groups[0].actions.length == 0 ) {
-                delete cd.untripactions;
-            } else {
-                ucf.id = '__untrip';
-                cd.untripactions = ucf;
-            }
+        });
+
+        if ( ! errors ) {
             /* Save has async action, so use callback to complete. */
             handleSaveClick( ev, function() {
                 if ( !configModified ) { /* successful save? */
                     jQuery( 'div.actionlist.tbmodified' ).removeClass( "tbmodified" );
                     jQuery( 'div.actionlist .tbmodified' ).removeClass( "tbmodified" );
-                    /* Scene refs are upgraded to actions, so delete old on save */
-                    api.setDeviceStateVariablePersistent( api.getCpanelDeviceId(), serviceId, "Scenes", "" );
                 }
             }, [] ); /* pass up */
             return;
@@ -3386,12 +3386,12 @@ var ReactorSensor = (function(api, $) {
      * Given a section, update cdata to match.
      */
     function updateActionList( section ) {
-        var sn = section.attr('id');
+        var sn = section.attr( 'id' );
         if ( !isEmpty( sn ) ) {
             var scene = buildActionList( section );
             if ( scene ) {
                 var myid = api.getCpanelDeviceId();
-                iData[myid].cdata[sn] = scene;
+                iData[myid].cdata.activities[sn] = scene;
                 configModified = true;
             }
         }
@@ -4269,7 +4269,7 @@ var ReactorSensor = (function(api, $) {
     }
 
     function loadActions( setName, scene ) {
-        var section = jQuery( 'div#' + setName );
+        var section = jQuery( 'div#' + idSelector( setName ) );
         var newRow;
         for ( var i=0; i < (scene.groups || []).length; i++ ) {
             var gr = scene.groups[i];
@@ -4348,14 +4348,59 @@ var ReactorSensor = (function(api, $) {
             }
         }
     }
+    
+    /* */
+    function getActionListContainer() {
+        var el = jQuery( "<div/>" ).addClass( "actionlist" );
+        var row = jQuery( '<div class="row"/>' );
+        row.append( '<div class="tblisttitle col-xs-6 col-sm-6"><span class="titletext">?title?</span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div>' );
+        el.append( row );
+        row = jQuery( '<div class="row buttonrow"/>' );
+        row.append( '<div class="col-sm-1"><button class="addaction btn btn-sm btn-primary">Add Action</button></div>' );
+        el.append( row );
+        return el;
+    }
 
     /* Redraw the activities lists within the existing tab structure. */
     function redrawActivities() {
         var cd = iData[api.getCpanelDeviceId()].cdata;
-        jQuery( 'div#tripactions div.actionrow' ).remove();
-        loadActions( 'tripactions', cd.tripactions || (cd.activites || {}).__trip || {} );
-        jQuery( 'div#untripactions div.actionrow' ).remove();
-        loadActions( 'untripactions', cd.untripactions || (cd.activities || {}).__untrip || {} );
+        jQuery( 'div#activities' ).empty();
+        
+        var el = getActionListContainer();
+        el.attr( 'id', '__trip' );
+        jQuery( 'span.titletext', el ).text( 'ReactorSensor Trip Actions' );
+        jQuery( 'div#activities' ).append( el );
+        loadActions( '__trip', cd.activities.__trip || {} );
+        
+        el = getActionListContainer();
+        el.attr( 'id', '__untrip' );
+        jQuery( 'span.titletext', el ).text( 'ReactorSensor Untrip Actions' );
+        jQuery( 'div#activities' ).append( el );
+        loadActions( '__untrip', cd.activities.__untrip || {} );
+        
+        for ( var ix=0; ix<(cd.conditions || []).length; ix++ ) {
+            var gr = cd.conditions[ix];
+            var scene = gr.groupid + '.true';
+            el = getActionListContainer();
+            el.attr( 'id', scene );
+            jQuery( 'span.titletext', el ).text( gr.groupid + ' True State Actions' );
+            jQuery( 'div#activities' ).append( el );
+            loadActions( scene, cd.activities[scene] || {} );
+            
+            scene = gr.groupid + '.false';
+            el = getActionListContainer();
+            el.attr( 'id', scene );
+            jQuery( 'span.titletext', el ).text( gr.groupid + ' False State Actions' );
+            jQuery( 'div#activities' ).append( el );
+            loadActions( scene, cd.activities[scene] || {} );
+        }
+
+        jQuery("div#tab-actions.reactortab button.addaction").on( 'click.reactor', handleAddActionClick );
+        jQuery("div#tab-actions.reactortab button#saveconf").on( 'click.reactor', handleActionsSaveClick )
+            .prop( "disabled", !configModified );
+        jQuery("div#tab-actions.reactortab button#revertconf").on( 'click.reactor', handleRevertClick )
+            .prop( "disabled", !configModified );
+        
         updateActionControls();
     }
 
@@ -4377,32 +4422,6 @@ var ReactorSensor = (function(api, $) {
 
             var cd = iData[myid].cdata;
 
-            /* Restore old-style selected scenes */
-            var rr = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "Scenes" ) || "";
-            if ( ! isEmpty( rr ) ) {
-                var selected = rr.split( /,/ );
-                var ts = parseInt( selected.shift() );
-                var us = selected.length > 0 ? parseInt( selected.shift() ) : NaN;
-                if ( !isNaN(ts) ) {
-                    if ( undefined === cd.tripactions )
-                        cd.tripactions = { isReactorScene: true, groups: [ { actions:[] } ] };
-                    if ( 0 === (cd.tripactions.groups || []).length )
-                        cd.tripactions.groups = [ { actions: [] } ];
-                    cd.tripactions.groups[0].actions.unshift( { type: "runscene", scene: ts } );
-                }
-                if ( !isNaN(us) ) {
-                    if ( undefined === cd.untripactions )
-                        cd.untripactions = { isReactorScene: true, groups: [ { actions:[] } ] };
-                    if ( 0 === (cd.untripactions.groups || []).length )
-                        cd.untripactions.groups = [ { actions: [] } ];
-                    cd.untripactions.groups[0].actions.unshift( { type: "runscene", scene: us } );
-                }
-                if ( "" !== ( ts + us ) ) {
-                    alert( "Your specified trip and untrip scenes have been moved to new-style actions. Please save. " );
-                    configModified = true;
-                }
-            }
-
             /* Set up a data list with our variables */
             var dl = jQuery('<datalist id="reactorvarlist"></datalist>');
             if ( cd.variables ) {
@@ -4416,10 +4435,6 @@ var ReactorSensor = (function(api, $) {
             jQuery( 'div#tab-actions.reactortab' ).append( dl );
 
             redrawActivities();
-
-            jQuery("div#tab-actions.reactortab button.addaction").on( 'click.reactor', handleAddActionClick );
-            jQuery("div#tab-actions.reactortab button#saveconf").on( 'click.reactor', handleActionsSaveClick ).prop( "disabled", true );
-            jQuery("div#tab-actions.reactortab button#revertconf").on( 'click.reactor', handleRevertClick ).prop( "disabled", true );
 
             if ( undefined !== deviceInfo ) {
                 var uc = jQuery( '<div id="di-ver-check"/>' );
@@ -4529,21 +4544,13 @@ var ReactorSensor = (function(api, $) {
             html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>Activities</h3></div></div>';
             html += '<div class="row"><div class="col-xs-12 col-sm-12">Activities are actions that Reactor will perform on its own when tripped or untripped.</div></div>';
 
-
-            html += '<div id="tripactions" class="actionlist">';
-            html += '<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span class="titletext">Trip Actions</span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>';
-            html += '<div class="row buttonrow"><div class="col-sm-1"><button id="addtripaction" class="addaction btn btn-sm btn-primary">Add Trip Action</button></div></div>';
-            html += '</div>'; // #tripactions
-            html += '<div id="untripactions" class="actionlist">';
-            html += '<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span class="titletext">Untrip Actions</span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>';
-            html += '<div class="row buttonrow"><div class="col-sm-1"><button id="adduntripaction" class="addaction btn btn-sm btn-primary">Add Untrip Action</button></div></div>';
-            html += '</div>'; // untripactions
+            html += '<div id="activities"/>';
 
             html += '</div>'; // tab-actions
 
             html += footer();
 
-            jQuery('div#loading').replaceWith( jQuery( html ) );
+            jQuery('div#loading').replaceWith( html );
 
             doActivities();
         }).fail( function( jqXHR, textStatus, errorThrown ) {

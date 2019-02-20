@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "2.4develop-19051"
+local _PLUGIN_VERSION = "2.4groupactions"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _CONFIGVERSION = 00206
 
@@ -769,7 +769,7 @@ local function getSceneData( sceneId, tdev )
     D("getSceneData(%1,%2)", sceneId, tdev )
 
     -- Check for activity (ReactorScene)
-    local skey = tostring(sceneId):lower()
+    local skey = tostring(sceneId)
     local cd = sensorState[tostring(tdev)].configData
     if ( cd.activities or {} )[skey] then
         return cd.activities[skey]
@@ -1440,23 +1440,6 @@ local function loadSensorConfig( tdev )
         mt.__newindex = function(t, n, v) rawset(t,n,v) if debugMode then L({level=2,msg="setting %1=%2 in cdata"}, n, v) end end
     end
     setmetatable( cdata, mt )
-    -- Check old-style scene runners, fix.
-    s = luup.variable_get( RSSID, "Scenes", tdev ) or ""
-    if s ~= "" then
-        L({level=2,msg="%3 (%2) Upgrading old-style scene pair %1 to actions (one-time upgrade)"},
-            s, tdev, luup.devices[tdev].description)
-
-        local st = split( s, "," )
-        if st[1] ~= "" then
-            cdata.tripactions = { isReactorScene=true, groups={ { delay=0, actions={ { ['type']="runscene", scene=st[1] } } } } }
-        end
-        if #st > 1 and st[2] ~= "" then
-            cdata.untripactions = { isReactorScene=true, groups={ { delay=0, actions={ { ['type']="runscene", scene=st[2] } } } } }
-        end
-        cdata.timestamp = os.time()
-        luup.variable_set( RSSID, "cdata", json.encode( cdata ), tdev )
-        luup.variable_set( RSSID, "Scenes", "", tdev )
-    end
     -- Save to cache.
     sensorState[tostring(tdev)].configData = cdata
     -- When loading sensor config, dump luaFunc so that any changes to code
@@ -3604,10 +3587,16 @@ function request( lul_request, lul_parameters, lul_outputformat )
                     end
                 end
                 local t
-                t, scenesUsed = getReactorScene( "Trip Actions", cdata.tripactions, n, scenesUsed )
+                t, scenesUsed = getReactorScene( "Trip Actions", (cdata.activities or {}).__trip, n, scenesUsed )
                 r = r .. t
-                t, scenesUsed = getReactorScene( "Untrip Actions", cdata.untripactions, n, scenesUsed )
+                t, scenesUsed = getReactorScene( "Untrip Actions", (cdata.activities or {}).__untrip, n, scenesUsed )
                 r = r .. t
+                for k,v in pairs( cdata.activities or {} ) do
+                    if k ~= "__trip" and k ~= "__untrip" then
+                        t, scenesUsed = getReactorScene( k, v, n, scenesUsed )
+                        r = r .. t
+                    end
+                end
                 r = r .. getEvents( n )
             end
         end
