@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
     
     var pluginVersion = '2.4develop';
 
-    var DEVINFO_MINSERIAL = 2.88;
+    var DEVINFO_MINSERIAL = 71.222;
 
     var CDATA_VERSION = 19012;
 
@@ -140,6 +140,7 @@ var ReactorSensor = (function(api, $) {
 
     /* Load configuration data. */
     function loadConfigData( myid ) {
+        var upgraded = false;
         var s = api.getDeviceState( myid, serviceId, "cdata" ) || "";
         var cdata;
         if ( ! isEmpty( s ) ) {
@@ -147,21 +148,45 @@ var ReactorSensor = (function(api, $) {
                 cdata = JSON.parse( s );
             } catch (e) {
                 console.log("Unable to parse cdata: " + String(e));
+                throw e;
             }
         }
         if ( cdata === undefined || typeof cdata !== "object" ||
                 cdata.conditions === undefined || typeof cdata.conditions !== "object" ) {
-            cdata = { version: CDATA_VERSION, variables: {}, conditions: [
-                { groupid: getUID('grp'), groupconditions: [
-                    { id: getUID('cond'), type: "comment", comment: "Enter your AND conditions here" }
-                    ]
-                }
-            ]};
+            console.log("Initializing new config for " + String(myid));
+            cdata = { 
+                version: CDATA_VERSION, 
+                variables: {},
+                conditions: [
+                    { 
+                        groupid: getUID('grp'), groupconditions: [
+                            { id: getUID('cond'), type: "comment", comment: "Enter your AND conditions here" }
+                        ]
+                    }
+                ]
+            };
+            upgraded = true;
         }
-        var upgraded = false;
+        
+        /* Check for upgrade tasks from prior versions */
         if ( undefined === cdata.variables ) {
             /* Fixup v2 */
             cdata.variables = {};
+            upgraded = true;
+        }
+        if ( false && undefined === cdata.activities ) {
+            /* later... */
+            cdata.activites = {};
+            if ( undefined !== cdata.tripactions ) {
+                cdata.activities.__trip = cdata.tripactions;
+                cdata.activities.__trip.id = '__trip';
+                delete cdata.tripactions;
+            }
+            if ( undefined !== cdata.untripactions ) {
+                cdata.activities.__untrip = cdata.untripactions;
+                cdata.activities.__untrip.id = '__untrip';
+                delete cdata.untripactions;
+            }
             upgraded = true;
         }
 
@@ -183,6 +208,7 @@ var ReactorSensor = (function(api, $) {
         cdata.device = myid;
         if ( upgraded ) {
             /* Write updated config. We don't care if it fails, as nothing we can't redo would be lost. */
+            console.log('Re-writing upgraded config data');
             api.setDeviceStateVariablePersistent( myid, serviceId, "cdata", JSON.stringify( cdata ) );
         }
 
@@ -3307,20 +3333,27 @@ var ReactorSensor = (function(api, $) {
     }
 
     function handleActionsSaveClick( ev ) {
+        var myid = api.getCpanelDeviceId();
         var tcf = buildActionList( jQuery( 'div#tripactions') );
         var ucf = buildActionList( jQuery( 'div#untripactions') );
+        var cd = iData[myid].cdata;
+        if ( undefined !== cd.activities ) {
+            delete cd.activities.__trip;
+            delete cd.activities.__untrip;
+        }
         if ( tcf && ucf ) {
-            var myid = api.getCpanelDeviceId();
-            /* If either "scene" has no actions, just delete the config */
+            /* If either "scene" has no actions, just delete its config */
             if ( tcf.groups.length == 1 && tcf.groups[0].actions.length == 0 ) {
-                delete iData[myid].cdata.tripactions;
+                delete cd.tripactions;
             } else {
-                iData[myid].cdata.tripactions = tcf;
+                tcf.id = '__trip';
+                cd.tripactions = tcf;
             }
             if ( ucf.groups.length == 1 && ucf.groups[0].actions.length == 0 ) {
-                delete iData[myid].cdata.untripactions;
+                delete cd.untripactions;
             } else {
-                iData[myid].cdata.untripactions = ucf;
+                ucf.id = '__untrip';
+                cd.untripactions = ucf;
             }
             /* Save has async action, so use callback to complete. */
             handleSaveClick( ev, function() {
@@ -4320,9 +4353,9 @@ var ReactorSensor = (function(api, $) {
     function redrawActivities() {
         var cd = iData[api.getCpanelDeviceId()].cdata;
         jQuery( 'div#tripactions div.actionrow' ).remove();
-        loadActions( 'tripactions', cd.tripactions || {} );
+        loadActions( 'tripactions', cd.tripactions || (cd.activites || {}).__trip || {} );
         jQuery( 'div#untripactions div.actionrow' ).remove();
-        loadActions( 'untripactions', cd.untripactions || {} );
+        loadActions( 'untripactions', cd.untripactions || (cd.activities || {}).__untrip || {} );
         updateActionControls();
     }
 
@@ -4484,7 +4517,7 @@ var ReactorSensor = (function(api, $) {
                 "ms), timestamp=" + String(data.timestamp) + ", serial=" +
                 String(data.serial));
             if ( (data.serial || 0) < DEVINFO_MINSERIAL ) {
-                jQuery("div#loading").empty().append( '<h3>Update Required</h3>Your D_ReactorDeviceInfo.json file needs to be at least serial ' + String(DEVINFO_MINSERIAL) + '. Please <a href="/port_3480/data_request?id=lr_Reactor&action=infoupdate" target="_blank">click here to update the file</a>, then go back to the Status tab and then come back here.<p><em>PRIVACY NOTICE:</em> Clicking this link will send the firmware version information and plugin version to the server. This information is used to select the correct file for your configuration, and is not used for tracking, authentication, or access control.</p>' );
+                jQuery("div#loading").empty().append( '<h3>Update Required</h3>Your device information database file needs to be at least serial ' + String(DEVINFO_MINSERIAL) + ' to run with this version of Reactor. Please go to the Tools tab to update it, then come back here.' );
                 return;
             }
 

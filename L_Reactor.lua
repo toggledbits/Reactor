@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "2.4develop-19049"
+local _PLUGIN_VERSION = "2.4develop-19051"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _CONFIGVERSION = 00206
 
@@ -39,6 +39,7 @@ local geofenceMode = 0
 local maxEvents = 50
 local luaEnv -- global state for all runLua actions
 
+local sceneSerial = 0
 local runStamp = 0
 local pluginDevice = 0
 local isALTUI = false
@@ -773,27 +774,29 @@ local function getSceneData( sceneId, tdev )
     if ( cd.activities or {} )[skey] then
         return cd.activities[skey]
     end
-    if skey:match( "^__[un]*trip") then -- patterns not very sophisticaed in Lua, so (overly) simple test
-        -- For these special scenes, they're already in config ready to go.
+    -- This is the "old" way of finding trip and untrip actions for the ReactorSensor. 
+    -- Keep it around for unchanged configs.
+    if skey == "__trip" or skey == "__untrip" then
         local pt = skey:match("^__un") and "untripactions" or "tripactions"
         local r = sensorState[tostring(tdev)].configData[pt]
         if r then r.id = skey r.name = skey end
         return r
     end
 
-    -- Load persistent (Vera) scene data to cache if cache empty
-    if next(sceneData) == nil then
-        sceneData = getVarJSON( "scenedata", {}, pluginDevice, MYSID )
-    end
-
-    -- Still a valid Vera scene?
-    local scid = tonumber( sceneId ) or -1
-    if luup.scenes[scid] == nil then
+    -- At this point, we're looking for a Vera scene, so make sure it's valid.
+    local scid = tonumber( sceneId )
+    if scid == nil or luup.scenes[scid] == nil then
         -- Nope.
         L({level=1,msg="Scene %1 in configuration for %3 (%2) is no longer available!"}, sceneId,
             tdev, luup.devices[tdev].description)
+        addEvent{ dev=tdev, event="runscene", scene=tostring(sceneId), sceneName="", ['error']="ERROR: scene not found" }
         sceneData[skey] = nil
         return nil
+    end
+
+    -- Load persistent (Vera) scene data to cache if cache empty
+    if next(sceneData) == nil then
+        sceneData = getVarJSON( "scenedata", {}, pluginDevice, MYSID )
     end
 
     -- See if we can return from cache
@@ -822,11 +825,11 @@ local function getSceneData( sceneId, tdev )
 end
 
 -- Stop running scenes
-local function stopScene( ctx, taskid, tdev )
-    D("stopScene(%1,%2,%3)", ctx, taskid, tdev)
+local function stopScene( ctx, taskid, tdev, scene )
+    D("stopScene(%1,%2,%3,%4)", ctx or false, taskid or false, tdev or false, scene or false) -- avoid nil shortcut
     assert(luup.devices[tdev].device_type == MYTYPE or luup.devices[tdev].device_type == RSTYPE)
     for tid,d in pairs(sceneState) do
-        if ( ctx == nil or ctx == d.context ) and ( taskid == nil or taskid == tid ) then
+        if ( ctx == nil or ctx == d.context ) and ( taskid == nil or taskid == tid ) and ( scene == nil or d.scene == scene) then
             D("stopScene() stopping scene run task %1", tid)
             scheduleTick( tid, 0 )
             sceneState[tid] = nil
@@ -1050,17 +1053,22 @@ end
 -- Run the next scene group(s), until we run out of groups or a group delay
 -- restriction hasn't been met. Across reloads, scenes will "catch up," running
 -- groups that are now past-due (native Luup scenes don't do this).
+-- Return taskid if groups remain to run (delayed), or nil if scene is finished.
 local function execSceneGroups( tdev, taskid, scd )
     D("execSceneGroups(%1,%2,%3)", tdev, taskid, type(scd) )
     assert(luup.devices[tdev].device_type == MYTYPE or luup.devices[tdev].device_type == RSTYPE)
 
     -- Get sceneState, make sure it's consistent with request.
     local sst = sceneState[taskid]
-    D("scene state %1", sst)
-    if sst == nil then return end
+    D("execSceneGroups() scene state %1", sst)
+    if sst == nil then 
+        scheduleTick( taskid, 0 )
+        return nil 
+    end
 
     -- Reload the scene if it wasn't passed to us (from cache)
     if not scd then
+        D("execSceneGroups() reloading scene data for %1", sst.scene)
         scd = getSceneData(sst.scene, tdev)
         if scd == nil then
             L({level=1,msg="Previously running scene %1 now not found/loaded. Aborting run."}, sst.scene)
@@ -1095,7 +1103,7 @@ local function execSceneGroups( tdev, taskid, scd )
                 -- It's not time yet. Schedule task to continue.
                 D("execSceneGroups() scene group %1 must delay to %2", nextGroup, tt)
                 addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, notice="Scene delay until "..os.date("%X", tt) }
-                scheduleTick( { id=sst.taskid, owner=sst.owner, func=execSceneGroups, args={} }, tt )
+                scheduleTick( { id=sst.taskid, owner=sst.owner, func=execSceneGroups, args={ scd } }, tt )
                 return taskid
             end
         end
@@ -1116,10 +1124,10 @@ local function execSceneGroups( tdev, taskid, scd )
                     for k,p in ipairs( action.arguments or {} ) do
                         param[p.name or tostring(k)] = p.value
                     end
-                    D("execSceneGroups() dev %4 (%5) do %1/%2(%3) for %6 (%7)", action.service,
-                        action.action, param, devnum,
+                    D("execSceneGroups() dev %4 (%5) do %1/%2(%3) for %6 (%7)", 
+                        action.service, action.action, param, devnum,
                         (luup.devices[devnum] or {}).description or "?unknown?",
-                        scd.name or "", scd.id )
+                        scd.name or scd.id, scd.id )
                     -- If Lua HomeAutomationGateway RunScene action, run in Reactor
                     if action.service == "urn:micasaverde-com:serviceId:HomeAutomationGateway1" and
                             action.action == "RunScene" and devnum == 0 then
@@ -1178,7 +1186,8 @@ local function execSceneGroups( tdev, taskid, scd )
                     -- Not running as job here because we want in-line execution of scene actions (the Reactor way).
                     runScene( scene, tdev, { contextDevice=sst.options.contextDevice, stopPriorScenes=false } )
                 elseif action.type == "runlua" then
-                    local fname = string.format("scene%s_group%d_action%d", tostring(scd.id), nextGroup, ix )
+                    local fname = string.format("rs%s_sc%s_gr%d_ac%d", 
+                        tostring(tdev), tostring(scd.id), nextGroup, ix )
                     D("execSceneGroups() running Lua for %1 (chunk name %2)", scd.id, fname)
                     local lua = action.lua
                     if ( action.encoded_lua or 0 ) ~= 0 then
@@ -1186,7 +1195,8 @@ local function execSceneGroups( tdev, taskid, scd )
                         if lua == nil then
                             addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, ['error']="Aborting; unable to decode Lua for action #" .. tostring(ix) }
                             L({level=1,msg="Aborting scene %1 (%2) run, unable to decode scene Lua"}, scd.id, scd.name)
-                            return
+                            stopScene( tdev, nil, tdev ) -- stop all scenes in context.
+                            return nil
                         end
                     end
                     local more, err = execLua( fname, lua, nil, tdev )
@@ -1239,17 +1249,16 @@ local function execScene( scd, tdev, options )
 
     -- Check if scene running. If so, stop it.
     local ctx = tonumber( options.contextDevice ) or 0
-    local taskid = string.format("ctx%s-sc%s", tostring(ctx), tostring(scd.id))
-    local sst = sceneState[taskid]
-    D("execScene() scene taskid %2 state is %1", sst, taskid)
+    sceneSerial = sceneSerial + 1
+    local taskid = string.format("ctx%s.sc%s.%x", tostring(ctx), tostring(scd.id), sceneSerial)
     if options.stopPriorScenes then
         stopScene( ctx, nil, tdev )
     end
 
-    -- Mark
+    -- And here ve go...
     addEvent{ dev=tdev, event="startscene", scene=scd.id, sceneName=scd.name or scd.id}
 
-    -- If there's scene lua, try to run it.
+    -- If there's (Luup) scene lua, try to run it.
     if ( scd.lua or "" ) ~= "" then
         D("execScene() handling scene (global) Lua")
         local luafragment
@@ -1264,7 +1273,10 @@ local function execScene( scd, tdev, options )
             luafragment = scd.lua or ""
         end
         -- Note name is context-free, because all runners of this scene use same
-        -- code. Environment will reflect different context at runtime.
+        -- code. Environment will reflect different context at runtime. Of course,
+        -- this assumes it's a Luup/Vera scene, not a Reactor scene, but Reactor
+        -- scenes don't have startup Lua.
+        -- N.B. Scene loader has to reproduce this name, so be careful making changes here.
         local fname = string.format("scene%s_start", tostring(scd.id))
         local more,err = execLua( fname, luafragment, options.externalArgument, tdev )
         if err then
@@ -1297,6 +1309,7 @@ local function execScene( scd, tdev, options )
     }
     luup.variable_set( MYSID, "runscene", json.encode(sceneState), pluginDevice )
 
+    -- execSceneGroups returns the taskid if delayed groups are pending, otherwise nil
     return execSceneGroups( tdev, taskid, scd )
 end
 
@@ -1351,14 +1364,16 @@ local function trip( state, tdev )
         -- Luup keeps (SecuritySensor1/)LastTrip, but we also keep LastReset
         luup.variable_set( RSSID, "LastReset", os.time(), tdev )
         -- Run the reset scene, if we have one. Scene ID must be unique across sensors!
-        local scd = getSceneData( '__untrip' .. tostring(tdev), tdev )
-        if scd then execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=true } ) end
+        stopScene( tdev, nil, tdev, '__trip' ) -- stop contra-activity
+        local scd = getSceneData( '__untrip', tdev )
+        if scd then execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } ) end
     else
         -- Count a trip.
         luup.variable_set( RSSID, "TripCount", getVarNumeric( "TripCount", 0, tdev, RSSID ) + 1, tdev )
         -- Run the trip scene, if we have one. Scene ID must be unique across sensors!
-        local scd = getSceneData( '__trip' .. tostring(tdev), tdev )
-        if scd then execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=true } ) end
+        stopScene( tdev, nil, tdev, '__untrip' ) -- stop contra-activity
+        local scd = getSceneData( '__trip', tdev )
+        if scd then execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } ) end
     end
 end
 
@@ -2382,6 +2397,26 @@ local function updateSensor( tdev )
             luup.variable_set( RSSID, "Runtime", getVarNumeric( "Runtime", 0, tdev, RSSID ) + delta, tdev )
         end
         luup.variable_set( RSSID, "lastacc", now, tdev )
+        
+        -- Pass through groups again, and run activities for any changed groups.
+        for _,gc in ipairs( cdata.conditions or {} ) do
+            local gs = sensorState[skey].condState[ gc.groupid ]
+            if gs and gs.changed then
+                local activity = gc.groupid .. ( gs.evalstate and ".true" or ".false" )
+                D("updateSensor() group %1 state changed to %2, looking for activity %3",
+                    gc.groupid, gs.evalstate, activity)
+                -- Run per-group state-driven activity. Before starting new activity,
+                -- stop any contra-activity (i.e. before run true actions, stop
+                -- the false actions.
+                local alter = gc.groupid .. ( gs.evalstate and ".false" or ".true" )
+                stopScene( tdev, nil, tdev, alter )
+                local scd = getSceneData( activity, tdev )
+                if scd then
+                    D("updateSensor() running %1 activities", activity)
+                    execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } )
+                end
+            end
+        end
 
         -- Set tripped state based on change in status.
         if currTrip ~= newTrip or ( newTrip and retrig ) then
@@ -3029,14 +3064,12 @@ end
 -- ctx is the context device, or 0 (global context) if not specified.
 function actionStopScene( ctx, scene, dev )
     L("StopScene action, scene %1", scene)
-    local taskid = nil
     if luup.devices[dev].device_type == RSTYPE then dev = luup.devices[dev].device_num_parent end
-    ctx = tonumber( ctx ) or 0
-    if scene ~= nil and tostring(scene) ~= "0" then
-        taskid = string.format("ctx%dscene%s", ctx, tostring(scene))
-    end
-    addEvent{ dev=dev, event="action", action="StopScene", contextDevice=ctx, scene=scene }
-    stopScene( ctx, taskid, dev )
+    -- Treat blank/empty as nil
+    if (ctx or "") ~= "" then ctx = tonumber( ctx ) or 0 else ctx = nil end
+    if scene == "" then scene = nil end
+    addEvent{ dev=dev, event="action", action="StopScene", contextDevice=ctx or "(all)", scene=scene or "(all)" }
+    stopScene( ctx, nil, dev, scene )
 end
 
 -- Set group enabled state (job).
@@ -3166,6 +3199,7 @@ function watch( dev, sid, var, oldVal, newVal )
         -- Sensor configuration change. Immediate update.
         L("Child %1 (%2) configuration change, updating!", dev, luup.devices[dev].description)
         addEvent{ dev=dev, event="configchange" }
+        stopScene( dev, nil, dev ) -- Stop all scenes in this device context.
         loadSensorConfig( dev )
         updateSensor( dev )
     else
