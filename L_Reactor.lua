@@ -769,12 +769,12 @@ local function getSceneData( sceneId, tdev )
     D("getSceneData(%1,%2)", sceneId, tdev )
 
     -- Check for activity (ReactorScene)
-    local skey = tostring(sceneId):lower()
+    local skey = tostring(sceneId)
     local cd = sensorState[tostring(tdev)].configData
     if ( cd.activities or {} )[skey] then
         return cd.activities[skey]
     end
-    -- This is the "old" way of finding trip and untrip actions for the ReactorSensor. 
+    -- This is the "old" way of finding trip and untrip actions for the ReactorSensor.
     -- Keep it around for unchanged configs.
     if skey == "__trip" or skey == "__untrip" then
         local pt = skey:match("^__un") and "untripactions" or "tripactions"
@@ -935,8 +935,8 @@ local function execLua( fname, luafragment, extarg, tdev )
             D("luaEnv.mt.__newindex(%1,%2,%3) new index; luaEnv=%4; debuginfo=%5", tostring(t), n, tostring(v), tostring(luaEnv), what)
             local dev = t.__reactor_getdevice()
             local fn = t.__reactor_getscript() or tostring(what.source)
-            if type(v) == "function" then 
-                --[[ 
+            if type(v) == "function" then
+                --[[
                     This special handling for functions allows luup callbacks to work.
                     The callbacks have to be defined in the plugin environment (outside
                     the sandbox) for Luup to find them by name later.
@@ -1061,9 +1061,9 @@ local function execSceneGroups( tdev, taskid, scd )
     -- Get sceneState, make sure it's consistent with request.
     local sst = sceneState[taskid]
     D("execSceneGroups() scene state %1", sst)
-    if sst == nil then 
+    if sst == nil then
         scheduleTick( taskid, 0 )
-        return nil 
+        return nil
     end
 
     -- Reload the scene if it wasn't passed to us (from cache)
@@ -1124,7 +1124,7 @@ local function execSceneGroups( tdev, taskid, scd )
                     for k,p in ipairs( action.arguments or {} ) do
                         param[p.name or tostring(k)] = p.value
                     end
-                    D("execSceneGroups() dev %4 (%5) do %1/%2(%3) for %6 (%7)", 
+                    D("execSceneGroups() dev %4 (%5) do %1/%2(%3) for %6 (%7)",
                         action.service, action.action, param, devnum,
                         (luup.devices[devnum] or {}).description or "?unknown?",
                         scd.name or scd.id, scd.id )
@@ -1186,7 +1186,7 @@ local function execSceneGroups( tdev, taskid, scd )
                     -- Not running as job here because we want in-line execution of scene actions (the Reactor way).
                     runScene( scene, tdev, { contextDevice=sst.options.contextDevice, stopPriorScenes=false } )
                 elseif action.type == "runlua" then
-                    local fname = string.format("rs%s_sc%s_gr%d_ac%d", 
+                    local fname = string.format("rs%s_sc%s_gr%d_ac%d",
                         tostring(tdev), tostring(scd.id), nextGroup, ix )
                     D("execSceneGroups() running Lua for %1 (chunk name %2)", scd.id, fname)
                     local lua = action.lua
@@ -1448,10 +1448,10 @@ local function loadSensorConfig( tdev )
 
         local st = split( s, "," )
         if st[1] ~= "" then
-            cdata.tripactions = { isReactorScene=true, groups={ { delay=0, actions={ { ['type']="runscene", scene=st[1] } } } } }
+            cdata.tripactions = { isReactorScene=true, groups={ { groupid=1, delay=0, actions={ { ['type']="runscene", scene=st[1] } } } } }
         end
         if #st > 1 and st[2] ~= "" then
-            cdata.untripactions = { isReactorScene=true, groups={ { delay=0, actions={ { ['type']="runscene", scene=st[2] } } } } }
+            cdata.untripactions = { isReactorScene=true, groups={ { groupid=2, delay=0, actions={ { ['type']="runscene", scene=st[2] } } } } }
         end
         cdata.timestamp = os.time()
         luup.variable_set( RSSID, "cdata", json.encode( cdata ), tdev )
@@ -1460,8 +1460,13 @@ local function loadSensorConfig( tdev )
     -- Save to cache.
     sensorState[tostring(tdev)].configData = cdata
     -- When loading sensor config, dump luaFunc so that any changes to code
-    -- in actions or scenes are honored immediately.
-    luaFunc = {}
+    -- in actions or scenes are honored immediately. This empties without
+    -- changing metatable (which defines mode).
+    local t = next( luaFunc )
+    while t do
+        luaFunc[t] = nil
+        t = next( luaFunc )
+    end
     return cdata
 end
 
@@ -2127,8 +2132,8 @@ local function evaluateCondition( cond, grp, tdev )
             return "",false
         end
     else
-        L({level=2,msg="Sensor %1 (%2) unknown condition type %3 for cond %4 in group %5; fails."},
-            tdev, luup.devices[tdev].description, cond.type, cond.id, grp.groupid)
+        L({level=2,msg="Sensor %1 (%2) unknown condition type %3 for cond %4 in group %5 (%6); fails."},
+            tdev, luup.devices[tdev].description, cond.type, cond.id, grp.name or grp.groupid, grp.groupid)
         return "",false
     end
 
@@ -2303,7 +2308,7 @@ local function evaluateGroup( grp, cdata, tdev )
     D("evaluateGroup() grp %1 conditions invert %3; new group state %2, previous %4",
         grp.groupid, passed, grp.invert and "yes" or "no", gs.evalstate)
     if gs.evalstate == nil or gs.evalstate ~= passed then
-        addEvent{dev=tdev,event='groupchange',cond=grp.groupid,oldState=gs.evalstate,newState=passed}
+        addEvent{dev=tdev,event='groupchange',group=grp.groupid,name=grp.name,oldState=gs.evalstate,newState=passed}
         gs.evalstate = passed
         gs.evalstamp = now
         gs.changed = true
@@ -2397,7 +2402,7 @@ local function updateSensor( tdev )
             luup.variable_set( RSSID, "Runtime", getVarNumeric( "Runtime", 0, tdev, RSSID ) + delta, tdev )
         end
         luup.variable_set( RSSID, "lastacc", now, tdev )
-        
+
         -- Pass through groups again, and run activities for any changed groups.
         for _,gc in ipairs( cdata.conditions or {} ) do
             local gs = sensorState[skey].condState[ gc.groupid ]
@@ -2656,6 +2661,9 @@ function startPlugin( pdev )
     watchData = {}
     sceneData = {}
     luaFunc = {}
+    if getVarNumeric( "SuppressWeakLuaFunc", 0, pdev, MYSID ) == 0 then
+        setmetatable( luaFunc, { __mode="v" } ) -- weak values
+    end
     sceneWaiting = {}
     sceneState = {}
     luaEnv = nil
@@ -2732,7 +2740,7 @@ function startPlugin( pdev )
 
     -- More inits
     maxEvents = getVarNumeric( "MaxEvents", 50, pdev, MYSID )
-    
+
     -- Queue all scenes cached for refresh
     local sd = luup.variable_get( MYSID, "scenedata", pdev ) or "{}"
     sceneData = json.decode( sd ) or {}
@@ -2742,7 +2750,7 @@ function startPlugin( pdev )
 
     -- Do this after scene queue refresh for optimal timer handling.
     scheduleDelay( { id=tostring(pdev), func=waitSystemReady, owner=pdev }, 5 )
-    
+
     -- Return success
     luup.set_failure( 0, pdev )
     return true, "Ready", _PLUGIN_NAME
@@ -3087,8 +3095,8 @@ function actionSetGroupEnabled( grpid, enab, dev )
         end
         grp.disabled = (not enab) and 1 or nil
         grp.enabled = nil
-        L("%1 (%2) SetGroupEnabled %3 now %4", luup.devices[dev].description,
-            dev, grp.groupid, grp.disabled and "disabled" or "enabled")
+        L("%1 (%2) SetGroupEnabled %3 (%4) now %5", luup.devices[dev].description,
+            dev, grp.name or grp.groupid, grp.groupid, grp.disabled and "disabled" or "enabled")
         addEvent{ dev=dev, event="action", action="SetGroupEnabled", group=grpid, enabled=enab and 1 or 0 }
         -- No need to call updateSensor here, modifying cdata does it
         luup.variable_set( RSSID, "cdata", json.encode( cdata ), dev )
@@ -3544,15 +3552,13 @@ function request( lul_request, lul_parameters, lul_outputformat )
                     r = r .. string.format("        %s=%s (last %q)", vv.name or "?", vv.expression or "?", lv) .. EOL
                     if le ~= "" then r = r .. "        ******** Error: " .. le .. EOL end
                 end
-                local ng=0
-                for _,gc in ipairs( cdata.conditions or {} ) do
+                for ng,gc in ipairs( cdata.conditions or {} ) do
                     local gs = (sensorState[tostring(n)].condState or {})[gc.groupid] or {}
-                    ng = ng + 1
-                    r = r .. "    Group #" .. ng .. " <" .. gc.groupid .. "> " ..
-                        ( gs.evalstate and "true" or "false" ) .. " as of " .. shortDate( gs.evalstamp ) ..
-                        ( gc.invert and " INVERTED" or "" ) ..
-                        ( gc.disabled and " DISABLED" or "" ) ..
-                        EOL
+                    r = r .. "    Group #" .. ng .. ": " .. ( gc.name or "unnamed" )  ..
+                        ( gs.evalstate and "; true" or "; false" ) .. " as of " .. shortDate( gs.evalstamp ) ..
+                        ( gc.invert and "; INVERTED" or "" ) ..
+                        ( gc.disabled and "; DISABLED" or "" ) ..
+                        " <" .. gc.groupid .. ">" .. EOL
                     for _,cond in ipairs( gc.groupconditions or {} ) do
                         local cs = (sensorState[tostring(n)].condState or {})[cond.id] or {}
                         r = r .. "        =" .. ( cs.evalstate and "T" or "f" )
@@ -3604,9 +3610,9 @@ function request( lul_request, lul_parameters, lul_outputformat )
                     end
                 end
                 local t
-                t, scenesUsed = getReactorScene( "Trip Actions", cdata.tripactions, n, scenesUsed )
+                t, scenesUsed = getReactorScene( "Trip Actions", cdata.tripactions or (cdata.activities or {}).__trip, n, scenesUsed )
                 r = r .. t
-                t, scenesUsed = getReactorScene( "Untrip Actions", cdata.untripactions, n, scenesUsed )
+                t, scenesUsed = getReactorScene( "Untrip Actions", cdata.untripactions or (cdata.activities or {}).__untrip, n, scenesUsed )
                 r = r .. t
                 r = r .. getEvents( n )
             end
