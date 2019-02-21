@@ -14,7 +14,7 @@ var ReactorSensor = (function(api, $) {
 
     /* unique identifier for this plugin... */
     var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
-    
+
     var pluginVersion = '2.4develop';
 
     var DEVINFO_MINSERIAL = 71.222;
@@ -67,7 +67,7 @@ var ReactorSensor = (function(api, $) {
     var msgUnsavedChanges = "You have unsaved changes! Press OK to save them, or Cancel to discard them.";
     var msgGroupNormal = "Normal; click for inverted (false when all conditions are met)";
     var msgGroupInvert = "Inverted; click for normal (true when all conditions are met)";
-    var msgGroupIdChange = "Click to change group ID";
+    var msgGroupIdChange = "Click to change group name";
 
     /* Return footer */
     function footer() {
@@ -86,11 +86,11 @@ var ReactorSensor = (function(api, $) {
 
     /* Create an ID that's functionally unique for our purposes. */
     function getUID( prefix ) {
-        /* Not good, but enough. */
-        var newx = Date.now();
+        /* Not good, but good enough. */
+        var newx = Date.now() - 1529298000000;
         if ( newx == lastx ) ++newx;
         lastx = newx;
-        return ( prefix === undefined ? "" : prefix ) + newx.toString(16);
+        return ( prefix === undefined ? "" : prefix ) + newx.toString(36);
     }
 
     function isEmpty( s ) {
@@ -154,11 +154,11 @@ var ReactorSensor = (function(api, $) {
         if ( cdata === undefined || typeof cdata !== "object" ||
                 cdata.conditions === undefined || typeof cdata.conditions !== "object" ) {
             console.log("Initializing new config for " + String(myid));
-            cdata = { 
-                version: CDATA_VERSION, 
+            cdata = {
+                version: CDATA_VERSION,
                 variables: {},
                 conditions: [
-                    { 
+                    {
                         groupid: getUID('grp'), groupconditions: [
                             { id: getUID('cond'), type: "comment", comment: "Enter your AND conditions here" }
                         ]
@@ -167,26 +167,11 @@ var ReactorSensor = (function(api, $) {
             };
             upgraded = true;
         }
-        
+
         /* Check for upgrade tasks from prior versions */
         if ( undefined === cdata.variables ) {
             /* Fixup v2 */
             cdata.variables = {};
-            upgraded = true;
-        }
-        if ( false && undefined === cdata.activities ) {
-            /* later... */
-            cdata.activites = {};
-            if ( undefined !== cdata.tripactions ) {
-                cdata.activities.__trip = cdata.tripactions;
-                cdata.activities.__trip.id = '__trip';
-                delete cdata.tripactions;
-            }
-            if ( undefined !== cdata.untripactions ) {
-                cdata.activities.__untrip = cdata.untripactions;
-                cdata.activities.__untrip.id = '__untrip';
-                delete cdata.untripactions;
-            }
             upgraded = true;
         }
 
@@ -509,7 +494,7 @@ var ReactorSensor = (function(api, $) {
         if ( v.match( varRefPattern ) ) return v;
         return JSON.stringify( v );
     }
-    
+
     function makeConditionDescription( cond ) {
         if ( cond === undefined ) {
             return "(undefined)";
@@ -781,7 +766,7 @@ var ReactorSensor = (function(api, $) {
                 grpel.removeClass( 'groupdisabled' );
             }
             grpel.append('<div class="row"><div id="grptitle" class="grouptitle col-xs-12" /></div>');
-            var title = 'Group: ' + grp.groupid + ( grp.invert ? " (inverted)" : "" ) +
+            var title = 'Group: ' + (grp.name || grp.groupid) + ( grp.invert ? " (inverted)" : "" ) +
                 ( grp.disabled ? " (disabled)" : "" );
             jQuery( 'div#grptitle', grpel ).text( title );
             stel.append( grpel );
@@ -1290,7 +1275,7 @@ var ReactorSensor = (function(api, $) {
                         cond.days = v;
                         nmin = nmin + 1440 * v;
                     }
-                } 
+                }
                 jQuery('div.params #hours', row).val();
                 if ( v.match( varRefPattern ) ) {
                     cond.hours = v;
@@ -2101,42 +2086,45 @@ var ReactorSensor = (function(api, $) {
 
     function handleTitleChange( ev ) {
         var input = jQuery( ev.currentTarget );
-        var newid = (input.val() || "").trim();
+        var newname = (input.val() || "").trim();
         var span = input.closest( 'span' );
+        var myid = api.getCpanelDeviceId();
         var grpid = span.closest( 'div.conditiongroup' ).attr( 'id' );
+        var grp = iData[myid].ixGroup[grpid];
+
         input.removeClass( 'tberror' );
-        if ( newid == grpid ) {
+
+        if ( newname == grp.name ) {
             /* No change */
-            span.empty().text( 'Group: ' + grpid ).on( 'click.reactor', handleTitleClick )
+            span.empty().text( 'Group: ' + grp.name ).on( 'click.reactor', handleTitleClick )
                 .addClass( 'titletext' ).attr( 'title', msgGroupIdChange );
             return;
         }
+
         /* Group name check */
-        if ( ! newid.match( /^[a-z][a-z0-9_]+$/i ) ) {
+        if ( newname.length < 1 ) {
             input.addClass( 'tberror' );
             input.focus();
             return;
-
         }
-        /* Don't allow duplicate group Id */
-        var myid = api.getCpanelDeviceId();
+
+        /* Don't allow duplicate name */
         for ( var v in iData[myid].ixGroup ) {
             if ( iData[myid].ixGroup.hasOwnProperty( v ) ) {
-                if ( v != grpid && v == newid ) {
+                if ( v != grpid && iData[myid].ixGroup[v].name == newname ) {
                     input.addClass( 'tberror' );
                     input.focus();
                     return;
                 }
             }
         }
+
         /* Update config */
-        iData[myid].ixGroup[newid] = iData[myid].ixGroup[grpid];
-        iData[myid].ixGroup[newid].groupid = newid;
-        delete iData[myid].ixGroup[grpid];
+        grp.name = newname;
         configModified = true;
+
         /* Remove input field and replace text */
-        span.closest( 'div.conditiongroup' ).attr( 'id', newid );
-        span.empty().text( 'Group: ' + newid ).on( 'click.reactor', handleTitleClick )
+        span.empty().text( 'Group: ' + newname ).on( 'click.reactor', handleTitleClick )
             .addClass( 'titletext' ).attr( 'title', msgGroupIdChange );
         updateSaveControls();
     }
@@ -2145,7 +2133,7 @@ var ReactorSensor = (function(api, $) {
         var span = jQuery( ev.currentTarget );
         span.off( 'click.reactor' ).removeClass( 'titletext' );
         var grpid = span.closest( 'div.conditiongroup' ).attr( 'id' );
-        span.empty().append( jQuery( '<input class="titleedit form-control form-control-sm" title="Enter new group ID">' ).val( grpid ) );
+        span.empty().append( jQuery( '<input class="titleedit form-control form-control-sm" title="Enter new group name">' ).val( grpid ) );
         jQuery( 'input', span ).on( 'change.reactor', handleTitleChange )
             .on( 'blur.reactor', handleTitleChange );
     }
@@ -2289,6 +2277,7 @@ var ReactorSensor = (function(api, $) {
         jQuery( 'span.titletext', condgroup ).text( "Group: " + newId ).on( 'click.reactor', handleTitleClick ).attr( 'title', msgGroupIdChange );
         jQuery("button#addgroup", condgroup).on( 'click.reactor', handleAddGroupClick );
         jQuery("button#saveconf", condgroup).on( 'click.reactor', handleSaveClick );
+        jQuery("button#revertconf", condgroup).on( 'click.reactor', handleRevertClick );
 
         /* Create a condition row for the first condition in the group */
         var condId = getUID("cond");
@@ -2312,7 +2301,7 @@ var ReactorSensor = (function(api, $) {
         var newcond = { id: condId };
         var myid = api.getCpanelDeviceId();
         iData[myid].ixCond[condId] = newcond;
-        iData[myid].ixGroup[newId] = { groupid: newId, groupconditions: [ newcond ] };
+        iData[myid].ixGroup[newId] = { groupid: newId, name: newId, groupconditions: [ newcond ] };
         iData[myid].cdata.conditions.push( iData[myid].ixGroup[newId] );
 
         configModified = true;
@@ -2469,8 +2458,8 @@ var ReactorSensor = (function(api, $) {
         var myid = api.getCpanelDeviceId();
         for (var ng=0; ng<(iData[myid].cdata.conditions || []).length; ++ng) {
             var grp = iData[myid].cdata.conditions[ng];
-            if ( grp.groupid === undefined )
-                grp.groupid = getUID("group");
+            if ( undefined === grp.groupid ) grp.groupid = getUID("grp");
+            if ( undefined === grp.name ) grp.name = grp.groupid;
             iData[myid].ixGroup[grp.groupid] = grp;
 
             /* Create div.conditiongroup and add conditions */
@@ -2493,7 +2482,7 @@ var ReactorSensor = (function(api, $) {
                 gel.removeClass('groupdisabled');
             }
 
-            jQuery( 'span.titletext', gel ).text( "Group: " + grp.groupid ).on( 'click.reactor', handleTitleClick ).attr( 'title', msgGroupIdChange );
+            jQuery( 'span.titletext', gel ).text( "Group: " + ( grp.name || grp.groupid ) ).on( 'click.reactor', handleTitleClick ).attr( 'title', msgGroupIdChange );
 
             for (var nc=0; nc<(grp.groupconditions || []).length; ++nc) {
                 var cond = grp.groupconditions[nc];
@@ -2545,7 +2534,7 @@ var ReactorSensor = (function(api, $) {
             }
 
             initModule();
-            
+
             var myid = api.getCpanelDeviceId();
 
             /* Load material design icons */
@@ -3337,11 +3326,11 @@ var ReactorSensor = (function(api, $) {
         var tcf = buildActionList( jQuery( 'div#tripactions') );
         var ucf = buildActionList( jQuery( 'div#untripactions') );
         var cd = iData[myid].cdata;
-        if ( undefined !== cd.activities ) {
-            delete cd.activities.__trip;
-            delete cd.activities.__untrip;
-        }
         if ( tcf && ucf ) {
+            if ( undefined !== cd.activities ) {
+                delete cd.activities.__trip;
+                delete cd.activities.__untrip;
+            }
             /* If either "scene" has no actions, just delete its config */
             if ( tcf.groups.length == 1 && tcf.groups[0].actions.length == 0 ) {
                 delete cd.tripactions;
@@ -4353,7 +4342,7 @@ var ReactorSensor = (function(api, $) {
     function redrawActivities() {
         var cd = iData[api.getCpanelDeviceId()].cdata;
         jQuery( 'div#tripactions div.actionrow' ).remove();
-        loadActions( 'tripactions', cd.tripactions || (cd.activites || {}).__trip || {} );
+        loadActions( 'tripactions', cd.tripactions || (cd.activities || {}).__trip || {} );
         jQuery( 'div#untripactions div.actionrow' ).remove();
         loadActions( 'untripactions', cd.untripactions || (cd.activities || {}).__untrip || {} );
         updateActionControls();
