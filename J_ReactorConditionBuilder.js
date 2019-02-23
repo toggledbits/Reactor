@@ -288,7 +288,7 @@ var ReactorConditionBuilder = (function(api, $) {
     }
 
     function isEmpty( s ) {
-        return s === undefined || s === "";
+        return s === undefined || s === "" || s.match( /^\s*$/ );
     }
 
     function quot( s ) {
@@ -611,16 +611,19 @@ var ReactorConditionBuilder = (function(api, $) {
 
     /**
      * Remove all properies on condition except those in the exclusion list.
-     * The id and type properties are always preserved.
+     * The id and type properties are always preserved. If removePrivate is
+     * passed and true, this interface's private data related to the object
+     * is also removed (those that begin '__'.
      */
-    function removeConditionProperties( cond, excl ) {
+    function removeConditionProperties( cond, excl, removePrivate ) {
         var elist = (excl || "").split(/,/);
         var emap = { id: true, type: true }; /* never remove these */
         for ( var ix=0; ix<elist.length; ++ix ) {
             emap[elist[ix]] = true;
         }
         for ( var prop in cond ) {
-            if ( cond.hasOwnProperty( prop ) && emap[prop] === undefined ) {
+            if ( cond.hasOwnProperty( prop ) && emap[prop] === undefined &&
+                    ( removePrivate || !prop.match( /^__/ ) ) ) {
                 delete cond[prop];
             }
         }
@@ -1050,24 +1053,14 @@ var ReactorConditionBuilder = (function(api, $) {
     function updateControls() {
         /* Disable all "Add Condition" buttons if any condition type menu
            has no selection. */
-        var nset = jQuery('select.condtype option[value=""]:selected').length !== 0;
-        jQuery('button.addcond').prop('disabled', nset );
+        var nset = jQuery('select.condtype option[value=""]:selected').length > 0;
 
-        /* Disable "Add Group" button with same conditions. */
+        /* ... or if any group has no conditions */
+        nset = nset || jQuery( 'div.condlist:empty' ).length > 0;
+
+        /* Disable "Add" buttons while the condition is true. */
+        jQuery('button#addcond').prop('disabled', nset );
         jQuery('button#addgroup').prop('disabled', nset );
-
-        /* Up/down tools for conditions enabled except up for first and down
-           for last in each group. */
-        jQuery('div.condcontrols i.action-up').attr('disabled', false);
-        jQuery('div.condcontrols i.action-down').attr('disabled', false);
-        jQuery('div.conditiongroup').each( function( ix, grpEl ) {
-            jQuery( 'div.conditionrow:first div.condcontrols i.action-up', grpEl ).attr('disabled', true);
-            jQuery( 'div.conditionrow:last div.condcontrols i.action-down', grpEl ).attr('disabled', true);
-
-            /* Delete on condition if more than 1 in group */
-            var count = jQuery( 'div.conditionrow', grpEl ).length;
-            jQuery( 'div.condcontrols i.action-delete', grpEl ).attr( 'disabled', count <= 1 );
-        });
 
         updateSaveControls();
     }
@@ -1075,71 +1068,194 @@ var ReactorConditionBuilder = (function(api, $) {
     /**
      * Update row structure from current display data.
      */
-    function updateConditionRow( row, target ) {
-        var condId = row.attr("id");
+    function updateConditionRow( $row, target ) {
+        var condId = $row.attr("id");
         var cond = iData[api.getCpanelDeviceId()].ixCond[ condId ];
-        var typ = jQuery("select.condtype", row).val() || "";
+        var typ = jQuery("select.condtype", $row).val() || "";
         cond.type = typ;
-        jQuery('.tberror', row).removeClass('tberror');
-        row.removeClass('tberror');
+        jQuery('.tberror', $row).removeClass('tberror');
+        $row.removeClass('tberror');
         var val, res;
         switch (typ) {
             case "":
-                jQuery( 'select.condtype', row ).addClass( 'tberror' );
+                jQuery( 'select.condtype', $row ).addClass( 'tberror' );
                 break;
-                
+
             case 'group':
                 removeConditionProperties( cond, 'conditions,operator,invert,disabled' );
                 if ( ( cond.conditions || [] ).length == 0 ) {
-                    row.addClass( 'tberror' );
+                    $row.addClass( 'tberror' );
                 }
                 break;
 
             case 'comment':
                 removeConditionProperties( cond, "comment" );
-                cond.comment = jQuery("div.params input", row).val();
+                cond.comment = jQuery("div.params input", $row).val();
                 break;
 
             case 'service':
-                /* Below removes nocase, but we put it back if needed */
-                removeConditionProperties( cond, "device,devicename,service,variable,operator,value" );
-                cond.device = parseInt( jQuery("div.params select.devicemenu", row).val() );
-                cond.service = jQuery("div.params select.varmenu", row).val() || "";
+                var n;
+                removeConditionProperties( cond, "device,devicename,service,variable,operator,value,duration,duration_op,after,aftertime,repeatcount,repeatwithin,latch,nocase" );
+                cond.device = parseInt( jQuery("div.params select.devicemenu", $row).val() );
+                cond.service = jQuery("div.params select.varmenu", $row).val() || "";
                 cond.variable = cond.service.replace( /^[^\/]+\//, "" );
                 cond.service = cond.service.replace( /\/.*$/, "" );
-                cond.operator = jQuery("div.params select.opmenu", row).val() || "=";
+                cond.operator = jQuery("div.params select.opmenu", $row).val() || "=";
                 if ( cond.operator.match( noCaseOptPattern ) ) {
-                    if ( ! jQuery( 'input#nocase', row ).prop( 'checked' ) ) {
-                        cond.nocase = 0;
+                    /* Case-insensitive is the default */
+                    n = ( jQuery( 'input#nocase', $row ).prop( 'checked' ) || false ) ? 0 : 1;
+                    if ( n !== cond.nocase ) {
+                        cond.nocase = ( 0 === n ) ? 0 : undefined;
+                        configModified = true;
                     }
                 }
                 var op = serviceOpsIndex[cond.operator || ""];
-                jQuery( "input#value", row ).css( "visibility", ( undefined !== op && 0 === op.args ) ? "hidden" : "visible" );
+                jQuery( "input#value", $row ).css( "visibility", ( undefined !== op && 0 === op.args ) ? "hidden" : "visible" );
                 // use op.args???
                 if ( "change" == cond.operator ) {
                     // Join simple two value list, but don't save "," on its own.
-                    cond.value = jQuery( 'input#val1', row ).val() || "";
-                    val = jQuery( 'input#val2', row ).val();
+                    cond.value = jQuery( 'input#val1', $row ).val() || "";
+                    val = jQuery( 'input#val2', $row ).val();
                     if ( ! isEmpty( val ) ) {
                         cond.value += "," + val;
                     }
                 } else {
-                    cond.value = jQuery("input#value", row).val() || "";
+                    cond.value = jQuery("input#value", $row).val() || "";
                 }
                 /* For numeric op, check that value is parseable as a number (unless var ref) */
                 if ( op && op.numeric && ! cond.value.match( varRefPattern ) ) {
-                    var n = parseFloat( cond.value );
+                    n = parseFloat( cond.value );
                     if ( isNaN( n ) ) {
-                        jQuery( 'input#value', row ).addClass( 'tberror' );
+                        jQuery( 'input#value', $row ).addClass( 'tberror' );
+                    }
+                }
+
+                /* If condition options are open, check them, too. */
+                if ( jQuery( 'div.condopts', $row ).length > 0 ) {
+
+                    /* Predecessor condition (sequencing) */
+                    var $pred = jQuery( 'select#pred', $row );
+                    if ( isEmpty( $pred.val() ) ) {
+                        if ( undefined !== cond.after ) {
+                            delete cond.after;
+                            delete cond.aftertime;
+                            configModified = true;
+                        }
+                    } else {
+                        var pt = parseInt( jQuery('input#predtime', $row).val() );
+                        if ( isNaN( pt ) || pt < 0 ) {
+                            pt = 0;
+                            jQuery('input#predtime', $row).val(pt);
+                        }
+                        if ( cond.after !== $pred.val() || cond.aftertime !== pt ) {
+                            cond.after = $pred.val();
+                            cond.aftertime = pt;
+                            configModified = true;
+                        }
+                    }
+
+                    /* Repeats */
+                    var $rc = jQuery('input#rcount', $row);
+                    if ( isEmpty( $rc.val() ) || $rc.prop('disabled') ) {
+                        jQuery('input#duration', $row).prop('disabled', false);
+                        jQuery('select#durop', $row).prop('disabled', false);
+                        jQuery('input#rspan', $row).val("").prop('disabled', true);
+                        if ( undefined !== cond.repeatcount ) {
+                            delete cond.repeatcount;
+                            delete cond.repeatwithin;
+                            configModified = true;
+                        }
+                    } else {
+                        n = getInteger( $rc.val() );
+                        if ( isNaN( n ) || n < 2 ) {
+                            $rc.addClass( 'tberror' );
+                        } else if ( n > 1 ) {
+                            $rc.removeClass( 'tberror' );
+                            if ( n != cond.repeatcount ) {
+                                cond.repeatcount = n;
+                                delete cond.duration;
+                                delete cond.duration_op;
+                                configModified = true;
+                            }
+                            jQuery('input#duration', $row).val("").prop('disabled', true);
+                            jQuery('select#durop', $row).val("ge").prop('disabled', true);
+                            jQuery('input#rspan', $row).prop('disabled', false);
+                            if ( jQuery('input#rspan', $row).val() === "" ) {
+                                jQuery('input#rspan', $row).val( "60" );
+                                cond.repeatwithin = 60;
+                                configModified = true;
+                            }
+                        }
+                    }
+                    var $rs = jQuery('input#rspan', $row);
+                    if ( ! $rs.prop('disabled') ) {
+                        var rspan = getInteger( $rs.val() );
+                        if ( isNaN( rspan ) || rspan < 1 ) {
+                            $rs.addClass( 'tberror' );
+                        } else {
+                            $rs.removeClass( 'tberror' );
+                            if ( rspan !== ( cond.repeatwithin || 0 ) ) {
+                                cond.repeatwithin = rspan;
+                                configModified = true;
+                            }
+                        }
+                    }
+
+                    /* Duration */
+                    var $dd = jQuery('input#duration', $row);
+                    if ( isEmpty( $dd.val() ) || $dd.prop('disabled') ) {
+                        jQuery('input#rcount', $row).prop('disabled', false);
+                        // jQuery('input#rspan', $row).prop('disabled', false);
+                        if ( undefined !== cond.duration ) {
+                            delete cond.duration;
+                            delete cond.duration_op;
+                            configModified = true;
+                        }
+                    } else {
+                        var dur = getInteger( $dd.val() );
+                        if ( isNaN( dur ) || dur < 0 ) {
+                            $dd.addClass('tberror');
+                        } else {
+                            $dd.removeClass('tberror');
+                            jQuery('input#rcount', $row).val("").prop('disabled', true);
+                            // jQuery('input#rspan', $row).val("").prop('disabled', true);
+                            delete cond.repeatwithin;
+                            delete cond.repeatcount;
+                            if ( (cond.duration||0) !== dur ) {
+                                /* Changed */
+                                if ( dur === 0 ) {
+                                    delete cond.duration;
+                                    delete cond.duration_op;
+                                    jQuery('input#rcount', $row).prop('disabled', false);
+                                    // jQuery('input#rspan', $row).prop('disabled', false);
+                                } else {
+                                    cond.duration = dur;
+                                    cond.duration_op = jQuery('select#durop', $row).val() || "ge";
+                                }
+                                configModified = true;
+                            }
+                        }
+                    }
+
+                    /* Latching */
+                    var latchval = jQuery('input#latchcond', $row).prop('checked') ? 1 : 0;
+                    if ( latchval != ( cond.latch || 0 ) ) {
+                        /* Changed. Don't store false, just remove key */
+                        if ( 0 !== latchval ) {
+                            cond.latch = latchval;
+                        } else {
+                            delete cond.latch;
+                        }
+                        configModified = true;
                     }
                 }
                 break;
 
             case 'weekday':
                 removeConditionProperties( cond, "operator,value" );
-                cond.operator = jQuery("div.params select.wdcond", row).val() || "";
+                cond.operator = jQuery("div.params select.wdcond", $row).val() || "";
                 res = [];
-                jQuery("input#opts:checked", row).each( function( ix, control ) {
+                jQuery("input#opts:checked", $row).each( function( ix, control ) {
                     res.push( control.value /* DOM element */ );
                 });
                 cond.value = res.join( ',' );
@@ -1147,17 +1263,17 @@ var ReactorConditionBuilder = (function(api, $) {
 
             case 'housemode':
                 removeConditionProperties( cond, "operator,value" );
-                cond.operator = jQuery("div.params select.opmenu", row).val() || "is";
+                cond.operator = jQuery("div.params select.opmenu", $row).val() || "is";
                 if ( "change" === cond.operator ) {
                     // Join simple two value list, but don't save "," on its own.
-                    cond.value = jQuery( 'select#frommode', row ).val() || "";
-                    val = jQuery( 'select#tomode', row ).val();
+                    cond.value = jQuery( 'select#frommode', $row ).val() || "";
+                    val = jQuery( 'select#tomode', $row ).val();
                     if ( ! isEmpty( val ) ) {
                         cond.value += "," + val;
                     }
                 } else {
                     res = [];
-                    jQuery("input#opts:checked", row).each( function( ix, control ) {
+                    jQuery("input#opts:checked", $row).each( function( ix, control ) {
                         res.push( control.value /* DOM element */ );
                     });
                     cond.value = res.join( ',' );
@@ -1175,9 +1291,9 @@ var ReactorConditionBuilder = (function(api, $) {
                     } else {
                         var losOtros;
                         if ( pdiv.hasClass('start') ) {
-                            losOtros = jQuery('div.end input.year', row);
+                            losOtros = jQuery('div.end input.year', $row);
                         } else {
-                            losOtros = jQuery('div.start input.year', row);
+                            losOtros = jQuery('div.start input.year', $row);
                         }
                         if ( newval === "" && losOtros.val() !== "" ) {
                             losOtros.val("");
@@ -1187,66 +1303,66 @@ var ReactorConditionBuilder = (function(api, $) {
                     }
                 }
                 /* Fetch and load */
-                cond.operator = jQuery("div.params select.opmenu", row).val() || "bet";
+                cond.operator = jQuery("div.params select.opmenu", $row).val() || "bet";
                 res = [];
-                var mon = jQuery("div.start select.monthmenu", row).val();
+                var mon = jQuery("div.start select.monthmenu", $row).val();
                 if ( ! isEmpty( mon ) ) {
-                    res.push( jQuery("div.start input.year", row).val() || "" );
-                    res.push( jQuery("div.start select.monthmenu", row).val() || "" );
-                    res.push( jQuery("div.start select.daymenu", row).val() || "1" );
+                    res.push( jQuery("div.start input.year", $row).val() || "" );
+                    res.push( jQuery("div.start select.monthmenu", $row).val() || "" );
+                    res.push( jQuery("div.start select.daymenu", $row).val() || "1" );
                 } else {
                     Array.prototype.push.apply( res, ["","",""] );
                 }
-                res.push( jQuery("div.start select.hourmenu", row).val() || "0" );
-                res.push( jQuery("div.start select.minmenu", row).val() || "0" );
+                res.push( jQuery("div.start select.hourmenu", $row).val() || "0" );
+                res.push( jQuery("div.start select.minmenu", $row).val() || "0" );
                 if ( cond.operator === "before" || cond.operator === "after" ) {
                     Array.prototype.push.apply( res, ["","","","",""] );
                 } else {
-                    jQuery('div.end', row).show();
+                    jQuery('div.end', $row).show();
                     if ( ! isEmpty( mon ) ) {
-                        res.push( jQuery("div.end input.year", row).val() || "" );
-                        res.push( jQuery("div.end select.monthmenu", row).val() || "" );
-                        res.push( jQuery("div.end select.daymenu", row).val() || "1" );
+                        res.push( jQuery("div.end input.year", $row).val() || "" );
+                        res.push( jQuery("div.end select.monthmenu", $row).val() || "" );
+                        res.push( jQuery("div.end select.daymenu", $row).val() || "1" );
                     } else {
                         Array.prototype.push.apply( res, ["","",""] );
                     }
-                    res.push( jQuery("div.end select.hourmenu", row).val() || "0" );
-                    res.push( jQuery("div.end select.minmenu", row).val() || "0" );
+                    res.push( jQuery("div.end select.hourmenu", $row).val() || "0" );
+                    res.push( jQuery("div.end select.minmenu", $row).val() || "0" );
                 }
                 cond.value = res.join(',');
                 if ( typ === "trange" ) {
-                    jQuery('.datespec', row).prop('disabled', res[1]==="");
+                    jQuery('.datespec', $row).prop('disabled', res[1]==="");
                     if ( cond.operator !== "bet" && cond.operator !== "nob" ) {
-                        jQuery('div.end', row).hide();
+                        jQuery('div.end', $row).hide();
                     } else {
-                        jQuery('div.end', row).show();
+                        jQuery('div.end', $row).show();
                     }
                 }
                 break;
 
             case 'sun':
                 removeConditionProperties( cond, "operator,value" );
-                cond.operator = jQuery('div.params select.opmenu', row).val() || "after";
+                cond.operator = jQuery('div.params select.opmenu', $row).val() || "after";
                 res = [];
-                var whence = jQuery('div.params select#sunstart', row).val() || "sunrise";
-                var offset = getInteger( jQuery('div.params input#startoffset', row).val() || "0" );
+                var whence = jQuery('div.params select#sunstart', $row).val() || "sunrise";
+                var offset = getInteger( jQuery('div.params input#startoffset', $row).val() || "0" );
                 if ( isNaN( offset ) ) {
                     /* Validation error, flag and treat as 0 */
                     offset = 0;
-                    jQuery('div.params input#startoffset', row).addClass('tberror');
+                    jQuery('div.params input#startoffset', $row).addClass('tberror');
                 }
                 res.push( whence + ( offset < 0 ? '' : '+' ) + String(offset) );
                 if ( cond.operator == "bet" || cond.operator == "nob" ) {
-                    jQuery( 'div.end', row ).show();
-                    whence = jQuery('select#sunend', row).val() || "sunset";
-                    offset = getInteger( jQuery('input#endoffset', row).val() || "0" );
+                    jQuery( 'div.end', $row ).show();
+                    whence = jQuery('select#sunend', $row).val() || "sunset";
+                    offset = getInteger( jQuery('input#endoffset', $row).val() || "0" );
                     if ( isNaN( offset ) ) {
                         offset = 0;
-                        jQuery('div.params input#endoffset', row).addClass('tberror');
+                        jQuery('div.params input#endoffset', $row).addClass('tberror');
                     }
                     res.push( whence + ( offset < 0 ? '' : '+' ) + String(offset) );
                 } else {
-                    jQuery( 'div.end', row ).hide();
+                    jQuery( 'div.end', $row ).hide();
                     res.push("");
                 }
                 cond.value = res.join(',');
@@ -1255,47 +1371,47 @@ var ReactorConditionBuilder = (function(api, $) {
             case 'interval':
                 removeConditionProperties( cond, "days,hours,mins,basetime" );
                 var nmin = 0;
-                var v = jQuery('div.params #days', row).val();
+                var v = jQuery('div.params #days', $row).val();
                 if ( v.match( varRefPattern ) ) {
                     cond.days = v;
                     nmin = 1440;
                 } else {
                     v = getOptionalInteger( v, 0 );
                     if ( isNaN(v) || v < 0 ) {
-                        jQuery( 'div.params #days', row ).addClass( 'tberror' );
+                        jQuery( 'div.params #days', $row ).addClass( 'tberror' );
                     } else {
                         cond.days = v;
                         nmin = nmin + 1440 * v;
                     }
                 }
-                jQuery('div.params #hours', row).val();
+                jQuery('div.params #hours', $row).val();
                 if ( v.match( varRefPattern ) ) {
                     cond.hours = v;
                     nmin = 60;
                 } else {
                     v = getOptionalInteger( v, 0 );
                     if ( isNaN(v) || v < 0 ) {
-                        jQuery( 'div.params #hours', row ).addClass( 'tberror' );
+                        jQuery( 'div.params #hours', $row ).addClass( 'tberror' );
                     } else {
                         cond.hours = v;
                         nmin = nmin + 60 * v;
                     }
                 }
-                v = jQuery('div.params #mins', row).val();
+                v = jQuery('div.params #mins', $row).val();
                 if ( v.match( varRefPattern ) ) {
                     cond.mins = v;
                     nmin = 1;
                 } else {
                     v = getOptionalInteger( v, 0 );
                     if ( isNaN(v) || v < 0 ) {
-                        jQuery( 'div.params #mins', row ).addClass( 'tberror' );
+                        jQuery( 'div.params #mins', $row ).addClass( 'tberror' );
                     } else {
                         cond.mins = v;
                         nmin = nmin + v;
                     }
                 }
                 if ( nmin <= 0 ) {
-                    jQuery( 'div.params select', row ).addClass( 'tberror' );
+                    jQuery( 'div.params select', $row ).addClass( 'tberror' );
                 }
                 var rh = jQuery( 'div.params select#relhour' ).val() || "00";
                 var rm = jQuery( 'div.params select#relmin' ).val() || "00";
@@ -1308,19 +1424,19 @@ var ReactorConditionBuilder = (function(api, $) {
 
             case 'ishome':
                 removeConditionProperties( cond, "operator,value" );
-                cond.operator = jQuery("div.params select.geofencecond", row).val() || "is";
+                cond.operator = jQuery("div.params select.geofencecond", $row).val() || "is";
                 res = [];
                 if ( "at" === cond.operator || "notat" === cond.operator ) {
-                    res[0] = jQuery( 'select#userid', row ).val() || "";
-                    res[1] = jQuery( 'select#location', row ).val() || "";
+                    res[0] = jQuery( 'select#userid', $row ).val() || "";
+                    res[1] = jQuery( 'select#location', $row ).val() || "";
                     if ( isEmpty( res[0] ) ) {
-                        jQuery( 'select#userid', row ).addClass( 'tberror' );
+                        jQuery( 'select#userid', $row ).addClass( 'tberror' );
                     }
                     if ( isEmpty( res[1] ) ) {
-                        jQuery( 'select#location', row ).addClass( 'tberror' );
+                        jQuery( 'select#location', $row ).addClass( 'tberror' );
                     }
                 } else {
-                    jQuery("input#opts:checked", row).each( function( ix, control ) {
+                    jQuery("input#opts:checked", $row).each( function( ix, control ) {
                         res.push( control.value /* DOM element */ );
                     });
                 }
@@ -1336,13 +1452,14 @@ var ReactorConditionBuilder = (function(api, $) {
                 break;
         }
 
-        row.has('.tberror').addClass('tberror');
+        $row.has('.tberror').addClass('tberror');
 
         updateControls();
     }
 
     /**
-     * Handler for row change (generic)
+     * Handler for row change (generic change to some value we don't otherwise
+     * need additional processing to respond to)
      */
     function handleConditionRowChange( ev ) {
         var el = jQuery( ev.currentTarget );
@@ -1378,7 +1495,7 @@ var ReactorConditionBuilder = (function(api, $) {
     }
 
     /**
-     * Handler for variable change.
+     * Handler for variable change. Change the displayed current value.
      */
     function handleConditionVarChange( ev ) {
         var $el = jQuery( ev.currentTarget );
@@ -1471,126 +1588,11 @@ var ReactorConditionBuilder = (function(api, $) {
         updateConditionRow( $row ); /* pass it on */
     }
 
-    function handleOptionChange( ev ) {
-        var $row = jQuery( ev.currentTarget ).closest( 'div.cond-container' );
-        var cond = iData[api.getCpanelDeviceId()].ixCond[ $row.attr( "id" ) ];
-
-        var pred = jQuery( 'select#pred', $row );
-        if ( "" === pred.val() ) {
-            if ( undefined !== cond.after ) {
-                delete cond.after;
-                delete cond.aftertime;
-                configModified = true;
-            }
-        } else {
-            var pt = parseInt( jQuery('input#predtime', $row).val() );
-            if ( isNaN( pt ) || pt < 0 ) {
-                pt = 0;
-                jQuery('input#predtime', $row).val(pt);
-            }
-            if ( cond.after !== pred.val() || cond.aftertime !== pt ) {
-                cond.after = pred.val();
-                cond.aftertime = pt;
-                configModified = true;
-            }
-        }
-
-        var $rc = jQuery('input#rcount', $row);
-        if ( "" === $rc.val() || $rc.prop('disabled') ) {
-            jQuery('input#duration', $row).prop('disabled', false);
-            jQuery('select#durop', $row).prop('disabled', false);
-            jQuery('input#rspan', $row).val("").prop('disabled', true);
-            if ( undefined !== cond.repeatcount ) {
-                delete cond.repeatcount;
-                delete cond.repeatwithin;
-                configModified = true;
-            }
-        } else {
-            var n = getInteger( $rc.val() );
-            if ( isNaN( n ) || n < 2 ) {
-                $rc.addClass( 'tberror' );
-            } else if ( n > 1 ) {
-                $rc.removeClass( 'tberror' );
-                if ( n != cond.repeatcount ) {
-                    cond.repeatcount = n;
-                    delete cond.duration;
-                    delete cond.duration_op;
-                    configModified = true;
-                }
-                jQuery('input#duration', $row).val("").prop('disabled', true);
-                jQuery('select#durop', $row).val("ge").prop('disabled', true);
-                jQuery('input#rspan', $row).prop('disabled', false);
-                if ( jQuery('input#rspan', $row).val() === "" ) {
-                    jQuery('input#rspan', $row).val( "60" );
-                    cond.repeatwithin = 60;
-                    configModified = true;
-                }
-            }
-        }
-
-        var latchval = jQuery('input#latchcond', $row).prop('checked') ? 1 : 0;
-        if ( latchval != ( cond.latch || 0 ) ) {
-            cond.latch = latchval;
-            configModified = true;
-        }
-
-        var $rs = jQuery('input#rspan', $row);
-        if ( ! $rs.prop('disabled') ) {
-            var rspan = getInteger( $rs.val() );
-            if ( isNaN( rspan ) || rspan < 1 ) {
-                $rs.addClass( 'tberror' );
-            } else {
-                $rs.removeClass( 'tberror' );
-                if ( rspan !== ( cond.repeatwithin || 0 ) ) {
-                    cond.repeatwithin = rspan;
-                    configModified = true;
-                }
-            }
-        }
-
-        var $dd = jQuery('input#duration', $row);
-        if ( "" === $dd.val() || $dd.prop('disabled') ) {
-            jQuery('input#rcount', $row).prop('disabled', false);
-            // jQuery('input#rspan', $row).prop('disabled', false);
-            if ( undefined !== cond.duration ) {
-                delete cond.duration;
-                delete cond.duration_op;
-                configModified = true;
-            }
-        } else {
-            var dur = getInteger( $dd.val() );
-            if ( isNaN( dur ) || dur < 0 ) {
-                $dd.addClass('tberror');
-            } else {
-                $dd.removeClass('tberror');
-                jQuery('input#rcount', $row).val("").prop('disabled', true);
-                // jQuery('input#rspan', $row).val("").prop('disabled', true);
-                delete cond.repeatwithin;
-                delete cond.repeatcount;
-                if ( (cond.duration||0) !== dur ) {
-                    /* Changed */
-                    if ( dur === 0 ) {
-                        delete cond.duration;
-                        delete cond.duration_op;
-                        jQuery('input#rcount', $row).prop('disabled', false);
-                        // jQuery('input#rspan', $row).prop('disabled', false);
-                    } else {
-                        cond.duration = dur;
-                        cond.duration_op = jQuery('select#durop', $row).val() || "ge";
-                    }
-                    configModified = true;
-                }
-            }
-        }
-
-        updateControls();
-    }
-
     function handleCloseOptionsClick( ev ) {
         var $row = jQuery( ev.currentTarget ).closest('div.cond-container');
 
-        /* Remove the options block */
-        jQuery('div.cond-body div.condopts', $row).remove();
+        /* Don't remove the option block, just hide it. */
+        jQuery('div.cond-body div.condopts', $row).slideUp();
 
         /* Put the open tool back */
         jQuery('div.params i#condmore').show();
@@ -1606,8 +1608,16 @@ var ReactorConditionBuilder = (function(api, $) {
         /* Remove the open tool */
         $el.hide();
 
+        /* If the options container already exists, just show it. */
+        var $container = jQuery( 'div.cond-body div.condopts' );
+        if ( $container.length > 0 ) {
+            $container.slideDown();
+            return;
+        }
+
         /* Create the options container and add options */
-        var $container = jQuery('<div class="condopts"></div>');
+        $container = jQuery('<div class="condopts"></div>');
+
         /* Predecessor */
         var $preds = jQuery('<select id="pred" class="form-control form-control-sm"><option value="">(any time/no sequence)</option></select>');
         for ( var ic=0; ic<(grp.conditions || []).length; ic++) {
@@ -1634,7 +1644,7 @@ var ReactorConditionBuilder = (function(api, $) {
         $container.append('<div id="repopt" class="form-inline"><label>Condition repeats <input type="text" id="rcount" class="form-control form-control-sm narrow" autocomplete="off"> times within <input type="text" id="rspan" class="form-control form-control-sm narrow" autocomplete="off"> seconds</label></div>');
         $container.append('<div id="latchopt" class="form-inline"><label class="checkbox-inline"><input type="checkbox" id="latchcond" class="form-check">&nbsp;Latch (once met, condition remains true until group resets)<label></div>');
         $container.append('<i class="md-btn material-icons closeopts" title="Close Options">expand_less</i>');
-        jQuery('input,select', $container).on( 'change.reactor', handleOptionChange );
+        jQuery('input,select', $container).on( 'change.reactor', handleConditionRowChange );
         jQuery('i.closeopts', $container).on( 'click.reactor', handleCloseOptionsClick );
         if ( ( cond.duration || 0 ) > 0 ) {
             jQuery('input#rcount,input#rspan', $container).prop('disabled', true);
@@ -1649,12 +1659,12 @@ var ReactorConditionBuilder = (function(api, $) {
         }
         jQuery('input#latchcond', $container).prop('checked', ( cond.latch || 0 ) != 0 );
 
-        /* Add it to the params */
-        jQuery('div.cond-body:first', $row).append( $container );
+        /* Add the options container (specific immediate child of this row selection) */
+        $row.children( 'div.cond-body' ).append( $container );
     }
 
     /**
-     *
+     * Update location selector to show correct locations for selected user.
      */
     function updateGeofenceLocations( row, loc ) {
         var user = jQuery( 'select#userid', row ).val() || "";
@@ -1682,7 +1692,7 @@ var ReactorConditionBuilder = (function(api, $) {
     }
 
     /**
-     *
+     * Handle user selector changed event.
      */
     function handleGeofenceUserChange( ev ) {
         var row = jQuery( ev.currentTarget ).closest( 'div.conditionrow' );
@@ -1691,7 +1701,7 @@ var ReactorConditionBuilder = (function(api, $) {
     }
 
     /**
-     *
+     * Handle geofence operator change event.
      */
     function handleGeofenceOperatorChange( ev ) {
         var el = jQuery( ev.currentTarget );
@@ -1708,7 +1718,10 @@ var ReactorConditionBuilder = (function(api, $) {
     }
 
     /**
-     * Set condition for type
+     * Set condition fields and data for type. This also replaces existing
+     * data from the passed condition. The condition must have at least
+     * id and type keys set (so new conditions may be safely be otherwise
+     * empty).
      */
     function setConditionForType( cond, row ) {
         var op, k, v, mm;
@@ -2163,7 +2176,7 @@ var ReactorConditionBuilder = (function(api, $) {
      */
     function handleDeleteGroupClick( ev ) {
         var $el = jQuery( ev.currentTarget );
-        if ( $el.attr( 'disabled' ) || "root" === $el.attr( 'id' ) ) { return; }
+        if ( $el.prop( 'disabled' ) || "root" === $el.attr( 'id' ) ) { return; }
 
         var $grpEl = $el.closest( 'div.cond-group-container' );
         var grpId = $grpEl.attr( 'id' );
@@ -2178,8 +2191,9 @@ var ReactorConditionBuilder = (function(api, $) {
         if ( gparent ) {
             var ix = grp.__index;
             gparent.conditions.splice( ix, 1 );
-            reindexConditions( gparent );
             $grpEl.remove();
+            reindexConditions( gparent );
+
             configModified = true;
             updateSaveControls();
             return;
@@ -2247,10 +2261,10 @@ var ReactorConditionBuilder = (function(api, $) {
         var grp = ixCond[ grpId ];
         grp.conditions.splice( ixCond[ condId ].__index, 1 );
         delete ixCond[ condId ];
-        reindexConditions( grp );
 
         /* Remove the condition row from display */
         row.remove();
+        reindexConditions( grp );
 
         el.closest( 'div.cond-group-container' ).addClass( 'tbmodified' );
         configModified = true;
@@ -2275,7 +2289,6 @@ var ReactorConditionBuilder = (function(api, $) {
          * to find and use here. The clone is the one with this class in the new
          * location. Incidentally, the id has also been removed from the clone by
          * jQuery-UI. */
-debugger;
         var $clone = $target.children( 'div:not([id])' ); /* direct descendant with no id */
         $el.detach();
         $clone.replaceWith( $el );
