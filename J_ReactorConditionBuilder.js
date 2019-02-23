@@ -266,7 +266,7 @@ var ReactorConditionBuilder = (function(api, $) {
     /* Return footer */
     function footer() {
         var html = '';
-        html += '<div class="clearfix">';
+        html += '<div class="clearfix" />';
         html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
         html += '<div id="tbcopyright">Reactor ver ' + pluginVersion + ' &copy; 2018,2019 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
             ' All Rights Reserved. Please check out the <a href="https://github.com/toggledbits/Reactor/wiki" target="_blank">online documentation</a>' +
@@ -412,17 +412,6 @@ var ReactorConditionBuilder = (function(api, $) {
             cdata.conditions = { root: root };
         }
 
-        /* Set up our indices. */
-        var ixGroup = {};
-        var ixCond = {};
-        for ( var ig=0; ig<(cdata.conditions || []).length; ig++ ) {
-            var grp = cdata.conditions[ig];
-            ixGroup[ grp.groupid ] = grp;
-            for ( var ic=0; ic<(grp.groupconditions || []).length; ic++ ) {
-                ixCond[ grp.groupconditions[ic].id ] = grp.groupconditions[ic];
-            }
-        }
-
         /* Keep version on config as highest that has edited it. */
         if ( ( cdata.version || 0 ) < CDATA_VERSION ) {
             cdata.version = CDATA_VERSION;
@@ -434,7 +423,7 @@ var ReactorConditionBuilder = (function(api, $) {
 //          api.setDeviceStateVariablePersistent( myid, serviceId, "cdata", JSON.stringify( cdata ) );
         }
 
-        iData[ myid ] = { cdata: cdata, ixCond: ixCond, ixGroup: ixGroup };
+        iData[ myid ] = { cdata: cdata, ixCond: {} };
 
         configModified = false;
         return cdata;
@@ -459,7 +448,7 @@ var ReactorConditionBuilder = (function(api, $) {
         actions = {};
 
         /* Instance data */
-        iData[myid] = { cdata: {}, ixCond: {}, ixGroup: {} };
+        iData[myid] = { cdata: {}, ixCond: {} };
 
         /* Force this false every time, and make the status panel change it. */
         inStatusPanel = false;
@@ -553,7 +542,7 @@ var ReactorConditionBuilder = (function(api, $) {
      * Find cdata condition in group.
      */
     function findCdataConditionIndex( condid, grpid ) {
-        var grp = iData[api.getCpanelDeviceId()].ixGroup[ grpid ];
+        var grp = iData[api.getCpanelDeviceId()].ixCond[ grpid ];
         if ( undefined !== grp ) {
             for ( var ix=0; ix<(grp.groupconditions || []).length; ++ix ) {
                 if ( grp.groupconditions[ix].id === condid ) {
@@ -1098,6 +1087,13 @@ var ReactorConditionBuilder = (function(api, $) {
             case "":
                 jQuery( 'select.condtype', row ).addClass( 'tberror' );
                 break;
+                
+            case 'group':
+                removeConditionProperties( cond, 'conditions,operator,invert,disabled' );
+                if ( ( cond.conditions || [] ).length == 0 ) {
+                    row.addClass( 'tberror' );
+                }
+                break;
 
             case 'comment':
                 removeConditionProperties( cond, "comment" );
@@ -1351,9 +1347,10 @@ var ReactorConditionBuilder = (function(api, $) {
     function handleConditionRowChange( ev ) {
         var el = jQuery( ev.currentTarget );
         var row = el.closest('div.cond-container');
-        
+
         console.log('handleConditionRowChange ' + String(row.attr('id')));
-        
+
+        row.addClass( 'tbmodified' );
         configModified = true;
         updateConditionRow( row, el );
     }
@@ -1604,7 +1601,7 @@ var ReactorConditionBuilder = (function(api, $) {
         var $row = $el.closest( 'div.cond-container' );
         var myid = api.getCpanelDeviceId();
         var cond = iData[myid].ixCond[ $row.attr( "id" ) ];
-        var grp = iData[myid].ixGroup[ $row.closest( 'div.cond-group-container').attr( 'id' ) ];
+        var grp = cond.__parent;
 
         /* Remove the open tool */
         $el.hide();
@@ -2044,8 +2041,23 @@ var ReactorConditionBuilder = (function(api, $) {
         iData[myid].ixCond[condId].type = newType;
         setConditionForType( iData[myid].ixCond[condId], $row );
 
+        $row.addClass( 'tbmodified' );
         configModified = true;
         updateConditionRow( $row );
+    }
+
+    /**
+     * Renumber group conditions.
+     */
+    function reindexConditions( grp ) {
+        var $el = jQuery( 'div#' + idSelector( grp.id ) + '.cond-group-container' ).children( 'div.cond-group-body' ).children( 'div.cond-list' );
+        var ixCond = iData[api.getCpanelDeviceId()].ixCond;
+        var ix = 0;
+        $el.children().each( function() {
+            var id = jQuery( this ).attr( 'id' );
+            var obj = ixCond[ id ];
+            obj.__index = ix++;
+        });
     }
 
     /**
@@ -2067,182 +2079,111 @@ var ReactorConditionBuilder = (function(api, $) {
         jQuery( 'div.cond-list:first', $parentGroup ).append( condel );
 
         /* Add to data */
-        var grp = iData[myid].ixGroup[ parentId ];
+        var grp = iData[myid].ixCond[ parentId ];
         grp.conditions.push( cond );
+        cond.__parent = grp;
         iData[myid].ixCond[ cond.id ] = cond;
+        reindexConditions( grp );
 
+        condel.addClass( 'tbmodified' );
         configModified = true;
         updateConditionRow( condel );
     }
 
     function handleTitleChange( ev ) {
         var input = jQuery( ev.currentTarget );
-        var newid = (input.val() || "").trim();
-        var span = input.closest( 'span' );
-        var grpid = span.closest( 'div.conditiongroup' ).attr( 'id' );
+        var grpid = input.closest( 'div.cond-group-container' ).attr( 'id' );
+        var newname = (input.val() || "").trim();
+        var span = jQuery( 'span', input.parent() );
+        var grp = iData[api.getCpanelDeviceId()].ixCond[grpid];
         input.removeClass( 'tberror' );
-        if ( newid == grpid ) {
-            /* No change */
-            span.empty().text( 'Group: ' + grpid ).on( 'click.reactor', handleTitleClick )
-                .addClass( 'titletext' ).attr( 'title', msgGroupIdChange );
-            return;
-        }
-        /* Group name check */
-        if ( ! newid.match( /^[a-z][a-z0-9_]+$/i ) ) {
-            input.addClass( 'tberror' );
-            input.focus();
-            return;
-
-        }
-        /* Don't allow duplicate group Id */
-        var myid = api.getCpanelDeviceId();
-        for ( var v in iData[myid].ixGroup ) {
-            if ( iData[myid].ixGroup.hasOwnProperty( v ) ) {
-                if ( v != grpid && v == newid ) {
-                    input.addClass( 'tberror' );
-                    input.focus();
-                    return;
-                }
+        if ( newname !== grp.name ) {
+            /* Group name check */
+            if ( newname.length < 2 ) {
+                ev.preventDefault();
+                input.addClass( 'tberror' );
+                input.focus();
+                return;
             }
+
+            /* Update config */
+            input.closest( 'div.cond-group-container' ).addClass( 'tbmodified' );
+            grp.name = newname;
+            configModified = true;
         }
-        /* Update config */
-        iData[myid].ixGroup[newid] = iData[myid].ixGroup[grpid];
-        iData[myid].ixGroup[newid].groupid = newid;
-        delete iData[myid].ixGroup[grpid];
-        configModified = true;
+
         /* Remove input field and replace text */
-        span.closest( 'div.conditiongroup' ).attr( 'id', newid );
-        span.empty().text( 'Group: ' + newid ).on( 'click.reactor', handleTitleClick )
-            .addClass( 'titletext' ).attr( 'title', msgGroupIdChange );
+        input.remove();
+        span.text( newname );
+        span.closest( 'div.cond-group-title' ).children().show();
         updateSaveControls();
     }
 
     function handleTitleClick( ev ) {
-        var span = jQuery( ev.currentTarget );
-        span.off( 'click.reactor' ).removeClass( 'titletext' );
-        var grpid = span.closest( 'div.conditiongroup' ).attr( 'id' );
-        span.empty().append( jQuery( '<input class="titleedit form-control form-control-sm" title="Enter new group ID">' ).val( grpid ) );
-        jQuery( 'input', span ).on( 'change.reactor', handleTitleChange )
-            .on( 'blur.reactor', handleTitleChange );
+        /* N.B. Click can be on span or icon */
+        var $el = jQuery( ev.currentTarget );
+        var $p = $el.closest( 'div.cond-group-title' );
+        $p.children().hide();
+        var grpid = $p.closest( 'div.cond-group-container' ).attr( 'id' );
+        var grp = iData[api.getCpanelDeviceId()].ixCond[grpid];
+        if ( grp ) {
+            $p.append( jQuery( '<input class="titleedit form-control form-control-sm" title="Enter new group name">' )
+                .val( grp.name ) );
+            jQuery( 'input.titleedit', $p ).on( 'change.reactor', handleTitleChange )
+                .on( 'blur.reactor', handleTitleChange );
+        }
     }
 
     /**
      * Update group controls.
      */
     function updateGroupControls() {
-        var myid = api.getCpanelDeviceId();
-        var cdata = iData[myid].cdata;
-        jQuery.each( cdata.conditions || [], function( ix, obj ) {
-            var grpid = obj.groupid;
-            var grpEl = jQuery( 'div.conditiongroup#' + grpid );
-            jQuery( 'i#grpmoveup', grpEl ).attr( 'disabled', ix==0 );
-            jQuery( 'i#grpmovedn', grpEl ).attr( 'disabled', ix>=( cdata.conditions.length-1 ) );
-            jQuery( 'i#grpdelete', grpEl ).attr( 'disabled', cdata.conditions.length < 2 );
-        });
+        // ???
+        console.log("Do we need updateGroupControls() now?");
     }
 
     /**
-     * Handle click on group organization controls
+     * Handle click on group expand/collapse.
      */
-    function handleGroupControlClick( ev ) {
-        var el = jQuery( ev.currentTarget );
-        if ( el.attr( 'disabled' ) ) { return; }
-        var grpEl = el.closest( 'div.conditiongroup' );
-        var grpId = grpEl.attr('id');
-        var action = el.attr('id');
+    function handleGroupExpandClick( ev ) {
+        var $el = jQuery( ev.currentTarget );
+        var $p = $el.closest( 'div.cond-group-container' );
+        var $l = jQuery( 'div.cond-list:first', $p );
+        if ( "collapse" === $el.attr( 'id' ) ) {
+            $l.slideUp();
+            $el.attr( 'id', 'expand' ).removeClass( 'glyphicon-collapse-up' ).addClass( 'glyphicon-collapse-down' ).attr( 'title', 'Collapse group' );
+        } else {
+            $l.slideDown();
+            $el.attr( 'id', 'collapse' ).removeClass( 'glyphicon-collapse-down' ).addClass( 'glyphicon-collapse-up' ).attr( 'title', 'Expand group' );
+        }
+    }
 
-        var myid = api.getCpanelDeviceId();
-        var cdata = iData[myid].cdata;
-        var grpix = findCdataGroupIndex( grpId );
-        var grpconfig = cdata.conditions[grpix];
-        var grp, anch;
-        switch ( action ) {
-            case "grpenable":
-                if ( grpconfig.disabled ) {
-                    delete grpconfig.disabled;
-                    grpEl.removeClass( 'groupdisabled' );
-                } else {
-                    grpconfig.disabled = 1;
-                    grpEl.addClass( 'groupdisabled' );
-                }
-                el.text( grpconfig.disabled ? "sync" : "sync_disabled" );
-                configModified = true;
-                break;
+    /**
+     * Handle delete group button click
+     */
+    function handleDeleteGroupClick( ev ) {
+        var $el = jQuery( ev.currentTarget );
+        if ( $el.attr( 'disabled' ) || "root" === $el.attr( 'id' ) ) { return; }
 
-            case "grpdelete":
-                if ( cdata.conditions.length > 1 && confirm( 'Really delete this group?' ) ) {
-                    delete iData[myid].ixGroup[ grpId ];
-                    cdata.conditions.splice( grpix, 1 );
-                    /* remove the OR divider above the group */
-                    if ( grpix > 0 ) {
-                        grpEl.prev().remove();
-                    } else {
-                        grpEl.next().remove();
-                    }
-                    /* Remove the entire conditiongroup from display. */
-                    grpEl.remove();
+        var $grpEl = $el.closest( 'div.cond-group-container' );
+        var grpId = $grpEl.attr( 'id' );
 
-                    configModified = true;
-                }
-                break;
-
-            case "grpmoveup":
-                /* Move up. */
-                if ( grpix > 0 ) {
-                    /* Move up in data structure */
-                    var prior = jQuery( 'div#' + cdata.conditions[grpix-1].groupid + '.conditiongroup' );
-                    grp = cdata.conditions.splice( grpix, 1 );
-                    cdata.conditions.splice( grpix-1, 0, grp[0] );
-
-                    /* Move up in display */
-                    anch = grpEl.next( 'div.row' ); /* Always a row after, either separator or "Add Group" */
-                    // not working in jQuery for UI7: var prior = grpEl.prev( 'div.conditiongroup' ); /* find prior group */
-                    grpEl.detach();
-                    grpEl.insertAfter( prior );
-                    prior.detach();
-                    prior.insertBefore( anch );
-
-                    configModified = true;
-                }
-                break;
-
-            case "grpmovedn":
-                /* Move down */
-                if ( grpix < ( cdata.conditions.length-1 ) ) {
-                    /* Move down is data structure */
-                    var next = jQuery( 'div#' + cdata.conditions[grpix+1].groupid + '.conditiongroup' );
-                    grp = cdata.conditions.splice( grpix, 1 );
-                    cdata.conditions.splice( grpix+1, 0, grp[0] );
-
-                    /* Move down in display */
-                    anch = grpEl.next( 'div.row' ); /* Always a row after, either separator or "Add Group" */
-                    // not working in jQuery for UI7: var next = grpEl.next( 'div.conditiongroup' ); /* find next row */
-                    grpEl.detach();
-                    grpEl.insertAfter( next );
-                    next.detach();
-                    next.insertBefore( anch );
-
-                    configModified = true;
-                }
-                break;
-
-            case 'grpinvert':
-                if ( grpconfig.invert ) {
-                    delete grpconfig.invert;
-                    el.text( "check_circle_outline" ).attr( 'title', msgGroupNormal );
-                } else {
-                    grpconfig.invert = 1;
-                    el.text( "cancel" ).attr( 'title', msgGroupInvert );
-                }
-                configModified = true;
-                break;
-
-            default:
-                /* Nada */
+        var grp = iData[api.getCpanelDeviceId()].ixCond[ grpId ];
+        /* Confirm deletion only if group is not empty */
+        if ( ( grp.conditions || [] ).length > 0 && ! confirm( 'This group has conditions and/or sub-groups, which will all be deleted as well. Really delete this group?' ) ) {
+            return;
         }
 
-        updateGroupControls();
-        updateSaveControls();
+        var gparent = grp.__parent;
+        if ( gparent ) {
+            var ix = grp.__index;
+            gparent.conditions.splice( ix, 1 );
+            reindexConditions( gparent );
+            $grpEl.remove();
+            configModified = true;
+            updateSaveControls();
+            return;
+        }
     }
 
     /**
@@ -2259,66 +2200,21 @@ var ReactorConditionBuilder = (function(api, $) {
         var $parentGroup = $el.closest( 'div.cond-group-container' );
         var $container = jQuery( 'div.cond-list:first', $parentGroup );
         var parentId = $parentGroup.attr( 'id' );
-        var ixGroup = iData[api.getCpanelDeviceId()].ixGroup;
-        var grp = ixGroup[ parentId ];
+        var ixCond = iData[api.getCpanelDeviceId()].ixCond;
+        var grp = ixCond[ parentId ];
         var newgrp = { id: newId, name: newId, type: "group", conditions: [] };
         grp.conditions.push( newgrp );
-        ixGroup[ newId ] = newgrp;
+        newgrp.__parent = grp;
+        newgrp.__index = grp.conditions.length - 1; /* ??? for now */
+        ixCond[ newId ] = newgrp;
 
         /* Append the new condition group to the container */
         $container.append( $condgroup );
+        $condgroup.addClass( 'tbmodified' );
 
         configModified = true;
         updateGroupControls();
         updateSaveControls();
-    }
-
-    /**
-     * Handle click of sort (up/down) button on condition row.
-     */
-    function handleConditionSort( ev ) {
-        var el = jQuery( ev.currentTarget );
-        if ( el.attr( 'disabled' ) ) { return; }
-
-        var row = el.closest('div.row');
-        var up = el.hasClass('action-up');
-        var grpId = row.closest('div.conditiongroup').attr('id');
-        var grp = iData[api.getCpanelDeviceId()].ixGroup[grpId];
-        var condix = findCdataConditionIndex( row.attr('id'), grpId );
-        var cond;
-        if ( up ) {
-            /* Move up. */
-            if ( condix > 0 ) {
-                /* Move up in data structure */
-                cond = grp.groupconditions.splice( condix, 1 );
-                grp.groupconditions.splice( condix-1, 0, cond[0] );
-
-                /* Move up in display */
-                var prior = row.prev(); /* find prior row */
-                row.detach();
-                row.insertBefore( prior );
-
-                configModified = true;
-
-                updateConditionRow( row ); /* pass it on */
-            }
-        } else {
-            /* Move down */
-            if ( condix < ( grp.groupconditions.length-1 ) ) {
-                /* Move down is data structure */
-                cond = grp.groupconditions.splice( condix, 1 );
-                grp.groupconditions.splice( condix+1, 0, cond[0] );
-
-                /* Move down in display */
-                var next = row.next(); /* find next row */
-                row.detach();
-                row.insertAfter( next );
-
-                configModified = true;
-
-                updateConditionRow( row ); /* pass it on */
-            }
-        }
     }
 
     /**
@@ -2347,31 +2243,128 @@ var ReactorConditionBuilder = (function(api, $) {
             }
         }
 
-        /* Find the index of the condition in its groupconditions */
-        var grp = iData[myid].ixGroup[ grpId ];
-        if ( undefined !== grp ) {
-            for ( var ix=0; ix<(grp.conditions || []).length; ++ix ) {
-                if ( grp.conditions[ix].id == condId ) {
-                    /* Remove the element from structures */
-                    delete ixCond[ condId ];
-                    grp.conditions.splice( ix, 1 );
-                    
-                    /* Remove the condition row from display */
-                    row.remove();
-                    
-                    configModified = true;
-                    updateControls();
-                    return; /* fast exit */
-                }
+        /* Remove condition from parent. */
+        var grp = ixCond[ grpId ];
+        grp.conditions.splice( ixCond[ condId ].__index, 1 );
+        delete ixCond[ condId ];
+        reindexConditions( grp );
+
+        /* Remove the condition row from display */
+        row.remove();
+
+        el.closest( 'div.cond-group-container' ).addClass( 'tbmodified' );
+        configModified = true;
+        updateControls();
+    }
+
+    /**
+     * Receive a node at the end of a drag/drop.
+     */
+    function handleNodeReceive( ev, ui ) {
+        var $el = jQuery( ui.item );
+        var $target = jQuery( ev.target ); /* receiving .cond-list */
+        var $from = jQuery( ui.sender );
+
+        var myid = api.getCpanelDeviceId();
+        var ixCond = iData[myid].ixCond;
+
+        /* Since we cloned the element, replace the clone with the real object */
+        /* N.B. We would like ui.item or something to be the clone, but in Jquery
+         * 1.10.x (on Vera UI7 7.0.27) it's not, and nothing in either ui or ev
+         * gives it to us. So, draggable.start() adds class tb-dragtarget, for us
+         * to find and use here. The clone is the one with this class in the new
+         * location. Incidentally, the id has also been removed from the clone by
+         * jQuery-UI. */
+debugger;
+        var $clone = $target.children( 'div:not([id])' ); /* direct descendant with no id */
+        $el.detach();
+        $clone.replaceWith( $el );
+
+        /* Now, disconnect the data object from its current parent */
+        var obj = ixCond[ $el.attr( 'id' ) ];
+        obj.__parent.conditions.splice( obj.__index, 1 );
+
+        /* Attach it to new parent. */
+        var prid = $target.closest( 'div.cond-group-container' ).attr( 'id' );
+        var pr = ixCond[prid];
+        obj.__parent = pr;
+        /* Don't get fancy, just reindex as it now appears. */
+        reindexConditions( pr );
+
+        $el.addClass( 'tbmodified' ); /* ??? Is this really what we want to flag? */
+        configModified = true;
+        updateSaveControls();
+    }
+
+    /**
+     * Handle click on group controls (NOT/AND/OR)
+     */
+    function handleGroupControlClick( ev ) {
+        var $el = jQuery( ev.currentTarget );
+        var action = $el.attr( 'id' );
+        var grpid = $el.closest( 'div.cond-group-container' ).attr( 'id' );
+        var grp = iData[api.getCpanelDeviceId()].ixCond[ grpid ];
+
+        if ( $el.closest( '.btn-group' ).hasClass( 'tb-btn-radio' ) ) {
+            $el.closest( '.btn-group' ).find( '.checked' ).removeClass( 'checked' );
+            $el.addClass( 'checked' );
+        } else {
+            if ( $el.hasClass( "checked" ) ) {
+                $el.removeClass( "checked" );
+            } else {
+                $el.addClass( "checked" );
             }
         }
+
+        switch (action) {
+            case 'not':
+                grp.invert = $el.hasClass( "checked" );
+                break;
+
+            case 'and':
+                grp.operator = $el.hasClass( 'checked' ) ? "and" : "or";
+                break;
+
+            case 'or':
+                grp.operator = $el.hasClass( 'checked' ) ? "or" : "and";
+                break;
+
+            case 'disable':
+                grp.disabled = $el.hasClass( 'checked' );
+                break;
+
+            default:
+                /* nada */
+        }
+
+if (false) {
+        /* Make sure the opposite AND/OR button is off */
+        var $opposed = $el.closest( 'div.cond-group-conditions' )
+            .children( 'label:has(input#' + ( grp.operator == "and" ? "or" : "and" ) + ')' );
+        $opposed.removeClass( 'active' ).children( 'input' ).prop( 'checked', false );
+}
+
+        $el.closest( 'div.cond-group-container' ).addClass( 'tbmodified' );
+        configModified = true;
+        updateSaveControls();
     }
 
     /**
      * Create an empty condition row. Only type selector is pre-populated.
      */
     function getConditionTemplate( id ) {
-        var el = jQuery( '<div class="cond-container"><div class="btn-group pull-right cond-actions"><button id="delcond" type="button" class="btn btn-xs btn-danger"><i class="glyphicon glyphicon-remove"></i> Delete</button></div><div class="cond-body form-inline"><select class="condtype form-control form-control-sm"><option value="">--choose--</option></select><div class="params" /></div></div>' );
+        var el = jQuery( '\
+<div class="cond-container"> \
+  <div class="btn-group pull-right cond-actions"> \
+    <button id="delcond" type="button" class="btn btn-xs btn-danger"> \
+      <i class="glyphicon glyphicon-remove"></i> Delete \
+    </button> \
+  </div> \
+  <div class="cond-body form-inline"> \
+    <select class="condtype form-control form-control-sm"><option value="">--choose--</option></select> \
+    <div class="params" /> \
+  </div> \
+</div>' );
 
         [ "comment", "service", "housemode", "sun", "weekday", "trange", "interval", "ishome", "reload" ].forEach( function( k ) {
             if ( ! ( isOpenLuup && k == "ishome" ) ) {
@@ -2381,13 +2374,23 @@ var ReactorConditionBuilder = (function(api, $) {
 
         el.attr( 'id', id );
         jQuery('select.condtype', el).on( 'change.reactor', handleTypeChange );
-        jQuery('button#delcond', el).on( 'change.reactor', handleConditionDelete );
+        jQuery('button#delcond', el).on( 'click.reactor', handleConditionDelete );
+        el.draggable({
+            cursorAt: { top: 5, left: 5 },
+            helper: "clone",
+            connectToSortable: ".tb-sortable",
+            start: function( ev, ui ) {
+                jQuery( '.tb-dragtarget' ).removeClass( 'tb-dragtarget' );
+                jQuery( ui.helper ).addClass( 'tb-dragtarget' ).attr('id', 'xyzzy').attr('dragdog','xyzzy');
+            },
+            stop: function( ev, ui ) {}
+        });
         return el;
     }
 
     function getGroupTemplate( grpid ) {
-        var el = jQuery( '<div class="cond-group-container">\
-  <div class="cond-group-title"><span id="titletext" /></div> \
+        var el = jQuery( '\
+<div class="cond-group-container"> \
   <div class="cond-group-header"> \
     <div class="btn-group pull-right cond-group-actions"> \
       <button id="addcond" type="button" class="btn btn-xs btn-success"> \
@@ -2401,18 +2404,20 @@ var ReactorConditionBuilder = (function(api, $) {
       </button> \
     </div> \
     <div class="cond-group-conditions"> \
-      <div class="btn-group" data-toggle="buttons"> \
-      <label class="btn btn-xs btn-primary"> \
-        <input type="checkbox" id="not" name="invert" class="form-check-input"> NOT \
-      </label> \
+      <div class="btn-group tb-tbn-check"> \
+        <button id="not" class="btn btn-xs btn-primary"> NOT </button> \
       </div> \
-      <div class="btn-group" data-toggle="buttons"> \
-      <label class="btn btn-xs btn-primary active"> \
-        <input type="radio" id="and" class="form-check-input" checked> AND \
-      </label> \
-      <label class="btn btn-xs btn-primary"> \
-        <input type="radio" id="or" class="form-check-input"> OR \
-      </label> \
+      <div class="btn-group tb-btn-radio"> \
+        <button id="and" class="btn btn-xs btn-primary checked"> AND </button> \
+        <button id="or" class="btn btn-xs btn-primary"> OR </button> \
+      </div> \
+      <div class="btn-group tb-btn-check"> \
+        <button id="disable" class="btn btn-xs btn-primary tb-disable"> DISABLE </button> \
+      </div> \
+      <div class="cond-group-title"> \
+        <span id="titletext" /> \
+        <i id="edittitle" class="glyphicon glyphicon-wrench"></i> \
+        <i id="collapse" class="glyphicon glyphicon-collapse-up" title="Collapse group"></i> \
       </div> \
     </div> \
   </div> \
@@ -2422,42 +2427,71 @@ var ReactorConditionBuilder = (function(api, $) {
   </div> \
 </div>' );
         el.attr('id', grpid);
+        jQuery( 'span#titletext', el ).text( grpid );
         jQuery( 'div.cond-group-conditions input[type="radio"]', el ).attr('name', grpid);
         if ( 'root' === grpid ) {
             jQuery( 'button#delgroup', el ).remove(); /* can never delete root group */
         }
         jQuery( 'button#addcond', el ).on( 'click.reactor', handleAddConditionClick );
         jQuery( 'button#addgroup', el ).on( 'click.reactor', handleAddGroupClick );
-        jQuery( 'button#delgroup', el ).on( 'click.reactor', TBD );
-        jQuery( 'div#cond-group-title', el ).on( 'click.reactor', handleTitleClick );
-        jQuery( 'cond-group-conditions input', el ).on( 'click.reactor', TBD );
+        jQuery( 'button#delgroup', el ).on( 'click.reactor', handleDeleteGroupClick );
+        jQuery( 'span#titletext,i#edittitle', el ).on( 'click.reactor', handleTitleClick );
+        jQuery( 'i#collapse', el ).on( 'click.reactor', handleGroupExpandClick );
+        jQuery( '.cond-group-conditions button', el ).on( 'click.reactor', handleGroupControlClick );
+        jQuery( '.cond-list', el ).addClass("tb-sortable").sortable({
+            cursorAt: { top: 5, left: 5 },
+            receive: handleNodeReceive
+        });
+        /* Root group is not draggable. */
+        if ( 'root' !== grpid ) {
+            el.draggable({
+                cursorAt: { top: 5, left: 5 },
+                //helper: "clone",
+                helper: function() {
+                    return jQuery( '<div class="tb-helper"><i class="glyphicon glyphicon-arrow-right" /></div>' );
+                },
+                connectToSortable: ".tb-sortable",
+                start: function( ev, ui ) {
+                    jQuery( '.tb-dragtarget' ).removeClass( 'tb-dragtarget' );
+                    jQuery( ui.helper ).addClass( 'tb-dragtarget' );
+                }
+            });
+        }
         return el;
     }
 
-    function redrawGroup( myid, grp, container ) {
+    function redrawGroup( myid, grp, container, depth ) {
         container = container || jQuery( 'div#conditions' );
+        depth = depth || 0;
         var el = getGroupTemplate( grp.id );
         container.append( el );
 
+        el.addClass( 'level' + depth).addClass( 'levelmod' + (depth % 4) );
         jQuery( 'span#titletext', el ).text( grp.name || grp.id ).attr( 'title', msgGroupIdChange );
         if ( "or" === grp.operator ) {
-            jQuery( 'input#or', el ).closest( '.btn' ).click();
+            jQuery( 'button#or', el ).closest( '.btn' ).click();
+        } else {
+            grp.operator = "and";
         }
         if ( grp.invert ) {
-            jQuery( 'input#not', el ).closest( '.btn' ).click();
+            jQuery( 'button#not', el ).closest( '.btn' ).click();
         }
-        // grp.disabled ???
+        if ( grp.disabled ) {
+            jQuery( 'button#disable', el ).closest( '.btn' ).click();
+        }
 
         container = jQuery( 'div.cond-list', el );
 
         for ( var ix=0; ix<(grp.conditions || []).length; ix++ ) {
             var cond = grp.conditions[ix];
+            cond.__parent = grp;
+            cond.__index = ix;
+            iData[myid].ixCond[cond.id] = cond;
             if ( cond.type && "group" !== cond.type ) {
                 /* Condition */
                 if ( cond.id === undefined ) {
                     cond.id = getUID("cond");
                 }
-                iData[myid].ixCond[cond.id] = cond;
 
                 var row = getConditionTemplate( cond.id );
                 container.append( row );
@@ -2473,8 +2507,7 @@ var ReactorConditionBuilder = (function(api, $) {
                 setConditionForType( cond, row );
             } else {
                 /* Group! */
-                iData[myid].ixGroup[cond.id] = cond;
-                redrawGroup( myid, cond, container );
+                redrawGroup( myid, cond, container, depth + 1 );
             }
         }
     }
@@ -2487,8 +2520,7 @@ var ReactorConditionBuilder = (function(api, $) {
         container.empty();
 
         var myid = api.getCpanelDeviceId();
-        iData[myid].ixCond = {};
-        iData[myid].ixGroup = { root: iData[myid].cdata.conditions.root };
+        iData[myid].ixCond = { root: iData[myid].cdata.conditions.root };
         redrawGroup( myid, iData[myid].cdata.conditions.root );
 
         jQuery("button#saveconf").on( 'click.reactor', handleSaveClick );
@@ -2516,51 +2548,50 @@ var ReactorConditionBuilder = (function(api, $) {
             /* Our styles. */
             var html = "<style>";
             html += 'div#tab-conds.reactortab .cond-group-container { position: relative; margin: 4px 0; border-radius: 4px; padding: 5px; border: 1px solid #EEE; background: rgba(255, 255, 255, 0.9); }';
-            html += 'div#tab-conds.reactortab .cond-group-container { padding: 10px; padding-bottom: 6px; border: 1px solid #0c6099; background: #eff7ff; }';
+            html += 'div#tab-conds.reactortab .cond-group-container { padding: 10px; padding-bottom: 6px; border: 1px solid #0c6099; background: #f0f0ff; }';
+            html += 'div#tab-conds.reactortab .cond-group-container.levelmod1 { background-color: #f0fff0; }';
+            html += 'div#tab-conds.reactortab .cond-group-container.levelmod2 { background-color: #fff0f0; }';
+            html += 'div#tab-conds.reactortab .cond-group-container.levelmod3 { background-color: #f0ffff; }';
+            html += 'div#tab-conds.reactortab .cond-container { position: relative; margin: 4px 0; border-radius: 4px; padding: 5px; border: 1px solid #0c6099; background: #fff; }';
             html += 'div#tab-conds.reactortab .cond-group-header { margin-bottom: 10px; }';
             html += 'div#tab-conds.reactortab .cond-list { list-style: none; padding: 0 0 0 15px; margin: 0; }';
             html += 'div#tab-conds.reactortab .error-container { display: none; cursor: help; color: #F00; }';
-            html += '.cond-list > *::before, .cond-list > *::after { content: "";  position: absolute; left: -10px; width: 10px; height: calc(50% + 4px); border-color: #333333; border-style: solid; }';
-            html += '.cond-list > *::before { top: -4px; border-width: 0 0 2px 2px; }';
-            html += '.cond-list > *::after { top: 50%; border-width: 0 0 0 2px; }';
-            html += '.cond-list > *:first-child::before { top: -12px; height: calc(50% + 14px); }';
-            html += '.cond-list > *:last-child::before {  border-radius: 0 0 0 4px; }';
-            html += '.cond-list > *:last-child::after { display: none; }';
-            html += 'div#tab-conds.reactortab .cond-container { background: white; margin-bottom: 12px; padding: 0; }';
-            html += 'div#tab-conds.reactortab .btn-group .btn input { display: none; }';
+            html += '.cond-list > *:not(.ui-draggable-dragging)::before, .cond-list > *:not(.ui-draggable-dragging)::after { content: "";  position: absolute; left: -12px; width: 12px; height: calc(50% + 4px); border-color: #333333; border-style: solid; }';
+            html += '.cond-list > *:not(.ui-draggable-dragging)::before { top: -4px; border-width: 0 0 2px 2px; }';
+            html += '.cond-list > *:not(.ui-draggable-dragging)::after { top: 50%; border-width: 0 0 0 2px; }';
+            html += '.cond-list > *:not(.ui-draggable-dragging):first-child::before { top: -12px; height: calc(50% + 14px); }';
+            html += '.cond-list > *:not(.ui-draggable-dragging):last-child::before {  border-radius: 0 0 0 4px; }';
+            html += '.cond-list > *:not(.ui-draggable-dragging):last-child::after { display: none; }';
+            html += 'div#tab-conds.reactortab .cond-group-title { margin-left: 8px; display: inline-block; }';
+            html += 'div#tab-conds.reactortab .cond-group-title span#titletext { font-size: 16px; font-weight: bold; color: #036; }';
+            html += 'div#tab-conds.reactortab .btn.checked { background-color: #5cb85c; }';
+            html += 'div#tab-conds.reactortab .btn.tb-disable.checked { background-color: #d9534f; }';
+
+            html += 'div#tab-conds.reactortab div.cond-group-container.tbmodified:not(.tberror) { }';
+            html += 'div#tab-conds.reactortab div.cond-group-container.tberror { border-left: 4px solid red; }';
+            html += 'div#tab-conds.reactortab div.cond-container.tbmodified:not(.tberror) { }';
+            html += 'div#tab-conds.reactortab div.cond-container.tberror { border-left: 4px solid red; }';
+
             html += 'div#tab-conds.reactortab {}';
 
             html += "div#tab-conds.reactortab .tb-about { margin-top: 24px; }";
-            html += "div#tab-conds.reactortab .color-green { color: #006040; }";
             html += 'div#tab-conds.reactortab .tberror { border: 1px solid red; }';
             html += 'div#tab-conds.reactortab .tbwarn { border: 1px solid yellow; background-color: yellow; }';
             html += 'div#tab-conds.reactortab label { font-weight: normal; }';
             html += 'div#tab-conds.reactortab fieldset#nocaseopt { display: inline-block; }';
             html += 'div#tab-conds.reactortab div#currval { font-family: "Courier New", Courier, monospace; font-size: 0.9em; }';
             html += 'div#tab-conds.reactortab div.warning { color: red; }';
-            html += 'div#tab-conds.reactortab span#groupcontrols { color: white; margin-right: 8px; }';
-            html += 'div#tab-conds.reactortab div.condcontrols { color: #004020; }';
             html += 'div#tab-conds.reactortab i.md-btn:disabled { color: #999999; cursor: auto; }';
             html += 'div#tab-conds.reactortab i.md-btn[disabled] { color: #999999; cursor: auto; }';
             html += 'div#tab-conds.reactortab i.md-btn { margin-left: 2px; margin-right: 2px; cursor: pointer; }';
             html += 'div#tab-conds.reactortab .md12 { font-size: 12pt; }';
             html += 'div#tab-conds.reactortab .md14 { font-size: 14pt; }';
-            html += 'div#tab-conds.reactortab input.tbinvert { min-width: 16px; min-height: 16px; }';
-            html += 'div#tab-conds.reactortab div.conditions { width: 100%; }';
-            html += 'div#tab-conds.reactortab div.tblisttitle { background-color: #006040; color: #fff; padding: 8px; min-height: 42px; }';
-            html += 'div#tab-conds.reactortab div.tblisttitle span.titletext { font-size: 16px; font-weight: bold; margin-right: 4em; }';
+            html += 'div#tab-conds.reactortab div#conditions { width: 100%; }';
             html += 'div#tab-conds.reactortab fieldset.condfields { display: inline-block; }';
             html += 'div#tab-conds.reactortab input.narrow { max-width: 8em; }';
             html += 'div#tab-conds.reactortab input.tiny { max-width: 3em; }';
             html += 'div#tab-conds.reactortab input.titleedit { font-size: 12px; height: 24px; }';
-            html += 'div#tab-conds.reactortab div.conditiongroup { border-radius: 8px; border: 2px solid #006040; margin-bottom: 8px; }';
-            html += 'div#tab-conds.reactortab div.conditiongroup .row { margin-right: 0px; margin-left: 0px; }';
-            html += 'div#tab-conds.reactortab div.conditiongroup:not(.groupdisabled) div.conditionrow:nth-child(odd) { background-color: #e6ffe6; }';
             html += 'div#tab-conds.reactortab div.conditiongroup.groupdisabled { background-color: #ccc !important; color: #000 !important }';
-            html += 'div#tab-conds.reactortab div.conditionrow,div.buttonrow { padding: 8px; }';
-            html += 'div#tab-conds.reactortab div.conditionrow.tbmodified:not(.tberror) { border-left: 4px solid green; }';
-            html += 'div#tab-conds.reactortab div.conditionrow.tberror { border-left: 4px solid red; }';
-            html += 'div#tab-conds.reactortab div.divider h5 { font-size: 24px; font-weight: bold; }';
             html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
             html += 'div#tbbegging { display: block; color: #ff6600; margin-top: 12px; }';
             html += "</style>";
