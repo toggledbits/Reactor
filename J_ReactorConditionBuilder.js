@@ -2290,7 +2290,7 @@ var ReactorConditionBuilder = (function(api, $) {
         }
 
         /**
-         * Handle click on group controls (NOT/AND/OR)
+         * Handle click on group controls (NOT/AND/OR/XOR)
          */
         function handleGroupControlClick( ev ) {
             var $el = jQuery( ev.currentTarget );
@@ -2315,11 +2315,15 @@ var ReactorConditionBuilder = (function(api, $) {
                     break;
 
                 case 'and':
-                    grp.operator = $el.hasClass( 'checked' ) ? "and" : "or";
+                    grp.operator = "and";
                     break;
 
                 case 'or':
-                    grp.operator = $el.hasClass( 'checked' ) ? "or" : "and";
+                    grp.operator = "or";
+                    break;
+
+                case 'xor':
+                    grp.operator = "xor";
                     break;
 
                 case 'disable':
@@ -2329,13 +2333,6 @@ var ReactorConditionBuilder = (function(api, $) {
                 default:
                     /* nada */
             }
-
-    if (false) {
-            /* Make sure the opposite AND/OR button is off */
-            var $opposed = $el.closest( 'div.cond-group-conditions' )
-                .children( 'label:has(input#' + ( grp.operator == "and" ? "or" : "and" ) + ')' );
-            $opposed.removeClass( 'active' ).children( 'input' ).prop( 'checked', false );
-    }
 
             $el.closest( 'div.cond-group-container' ).addClass( 'tbmodified' );
             configModified = true;
@@ -2398,14 +2395,15 @@ var ReactorConditionBuilder = (function(api, $) {
     </div> \
     <div class="cond-group-conditions"> \
       <div class="btn-group tb-tbn-check"> \
-        <button id="not" class="btn btn-xs btn-primary"> NOT </button> \
+        <button id="not" class="btn btn-xs btn-primary" title="Invert the result of the AND/OR/XOR"> NOT </button> \
       </div> \
       <div class="btn-group tb-btn-radio"> \
-        <button id="and" class="btn btn-xs btn-primary checked"> AND </button> \
-        <button id="or" class="btn btn-xs btn-primary"> OR </button> \
+        <button id="and" class="btn btn-xs btn-primary checked" title="AND means group is true only if all conditions/subgroups are true"> AND </button> \
+        <button id="or" class="btn btn-xs btn-primary" title="OR means group is true if any child condition/subgroup is true"> OR </button> \
+        <button id="xor" class="btn btn-xs btn-primary" title="XOR (exclusive or) means group is true if one and only one condition/subgroup is true"> XOR </button> \
       </div> \
       <div class="btn-group tb-btn-check"> \
-        <button id="disable" class="btn btn-xs btn-primary tb-disable"> DISABLE </button> \
+        <button id="disable" class="btn btn-xs btn-primary tb-disable" title="Disabled groups are ignored, as if they did not exist"> DISABLE </button> \
       </div> \
       <div class="cond-group-title"> \
         <span id="titletext" /> \
@@ -2613,7 +2611,6 @@ var ReactorConditionBuilder = (function(api, $) {
             /* Body content */
             html = '<div id="tab-conds" class="reactortab">';
             html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>Conditions</h3></div></div>';
-            html += '<div class="row"><div class="col-xs-12 col-sm-12">Conditions within a group are "AND", and groups are "OR". That is, the sensor will trip when any group succeeds, and for a group to succeed, all conditions in the group must be met.</div></div>';
 
             var rr = api.getDeviceState( myid, serviceId, "Retrigger" ) || "0";
             if ( rr !== "0" ) {
