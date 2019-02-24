@@ -438,6 +438,13 @@ var ReactorConditionBuilder = (function(api, $) {
         return iData[ myid ];
     }
 
+    function setInstanceData( key, data, myid ) {
+        myid = myid || api.getCpanelDeviceId();
+        iData[ myid ] = iData[ myid ] || {};
+        iData[ myid ][ key ] = data;
+    }
+
+
     function getConfiguration( myid ) {
         var d = getInstanceData( myid );
         if ( ! d.cdata ) {
@@ -2456,7 +2463,7 @@ var ReactorConditionBuilder = (function(api, $) {
             depth = depth || 0;
             grp.__depth = depth;
 
-            var idata = getInstanceData( myid );
+            var ixCond = getInstanceData( myid ).ixCond;
             
             var el = getGroupTemplate( grp.id );
             container.append( el );
@@ -2480,7 +2487,7 @@ var ReactorConditionBuilder = (function(api, $) {
 
             for ( var ix=0; ix<(grp.conditions || []).length; ix++ ) {
                 var cond = grp.conditions[ix];
-                idata[ cond.id ] = cond;
+                ixCond[ cond.id ] = cond;
                 cond.__parent = grp;
                 cond.__index = ix;
                 if ( cond.type && "group" !== cond.type ) {
@@ -2516,8 +2523,7 @@ var ReactorConditionBuilder = (function(api, $) {
             container.empty();
 
             var cdata = getConfiguration( myid );
-            var idata = getInstanceData( myid );
-            idata.ixCond = { root: cdata.conditions.root };
+            setInstanceData( 'ixCond', { root: cdata.conditions.root }, myid );
             redrawGroup( myid, cdata.conditions.root );
 
             jQuery("button#saveconf").on( 'click.reactor', handleSaveClick );
@@ -2559,10 +2565,10 @@ var ReactorConditionBuilder = (function(api, $) {
             /* Our styles. */
             var html = "<style>";
             html += 'div#tab-conds.reactortab .cond-group-container { position: relative; margin: 4px 0; border-radius: 4px; padding: 5px; border: 1px solid #EEE; background: rgba(255, 255, 255, 0.9); }';
-            html += 'div#tab-conds.reactortab .cond-group-container { padding: 10px; padding-bottom: 6px; border: 1px solid #0c6099; background: #f0f0ff; }';
-            html += 'div#tab-conds.reactortab .cond-group-container.levelmod1 { background-color: #f0fff0; }';
-            html += 'div#tab-conds.reactortab .cond-group-container.levelmod2 { background-color: #fff0f0; }';
-            html += 'div#tab-conds.reactortab .cond-group-container.levelmod3 { background-color: #f0ffff; }';
+            html += 'div#tab-conds.reactortab .cond-group-container { padding: 10px; padding-bottom: 6px; border: 1px solid #0c6099; background: #bce8f1; }';
+            html += 'div#tab-conds.reactortab .cond-group-container.levelmod1 { background-color: #faebcc; }';
+            html += 'div#tab-conds.reactortab .cond-group-container.levelmod2 { background-color: #d6e9c6; }';
+            html += 'div#tab-conds.reactortab .cond-group-container.levelmod3 { background-color: #ebccd1; }';
             html += 'div#tab-conds.reactortab .cond-container { position: relative; margin: 4px 0; border-radius: 4px; padding: 5px; border: 1px solid #0c6099; background: #fff; }';
             html += 'div#tab-conds.reactortab .cond-group-header { margin-bottom: 10px; }';
             html += 'div#tab-conds.reactortab .cond-list { list-style: none; padding: 0 0 0 15px; margin: 0; }';
