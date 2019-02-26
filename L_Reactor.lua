@@ -667,30 +667,28 @@ local function loadCleanState( tdev )
             -- no return
         end
 
-if false then
         -- Find all conditions in cdata
         local conds = {}
-        for _,grp in ipairs( cdata.conditions or {} ) do
-            table.insert( conds, grp.id )
-            for _,cond in ipairs( grp.groupconditions or {} ) do
-                table.insert( conds, cond.id )
+        local function traverse( grp ) 
+            conds[ grp.id ] = grp
+            for _,cond in ipairs( grp.conditions or {} ) do
+                if ( cond.type or "group" ) == "group" then
+                    traverse( cond )
+                else
+                    conds[ cond.id ] = cond
+                end
             end
         end
-        D("loadCleanState() cdata has %1 conditions: %2", #conds, conds)
+        traverse( cdata.conditions.root or { id="root" } )
 
-        -- Get all conditions in cstate. Remove from that list all cdata conditions.
-        local states = getKeys( cstate )
-        D("loadCleanState() cstate has %1 states: %2", #states, states)
-        local dels = {} -- map
-        for _,k in ipairs( states ) do dels[k] = true end
-        for _,k in ipairs( conds ) do dels[k] = nil end
-
-        -- Delete whatever is left
-        D("loadCleanState() deleting %1", dels)
-        for k,_ in pairs( dels ) do cstate[ k ] = nil end
-else
-L{level=1,msg="loadCleanState() DOES NOT KNOW HOW TO PROPERLY CLEAN WITH NEW STRUCTURE FIX IT!"}
-end
+        -- Make array of conditions in cstate that aren't in cdata
+        local dels = {}
+        for k in pairs( cstate ) do 
+            if conds[k] == nil then table.insert( dels, k ) end
+        end
+        
+        -- Delete them
+        for _,k in ipairs( dels ) do cstate[k] = nil end
     end
 
     -- Save updated state
