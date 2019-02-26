@@ -90,7 +90,7 @@ var ReactorSensor = (function(api, $) {
     /* Create an ID that's functionally unique for our purposes. */
     function getUID( prefix ) {
         /* Not good, but good enough. */
-        var newx = Date.now();
+        var newx = Date.now() - 1529298000000;
         if ( newx == lastx ) ++newx;
         lastx = newx;
         return ( prefix === undefined ? "" : prefix ) + newx.toString(36);
