@@ -667,7 +667,7 @@ local function loadCleanState( tdev )
             -- no return
         end
 
-if false then        
+if false then
         -- Find all conditions in cdata
         local conds = {}
         for _,grp in ipairs( cdata.conditions or {} ) do
@@ -690,7 +690,7 @@ if false then
         for k,_ in pairs( dels ) do cstate[ k ] = nil end
 else
 L{level=1,msg="loadCleanState() DOES NOT KNOW HOW TO PROPERLY CLEAN WITH NEW STRUCTURE FIX IT!"}
-end       
+end
     end
 
     -- Save updated state
@@ -798,7 +798,7 @@ local function getSceneData( sceneId, tdev )
     if ( cd.activities or {} )[skey] then
         return cd.activities[skey]
     end
-    -- This is the "old" way of finding trip and untrip actions for the ReactorSensor. 
+    -- This is the "old" way of finding trip and untrip actions for the ReactorSensor.
     -- Keep it around for unchanged configs.
     if skey == "__trip" or skey == "__untrip" then
         local pt = skey:match("^__un") and "untripactions" or "tripactions"
@@ -960,8 +960,8 @@ local function execLua( fname, luafragment, extarg, tdev )
             D("luaEnv.mt.__newindex(%1,%2,%3) new index; luaEnv=%4; debuginfo=%5", tostring(t), n, tostring(v), tostring(luaEnv), what)
             local dev = t.__reactor_getdevice()
             local fn = t.__reactor_getscript() or tostring(what.source)
-            if type(v) == "function" then 
-                --[[ 
+            if type(v) == "function" then
+                --[[
                     This special handling for functions allows luup callbacks to work.
                     The callbacks have to be defined in the plugin environment (outside
                     the sandbox) for Luup to find them by name later.
@@ -1088,9 +1088,9 @@ local function execSceneGroups( tdev, taskid, scd )
     -- Get sceneState, make sure it's consistent with request.
     local sst = sceneState[taskid]
     D("execSceneGroups() scene state %1", sst)
-    if sst == nil then 
+    if sst == nil then
         scheduleTick( taskid, 0 )
-        return nil 
+        return nil
     end
 
     -- Reload the scene if it wasn't passed to us (from cache)
@@ -1151,7 +1151,7 @@ local function execSceneGroups( tdev, taskid, scd )
                     for k,p in ipairs( action.arguments or {} ) do
                         param[p.name or tostring(k)] = p.value
                     end
-                    D("execSceneGroups() dev %4 (%5) do %1/%2(%3) for %6 (%7)", 
+                    D("execSceneGroups() dev %4 (%5) do %1/%2(%3) for %6 (%7)",
                         action.service, action.action, param, devnum,
                         (luup.devices[devnum] or {}).description or "?unknown?",
                         scd.name or scd.id, scd.id )
@@ -1213,7 +1213,7 @@ local function execSceneGroups( tdev, taskid, scd )
                     -- Not running as job here because we want in-line execution of scene actions (the Reactor way).
                     runScene( scene, tdev, { contextDevice=sst.options.contextDevice, stopPriorScenes=false } )
                 elseif action.type == "runlua" then
-                    local fname = string.format("rs%s_sc%s_gr%d_ac%d", 
+                    local fname = string.format("rs%s_sc%s_gr%d_ac%d",
                         tostring(tdev), tostring(scd.id), nextGroup, ix )
                     D("execSceneGroups() running Lua for %1 (chunk name %2)", scd.id, fname)
                     local lua = action.lua
@@ -1716,7 +1716,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 
     if ( cond.type or "group" ) == "group" then
         return evaluateGroup( cond, grp, cdata, tdev )
-    
+
     elseif cond.type == "service" then
         -- Can't succeed if referenced device doesn't exist.
         if luup.devices[cond.device or -1] == nil then
@@ -2345,7 +2345,7 @@ local function processCondition( cond, grp, cdata, tdev )
     else
         cs.changed = nil
     end
-    
+
     return cs.lastvalue, state, condTimer
 end
 
@@ -2370,11 +2370,11 @@ evaluateGroup = function( grp, parentGroup, cdata, tdev )
             end
 
             -- And apply to ongoing group state
-            if passed == nil then 
+            if passed == nil then
                 passed = state
             elseif grp.operator == "xor" then
                 passed = state ~= passed
-            elseif grp.operator == "or" then   
+            elseif grp.operator == "or" then
                 passed = passed or state
             else
                 passed = passed and state
@@ -2385,7 +2385,7 @@ evaluateGroup = function( grp, parentGroup, cdata, tdev )
             D("evaluateGroup() cond %1 %2 skipped, disabled", cond.id, cond.type)
         end
     end
-    
+
     -- Save group state.
     if grp.invert then passed = not passed end
     if not passed then
@@ -2437,10 +2437,10 @@ local function updateSensor( tdev )
         local currTrip = getVarNumeric( "Tripped", 0, tdev, SENSOR_SID ) ~= 0
         local retrig = getVarNumeric( "Retrigger", 0, tdev, RSSID ) ~= 0
         local invert = getVarNumeric( "Invert", 0, tdev, RSSID ) ~= 0
-        
+
         local newTrip
         _,newTrip,hasTimer = processCondition( cdata.conditions.root, nil, cdata, tdev )
-        
+
         if invert then newTrip = not newTrip end
         D("updateSensor() trip %4was %1 now %2, retrig %3", currTrip, newTrip,
             retrig, invert and "(inverted) " or "" )
@@ -2453,7 +2453,7 @@ local function updateSensor( tdev )
             luup.variable_set( RSSID, "Runtime", getVarNumeric( "Runtime", 0, tdev, RSSID ) + delta, tdev )
         end
         luup.variable_set( RSSID, "lastacc", now, tdev )
-        
+
         -- Pass through groups again, and run activities for any changed groups.
         for grp in conditionGroups( cdata.conditions.root ) do
             local gs = condState[ grp.id ]
@@ -2588,7 +2588,7 @@ local function startSensor( tdev, pdev )
 
     -- Device one-time initialization
     sensor_runOnce( tdev )
-    
+
     -- ??? Cleanup
     luup.variable_set( MYSID, "cdata", nil, tdev )
 
@@ -2789,7 +2789,7 @@ function startPlugin( pdev )
 
     -- More inits
     maxEvents = getVarNumeric( "MaxEvents", 50, pdev, MYSID )
-    
+
     -- Queue all scenes cached for refresh
     local sd = luup.variable_get( MYSID, "scenedata", pdev ) or "{}"
     sceneData = json.decode( sd ) or {}
@@ -2799,7 +2799,7 @@ function startPlugin( pdev )
 
     -- Do this after scene queue refresh for optimal timer handling.
     scheduleDelay( { id=tostring(pdev), func=waitSystemReady, owner=pdev }, 5 )
-    
+
     -- Return success
     luup.set_failure( 0, pdev )
     return true, "Ready", _PLUGIN_NAME
@@ -3518,6 +3518,77 @@ local function showGeofenceData( r )
     return r
 end
 
+function RG( grp, condState, level, r )
+    r = r or ""
+    level = level or 1
+    local gs = condState[ grp.id ] or {}
+    r = r .. "\"" .. (grp.name or grp.id) .. "\" (" ..
+        ( grp.invert and "NOT " or "" ) .. (grp.operator or "and"):upper() .. ") " ..
+        ( gs.evalstate and "TRUE" or "false" ) .. " as of " .. shortDate( gs.evalstamp ) ..
+        ( grp.disabled and " DISABLED" or "" ) ..
+        ' <' .. tostring(grp.id) .. '>' ..
+        EOL
+    for _,cond in ipairs( grp.conditions or {} ) do
+        local condtype = cond.type or "group"
+        local cs = condState[cond.id] or {}
+        r = r .. "    " .. string.rep( "  |   ", level-1 ) .. 
+            "  +-" .. ( (cs.evalstate == nil) and "X" or ( cs.evalstate and "T" or "F" ) ) .. "-" .. 
+            condtype .. " "
+        if condtype == "group" then
+            r = r .. RG( cond, condState, level+1 )
+        elseif condtype == "service" then
+            r = r .. string.format("%s (%d) ", ( luup.devices[cond.device]==nil ) and ( "*** missing " .. ( cond.devicename or "unknown" ) ) or
+                luup.devices[cond.device].description, cond.device )
+            r = r .. string.format("%s/%s %s %s", cond.service or "?", cond.variable or "?", cond.operator or cond.condition or "?",
+                cond.value or "")
+            if cond.nocase == 0 then r = r .. " (match case)" end
+            if cond.duration then
+                r = r .. " for " .. ( cond.duration_op or "ge" ) ..
+                    " " .. cond.duration .. "s"
+            end
+            if cond.after then
+                if ( cond.aftertime or 0 ) > 0 then
+                    r = r .. " within " .. tostring(cond.aftertime) .. "s"
+                end
+                r = r .. " after " .. cond.after
+            end
+            if cond.repeatcount then
+                r = r .. " repeat " .. cond.repeatcount ..
+                    " within " .. ( cond.repeatwithin or 60 ).. "s"
+            end
+            if (cond.latch or 0) ~= 0 then
+                r = r .. " (latching)"
+            end
+        elseif condtype == "comment" then
+            r = r .. string.format("%q", cond.comment)
+        elseif condtype == "housemode" then
+            r = r .. "in " .. ( cond.value or "" )
+        elseif condtype == "sun" then
+            r = r .. ( cond.operator or cond.condition or "?" ) .. " " .. ( cond.value or "" )
+        elseif condtype == "trange" then
+            r = r .. ( cond.operator or cond.condition or "?" ) .. " " .. ( cond.value or "" )
+        elseif condtype == "ishome" then
+            r = r .. ( cond.operator or "is" ) .. " " .. ( cond.value or "" )
+        elseif condtype == "reload" then
+        else
+            r = r .. json.encode(cond)
+        end
+        if not (":comment:group:"):match( condtype ) then
+            r = r .. " ["
+            if cs.priorvalue then r = r .. tostring(cs.priorvalue) .. " => " end
+            r = r .. tostring(cs.lastvalue) .. " at " .. shortDate( cs.valuestamp )
+            r = r .. ( cs.laststate and "; T" or "; F" ) .. "/" .. (cs.evalstate and "T" or "F" )
+            r = r .. " as of " .. shortDate( cs.statestamp ) .. "/" .. shortDate( cs.evalstamp )
+            r = r .. "]"
+        end
+        if condtype ~= "group" then
+            r = r .. " <" .. cond.id .. ">"
+            r = r .. EOL
+        end
+    end
+    return r
+end
+
 function request( lul_request, lul_parameters, lul_outputformat )
     D("request(%1,%2,%3) luup.device=%4", lul_request, lul_parameters, lul_outputformat, luup.device)
     local action = lul_parameters['action'] or lul_parameters['command'] or ""
@@ -3617,65 +3688,8 @@ function request( lul_request, lul_parameters, lul_outputformat )
                     r = r .. string.format("        %s=%s (last %q)", vv.name or "?", vv.expression or "?", lv) .. EOL
                     if le ~= "" then r = r .. "        ******** Error: " .. le .. EOL end
                 end
-                local ng=0
-                for _,gc in ipairs( cdata.conditions or {} ) do
-                    local gs = condState[gc.id] or {}
-                    ng = ng + 1
-                    r = r .. "    Group #" .. ng .. " <" .. gc.id .. "> " ..
-                        ( gs.evalstate and "true" or "false" ) .. " as of " .. shortDate( gs.evalstamp ) ..
-                        ( gc.invert and " INVERTED" or "" ) ..
-                        ( gc.disabled and " DISABLED" or "" ) ..
-                        EOL
-                    for _,cond in ipairs( gc.groupconditions or {} ) do
-                        local cs = condState[cond.id] or {}
-                        r = r .. "        =" .. ( cs.evalstate and "T" or "f" )
-                        r = r .. " (" .. ( cond.type or "?type?" ) .. ") "
-                        if cond.type == "service" then
-                            r = r .. string.format("%s (%d) ", ( luup.devices[cond.device]==nil ) and ( "*** missing " .. ( cond.devicename or "unknown" ) ) or
-                                luup.devices[cond.device].description, cond.device )
-                            r = r .. string.format("%s/%s %s %s", cond.service or "?", cond.variable or "?", cond.operator or cond.condition or "?",
-                                cond.value or "")
-                            if cond.nocase == 0 then r = r .. " (match case)" end
-                            if cond.duration then
-                                r = r .. " for " .. ( cond.duration_op or "ge" ) ..
-                                    " " .. cond.duration .. "s"
-                            end
-                            if cond.after then
-                                if ( cond.aftertime or 0 ) > 0 then
-                                    r = r .. " within " .. tostring(cond.aftertime) .. "s"
-                                end
-                                r = r .. " after " .. cond.after
-                            end
-                            if cond.repeatcount then
-                                r = r .. " repeat " .. cond.repeatcount ..
-                                    " within " .. ( cond.repeatwithin or 60 ).. "s"
-                            end
-                            if (cond.latch or 0) ~= 0 then
-                                r = r .. " (latching)"
-                            end
-                        elseif cond.type == "comment" then
-                            r = r .. string.format("%q", cond.comment)
-                        elseif cond.type == "housemode" then
-                            r = r .. "in " .. ( cond.value or "" )
-                        elseif cond.type == "sun" then
-                            r = r .. ( cond.operator or cond.condition or "?" ) .. " " .. ( cond.value or "" )
-                        elseif cond.type == "trange" then
-                            r = r .. ( cond.operator or cond.condition or "?" ) .. " " .. ( cond.value or "" )
-                        elseif cond.type == "ishome" then
-                            r = r .. ( cond.operator or "is" ) .. " " .. ( cond.value or "" )
-                        elseif cond.type == "reload" then
-                        else
-                            r = r .. json.encode(cond)
-                        end
-                        r = r .. " ["
-                        r = r .. ( cs.laststate and "true" or "false" ) .. "/" .. (cs.evalstate and "true" or "false" )
-                        r = r .. " as of " .. shortDate( cs.statestamp ) .. "/" .. shortDate( cs.evalstamp ) .. "; "
-                        if cs.priorvalue then r = r .. tostring(cs.priorvalue) .. " => " end
-                        r = r .. tostring(cs.lastvalue) .. " at " .. shortDate( cs.valuestamp ) .. "]"
-                        r = r .. " <" .. cond.id .. ">"
-                        r = r .. EOL
-                    end
-                end
+                r = r .. "    Condition group " .. RG( cdata.conditions.root or {}, condState )
+
                 local t
                 t, scenesUsed = getReactorScene( "Trip Actions", (cdata.activities or {}).__trip, n, scenesUsed )
                 r = r .. t
