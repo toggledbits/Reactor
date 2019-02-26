@@ -62,6 +62,15 @@
             </run>
         </action>
         <action>
+            <serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
+            <name>ClearLatched</name>
+            <run>
+                Reactor.actionClearLatched( lul_device )
+                return true
+            </run>
+        </action>
+        
+        <action>
             <serviceId>urn:micasaverde-com:serviceId:SecuritySensor1</serviceId>
             <name>SetArmed</name>
             <run>

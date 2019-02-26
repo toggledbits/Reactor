@@ -115,6 +115,10 @@
             <argumentList/>
         </action>
         <action>
+            <name>ClearLatched</name>
+            <argumentList/>
+        </action>
+        <action>
           <name>RunScene</name>
           <argumentList>
             <argument>

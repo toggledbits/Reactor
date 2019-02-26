@@ -299,8 +299,8 @@
 			"Position": 1,
 			"TabType": "javascript",
 			"TopNavigationTab": 1,
-			"ScriptName": "J_ReactorConditionBuilder.js",
-			"Function": "ReactorConditionBuilder.doConditions"
+			"ScriptName": "J_ReactorSensor_UI7.js",
+			"Function": "ReactorSensor.doConditions"
 		},
 		{
 			"Label": {
