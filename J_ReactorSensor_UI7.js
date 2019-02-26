@@ -70,6 +70,8 @@ var ReactorSensor = (function(api, $) {
     var msgGroupInvert = "Inverted; click for normal (true when all conditions are met)";
     var msgGroupIdChange = "Click to change group ID";
 
+    function TBD( ev ) { alert( String(ev) ); } /* receiver for handlers yet to be written ??? */
+
     /* Return footer */
     function footer() {
         var html = '';
@@ -87,7 +89,7 @@ var ReactorSensor = (function(api, $) {
 
     /* Create an ID that's functionally unique for our purposes. */
     function getUID( prefix ) {
-        /* Not good, but enough. */
+        /* Not good, but good enough. */
         var newx = Date.now();
         if ( newx == lastx ) ++newx;
         lastx = newx;
@@ -3106,7 +3108,7 @@ var ReactorSensor = (function(api, $) {
 
     function makeSceneMenu() {
         var ud = api.getUserData();
-        var scenes = api.cloneObject( ud.scenes );
+        var scenes = api.cloneObject( ud.scenes || [] );
         var menu = jQuery( '<select class="form-control form-control-sm" />' );
         /* If lots of scenes, sort by room; otherwise, use straight as-is */
         var i;
@@ -3506,8 +3508,8 @@ var ReactorSensor = (function(api, $) {
         if ( !isEmpty( sn ) ) {
             var scene = buildActionList( section );
             if ( scene ) {
-                var myid = api.getCpanelDeviceId();
-                iData[myid].cdata.activities[sn] = scene;
+                var cd = getConfiguration();
+                cd.activities[sn] = scene;
                 configModified = true;
             }
         }
@@ -4384,8 +4386,8 @@ var ReactorSensor = (function(api, $) {
         newRow.insertBefore( jQuery( '.buttonrow', container ) );
     }
 
-    function loadActions( setName, scene ) {
-        var section = jQuery( 'div#' + idSelector( setName ) );
+    function loadActions( section, scene ) {
+        var insertionPoint = jQuery( 'div.buttonrow', section );
         var newRow;
         for ( var i=0; i < (scene.groups || []).length; i++ ) {
             var gr = scene.groups[i];
@@ -4395,7 +4397,7 @@ var ReactorSensor = (function(api, $) {
                 changeActionType( newRow, "delay" );
                 jQuery( "input#delay", newRow ).val( gr.delay );
                 jQuery( "select#delaytype", newRow ).val( gr.delaytype || "inline" );
-                newRow.insertBefore( jQuery( '.buttonrow', section ) );
+                newRow.insertBefore( insertionPoint );
             }
             for ( var k=0; k < (gr.actions || []).length; k++ ) {
                 var act = gr.actions[k];
@@ -4460,58 +4462,110 @@ var ReactorSensor = (function(api, $) {
                         continue;
                 }
 
-                newRow.insertBefore( jQuery( '.buttonrow', section ) );
+                newRow.insertBefore( insertionPoint );
             }
         }
+    }
+
+    function handleActionCopyClick( ev ) {
+        var $el = jQuery( ev.currentTarget );
+        var source = $el.attr( 'id' ) || "";
+        if ( "" === source ) return; /* clicked a non-clickable */
+
+        var $target = $el.closest( 'div.actionlist' );
+
+        /* Pass clone of actions so adding to ourselves isn't infinite loop */
+        var cdata = getConfiguration();
+        loadActions( $target, api.cloneObject( cdata.activities[source] || {} ) );
+        updateActionList( $target );
+        updateActionControls();
     }
 
     /* */
     function getActionListContainer() {
         var el = jQuery( "<div/>" ).addClass( "actionlist" );
         var row = jQuery( '<div class="row"/>' );
-        row.append( '<div class="tblisttitle col-xs-6 col-sm-6"><span class="titletext">?title?</span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div>' );
+        row.append( '\
+<div class="tblisttitle col-xs-9 col-sm-9 col-lg-10"> \
+  <span class="titletext">?title?</span> \
+</div> \
+<div class="tblisttitle col-xs-3 col-sm-3 col-lg-2 text-right"> \
+  <div class="btn-group"> \
+    <button id="saveconf" class="btn btn-xs btn-success">Save</button> \
+    <button id="revertconf" class="btn btn-xs btn-danger">Revert</button> \
+  </div> \
+</div>' );
         el.append( row );
         row = jQuery( '<div class="row buttonrow"/>' );
-        row.append( '<div class="col-sm-1"><button class="addaction btn btn-sm btn-primary">Add Action</button></div>' );
+        row.append( '\
+<div class="col-xs-12 col-sm-12"> \
+  <div class="btn-group"> \
+    <button class="addaction btn btn-sm btn-success">Add Action</button> \
+    <div class="btn-group"> \
+      <button id="global-import" class="btn btn-sm btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" title="Import activity or scene to this activity"> \
+        Copy From <span class="caret"></span> \
+      </button> \
+      <ul id="activities" class="dropdown-menu"></ul> \
+    </div> \
+  </div> \
+</div>' );
         el.append( row );
         return el;
     }
 
     /* Redraw the activities lists within the existing tab structure. */
     function redrawActivities() {
-        var cd = iData[api.getCpanelDeviceId()].cdata;
+        var myid = api.getCpanelDeviceId();
+        var devobj = api.getDeviceObject( myid );
+        var cd = iData[myid].cdata;
         jQuery( 'div#activities' ).empty();
 
         var el = getActionListContainer();
         el.attr( 'id', '__trip' );
-        jQuery( 'span.titletext', el ).text( 'ReactorSensor Trip Actions' );
+        jQuery( 'span.titletext', el ).text( 'When ' + devobj.name + ' Trips' );
         jQuery( 'div#activities' ).append( el );
-        loadActions( '__trip', cd.activities.__trip || {} );
+        loadActions( jQuery( 'div#__trip.actionlist' ), cd.activities.__trip || {} );
 
         el = getActionListContainer();
         el.attr( 'id', '__untrip' );
-        jQuery( 'span.titletext', el ).text( 'ReactorSensor Untrip Actions' );
+        jQuery( 'span.titletext', el ).text( 'When ' + devobj.name + ' Untrips' );
         jQuery( 'div#activities' ).append( el );
-        loadActions( '__untrip', cd.activities.__untrip || {} );
+        loadActions( jQuery( 'div#__untrip.actionlist' ), cd.activities.__untrip || {} );
 
-        for ( var ix=0; ix<(cd.conditions || []).length; ix++ ) {
-            var gr = cd.conditions[ix];
-            var scene = gr.groupid + '.true';
-            el = getActionListContainer();
-            el.attr( 'id', scene );
-            jQuery( 'span.titletext', el ).text( gr.groupid + ' True State Actions' );
-            jQuery( 'div#activities' ).append( el );
-            loadActions( scene, cd.activities[scene] || {} );
+        var ul = jQuery( '<ul />' );
+        function orderly( gr ) {
+            ul.append( jQuery( '<li />' ).attr( 'id', gr.id + ".true" ).text( ( gr.name || gr.id ) + " True" ) );
+            ul.append( jQuery( '<li />' ).attr( 'id', gr.id + ".false" ).text( ( gr.name || gr.id ) + " False" ) );
+            if ( "root" !== gr.id ) {
+                var scene = gr.id + '.true';
+                el = getActionListContainer();
+                el.attr( 'id', scene );
+                jQuery( 'span.titletext', el ).text( 'When ' +
+                    ( gr.name || gr.id ) + ' <' + gr.id + '> = True' );
+                jQuery( 'div#activities' ).append( el );
+                loadActions( el, cd.activities[scene] || {} );
 
-            scene = gr.groupid + '.false';
-            el = getActionListContainer();
-            el.attr( 'id', scene );
-            jQuery( 'span.titletext', el ).text( gr.groupid + ' False State Actions' );
-            jQuery( 'div#activities' ).append( el );
-            loadActions( scene, cd.activities[scene] || {} );
+                scene = gr.id + '.false';
+                el = getActionListContainer();
+                el.attr( 'id', scene );
+                jQuery( 'span.titletext', el ).text( 'When ' +
+                    ( gr.name || gr.id ) + ' <' + gr.id + '> = False' );
+                jQuery( 'div#activities' ).append( el );
+                loadActions( el, cd.activities[scene] || {} );
+            }
+            for ( var ix=0; ix<(gr.conditions || []).length; ix++ ) {
+                var cond = gr.conditions[ix];
+                if ( "group" === ( cond.type || "group" ) ) {
+                    orderly( cond );
+                }
+            }
         }
+        orderly( ( cd.conditions || {} ).root || [ { id: "root" } ] );
 
         jQuery("div#tab-actions.reactortab button.addaction").on( 'click.reactor', handleAddActionClick );
+        //jQuery("div#tab-actions.reactortab i#global-import").on( 'click.reactor', TBD );
+        jQuery("div#tab-actions.reactortab ul#activities").empty().append( ul.children() );
+        jQuery("div#tab-actions.reactortab ul#activities li").on( 'click.reactor', handleActionCopyClick );
         jQuery("div#tab-actions.reactortab button#saveconf").on( 'click.reactor', handleActionsSaveClick )
             .prop( "disabled", !configModified );
         jQuery("div#tab-actions.reactortab button#revertconf").on( 'click.reactor', handleRevertClick )
@@ -4626,6 +4680,8 @@ var ReactorSensor = (function(api, $) {
         html += 'div#tab-actions.reactortab .tbslider { display: inline-block; width: 200px; height: 1em; border-radius: 8px; }';
         html += 'div#tab-actions.reactortab .tbslider .ui-slider-handle { background: url("/cmh/skins/default/img/other/slider_horizontal_cursor_24.png?") no-repeat scroll left center rgba(0,0,0,0); cursor: pointer !important; height: 24px !important; width: 24px !important; margin-top: 6px; font-size: 12px; text-align: center; padding-top: 4px; text-decoration: none; }';
         html += 'div#tab-actions.reactortab .tbslider .ui-slider-range-min { background-color: #12805b !important; }';
+        html += 'div#tab-actions.reactortab ul.dropdown-menu { color: #333; background-color: white; border: 1px solid #333; text-align: initial; padding: 4px 4px; width: 320px; max-height: 320px; overflow: auto; }';
+        html += 'div#tab-actions.reactortab ul.dropdown-menu li:hover { color: white; background-color: #333; }';
         html += "</style>";
         jQuery("head").append( html );
 
