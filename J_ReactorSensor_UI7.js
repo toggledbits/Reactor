@@ -2508,13 +2508,7 @@ var ReactorSensor = (function(api, $) {
             var el = jQuery( '\
 <div class="cond-group-container"> \
   <div class="cond-group-header"> \
-    <div class="btn-group pull-right cond-group-actions"> \
-      <button id="addcond" type="button" class="btn btn-xs btn-success"> \
-        <i class="glyphicon glyphicon-plus"></i> Add Condition \
-      </button> \
-      <button id="addgroup" type="button" class="btn btn-xs btn-success"> \
-        <i class="glyphicon glyphicon-plus-sign"></i> Add Group \
-      </button> \
+    <div class="btn-group pull-right"> \
       <button id="delgroup" type="button" class="btn btn-xs btn-danger"> \
         <i class="glyphicon glyphicon-remove"></i> Delete \
       </button> \
@@ -2542,11 +2536,25 @@ var ReactorSensor = (function(api, $) {
   <div class="cond-group-body"> \
     <div class="cond-list"></div> \
   </div> \
+  <div class="cond-group-actions"> \
+    <div class="btn-group"> \
+      <button id="addcond" type="button" class="btn btn-xs btn-success"> \
+        <i class="glyphicon glyphicon-plus"></i> Add Condition \
+      </button> \
+      <button id="addgroup" type="button" class="btn btn-xs btn-success"> \
+        <i class="glyphicon glyphicon-plus-sign"></i> Add Group \
+      </button> \
+    </div> \
+  </div> \
 </div>' );
             el.attr('id', grpid);
             jQuery( 'span#titletext', el ).text( grpid );
             jQuery( 'div.cond-group-conditions input[type="radio"]', el ).attr('name', grpid);
             if ( 'root' === grpid ) {
+                /* Can't delete root group, but use the space for Save and Revert */
+                jQuery( 'button#delgroup', el ).replaceWith( 
+                    jQuery( '<button id="saveconf" class="btn btn-sm btn-success"> Save </button> <button id="revertconf" class="btn btn-sm btn-danger"> Revert </button>' ) 
+                );
                 jQuery( 'button#delgroup', el ).remove(); /* can never delete root group */
             }
             jQuery( 'button#addcond', el ).on( 'click.reactor', handleAddConditionClick );
