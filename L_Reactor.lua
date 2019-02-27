@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "2.4develop-19051"
+local _PLUGIN_VERSION = "2.4develop-19058"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _CONFIGVERSION = 00206
 
@@ -35,6 +35,7 @@ local sceneData = {}
 local sceneWaiting = {}
 local sceneState = {}
 local hasBattery = true
+local usesHouseMode = false
 local geofenceMode = 0
 local maxEvents = 50
 local luaEnv -- global state for all runLua actions
@@ -50,6 +51,12 @@ local TICKOFFS = 5 -- cond tasks try to run TICKOFFS seconds after top of minute
 local TRUESTRINGS = ":y:yes:t:true:on:1:" -- strings that mean true (also numeric ~= 0)
 
 local defaultLogLevel = false -- or a number, which is (uh...) the default log level for messages
+
+-- These are the types of children we create, and their associated device file.
+local dfMap = {
+    ["urn:schemas-toggledbits-com:device:ReactorSensor:1"] = { device_file="D_ReactorSensor.xml" },
+    ["urn:schemas-micasaverde-com:device:DoorSensor:1"] = { device_file="D_DoorSensor1.xml" }
+}
 
 local json = require("dkjson")
 local mime = require("mime")
@@ -776,8 +783,8 @@ local function getSceneData( sceneId, tdev )
     end
     -- This is the "old" way of finding trip and untrip actions for the ReactorSensor.
     -- Keep it around for unchanged configs.
-    if skey == "__trip" or skey == "__untrip" then
-        local pt = skey:match("^__un") and "untripactions" or "tripactions"
+    if skey == "root.true" or skey == "root.false" then
+        local pt = skey:match("%.true") and "tripactions" or "untripactions"
         local r = sensorState[tostring(tdev)].configData[pt]
         if r then r.id = skey r.name = skey end
         return r
@@ -1364,15 +1371,15 @@ local function trip( state, tdev )
         -- Luup keeps (SecuritySensor1/)LastTrip, but we also keep LastReset
         luup.variable_set( RSSID, "LastReset", os.time(), tdev )
         -- Run the reset scene, if we have one. Scene ID must be unique across sensors!
-        stopScene( tdev, nil, tdev, '__trip' ) -- stop contra-activity
-        local scd = getSceneData( '__untrip', tdev )
+        stopScene( tdev, nil, tdev, 'root.true' ) -- stop contra-activity
+        local scd = getSceneData( 'root.false', tdev )
         if scd then execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } ) end
     else
         -- Count a trip.
         luup.variable_set( RSSID, "TripCount", getVarNumeric( "TripCount", 0, tdev, RSSID ) + 1, tdev )
         -- Run the trip scene, if we have one. Scene ID must be unique across sensors!
-        stopScene( tdev, nil, tdev, '__untrip' ) -- stop contra-activity
-        local scd = getSceneData( '__trip', tdev )
+        stopScene( tdev, nil, tdev, 'root.false' ) -- stop contra-activity
+        local scd = getSceneData( 'root.true', tdev )
         if scd then execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } ) end
     end
 end
@@ -1433,6 +1440,14 @@ local function loadSensorConfig( tdev )
         L("Unable to parse JSON data at %2, %1 in %3", pos, err, s)
         return error("Unable to load configuration")
     end
+
+    -- Backport/downgrade attempt from future version?
+    if cdata.version and cdata.version > 19012 then
+        L({level=1,msg="Configuration loaded is format v%1, max compatible with this version of Reactor is 19012; upgrade Reactor or restore older config from backup."},
+            cdata.version)
+        error("Incompatible config format version. Upgrade Reactor or restore older config from backup.")
+    end
+
     -- Special meta to control encode rendering when needed.
     local mt = { __jsontype="object" } -- empty tables render as object
     if debugMode then
@@ -1440,6 +1455,7 @@ local function loadSensorConfig( tdev )
         mt.__newindex = function(t, n, v) rawset(t,n,v) if debugMode then L({level=2,msg="setting %1=%2 in cdata"}, n, v) end end
     end
     setmetatable( cdata, mt )
+
     -- Check old-style scene runners, fix.
     s = luup.variable_get( RSSID, "Scenes", tdev ) or ""
     if s ~= "" then
@@ -1448,10 +1464,10 @@ local function loadSensorConfig( tdev )
 
         local st = split( s, "," )
         if st[1] ~= "" then
-            cdata.tripactions = { isReactorScene=true, groups={ { groupid=1, delay=0, actions={ { ['type']="runscene", scene=st[1] } } } } }
+            cdata.tripactions = { id='root.true', isReactorScene=true, groups={ { groupid=1, delay=0, actions={ { ['type']="runscene", scene=st[1] } } } } }
         end
         if #st > 1 and st[2] ~= "" then
-            cdata.untripactions = { isReactorScene=true, groups={ { groupid=2, delay=0, actions={ { ['type']="runscene", scene=st[2] } } } } }
+            cdata.untripactions = { id='root.false', isReactorScene=true, groups={ { groupid=1, delay=0, actions={ { ['type']="runscene", scene=st[2] } } } } }
         end
         cdata.timestamp = os.time()
         luup.variable_set( RSSID, "cdata", json.encode( cdata ), tdev )
@@ -1760,6 +1776,7 @@ local function evaluateCondition( cond, grp, tdev )
         return vv,true
     elseif cond.type == "housemode" then
         -- Add watch on parent if we don't already have one.
+        usesHouseMode = true
         addServiceWatch( pluginDevice, MYSID, "HouseMode", tdev )
         local val = cond.value or ""
         local modes = split( val )
@@ -2482,6 +2499,45 @@ local function sensorTick(tdev)
     end
 end
 
+-- Get the house mode tracker. If it doesn't exist, create it (child device).
+-- No HMT on openLuup because it doesn't have native device file to support it.
+local function getHouseModeTracker( createit, pdev )
+    if not isOpenLuup then
+        local children = {}
+        for k,v in pairs( luup.devices ) do
+            if v.device_num_parent == pdev then
+                if v.id == "hmt" then
+                    return k, v
+                end
+                table.insert( children, k )
+                if dfMap[v.device_type] == nil then
+                    -- Early detection and error exit prevents accidental destruction of children.
+                    error( "Device " .. tostring( v.description ) .. " (#" .. k ..
+                        ") type "..v.device_type.." not found in dfMap!" )
+                end
+            end
+        end
+        -- Didn't find it. At this point, we have a list of children.
+        if createit then
+            -- Didn't find it. Need to create a new child device for it. Sigh.
+            L{level=2,msg="Did not find house mode tracker; creating. This will cause a Luup reload."}
+            local ptr = luup.chdev.start( pdev )
+            luup.variable_set( MYSID, "Message", "Adding house mode tracker, please wait...", pdev )
+            for _,k in ipairs( children ) do
+                local v = luup.devices[ k ]
+                local df = dfMap[ v.device_type ]
+                D("getHouseModeTracker() appending existing device %1 (%2)", v.id, v.description)
+                luup.chdev.append( pdev, ptr, v.id, v.description, "", df.device_file, "", "", false )
+            end
+            D("getHouseModeTracker() creating hmt child; final step before reload.")
+            luup.chdev.append( pdev, ptr, "hmt", "Reactor Internal HMT", "", "D_DoorSensor1.xml", "", "", false )
+            luup.chdev.sync( pdev, ptr )
+            -- Should cause reload immediately. Drop through.
+        end
+    end
+    return false
+end
+
 -- Tick handler for master device
 local function masterTick(pdev)
     D("masterTick(%1)", pdev)
@@ -2490,8 +2546,15 @@ local function masterTick(pdev)
     local nextTick = math.floor( now / 60 + 1 ) * 60
     scheduleTick( tostring(pdev), nextTick )
 
-    -- Check and update house mode.
+    -- Check and update house mode (by polling, always).
     setVar( MYSID, "HouseMode", luup.attr_get( "Mode", 0 ) or "1", pdev )
+    if usesHouseMode and not isOpenLuup then
+        -- Find housemode tracking child. Create it if it doesn't exist.
+        local hmt = getHouseModeTracker( true, pdev )
+        if hmt then
+            addServiceWatch( hmt, "urn:micasaverde-com:serviceId:SecuritySensor1", "Armed", pdev )
+        end
+    end
 
     -- Vera Secure has battery, check it.
     if hasBattery then
@@ -2618,6 +2681,12 @@ local function waitSystemReady( pdev )
             else
                 started = started + 1
             end
+        elseif v.device_num_parent == pdev and v.id == "hmt" then
+            D("waitSystemReady() adding watch for hmt device #%1", k)
+            luup.attr_set( "invisible", 1, k )
+            luup.attr_set( "hidden", 1, k )
+            luup.variable_set( "urn:micasaverde-com:serviceId:HaDevice1", "ModeSetting", "1:;2:A;3:A;4:A", k )
+            addServiceWatch( k, "urn:micasaverde-com:serviceId:SecuritySensor1", "Armed", pdev )
         end
     end
     luup.variable_set( MYSID, "NumChildren", count, pdev )
@@ -2668,6 +2737,8 @@ function startPlugin( pdev )
     sceneState = {}
     luaEnv = nil
     runStamp = 1
+    geofenceMode = 0
+    usesHouseMode = false
 
     -- Debug?
     if getVarNumeric( "DebugMode", 0, pdev, MYSID ) ~= 0 then
@@ -2759,24 +2830,36 @@ end
 -- Add a child (used as both action and local function)
 function actionAddSensor( pdev )
     D("addSensor(%1)", pdev)
-    local ptr = luup.chdev.start( pdev )
-    local highd = 0
     luup.variable_set( MYSID, "Message", "Adding sensor, please hard-refresh your browser.", pdev )
-    for _,v in pairs(luup.devices) do
-        if v.device_type == RSTYPE and v.device_num_parent == pdev then
-            D("addSensor() appending existing device %1 (%2)", v.id, v.description)
-            local dd = tonumber( string.match( v.id, "s(%d+)" ) )
-            if dd == nil then highd = highd + 1 elseif dd > highd then highd = dd end
-            luup.chdev.append( pdev, ptr, v.id, v.description, "",
-                "D_ReactorSensor.xml", "", "", false )
+    -- Safe child add.
+    local children = {}
+    for k,v in pairs( luup.devices ) do
+        if v.device_num_parent == pdev then
+            if dfMap[ v.device_type ] == nil then
+                error( "Device " .. tostring( v.description ) .. " (#" .. k ..
+                    ") type "..v.device_type.." not found in dfMap!" )
+            end
+            table.insert( children, k )
         end
     end
-    highd = highd + 1
-    D("addSensor() creating child r%1s%2", pdev, highd)
+    local ptr = luup.chdev.start( pdev )
+    local highd = 0
+    for _,k in ipairs( children ) do
+        local v = luup.devices[ k ]
+        D("addSensor() appending existing device %1 (%2)", v.id, v.description)
+        if v.device_type == RSTYPE then
+             local dd = tonumber( string.match( v.id, "s(%d+)" ) )
+             if dd == nil then highd = highd + 1 elseif dd > highd then highd = dd end
+        end
+        local df = dfMap[ v.device_type ]
+        luup.chdev.append( pdev, ptr, v.id, v.description, "", df.device_file, "", "", false )
+    end
+    highd = highd + 1    D("addSensor() creating child r%1s%2", pdev, highd)
     luup.chdev.append( pdev, ptr, string.format("r%ds%d", pdev, highd),
         "Reactor Sensor " .. highd, "", "D_ReactorSensor.xml", "", "", false )
     luup.chdev.sync( pdev, ptr )
     -- Should cause reload immediately.
+    return true
 end
 
 -- Remove all child devices.
@@ -3210,6 +3293,14 @@ function watch( dev, sid, var, oldVal, newVal )
         stopScene( dev, nil, dev ) -- Stop all scenes in this device context.
         loadSensorConfig( dev )
         updateSensor( dev )
+    elseif (luup.devices[dev] or {}).id == "hmt" and
+            luup.devices[dev].device_num_parent == pluginDevice and
+            sid == "urn:micasaverde-com:serviceId:SecuritySensor1" and
+            var == "Armed" then
+        -- Arming state changed on HMT, update house mode.
+        local mode = luup.attr_get( "Mode", 0 ) or "1"
+        D("watch() HMT device arming state changed, updating HouseMode to %1", mode)
+        setVar( MYSID, "HouseMode", mode, pluginDevice )
     else
         local key = string.format("%d:%s/%s", dev, sid, var)
         if watchData[key] then
@@ -3502,7 +3593,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
         r = r .. "; " .. tostring((_G or {})._VERSION)
         r = r .. EOL
         r = r .. "Local time: " .. os.date("%Y-%m-%dT%H:%M:%S%z") .. ", DST=" .. tostring(luup.variable_get( MYSID, "LastDST", pluginDevice ) or "") .. EOL
-        r = r .. "House mode: " .. tostring(luup.variable_get( MYSID, "HouseMode", pluginDevice ) or "") .. EOL
+        r = r .. "House mode: tracking " .. ( usesHouseMode and "off" and "on" ) .. "; current mode " .. tostring(luup.variable_get( MYSID, "HouseMode", pluginDevice ) or "") .. EOL
         r = r .. "  Sun data: " .. tostring(luup.variable_get( MYSID, "sundata", pluginDevice ) or "") .. EOL
         if geofenceMode ~= 0 then
             local status, p = pcall( showGeofenceData )
@@ -3610,9 +3701,9 @@ function request( lul_request, lul_parameters, lul_outputformat )
                     end
                 end
                 local t
-                t, scenesUsed = getReactorScene( "Trip Actions", cdata.tripactions or (cdata.activities or {}).__trip, n, scenesUsed )
+                t, scenesUsed = getReactorScene( "Trip Actions", cdata.tripactions, n, scenesUsed )
                 r = r .. t
-                t, scenesUsed = getReactorScene( "Untrip Actions", cdata.untripactions or (cdata.activities or {}).__untrip, n, scenesUsed )
+                t, scenesUsed = getReactorScene( "Untrip Actions", cdata.untripactions, n, scenesUsed )
                 r = r .. t
                 r = r .. getEvents( n )
             end

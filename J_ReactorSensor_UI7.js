@@ -15,7 +15,7 @@ var ReactorSensor = (function(api, $) {
     /* unique identifier for this plugin... */
     var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-    var pluginVersion = '2.4develop';
+    var pluginVersion = '2.4develop-19058';
 
     var DEVINFO_MINSERIAL = 71.222;
 
@@ -3327,21 +3327,17 @@ var ReactorSensor = (function(api, $) {
         var ucf = buildActionList( jQuery( 'div#untripactions') );
         var cd = iData[myid].cdata;
         if ( tcf && ucf ) {
-            if ( undefined !== cd.activities ) {
-                delete cd.activities.__trip;
-                delete cd.activities.__untrip;
-            }
             /* If either "scene" has no actions, just delete its config */
             if ( tcf.groups.length == 1 && tcf.groups[0].actions.length == 0 ) {
                 delete cd.tripactions;
             } else {
-                tcf.id = '__trip';
+                tcf.id = 'root.true';
                 cd.tripactions = tcf;
             }
             if ( ucf.groups.length == 1 && ucf.groups[0].actions.length == 0 ) {
                 delete cd.untripactions;
             } else {
-                ucf.id = '__untrip';
+                ucf.id = 'root.false';
                 cd.untripactions = ucf;
             }
             /* Save has async action, so use callback to complete. */
@@ -4342,9 +4338,9 @@ var ReactorSensor = (function(api, $) {
     function redrawActivities() {
         var cd = iData[api.getCpanelDeviceId()].cdata;
         jQuery( 'div#tripactions div.actionrow' ).remove();
-        loadActions( 'tripactions', cd.tripactions || (cd.activities || {}).__trip || {} );
+        loadActions( 'tripactions', cd.tripactions || {} );
         jQuery( 'div#untripactions div.actionrow' ).remove();
-        loadActions( 'untripactions', cd.untripactions || (cd.activities || {}).__untrip || {} );
+        loadActions( 'untripactions', cd.untripactions || {} );
         updateActionControls();
     }
 
