@@ -669,7 +669,7 @@ local function loadCleanState( tdev )
 
         -- Find all conditions in cdata
         local conds = {}
-        local function traverse( grp ) 
+        local function traverse( grp )
             conds[ grp.id ] = grp
             for _,cond in ipairs( grp.conditions or {} ) do
                 if ( cond.type or "group" ) == "group" then
@@ -683,10 +683,10 @@ local function loadCleanState( tdev )
 
         -- Make array of conditions in cstate that aren't in cdata
         local dels = {}
-        for k in pairs( cstate ) do 
+        for k in pairs( cstate ) do
             if conds[k] == nil then table.insert( dels, k ) end
         end
-        
+
         -- Delete them
         for _,k in ipairs( dels ) do cstate[k] = nil end
     end
@@ -798,8 +798,8 @@ local function getSceneData( sceneId, tdev )
     end
     -- This is the "old" way of finding trip and untrip actions for the ReactorSensor.
     -- Keep it around for unchanged configs.
-    if skey == "__trip" or skey == "__untrip" then
-        local pt = skey:match("^__un") and "untripactions" or "tripactions"
+    if skey == "root.true" or skey == "root.false" then
+        local pt = skey:match( ".true" ) and "tripactions" or "untripactions"
         local r = sensorState[tostring(tdev)].configData[pt]
         if r then r.id = skey r.name = skey end
         return r
@@ -1399,15 +1399,15 @@ local function trip( state, tdev )
             end
         end
         -- Run the reset scene, if we have one. Scene ID must be unique across sensors!
-        stopScene( tdev, nil, tdev, '__trip' ) -- stop contra-activity
-        local scd = getSceneData( '__untrip', tdev )
+        stopScene( tdev, nil, tdev, 'root.true' ) -- stop contra-activity
+        local scd = getSceneData( 'root.false', tdev )
         if scd then execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } ) end
     else
         -- Count a trip.
         luup.variable_set( RSSID, "TripCount", getVarNumeric( "TripCount", 0, tdev, RSSID ) + 1, tdev )
         -- Run the trip scene, if we have one. Scene ID must be unique across sensors!
-        stopScene( tdev, nil, tdev, '__untrip' ) -- stop contra-activity
-        local scd = getSceneData( '__trip', tdev )
+        stopScene( tdev, nil, tdev, 'root.false' ) -- stop contra-activity
+        local scd = getSceneData( 'root.true', tdev )
         if scd then execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } ) end
     end
 end
@@ -1462,6 +1462,7 @@ end
 
 -- Load sensor config
 local function loadSensorConfig( tdev )
+    local upgraded = false
     local s = luup.variable_get( RSSID, "cdata", tdev ) or ""
     local cdata, pos, err
     if "" ~=  s then
@@ -1480,6 +1481,7 @@ local function loadSensorConfig( tdev )
                 root={ id="root", name=luup.devices[tdev].description, ['type']="group", conditions={}, operator="and" }
             }
         }
+        upgraded = true
     end
     if not (cdata.conditions or {}).root then
         L("Upgrading conditions in configuration")
@@ -1502,7 +1504,22 @@ local function loadSensorConfig( tdev )
             end
         end
         cdata.conditions = { root=root }
-        luup.variable_set( RSSID, "cdata", json.encode( cdata ), tdev )
+        upgraded = true
+    end
+    cdata.activities = cdata.activities or {}
+    if cdata.tripactions then
+        L("Upgrading activities in configuration")
+        cdata.activities['root.true'] = cdata.tripactions
+        cdata.activities['root.true'].id = 'root.true'
+        cdata.tripactions = nil
+        upgraded = true
+    end
+    if cdata.untripactions then
+        L("Upgrading activities in configuration")
+        cdata.activities['root.false'] = cdata.untripactions
+        cdata.activities['root.false'].id = 'root.false'
+        cdata.untripactions = nil
+        upgraded = true
     end
     -- Special meta to control encode rendering when needed.
     local mt = { __jsontype="object" } -- empty tables render as object
@@ -1511,6 +1528,13 @@ local function loadSensorConfig( tdev )
         mt.__newindex = function(t, n, v) rawset(t,n,v) if debugMode then L({level=2,msg="setting %1=%2 in cdata"}, n, v) end end
     end
     setmetatable( cdata, mt )
+
+    -- Rewrite if we upgraded.
+    if upgraded then
+        cdata.timestamp = os.time()
+        luup.variable_set( RSSID, "cdata", json.encode( cdata ), tdev )
+    end
+
     -- Save to cache.
     sensorState[tostring(tdev)].configData = cdata
     -- When loading sensor config, dump luaFunc so that any changes to code
@@ -2455,18 +2479,19 @@ local function updateSensor( tdev )
         -- Pass through groups again, and run activities for any changed groups.
         for grp in conditionGroups( cdata.conditions.root ) do
             local gs = condState[ grp.id ]
-            local activity = grp.id .. ( gs.evalstate and ".true" or ".false" )
-            D("updateSensor() group %1 state changed to %2, looking for activity %3",
-                grp.id, gs.evalstate, activity)
-            -- Run per-group state-driven activity. Before starting new activity,
-            -- stop any contra-activity (i.e. before run true actions, stop
-            -- the false actions.
-            local alter = grp.id .. ( gs.evalstate and ".false" or ".true" )
-            stopScene( tdev, nil, tdev, alter )
-            local scd = getSceneData( activity, tdev )
-            if scd then
-                D("updateSensor() running %1 activities", activity)
-                execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } )
+            if gs.changed then
+                local activity = grp.id .. ( gs.evalstate and ".true" or ".false" )
+                D("updateSensor() group %1 state changed to %2, looking for activity %3",
+                    grp.id, gs.evalstate, activity)
+                -- Run per-group state-driven activity. Before starting new activity,
+                -- stop any contra-activity (e.g. stop false before running true).
+                local contra = grp.id .. ( gs.evalstate and ".false" or ".true" )
+                stopScene( tdev, nil, tdev, contra )
+                local scd = getSceneData( activity, tdev )
+                if scd then
+                    D("updateSensor() running %1 activities", activity)
+                    execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } )
+                end
             end
         end
 
@@ -3529,8 +3554,8 @@ function RG( grp, condState, level, r )
     for _,cond in ipairs( grp.conditions or {} ) do
         local condtype = cond.type or "group"
         local cs = condState[cond.id] or {}
-        r = r .. "    " .. string.rep( "  |   ", level-1 ) .. 
-            "  +-" .. ( (cs.evalstate == nil) and "X" or ( cs.evalstate and "T" or "F" ) ) .. "-" .. 
+        r = r .. "    " .. string.rep( "  |   ", level-1 ) ..
+            "  +-" .. ( (cs.evalstate == nil) and "X" or ( cs.evalstate and "T" or "F" ) ) .. "-" ..
             condtype .. " "
         if condtype == "group" then
             r = r .. RG( cond, condState, level+1 )
@@ -3689,15 +3714,17 @@ function request( lul_request, lul_parameters, lul_outputformat )
                 r = r .. "    Condition group " .. RG( cdata.conditions.root or {}, condState )
 
                 local t
-                t, scenesUsed = getReactorScene( "Trip Actions", (cdata.activities or {}).__trip, n, scenesUsed )
-                r = r .. t
-                t, scenesUsed = getReactorScene( "Untrip Actions", (cdata.activities or {}).__untrip, n, scenesUsed )
-                r = r .. t
+                if cdata.tripactions then
+                    t, scenesUsed = getReactorScene( "Trip Actions (old format)", cdata.tripactions, n, scenesUsed )
+                    r = r .. t
+                end
+                if cdata.untripactions then
+                    t, scenesUsed = getReactorScene( "Untrip Actions (old format)", cdata.untripactions, n, scenesUsed )
+                    r = r .. t
+                end
                 for k,v in pairs( cdata.activities or {} ) do
-                    if k ~= "__trip" and k ~= "__untrip" then
-                        t, scenesUsed = getReactorScene( k, v, n, scenesUsed )
-                        r = r .. t
-                    end
+                    t, scenesUsed = getReactorScene( k, v, n, scenesUsed )
+                    r = r .. t
                 end
                 r = r .. getEvents( n )
             end

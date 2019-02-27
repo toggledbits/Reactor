@@ -186,22 +186,36 @@ var ReactorSensor = (function(api, $) {
             upgraded = true;
         }
         if ( undefined === cdata.activities ) {
-            /* Fixup v19051 */
+            /* Fixup pre 19051 to 19052 */
             cdata.activities = {};
             if ( undefined !== cdata.tripactions ) {
-                cdata.activities.__trip = cdata.tripactions;
-                cdata.activities.__trip.id = cdata.activities.__trip.name = '__trip';
+                cdata.activities['root.true'] = cdata.tripactions;
+                cdata.activities['root.true'].id = 'root.true';
                 delete cdata.tripactions;
             }
             if ( undefined !== cdata.untripactions ) {
-                cdata.activities.__untrip = cdata.untripactions;
-                cdata.activities.__untrip.id = cdata.activities.__untrip.name = '__untrip';
+                cdata.activities['root.false'] = cdata.untripactions;
+                cdata.activities['root.false'].id = 'root.false';
                 delete cdata.untripactions;
             }
             upgraded = true;
         }
+        if ( cdata.activities.__trip ) {
+            /* Fixup 19051 to 19052 -- development only, should not be seen in wild */
+            cdata.activities['root.true'] = cdata.activities.__trip;
+            cdata.activities['root.true'].id = 'root.true';
+            delete cdata.activities.__trip;
+            upgraded = true;
+        }
+        if ( cdata.activities.__untrip ) {
+            /* Fixup 19051 to 19052 -- development only, should not be seen in wild */
+            cdata.activities['root.false'] = cdata.activities.__untrip;
+            cdata.activities['root.false'].id = 'root.false';
+            delete cdata.activities.__untrip;
+            upgraded = true;
+        }
         if ( undefined === cdata.conditions.root ) {
-            /* Fixup v19052 */
+            /* Fixup any pre to 19052 */
             var root = { id: "root", name: api.getDeviceObject( myid ).name, type: "group", operator: "and", conditions: [] };
             var ng = (cdata.conditions || []).length;
             if ( ng == 0 || ( ng == 1 && ( cdata.conditions[0].groupconditions || [] ).length == 0 ) ) {
@@ -1694,7 +1708,7 @@ var ReactorSensor = (function(api, $) {
             if ( undefined !== cond.device ) {
                 cond.device = parseInt( newDev );
                 var dobj = api.getDeviceObject( cond.device );
-                cond.devicename = dobj ? dobj.name : ("#"+String(cond.device)+"?");
+                cond.devicename = dobj ? dobj.name : ( "#" + String(cond.device) + "?" );
                 configModified = true;
             }
 
@@ -1844,7 +1858,7 @@ var ReactorSensor = (function(api, $) {
         function setConditionForType( cond, row ) {
             var op, k, v, mm;
             if ( undefined === row ) {
-                row = jQuery('div.cond-container#' + cond.id);
+                row = jQuery( 'div.cond-container#' + idSelector( cond.id ) );
             }
             var container = jQuery('div.params', row).empty();
             switch (cond.type) {
@@ -2955,7 +2969,7 @@ var ReactorSensor = (function(api, $) {
             var f = jQuery( ev.currentTarget );
             var row = f.closest( 'div.varexp' );
             var vname = f.val() || "";
-            if ( vname === "" || jQuery( 'div.varexp#' + vname ).length > 0 || !vname.match( /^[A-Z][A-Z0-9_]*$/i ) ) {
+            if ( vname === "" || jQuery( 'div.varexp#' + idSelector( vname ) ).length > 0 || !vname.match( /^[A-Z][A-Z0-9_]*$/i ) ) {
                 row.addClass( 'tberror' );
                 f.addClass('tberror');
                 f.focus();
@@ -3217,7 +3231,7 @@ var ReactorSensor = (function(api, $) {
                             var p = ai.parameters[k];
                             if ( undefined === p.value ) { /* ignore fixed value */
                                 /* Fetch value */
-                                var field = jQuery( '#' + p.name, row );
+                                var field = jQuery( '#' + idSelector( p.name ), row );
                                 if ( field.length != 1 ) {
                                     console.log("validateActionRow: field " + p.name + " expected 1 found " +
                                         field.length );
@@ -3372,7 +3386,7 @@ var ReactorSensor = (function(api, $) {
                                 pt.value = ai.parameters[k].value;
                             } else {
                                 /* Ignore default here, it's assumed to be valid when needed */
-                                t = jQuery( '#' + ai.parameters[k].name, row ).val() || "";
+                                t = jQuery( '#' + idSelector( ai.parameters[k].name ), row ).val() || "";
                                 if ( isEmpty( t ) ) {
                                     if ( ai.parameters[k].optional ) {
                                         continue; /* skip it, not even put on the list */
@@ -3463,7 +3477,7 @@ var ReactorSensor = (function(api, $) {
             var id = jQuery( this ).attr( 'id' );
             var scene = buildActionList( jQuery( this ) );
             if ( scene ) {
-                if ( scene.groups.length == 1 && scene.groups[0].actions.length == 0 ) {
+                if ( (scene.groups || []).length == 0 || ( scene.groups.length == 1 && ( scene.groups[0].actions || []).length == 0 ) ) {
                     delete cd.activities[id];
                 } else {
                     cd.activities[id] = scene;
@@ -3581,7 +3595,7 @@ var ReactorSensor = (function(api, $) {
                     if ( undefined !== window.HTMLDataListElement ) {
                         /* Use datalist when supported (allows more flexible entry) */
                         var dlid = ("data-" + action.service + '-' + action.name + '-' + parm.name).replace( /[^a-z0-9-]/ig, "-" );
-                        if ( 0 == jQuery( 'datalist#'+dlid ).length ) {
+                        if ( 0 == jQuery( 'datalist#' + idSelector( dlid ) ).length ) {
                             /* Datalist doesn't exist yet, create it */
                             inp = jQuery('<datalist class="argdata" id="' + dlid + '"/>');
                             for ( j=0; j<parm.values.length; j++ ) {
@@ -4200,7 +4214,7 @@ var ReactorSensor = (function(api, $) {
                                 param[p.name] = p.value;
                                 actionText += "{" + p.name + "=" + String(p.value) + "}, ";
                             } else {
-                                var v = (jQuery( '#' + p.name, row ).val() || "").trim();
+                                var v = (jQuery( '#' + idSelector( p.name ), row ).val() || "").trim();
                                 var vn = v.match( varRefPattern );
                                 if ( vn && vn.length == 2 ) {
                                     /* Variable reference, get current value. */
@@ -4325,12 +4339,12 @@ var ReactorSensor = (function(api, $) {
                                     changeActionAction( row, key );
                                     for ( var j=0; j<(action.arguments || []).length; j++ ) {
                                         var a = action.arguments[j];
-                                        if ( 0 === jQuery( '#' + a.name, row ).length ) {
+                                        if ( 0 === jQuery( '#' + idSelector( a.name ), row ).length ) {
                                             var inp = jQuery( '<input class="argument form-control form-control-sm">' ).attr('id', a.name);
                                             var lbl = jQuery( '<label/>' ).attr('for', a.name).text(a.name).addClass('tbrequired').append(inp);
                                             jQuery( 'div.actiondata', row ).append( lbl );
                                         }
-                                        jQuery( '#' + a.name, row ).val( a.value || "" );
+                                        jQuery( '#' + idSelector( a.name ), row ).val( a.value || "" );
                                     }
                                 }, [ newRow, act ]);
                             }
@@ -4425,12 +4439,12 @@ var ReactorSensor = (function(api, $) {
                             jQuery( 'select#actionmenu', row ).val( key );
                             changeActionAction( row, key );
                             for ( var j=0; j<(action.parameters || []).length; j++ ) {
-                                if ( false && 0 === jQuery( '#' + action.parameters[j].name, row ).length ) {
+                                if ( false && 0 === jQuery( '#' + idSelector( action.parameters[j].name ), row ).length ) {
                                     var inp = jQuery( '<input class="argument form-control form-control-sm">' ).attr('id', action.parameters[j].name);
                                     var lbl = jQuery( '<label/>' ).attr('for', action.parameters[j].name).text(action.parameters[j].name).addClass('tbrequired').append(inp);
                                     jQuery( 'div.actiondata', row ).append( lbl );
                                 }
-                                jQuery( '#' + action.parameters[j].name, row ).val( action.parameters[j].value || "" );
+                                jQuery( '#' + idSelector( action.parameters[j].name ), row ).val( action.parameters[j].value || "" );
                             }
                         }, [ newRow, act ]);
                         break;
@@ -4521,16 +4535,16 @@ var ReactorSensor = (function(api, $) {
         jQuery( 'div#activities' ).empty();
 
         var el = getActionListContainer();
-        el.attr( 'id', '__trip' );
+        el.attr( 'id', 'root.true' );
         jQuery( 'span.titletext', el ).text( 'When ' + devobj.name + ' Trips' );
         jQuery( 'div#activities' ).append( el );
-        loadActions( jQuery( 'div#__trip.actionlist' ), cd.activities.__trip || {} );
+        loadActions( el, cd.activities['root.true'] || {} );
 
         el = getActionListContainer();
         el.attr( 'id', '__untrip' );
         jQuery( 'span.titletext', el ).text( 'When ' + devobj.name + ' Untrips' );
         jQuery( 'div#activities' ).append( el );
-        loadActions( jQuery( 'div#__untrip.actionlist' ), cd.activities.__untrip || {} );
+        loadActions( el, cd.activities['root.false'] || {} );
 
         var ul = jQuery( '<ul />' );
         function orderly( gr ) {
@@ -4712,7 +4726,6 @@ var ReactorSensor = (function(api, $) {
             html += '<div id="tab-actions" class="reactortab">';
 
             html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>Activities</h3></div></div>';
-            html += '<div class="row"><div class="col-xs-12 col-sm-12">Activities are actions that Reactor will perform on its own when tripped or untripped.</div></div>';
 
             html += '<div id="activities"/>';
 
