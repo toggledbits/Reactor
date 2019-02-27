@@ -35,6 +35,7 @@ local sceneData = {}
 local sceneWaiting = {}
 local sceneState = {}
 local hasBattery = true
+local usesHouseMode = false
 local geofenceMode = 0
 local maxEvents = 50
 local luaEnv -- global state for all runLua actions
@@ -50,6 +51,12 @@ local TICKOFFS = 5 -- cond tasks try to run TICKOFFS seconds after top of minute
 local TRUESTRINGS = ":y:yes:t:true:on:1:" -- strings that mean true (also numeric ~= 0)
 
 local defaultLogLevel = false -- or a number, which is (uh...) the default log level for messages
+
+-- These are the types of children we create, and their associated device file.
+local dfMap = {
+    ["urn:schemas-toggledbits-com:device:ReactorSensor:1"] = { device_file="D_ReactorSensor.xml" },
+    ["urn:schemas-micasaverde-com:device:DoorSensor:1"] = { device_file="D_DoorSensor1.xml" }
+}
 
 local json = require("dkjson")
 local mime = require("mime")
@@ -1837,6 +1844,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
         return vv,true
     elseif cond.type == "housemode" then
         -- Add watch on parent if we don't already have one.
+        usesHouseMode = true
         addServiceWatch( pluginDevice, MYSID, "HouseMode", tdev )
         local val = cond.value or ""
         local modes = split( val )
@@ -2554,6 +2562,45 @@ local function sensorTick(tdev)
     end
 end
 
+-- Get the house mode tracker. If it doesn't exist, create it (child device).
+-- No HMT on openLuup because it doesn't have native device file to support it.
+local function getHouseModeTracker( createit, pdev )
+    if not isOpenLuup then
+        local children = {}
+        for k,v in pairs( luup.devices ) do
+            if v.device_num_parent == pdev then
+                if v.id == "hmt" then
+                    return k, v
+                end
+                table.insert( children, k )
+                if dfMap[v.device_type] == nil then
+                    -- Early detection and error exit prevents accidental destruction of children.
+                    error( "Device " .. tostring( v.description ) .. " (#" .. k .. 
+                        ") type "..v.device_type.." not found in dfMap!" )
+                end
+            end
+        end
+        -- Didn't find it. At this point, we have a list of children.
+        if createit then
+            -- Didn't find it. Need to create a new child device for it. Sigh.
+            L{level=2,msg="Did not find house mode tracker; creating. This will cause a Luup reload."}
+            local ptr = luup.chdev.start( pdev )
+            luup.variable_set( MYSID, "Message", "Adding house mode tracker, please wait...", pdev )
+            for _,k in ipairs( children ) do
+                local v = luup.devices[ k ]
+                local df = dfMap[ v.device_type ]
+                D("getHouseModeTracker() appending existing device %1 (%2)", v.id, v.description)
+                luup.chdev.append( pdev, ptr, v.id, v.description, "", df.device_file, "", "", false )
+            end
+            D("getHouseModeTracker() creating hmt child; final step before reload.")
+            luup.chdev.append( pdev, ptr, "hmt", "Reactor Internal HMT", "", "D_DoorSensor1.xml", "", "", false )
+            luup.chdev.sync( pdev, ptr )
+            -- Should cause reload immediately. Drop through.
+        end
+    end
+    return false
+end
+
 -- Tick handler for master device
 local function masterTick(pdev)
     D("masterTick(%1)", pdev)
@@ -2562,8 +2609,15 @@ local function masterTick(pdev)
     local nextTick = math.floor( now / 60 + 1 ) * 60
     scheduleTick( tostring(pdev), nextTick )
 
-    -- Check and update house mode.
+    -- Check and update house mode (by polling, always).
     setVar( MYSID, "HouseMode", luup.attr_get( "Mode", 0 ) or "1", pdev )
+    if usesHouseMode and not isOpenLuup then
+        -- Find housemode tracking child. Create it if it doesn't exist.
+        local hmt = getHouseModeTracker( true, pdev )
+        if hmt then
+            addServiceWatch( hmt, "urn:micasaverde-com:serviceId:SecuritySensor1", "Armed", pdev )
+        end
+    end
 
     -- Vera Secure has battery, check it.
     if hasBattery then
@@ -2693,6 +2747,12 @@ local function waitSystemReady( pdev )
             else
                 started = started + 1
             end
+        elseif v.device_num_parent == pdev and v.id == "hmt" then
+            D("waitSystemReady() adding watch for hmt device #%1", k)
+            luup.attr_set( "invisible", 1, k )
+            luup.attr_set( "hidden", 1, k )
+            luup.variable_set( "urn:micasaverde-com:serviceId:HaDevice1", "ModeSetting", "1:;2:A;3:A;4:A", k )
+            addServiceWatch( k, "urn:micasaverde-com:serviceId:SecuritySensor1", "Armed", pdev )
         end
     end
     luup.variable_set( MYSID, "NumChildren", count, pdev )
@@ -2740,6 +2800,8 @@ function startPlugin( pdev )
     sceneState = {}
     luaEnv = nil
     runStamp = 1
+    geofenceMode = 0
+    usesHouseMode = false
 
     -- Debug?
     if getVarNumeric( "DebugMode", 0, pdev, MYSID ) ~= 0 then
@@ -2831,17 +2893,29 @@ end
 -- Add a child (used as both action and local function)
 function actionAddSensor( pdev )
     D("addSensor(%1)", pdev)
+    luup.variable_set( MYSID, "Message", "Adding sensor, please hard-refresh your browser.", pdev )
+    -- Safe child add.
+    local children = {}
+    for k,v in pairs( luup.devices ) do
+        if v.device_num_parent == pdev then
+            if dfMap[ v.device_type ] == nil then
+                error( "Device " .. tostring( v.description ) .. " (#" .. k .. 
+                    ") type "..v.device_type.." not found in dfMap!" )
+            end
+            table.insert( children, k )
+        end
+    end
     local ptr = luup.chdev.start( pdev )
     local highd = 0
-    luup.variable_set( MYSID, "Message", "Adding sensor, please hard-refresh your browser.", pdev )
-    for _,v in pairs(luup.devices) do
-        if v.device_type == RSTYPE and v.device_num_parent == pdev then
-            D("addSensor() appending existing device %1 (%2)", v.id, v.description)
+    for _,k in ipairs( children ) do
+        local v = luup.devices[ k ]
+        D("addSensor() appending existing device %1 (%2)", v.id, v.description)
+        if v.device_type == RSTYPE then
             local dd = tonumber( string.match( v.id, "s(%d+)" ) )
             if dd == nil then highd = highd + 1 elseif dd > highd then highd = dd end
-            luup.chdev.append( pdev, ptr, v.id, v.description, "",
-                "D_ReactorSensor.xml", "", "", false )
         end
+        local df = dfMap[ v.device_type ]
+        luup.chdev.append( pdev, ptr, v.id, v.description, "", df.device_file, "", "", false )
     end
     highd = highd + 1
     D("addSensor() creating child r%1s%2", pdev, highd)
@@ -2849,6 +2923,7 @@ function actionAddSensor( pdev )
         "Reactor Sensor " .. highd, "", "D_ReactorSensor.xml", "", "", false )
     luup.chdev.sync( pdev, ptr )
     -- Should cause reload immediately.
+    return true
 end
 
 -- Remove all child devices.
@@ -3298,6 +3373,14 @@ function watch( dev, sid, var, oldVal, newVal )
         stopScene( dev, nil, dev ) -- Stop all scenes in this device context.
         loadSensorConfig( dev )
         updateSensor( dev )
+    elseif (luup.devices[dev] or {}).id == "hmt" and 
+            luup.devices[dev].device_num_parent == pluginDevice and
+            sid == "urn:micasaverde-com:serviceId:SecuritySensor1" and
+            var == "Armed" then
+        -- Arming state changed on HMT, update house mode.
+        local mode = luup.attr_get( "Mode", 0 ) or "1"
+        D("watch() HMT device arming state changed, updating HouseMode to %1", mode)
+        setVar( MYSID, "HouseMode", mode, pluginDevice )
     else
         local key = string.format("%d:%s/%s", dev, sid, var)
         if watchData[key] then
@@ -3661,7 +3744,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
         r = r .. "; " .. tostring((_G or {})._VERSION)
         r = r .. EOL
         r = r .. "Local time: " .. os.date("%Y-%m-%dT%H:%M:%S%z") .. ", DST=" .. tostring(luup.variable_get( MYSID, "LastDST", pluginDevice ) or "") .. EOL
-        r = r .. "House mode: " .. tostring(luup.variable_get( MYSID, "HouseMode", pluginDevice ) or "") .. EOL
+        r = r .. "House mode: tracking " .. ( usesHouseMode and "off" and "on" ) .. "; current mode " .. tostring(luup.variable_get( MYSID, "HouseMode", pluginDevice ) or "") .. EOL
         r = r .. "  Sun data: " .. tostring(luup.variable_get( MYSID, "sundata", pluginDevice ) or "") .. EOL
         if geofenceMode ~= 0 then
             local status, p = pcall( showGeofenceData )
