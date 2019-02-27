@@ -2,8 +2,12 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
-## Version 2.4 (development)
+## Version 2.4 (groupactions)
 
+* Enhancement: The response time for house mode changes into and out of "Home" mode has been dramatically improved (without increased polling).
+* Enhancement: Condition groups are now a hierarchical construct, and group logic is user-settable (AND/OR/XOR + NOT). This adds considerable flexibility to the condition logic for users, at the expense of some complexity in the UI (implementation/operation is not significantly different).
+* Enhancement: Users may now create Activities for each condition group, not just the over trip/untrip of the sensor.
+* Enhancement: It is now possible to copy the contents of one activity to another.
 * Enhancement: The restore facility can now restore a configuration to a selected ReactorSensor, rather than only to an RS with the same name; this makes it possible to copy Reactor configuration between devices. Incorporates hotfix-19044-01.
 * Fix hotfix-19044-01: Restore of configuration not being written to device correctly, so restore appears to succeed, but device is unchanged.
 * Fix hotfix-19040-01: Fix missing pre-init of context variable that causes later spurious error (reported on openLuup).
