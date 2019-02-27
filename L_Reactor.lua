@@ -156,6 +156,31 @@ local function shallowCopy( t )
     return r
 end
 
+-- Get iterator for child devices matching passed table of attributes 
+-- (e.g. { device_type="urn:...", category_num=4 })
+local function childDevices( prnt, attr )
+    prnt = prnt or pluginDevice
+    attr = attr or {}
+    local prev = nil
+    return function()
+        while true do
+            local n, d = next( luup.devices, prev )
+            prev = n
+            if n == nil then return nil end
+            local matched = d.device_num_parent == prnt
+            if matched then
+                for a,v in pairs( attr ) do
+                    if d[a] ~= v then
+                        matched = false
+                        break
+                    end
+                end
+            end
+            if matched then return n,d end
+        end
+    end
+end
+
 -- Initialize a variable if it does not already exist.
 local function initVar( name, dflt, dev, sid )
     assert( dev ~= nil )
@@ -2567,17 +2592,15 @@ end
 local function getHouseModeTracker( createit, pdev )
     if not isOpenLuup then
         local children = {}
-        for k,v in pairs( luup.devices ) do
-            if v.device_num_parent == pdev then
-                if v.id == "hmt" then
-                    return k, v
-                end
-                table.insert( children, k )
-                if dfMap[v.device_type] == nil then
-                    -- Early detection and error exit prevents accidental destruction of children.
-                    error( "Device " .. tostring( v.description ) .. " (#" .. k .. 
-                        ") type "..v.device_type.." not found in dfMap!" )
-                end
+        for k,v in childDevices( pdev ) do
+            if v.id == "hmt" then
+                return k, v -- got it
+            end
+            table.insert( children, k )
+            if dfMap[v.device_type] == nil then
+                -- Early detection and error exit prevents accidental destruction of children.
+                error( "Device " .. tostring( v.description ) .. " (#" .. k .. 
+                    ") type "..v.device_type.." not found in dfMap!" )
             end
         end
         -- Didn't find it. At this point, we have a list of children.
@@ -2734,8 +2757,8 @@ local function waitSystemReady( pdev )
     -- Ready to go. Start our children.
     local count = 0
     local started = 0
-    for k,v in pairs(luup.devices) do
-        if v.device_type == RSTYPE and v.device_num_parent == pdev then
+    for k,v in childDevices( pdev ) do
+        if v.device_type == RSTYPE then
             count = count + 1
             L("Starting sensor %1 (%2)", k, luup.devices[k].description)
             local status, err = pcall( startSensor, k, pdev )
@@ -2747,12 +2770,15 @@ local function waitSystemReady( pdev )
             else
                 started = started + 1
             end
-        elseif v.device_num_parent == pdev and v.id == "hmt" then
+        elseif v.id == "hmt" then
             D("waitSystemReady() adding watch for hmt device #%1", k)
             luup.attr_set( "invisible", 1, k )
             luup.attr_set( "hidden", 1, k )
             luup.variable_set( "urn:micasaverde-com:serviceId:HaDevice1", "ModeSetting", "1:;2:A;3:A;4:A", k )
             addServiceWatch( k, "urn:micasaverde-com:serviceId:SecuritySensor1", "Armed", pdev )
+        else
+            L({level=2,msg="Child device #%1 (%2) is unrecognized type; ignoring! %3"},
+                k, v.description or "nil", v)
         end
     end
     luup.variable_set( MYSID, "NumChildren", count, pdev )
@@ -2896,14 +2922,12 @@ function actionAddSensor( pdev )
     luup.variable_set( MYSID, "Message", "Adding sensor, please hard-refresh your browser.", pdev )
     -- Safe child add.
     local children = {}
-    for k,v in pairs( luup.devices ) do
-        if v.device_num_parent == pdev then
-            if dfMap[ v.device_type ] == nil then
-                error( "Device " .. tostring( v.description ) .. " (#" .. k .. 
-                    ") type "..v.device_type.." not found in dfMap!" )
-            end
-            table.insert( children, k )
+    for k,v in childDevices( pdev ) do
+        if dfMap[ v.device_type ] == nil then
+            error( "Device " .. tostring( v.description ) .. " (#" .. k .. 
+                ") type "..v.device_type.." not found in dfMap!" )
         end
+        table.insert( children, k )
     end
     local ptr = luup.chdev.start( pdev )
     local highd = 0
