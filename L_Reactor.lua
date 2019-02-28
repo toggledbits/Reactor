@@ -156,7 +156,7 @@ local function shallowCopy( t )
     return r
 end
 
--- Get iterator for child devices matching passed table of attributes 
+-- Get iterator for child devices matching passed table of attributes
 -- (e.g. { device_type="urn:...", category_num=4 })
 local function childDevices( prnt, attr )
     prnt = prnt or pluginDevice
@@ -1528,7 +1528,7 @@ local function loadSensorConfig( tdev )
         local fn = string.format( "reactor-dev%d-config-v%s-backup.json", tdev, tostring( cdata.version or 0 ) )
         if isOpenLuup then
             local loader = require "openLuup.loader"
-            if loader.find_file == nil then 
+            if loader.find_file == nil then
                 fn = "./" .. fn -- old Reactor, punt
             else
                 fn = loader.find_file( "L_Reactor.lua" ):gsub( "L_Reactor.lua$", "" ) .. fn
@@ -1538,7 +1538,7 @@ local function loadSensorConfig( tdev )
         end
         local f = io.open( fn, "r" )
         if f == nil then
-            L("Backing up %1 (#%2) pre-upgrade configuration to %3", 
+            L("Backing up %1 (#%2) pre-upgrade configuration to %3",
                 luup.devices[tdev].description, tdev, fn )
             f = io.open( fn, "w" )
             if f then
@@ -2640,7 +2640,7 @@ local function getHouseModeTracker( createit, pdev )
             table.insert( children, k )
             if dfMap[v.device_type] == nil then
                 -- Early detection and error exit prevents accidental destruction of children.
-                error( "Device " .. tostring( v.description ) .. " (#" .. k .. 
+                error( "Device " .. tostring( v.description ) .. " (#" .. k ..
                     ") type "..v.device_type.." not found in dfMap!" )
             end
         end
@@ -2965,7 +2965,7 @@ function actionAddSensor( pdev )
     local children = {}
     for k,v in childDevices( pdev ) do
         if dfMap[ v.device_type ] == nil then
-            error( "Device " .. tostring( v.description ) .. " (#" .. k .. 
+            error( "Device " .. tostring( v.description ) .. " (#" .. k ..
                 ") type "..v.device_type.." not found in dfMap!" )
         end
         table.insert( children, k )
@@ -3438,7 +3438,7 @@ function watch( dev, sid, var, oldVal, newVal )
         stopScene( dev, nil, dev ) -- Stop all scenes in this device context.
         loadSensorConfig( dev )
         updateSensor( dev )
-    elseif (luup.devices[dev] or {}).id == "hmt" and 
+    elseif (luup.devices[dev] or {}).id == "hmt" and
             luup.devices[dev].device_num_parent == pluginDevice and
             sid == "urn:micasaverde-com:serviceId:SecuritySensor1" and
             var == "Armed" then
