@@ -682,6 +682,7 @@ local function loadCleanState( tdev )
     end
 
     -- Fetch cstate. If it's empty, there's nothing to do here.
+    local modified = false
     local cstate = {} -- guilty until proven innocent
     local s = luup.variable_get( RSSID, "cstate", tdev ) or ""
     if s ~= "" then
@@ -690,6 +691,7 @@ local function loadCleanState( tdev )
         if err then
             L({level=2,msg="ReactorSensor %1 (%2) corrupted cstate, clearing!"}, tdev, luup.devices[tdev].description)
             cstate = {}
+            modified = true
         end
 
         local cdata = sensorState[tostring(tdev)].configData
@@ -720,14 +722,19 @@ local function loadCleanState( tdev )
         end
 
         -- Delete them
+        modified = modified or #dels > 0
         for _,k in ipairs( dels ) do cstate[k] = nil end
+    else
+        modified = true
     end
 
     -- Save updated state
-    D("loadCleanState() saving state %1", cstate)
-    cstate.lastSaved = os.time()
-    luup.variable_set( RSSID, "cstate", json.encode( cstate ), tdev )
     sensorState[tostring(tdev)].condState = cstate
+    if modified then
+        D("loadCleanState() saving updated state %1", cstate)
+        cstate.lastSaved = os.time()
+        luup.variable_set( RSSID, "cstate", json.encode( cstate ), tdev )
+    end
     return cstate
 end
 
@@ -1495,6 +1502,7 @@ end
 
 -- Load sensor config
 local function loadSensorConfig( tdev )
+    D("loadSensorConfig(%1)", tdev)
     local upgraded = false
     local s = luup.variable_get( RSSID, "cdata", tdev ) or ""
     local cdata, pos, err
@@ -1504,6 +1512,7 @@ local function loadSensorConfig( tdev )
             L("Unable to parse JSON data at %2, %1 in %3", pos, err, s)
             return error("Unable to load configuration")
         end
+        D("loadSensorConfig() loaded configuration version %1", cdata.version)
     end
     if cdata == nil then
         L("Initializing new configuration")
@@ -1515,6 +1524,35 @@ local function loadSensorConfig( tdev )
             }
         }
         upgraded = true
+    elseif ( cdata.version or 0 ) < 19051 then
+        local fn = string.format( "reactor-dev%d-config-v%s-backup.json", tdev, tostring( cdata.version or 0 ) )
+        if isOpenLuup then
+            local loader = require "openLuup.loader"
+            if loader.find_file == nil then 
+                fn = "./" .. fn -- old Reactor, punt
+            else
+                fn = loader.find_file( "L_Reactor.lua" ):gsub( "L_Reactor.lua$", "" ) .. fn
+            end
+        else
+            fn = "/etc/cmh-ludl/" .. fn
+        end
+        local f = io.open( fn, "r" )
+        if f == nil then
+            L("Backing up %1 (#%2) pre-upgrade configuration to %3", 
+                luup.devices[tdev].description, tdev, fn )
+            f = io.open( fn, "w" )
+            if f then
+                -- Write in backup container format
+                local d = {}
+                d[tostring(tdev)] = { devnum=tdev, name=luup.devices[tdev].description, config=cdata }
+                local mt = { __jsontype="object" } -- empty tables render as object
+                setmetatable( d, mt )
+                f:write( json.encode(d) )
+                f:close()
+            end
+        else
+            f:close()
+        end
     end
     if not (cdata.conditions or {}).root then
         L("Upgrading conditions in configuration")
@@ -1564,6 +1602,8 @@ local function loadSensorConfig( tdev )
 
     -- Rewrite if we upgraded.
     if upgraded then
+        D("loadSensorConfig() writing updated sensor config")
+        cdata.version = 19051 -- MUST COINCIDE WITH J_ReactorSensor_UI7.js
         cdata.timestamp = os.time()
         luup.variable_set( RSSID, "cdata", json.encode( cdata ), tdev )
     end
