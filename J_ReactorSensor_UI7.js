@@ -167,6 +167,13 @@ var ReactorSensor = (function(api, $) {
             };
             upgraded = true;
         }
+        
+        /* Special version check */
+        if ( ( cdata.version || 0 ) > CDATA_VERSION ) {
+            console.log("The configuration for this ReactorSensor is an unsupported format/version (" +
+                String( cdata.version ) + "). Upgrade Reactor or restore an older config from backup.");
+            throw "Incompatible configuration format/version";
+        }
 
         /* Check for upgrade tasks from prior versions */
         if ( undefined === cdata.variables ) {
