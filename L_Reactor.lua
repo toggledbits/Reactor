@@ -1033,8 +1033,9 @@ local function execLua( fname, luafragment, extarg, tdev )
         script=fname, version=_PLUGIN_VERSION }
     _R.dump = stringify -- handy
     local condState = loadCleanState( tdev )
+    D("execLua() loaded condState %1", condState)
     for gr,gs in pairs( condState ) do
-        if (gs.type or "group") == "group" then
+        if type(gs) == "table" and (gs.type or "group") == "group" then
             _R.groups[gr] = { state=gs.evalstate, since=gs.evalstamp }
             if gs.changed then
                 if gs.evalstate then _R.trip[gr] = _R.groups[gr]
@@ -2277,7 +2278,7 @@ local function processCondition( cond, grp, cdata, tdev )
         D("processCondition() condition %1 value state changed from %2 to %3", cond.id, cs.laststate, state)
         -- ??? At certain times, Vera gets a time that is in the future, or so it appears. It looks like the TZ offset isn't applied, randomly.
         -- Maybe if call is during ntp update, don't know. Investigating... This log message helps detection and analysis.
-        if now < cs.statestamp then L({level=1,msg="Time moved backwards! Sensor %4 cond %1 last change at %2, but time now %3"}, cond.id, cs.statestamp, now, tdev) end
+        if now < ( cs.statestamp or 0 ) then L({level=1,msg="Time moved backwards! Sensor %4 cond %1 last change at %2, but time now %3"}, cond.id, cs.statestamp, now, tdev) end
         addEvent{dev=tdev,event='condchange',cond=cond.id,oldState=cs.laststate,newState=state}
         cs.laststate = state
         cs.statestamp = now
