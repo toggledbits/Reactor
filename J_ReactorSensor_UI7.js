@@ -20,7 +20,7 @@ var ReactorSensor = (function(api, $) {
 
     var DEVINFO_MINSERIAL = 71.222;
 
-    var CDATA_VERSION = 19051;
+    var CDATA_VERSION = 19051; /* must coincide with (Lua) loadSensorConfig! */
 
     var myModule = {};
 
@@ -153,6 +153,16 @@ var ReactorSensor = (function(api, $) {
         if ( ! isEmpty( s ) ) {
             try {
                 cdata = JSON.parse( s );
+                /* Luup's json library doesn't seem to support __jsontype metadata,
+                   so fixup empty objects, which it renders as empty arrays. */
+                if ( cdata.variables && Array.isArray( cdata.variables ) && cdata.variables.length == 0 ) {
+                    console.log("Fixing cdata.variables from array to object");
+                    cdata.variables = {};
+                }
+                if ( cdata.activities && Array.isArray( cdata.activities ) && cdata.activities.length == 0 ) {
+                    console.log("Fixing cdata.activities from array to object");
+                    cdata.activities = {};
+                }
             } catch (e) {
                 console.log("Unable to parse cdata: " + String(e));
                 throw e;
@@ -2552,8 +2562,8 @@ var ReactorSensor = (function(api, $) {
             jQuery( 'div.cond-group-conditions input[type="radio"]', el ).attr('name', grpid);
             if ( 'root' === grpid ) {
                 /* Can't delete root group, but use the space for Save and Revert */
-                jQuery( 'button#delgroup', el ).replaceWith( 
-                    jQuery( '<button id="saveconf" class="btn btn-sm btn-success"> Save </button> <button id="revertconf" class="btn btn-sm btn-danger"> Revert </button>' ) 
+                jQuery( 'button#delgroup', el ).replaceWith(
+                    jQuery( '<button id="saveconf" class="btn btn-sm btn-success"> Save </button> <button id="revertconf" class="btn btn-sm btn-danger"> Revert </button>' )
                 );
                 jQuery( 'button#delgroup', el ).remove(); /* can never delete root group */
             }
@@ -2792,10 +2802,6 @@ var ReactorSensor = (function(api, $) {
         var container = jQuery('div#reactorvars');
         var myid = api.getCpanelDeviceId();
         var cd = iData[myid].cdata;
-        /* JSON may save and restore an empty object as an array; fix type. */
-        if ( Array.isArray( cd.variables ) ) {
-            cd.variables = {};
-        }
 
         jQuery('.tberror', container).removeClass( 'tberror' );
         jQuery('div.varexp', container).each( function( ix, obj ) {
@@ -3007,7 +3013,7 @@ var ReactorSensor = (function(api, $) {
         var gel = jQuery('<div class="vargroup"></div>');
         gel.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span class="titletext">Defined Variables</span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>');
         var cdata = iData[api.getCpanelDeviceId()].cdata;
-        for ( var vn in cdata.variables ) {
+        for ( var vn in ( cdata.variables || {} ) ) {
             if ( cdata.variables.hasOwnProperty( vn ) ) {
                 var vd = cdata.variables[vn];
                 var el = getVariableRow();
@@ -3120,7 +3126,7 @@ var ReactorSensor = (function(api, $) {
                 return;
             } else if ( data.status === false ) { /* specific false, not undefined */
                 el.addClass( "tberror" );
-                jQuery( 'div.actiondata' ).prepend( '<div class="tberrmsg"/>' );
+                jQuery( 'div.actiondata' , row ).prepend( '<div class="tberrmsg"/>' );
                 jQuery( 'div.tberrmsg', row ).text( data.message || "Error in Lua" );
             }
         }).fail( function( stat ) {
@@ -3327,7 +3333,7 @@ var ReactorSensor = (function(api, $) {
         }
         /* Set up scene framework and first group with no delay */
         var id = root.attr( 'id' );
-        var scene = { isReactorScene: true, id: id, name: id, groups: [] };
+        var scene = { isReactorScene: 1, id: id, name: id, groups: [] };
         var group = { groupid: "grp0", actions: [] };
         scene.groups.push( group );
         var firstScene = true;
@@ -3481,7 +3487,7 @@ var ReactorSensor = (function(api, $) {
         var myid = api.getCpanelDeviceId();
         var cd = iData[myid].cdata;
         var errors = false;
-        jQuery( 'div.actionrow' ).each( function() {
+        jQuery( 'div.actionlist' ).each( function() {
             var id = jQuery( this ).attr( 'id' );
             var scene = buildActionList( jQuery( this ) );
             if ( scene ) {
@@ -3538,7 +3544,6 @@ var ReactorSensor = (function(api, $) {
     }
 
     function changeActionRow( row ) {
-        console.log("changeActionRow: updating cached config");
         configModified = true;
         row.addClass( "tbmodified" );
         jQuery( 'div.actionlist' ).addClass( "tbmodified" ); // all lists, because save saves all.
@@ -3556,7 +3561,7 @@ var ReactorSensor = (function(api, $) {
     function appendVariables( menu ) {
         var cd = iData[ api.getCpanelDeviceId() ].cdata;
         var first = true;
-        for ( var vname in (cd.variables||{}) ) {
+        for ( var vname in ( cd.variables || {} ) ) {
             if ( cd.variables.hasOwnProperty( vname ) ) {
                 if ( first ) {
                     menu.append( '<option class="menuspacer" disabled/>' ).append( '<option id="variables" class="optheading" disabled>--Variables--</option>' );
@@ -4162,7 +4167,7 @@ var ReactorSensor = (function(api, $) {
         changeActionRow( row );
     }
 
-    function handleControlClick( ev ) {
+    function handleActionControlClick( ev ) {
         var el = ev.currentTarget;
         if ( jQuery( el ).prop('disabled') ) {
             return;
@@ -4393,7 +4398,7 @@ var ReactorSensor = (function(api, $) {
         controls.append( '<i id="action-up" class="material-icons md-btn" title="Move up">arrow_upward</i>' );
         controls.append( '<i id="action-down" class="material-icons md-btn" title="Move down">arrow_downward</i>' );
         controls.append( '<i id="action-delete" class="material-icons md-btn" title="Remove action">clear</i>' );
-        jQuery( 'i.md-btn', controls ).on( 'click.reactor', handleControlClick );
+        jQuery( 'i.md-btn', controls ).on( 'click.reactor', handleActionControlClick );
         jQuery( 'i#action-try,i#action-import', controls ).hide();
         row.append( controls );
         jQuery( 'select#actiontype', row ).val( 'comment' ).on( 'change.reactor', handleActionChange );
@@ -4549,7 +4554,7 @@ var ReactorSensor = (function(api, $) {
         loadActions( el, cd.activities['root.true'] || {} );
 
         el = getActionListContainer();
-        el.attr( 'id', '__untrip' );
+        el.attr( 'id', 'root.false' );
         jQuery( 'span.titletext', el ).text( 'When ' + devobj.name + ' Untrips' );
         jQuery( 'div#activities' ).append( el );
         loadActions( el, cd.activities['root.false'] || {} );
