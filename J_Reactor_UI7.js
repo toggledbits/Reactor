@@ -174,17 +174,17 @@ var Reactor = (function(api, $) {
                 },
                 'onFailure' : function() {
                     try {
-                    var el = jQuery( '.reactortab div#restorestatus p#' + idSelector(item) + ' > img' );
-                    if ( tries < 12 ) {
-                        if ( 0 === tries ) {
-                            jQuery( "<span> waiting for Luup...</span>" ).insertBefore( el );
+                        var el = jQuery( '.reactortab div#restorestatus p#' + idSelector(item) + ' > img' );
+                        if ( tries < 12 ) {
+                            if ( 0 === tries ) {
+                                jQuery( "<span> waiting for Luup...</span>" ).insertBefore( el );
+                            } else {
+                                jQuery( "<span> &sdot;</span>" ).insertBefore( el );
+                            }
+                            setTimeout( function() { restore( item, dev, tries+1 ); }, 5000 );
                         } else {
-                            jQuery( "<span> &sdot;</span>" ).insertBefore( el );
+                            el.replaceWith( '<b> FAILED!</b>' );
                         }
-                        setTimeout( function() { restore( item, dev, tries+1 ); }, 5000 );
-                    } else {
-                        el.replaceWith( '<b> FAILED!</b>' );
-                    }
                     } catch(e) { console.log(String(e)); console.log(e.stack); }
                 }
             }
