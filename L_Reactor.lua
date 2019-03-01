@@ -50,6 +50,8 @@ local TICKOFFS = 5 -- cond tasks try to run TICKOFFS seconds after top of minute
 
 local TRUESTRINGS = ":y:yes:t:true:on:1:" -- strings that mean true (also numeric ~= 0)
 
+local ARRAYMAX = 100 -- maximum size of an unbounded (luaxp) array (override by providing boundary/size)
+
 local defaultLogLevel = false -- or a number, which is (uh...) the default log level for messages
 
 -- These are the types of children we create, and their associated device file.
@@ -735,12 +737,22 @@ local function loadCleanState( tdev )
         -- Make array of conditions in cstate that aren't in cdata
         local dels = {}
         for k in pairs( cstate ) do
-            if conds[k] == nil then table.insert( dels, k ) end
+            if k ~= "vars" and conds[k] == nil then table.insert( dels, k ) end
         end
 
         -- Delete them
         modified = modified or #dels > 0
         for _,k in ipairs( dels ) do cstate[k] = nil end
+        
+        -- Clean variables no longer in use
+        dels = {}
+        for n in pairs( cstate.vars or {} ) do
+            if (cdata.variables or {})[n] == nil then
+                table.insert( dels, n )
+            end
+        end
+        modified = modified or #dels > 0
+        for _,k in ipairs( dels ) do cstate.vars[k] = nil end
     else
         modified = true
     end
@@ -1648,47 +1660,67 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
     -- if debugMode then luaxp._DEBUG = D end
     ctx.NULL = luaxp.NULL
     local result, err = luaxp.evaluate( vdef.expression or "?", ctx )
-    if not ( err or luaxp.isNull(result) or string.find( ":number:string:boolean:", type(result) ) ) then
-        -- Type we can't store in state variable.
-        err = { message="Invalid result type for state variable storage (" .. type(result) .. ")" }
+    D("evaluateVariable() %2 (%1) %3 evaluates to %4", tdev, luup.devices[tdev].description,
+        vdef.expression, result)
+
+    ctx[vname] = (err ~= nil or result == nil) and luaxp.NULL or result
+    local errmsg
+    if err then
+        errmsg = (err or {}).message or "Failed"
+        if (err or {}).location ~= nil then errmsg = errmsg .. " at " .. tostring(err.location) end
+        L({level=2,msg="%2 (#%1) failed evaluation of %3: %4"}, tdev, luup.devices[tdev].description,
+            vdef.expression, errmsg)
+        addEvent{ dev=tdev, event="expression", variable=vname, ['error']=errmsg }
     end
-    if not ( err or luaxp.isNull(result) ) then
-        D("evaluateVariable() %2 (%1) %3 evaluates to %4", tdev, luup.devices[tdev].description,
-            vdef.expression, result)
-        -- Save on context for other evals
-        ctx[vname] = result
-        -- Canonify booleans by converting to number for storage as state variable
-        if type(result) == "boolean" then result = result and "1" or "0" end
-        if type(result) == "table" then
-            for ix,v in ipairs( result ) do
-                if type(v) ~= "number" then
-                    result[ix] = string.format( "%q", tostring(v) )
-                end
+    
+    -- Store in cstate. This will make them persistent (with some help).
+    local cstate = loadCleanState( tdev )
+    cstate.vars = cstate.vars or { ['__']=1 } -- force object type for old dkjson
+    local vs = cstate.vars[vname]
+    if not vs then
+        D("evaluateVariable() creating new state for expr/var %1", vname)
+        cstate.vars[vname] = { name=vname, lastvalue=result, laststamp=sensorState[tostring(tdev)].timebase }
+        addEvent{ dev=tdev, event="variable", variable=vname, oldval="", newval=result }
+    elseif vs.lastvalue ~= result then
+        D("evaluateVariable() updating value for %1 from %2 to %3", vname, cstate.vars[vname].lastvalue, result)
+        addEvent{ dev=tdev, event="variable", variable=vname, oldval=cstate.vars[vname].lastvalue, newval=result }
+        cstate.vars[vname].lastvalue = result
+        cstate.vars[vname].laststamp = sensorState[tostring(tdev)].timebase
+    end
+    cstate.vars[vname].err = errmsg
+
+    -- Store on state variable if exported
+    if ( cdata.variables[vname].export or 1 ) ~= 0 then
+        if not ( err or luaxp.isNull(result) ) then
+            -- Save on context for other evals
+            ctx[vname] = result
+            -- Canonify booleans by converting to number for storage as state variable
+            local sv
+            if type(result) == "boolean" then 
+                sv = result and "1" or "0"
+            elseif type(result) == "table" then 
+                _,sv = pcall( json.encode, result )
+                if sv == nil then sv = "" end
+            else
+                sv = tostring( result )
             end
-            result = 'list(' .. table.concat( result, "," ) .. ')'
-        end
-        local oldVal = luup.variable_get( VARSID, vname, tdev )
-        if oldVal == nil or oldVal ~= tostring(result or "") then
-            addEvent{ dev=tdev, event="variable", variable=vname, oldval=oldVal, newval=result }
-            luup.variable_set( VARSID, vname, tostring(result or ""), tdev )
-            luup.variable_set( VARSID, vname .. "_Error", "", tdev )
+            setVar( VARSID, vname, sv, tdev ) -- sets (and triggers watches) only if changed
+            setVar( VARSID, vname .. "_Error", "", tdev )
+        else
+            setVar( VARSID, vname, "", tdev )
+            setVar( VARSID, vname .. "_Error", errmsg, tdev )
         end
     else
-        L({level=2,msg="%2 (%1) failed evaluation of %3: result=%4, err=%5"}, tdev, luup.devices[tdev].description,
-            vdef.expression, result, err)
-        ctx[vname] = luaxp.NULL
-        local msg = (err or {}).message or "Failed"
-        if (err or {}).location ~= nil then msg = msg .. " at " .. tostring(err.location) end
-        addEvent{ dev=tdev, event="expression", variable=vname, ['error']=msg }
-        luup.variable_set( VARSID, vname, "", tdev )
-        luup.variable_set( VARSID, vname .. "_Error", msg, tdev )
-        return nil, err
+        -- Newer firmware deletes these variables.
+        luup.variable_set( VARSID, vname, nil, tdev )
+        luup.variable_set( VARSID, vname .. "_Error", nil, tdev )
     end
-    return result, false
+    return result, err ~= nil
 end
 
 local function getExpressionContext( cdata, tdev )
     local ctx = { __functions={}, __lvars={} }
+    luaxp = luaxp or require "L_LuaXP_Reactor"
     -- Create evaluation context
     ctx.__functions.finddevice = function( args )
         local selector = unpack( args )
@@ -1763,16 +1795,62 @@ local function getExpressionContext( cdata, tdev )
         end
         return val
     end
-    -- Implement LuaXP extension resolver as recursive evaluation. This allows expressions
-    -- to reference other variables, makes working order of evaluation.
-    ctx.__functions.__resolve = function( name, c2x )
-        D("__resolve(%1,c2x)", name)
-        if (cdata.variables or {})[ name ] == nil then
-            -- If we don't recognize it, we can't resolve it.
-            return nil
+    -- Append an element to an array, returns the array.
+    ctx.__functions.arraypush = function( args )
+        local arr, newel, nmax = unpack( args )
+        arr = ( arr == nil or luaxp.isNull( arr ) ) and {} or arr
+        if newel and not luaxp.isNull( newel ) then
+            if not nmax and #arr > ARRAYMAX then luaxp.evalerror("Unbounded array growing too large") end
+            table.insert( arr, newel ) 
         end
-        if getVarNumeric( "UseOldVariableResolver", 0, tdev, RSSID ) ~= 0 then
-            -- This is the old (pre-2.4) resolver--recursively resolve.
+        if nmax then while #arr > max.max(0,(tonumber(nmax) or 0)) do table.remove( arr, 1 ) end end
+        return arr
+    end
+    -- Remove the last element in the array, returns the modified array.
+    ctx.__functions.arraypop = function( args )
+        local arr = unpack( args )
+        arr = ( arr == nil or luaxp.isNull( arr ) ) and {} or arr
+        ctx.__lvars.__element = table.remove( arr ) or luaxp.NULL
+        return arr
+    end
+    -- Push an element to position 1 in the array, returns the modified array.
+    ctx.__functions.arrayunshift = function( args )
+        local arr, newel, nmax = unpack( args )
+        arr = ( arr == nil or luaxp.isNull( arr ) ) and {} or arr
+        if newel and not luaxp.isNull( newel ) then 
+            if not nmax and #arr > ARRAYMAX then luaxp.evalerror("Unbounded array growing too large") end
+            table.insert( arr, newel, 1 ) 
+        end
+        if nmax then while #arr > math.max(0,(tonumber(nmax) or 0)) do table.remove( arr ) end end
+        return arr
+    end
+    -- Remove the first element from an array, return the array.
+    ctx.__functions.arrayshift = function( args )
+        local arr = unpack( args )
+        arr = ( arr == nil or luaxp.isNull( arr ) ) and {} or arr
+        ctx.__lvars.__element = table.remove( arr, 1 ) or luaxp.NULL
+        return arr
+    end
+    ctx.__functions.sum = function( args ) 
+        local function sum( v ) 
+            local t = 0
+            if luaxp.isNull( v ) then
+                -- nada
+            elseif type(v) == "table" then
+                for _,n in ipairs( v ) do t = t + sum( n ) end
+            else
+                t = tonumber( v ) or 0
+            end
+            return t
+        end
+        return sum( args )
+    end
+    if getVarNumeric( "UseOldVariableResolver", 0, tdev, RSSID ) ~= 0 then
+        -- This is the old (pre-2.4) resolver--recursively resolve.
+        -- Implement LuaXP extension resolver as recursive evaluation. This allows expressions
+        -- to reference other variables, makes working order of evaluation.
+        ctx.__functions.__resolve = function( name, c2x )
+            D("__resolve(%1,c2x)", name)
             if (c2x.__resolving or {})[name] then
                 luaxp.evalerror("Circular reference detected (" .. name .. ")")
                 return luaxp.NULL
@@ -1783,32 +1861,58 @@ local function getExpressionContext( cdata, tdev )
             c2x.__resolving[name] = nil
             return val
         end
-        -- Version 2.4+: return current value of referenced variable. Expressions
-        -- in 2.4+ are sequential, so two expression A=B, B=getstate(...) will cause
-        -- A to get the prior value of B on re-eval.
-        local val = luup.variable_get( VARSID, name, tdev ) or ""
-        local n = tonumber( val )
-        if n ~= nil then return n end -- return numeric as number
-        return val
+    end
+    -- Add previous values to Luaxp context. We use the cstate versions rather 
+    -- than the state variables to preserve original data type. Every defined
+    -- variable must have an entry in ctx.
+    local cstate = loadCleanState( tdev )
+    for n in pairs( cdata.variables or {} ) do
+        if (cstate.vars or {})[n] then
+            ctx[n] = cstate.vars[n].lastvalue or luaxp.NULL
+        else
+            ctx[n] = luaxp.NULL
+        end
+        D("getExpressionContext() set starting value for %1 to %2", n, ctx[n])
     end
     return ctx
 end
 
 local function updateVariables( cdata, tdev )
+    if debugMode then
+        local cstate = loadCleanState( tdev )
+        for k,vv in pairs( cstate.vars or {} ) do
+            D("updateVariables() before %1=%2", k, (vv or {}).lastvalue)
+        end
+    end
     -- Make a list of variable names to iterate over. This also facilitates a
     -- quick test in case there are no variables, bypassing a bit of work.
     local vars = {}
-    for n,_ in pairs(cdata.variables or {}) do table.insert( vars, n ) end
-    D("updateVariables() updating vars=%1", vars)
-    local ctx = getExpressionContext( cdata, tdev )
+    for n in pairs(cdata.variables or {}) do table.insert( vars, n ) end
+    if #vars == 0 then return end
+    table.sort( vars, function( a, b )
+        local ix1 = cdata.variables[a].index or -1
+        local ix2 = cdata.variables[b].index or -1
+        return ix1 < ix2
+    end )
+
     -- Perform evaluations.
+    local ctx = sensorState[tostring(tdev)].ctx or getExpressionContext( cdata, tdev )
+    sensorState[tostring(tdev)].ctx = ctx
+    D("updateVariables() updating vars=%1", vars)
     for _,n in ipairs( vars ) do
-        if not ctx[n] then -- not yet evaluated this run?
+        D("updateVariables() evaluate %1 (index %2): %3", n, cdata.variables[n].index, cdata.variables[n].expression)
+        if ( cdata.variables[n].expression or "" ) ~= "" then
             evaluateVariable( n, ctx, cdata, tdev )
+        else
+            ctx[n] = ctx[n] or ""
         end
     end
-    -- Save the expression context for other uses.
-    sensorState[tostring(tdev)].ctx = ctx
+    if debugMode then
+        local cstate = loadCleanState( tdev )
+        for k,vv in pairs( cstate.vars or {} ) do
+            D("updateVariables() final %1=%2", k, (vv or {}).lastvalue)
+        end
+    end
 end
 
 -- Helper to schedule next condition update. Times are MSM (mins since midnight)
@@ -2629,7 +2733,7 @@ local function updateSensor( tdev )
         end
         hasTimer = true -- force, so sensor gets checked later.
     end
-
+    
     -- Save the condition state.
     sensorState[skey].condState.lastSaved = os.time()
     luup.variable_set( RSSID, "cstate", json.encode(sensorState[skey].condState), tdev )

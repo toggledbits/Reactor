@@ -952,29 +952,44 @@ var ReactorSensor = (function(api, $) {
             console.log("cstate unavailable");
         }
 
-        var hasVariables = false;
-        var grpel;
-        for ( var nn in ( cdata.variables || {} ) ) {
-            if ( cdata.variables.hasOwnProperty( nn ) ) {
-                if ( ! hasVariables ) {
-                    grpel = jQuery( '<div class="reactorgroup" id="variables"/>' );
-                    grpel.append( '<div class="row"><div id="vartitle" class="grouptitle col-xs-12">Expressions</div></div>' );
-                    hasVariables = true;
-                }
-                var vd = cdata.variables[nn];
-                el = jQuery( '<div class="row var" />' ).attr( 'id', vd.name );
-                var vv = api.getDeviceState( pdev, "urn:toggledbits-com:serviceId:ReactorValues", vd.name ) || "(undefined)";
-                var ve = api.getDeviceState( pdev, "urn:toggledbits-com:serviceId:ReactorValues", vd.name + "_Error" ) || "";
-                el.append( jQuery('<div class="col-sm-6 col-md-2" />').text(vd.name) );
-                el.append( jQuery('<div class="col-sm-12 col-md-7 tb-sm" />').text(vd.expression) );
-                el.append( jQuery('<div class="col-sm-6 col-md-3" />').text(ve !== "" ? ve : vv) );
-                grpel.append( el );
+        var vix = [];
+        for ( var vn in ( cdata.variables || {} ) ) {
+            if ( cdata.variables.hasOwnProperty( vn ) ) {
+                var v = cdata.variables[vn];
+                vix.push( v );
             }
         }
-        if ( hasVariables ) {
+        if ( vix.length > 0 ) {
+            vix.sort( function( a, b ) {
+                var i1 = a.index || -1;
+                var i2 = b.index || -1;
+                if ( i1 === i2 ) return 0; // ??? fix both to sort by name secondarily
+                return ( i1 < i2 ) ? -1 : 1;
+            });
+            var grpel = jQuery( '<div class="reactorgroup" id="variables"/>' );
+            grpel.append( '<div class="row"><div id="vartitle" class="grouptitle col-xs-12">Expressions</div></div>' );
+            for ( var ix=0; ix<vix.length; ix++ ) {
+                var vd = vix[ix];
+                el = jQuery( '<div class="row var" />' ).attr( 'id', vd.name );
+                var vv = ((cstate.vars || {})[vd.name] || {}).lastvalue || "(undefined)"
+                if ( typeof(vv) == "object" && vv.__type == "null" ) {
+                    vv = "(null)";
+                } else {
+                    try {
+                        vv = JSON.stringify(vv);
+                    } catch( e ) {
+                        vv = String( vv );
+                    }
+                }
+                var ve = ((cstate.vars || {})[vd.name] || {}).err || ""
+                el.append( jQuery('<div class="col-sm-6 col-md-2" />').text(vd.name) );
+                el.append( jQuery('<div class="col-sm-12 col-md-7 tb-sm" />').text(vd.expression) );
+                el.append( jQuery('<div class="col-sm-6 col-md-3" />').text( "" !== ve ? ve : vv ) );
+                grpel.append( el );
+            }
             stel.append( grpel );
         }
-
+        
         showGroupStatus( cdata.conditions.root, stel, cstate );
     }
 
@@ -2814,6 +2829,7 @@ var ReactorSensor = (function(api, $) {
             }
             if ( cd.variables[vname] === undefined ) {
                 cd.variables[vname] = { name: vname, expression: expr, index: ix };
+                configModified = true;
             } else {
                 if ( cd.variables[vname].expression !== expr ) {
                     cd.variables[vname].expression = expr;
@@ -2988,7 +3004,7 @@ var ReactorSensor = (function(api, $) {
             /* Convert to regular row */
             var f = jQuery( ev.currentTarget );
             var row = f.closest( 'div.varexp' );
-            var vname = f.val() || "";
+            var vname = (f.val() || "").trim();
             if ( vname === "" || jQuery( 'div.varexp#' + idSelector( vname ) ).length > 0 || !vname.match( /^[A-Z][A-Z0-9_]*$/i ) ) {
                 row.addClass( 'tberror' );
                 f.addClass('tberror');
