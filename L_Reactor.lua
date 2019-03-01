@@ -293,6 +293,19 @@ local function rateLimit( rh, rateMax, bump)
     return t > rateMax, t, r60
 end
 
+-- Set HMT ModeSetting
+local function setHMTModeSetting( hmtdev )
+    local chm = luup.attr_get( 'Mode', 0 ) or "1"
+    local armed = getVarNumeric( "Armed", 0, hmtdev, SENSOR_SID ) ~= 0
+    local s = {}
+    for ix=1,4 do
+        table.insert( s, string.format( "%d:%s", ix, ( tostring(ix) == chm ) and ( armed and "A" or "" ) or ( armed and "" or "A" ) ) )
+    end
+    s = table.concat( s, ";" )
+    D("setHMTModeSetting() current mode is %1, current armed is %2; setting HMT ModeSetting=%3", chm, armed, s)
+    luup.variable_set( "urn:micasaverde-com:serviceId:HaDevice1", "ModeSetting", s, hmtdev )
+end
+
 --[[
     Compute sunrise/set for given date (t, a timestamp), lat/lon (degrees),
     elevation (elev in meters). Apply optional twilight adjustment (degrees,
@@ -2552,7 +2565,7 @@ local function masterTick(pdev)
         -- Find housemode tracking child. Create it if it doesn't exist.
         local hmt = getHouseModeTracker( true, pdev )
         if hmt then
-            addServiceWatch( hmt, "urn:micasaverde-com:serviceId:SecuritySensor1", "Armed", pdev )
+            addServiceWatch( hmt, SENSOR_SID, "Armed", pdev )
         end
     end
 
@@ -2683,10 +2696,11 @@ local function waitSystemReady( pdev )
             end
         elseif v.device_num_parent == pdev and v.id == "hmt" then
             D("waitSystemReady() adding watch for hmt device #%1", k)
-            luup.attr_set( "invisible", 1, k )
-            luup.attr_set( "hidden", 1, k )
-            luup.variable_set( "urn:micasaverde-com:serviceId:HaDevice1", "ModeSetting", "1:;2:A;3:A;4:A", k )
-            addServiceWatch( k, "urn:micasaverde-com:serviceId:SecuritySensor1", "Armed", pdev )
+            luup.attr_set( "invisible", debugMode and 0 or 1, k )
+            luup.attr_set( "hidden", debugMode and 0 or 1, k )
+            setVar( SENSOR_SID, "Tripped", "0", k )
+            setHMTModeSetting( k )
+            addServiceWatch( k, SENSOR_SID, "Armed", pdev )
         end
     end
     luup.variable_set( MYSID, "NumChildren", count, pdev )
@@ -3295,12 +3309,12 @@ function watch( dev, sid, var, oldVal, newVal )
         updateSensor( dev )
     elseif (luup.devices[dev] or {}).id == "hmt" and
             luup.devices[dev].device_num_parent == pluginDevice and
-            sid == "urn:micasaverde-com:serviceId:SecuritySensor1" and
-            var == "Armed" then
+            sid == SENSOR_SID and var == "Armed" then
         -- Arming state changed on HMT, update house mode.
         local mode = luup.attr_get( "Mode", 0 ) or "1"
         D("watch() HMT device arming state changed, updating HouseMode to %1", mode)
         setVar( MYSID, "HouseMode", mode, pluginDevice )
+        setHMTModeSetting( dev )
     else
         local key = string.format("%d:%s/%s", dev, sid, var)
         if watchData[key] then
