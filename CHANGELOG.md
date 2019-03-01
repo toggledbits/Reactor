@@ -4,7 +4,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 2.4stable-19059 (stable)
 
-* Enhancement: The response time for house mode changes into and out of "Home" mode has been dramatically improved (without increased polling).
+* Enhancement: The response time for house mode changes has been dramatically improved (without increased polling).
 * Enhancement: Reactor now uses a weak table to cache compiled Lua. This allows the system to purge the compiled fragments if the memory is needed elsewhere. This can be disabled by setting SuppressWeakLuaFunc to 1 in the Reactor master device (+reload).
 * Enhancement: The restore facility can now restore a configuration to a selected ReactorSensor, rather than only to an RS with the same name; this makes it possible to copy Reactor configuration between devices. Incorporates hotfix-19044-01.
 * Fix hotfix-19044-01: Restore of configuration not being written to device correctly, so restore appears to succeed, but device is unchanged.
