@@ -2813,10 +2813,16 @@ var ReactorSensor = (function(api, $) {
                 jQuery('textarea.expr', row).addClass('tberror');
             }
             if ( cd.variables[vname] === undefined ) {
-                cd.variables[vname] = { name: vname, expression: expr };
-            } else if ( cd.variables[vname].expression !== expr ) {
-                cd.variables[vname].expression = expr;
-                configModified = true;
+                cd.variables[vname] = { name: vname, expression: expr, index: ix };
+            } else {
+                if ( cd.variables[vname].expression !== expr ) {
+                    cd.variables[vname].expression = expr;
+                    configModified = true;
+                }
+                if ( cd.variables[vname].index !== ix ) {
+                    cd.variables[vname].index = ix;
+                    configModified = true;
+                }
             }
         });
 
@@ -3012,17 +3018,35 @@ var ReactorSensor = (function(api, $) {
         container.empty();
         var gel = jQuery('<div class="vargroup"></div>');
         gel.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span class="titletext">Defined Variables</span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>');
-        var cdata = iData[api.getCpanelDeviceId()].cdata;
+        var cdata = getConfiguration();
+
+        /* Create a list of variables by index, sorted. cdata.variables is a map/hash,
+           not an array */
+        var vix = [];
         for ( var vn in ( cdata.variables || {} ) ) {
             if ( cdata.variables.hasOwnProperty( vn ) ) {
-                var vd = cdata.variables[vn];
-                var el = getVariableRow();
-                el.attr('id', vn);
-                jQuery( 'div#varname', el).text( vn );
-                jQuery( 'textarea.expr', el ).val( vd.expression );
-                jQuery( 'i.md-btn', el ).attr( 'disabled', false );
-                gel.append( el );
+                var v = cdata.variables[vn];
+                vix.push( v );
             }
+        }
+        vix.sort( function( a, b ) {
+            var i1 = a.index || -1;
+            var i2 = b.index || -1;
+            if ( i1 === i2 ) return 0;
+            return ( i1 < i2 ) ? -1 : 1;
+        });
+        for ( var ix=0; ix<vix.length; ix++ ) {
+            var vd = vix[ix];
+            if ( vix[ix].index !== ix ) {
+                configModified = true; /* flag change we need to save */ /* ??? do where config is read? */
+                vix[ix].index = ix;
+            }
+            var el = getVariableRow();
+            el.attr( 'id', vd.name );
+            jQuery( 'div#varname', el).text( vd.name );
+            jQuery( 'textarea.expr', el ).val( vd.expression );
+            jQuery( 'i.md-btn', el ).attr( 'disabled', false );
+            gel.append( el );
         }
 
         /* Add "Add" button */

@@ -4,7 +4,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 2.4 (groupactions)
 
-* Enhancement: The response time for house mode changes into and out of "Home" mode has been dramatically improved (without increased polling).
+* Enhancement: The response time for house mode changes has been dramatically improved, without more frequent polling. Polling for house mode may now be obsolete, but I'm leaving it as a hedge against missed events--it doesn't cost much, because it's done on the master tick, which has to run to handle other tasks anyway.
 * Enhancement: Condition groups are now a hierarchical construct, and group logic is user-settable (AND/OR/XOR + NOT). This adds considerable flexibility to the condition logic for users, at the expense of some complexity in the UI (implementation/operation is not significantly different).
 * Enhancement: Users may now create Activities for each condition group, not just the over trip/untrip of the sensor.
 * Enhancement: It is now possible to copy the contents of one activity to another.

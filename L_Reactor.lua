@@ -318,6 +318,23 @@ local function rateLimit( rh, rateMax, bump)
     return t > rateMax, t, r60
 end
 
+-- Set HMT ModeSetting
+local function setHMTModeSetting( hmtdev, pdev )
+    if hmtdev == nil then
+        hmtdev = childDevices( pdev, { id="hmt" } )
+        if hmtdev then hmtdev = hmtdev[1] end -- array to number
+    end
+    local chm = luup.attr_get( 'Mode', 0 ) or "1"
+    local armed = getVarNumeric( "Armed", 0, hmtdev, SENSOR_SID ) ~= 0
+    local s = {}
+    for ix=1,4 do
+        table.insert( s, string.format( "%d:%s", ix, ( tostring(ix) == chm ) and ( armed and "A" or "" ) or ( armed and "" or "A" ) ) )
+    end
+    s = table.concat( s, ";" )
+    D("setHMTModeSetting() current mode is %1, current armed is %2; setting HMT ModeSetting=%3", chm, armed, s)
+    luup.variable_set( "urn:micasaverde-com:serviceId:HaDevice1", "ModeSetting", s, hmtdev )
+end
+
 --[[
     Compute sunrise/set for given date (t, a timestamp), lat/lon (degrees),
     elevation (elev in meters). Apply optional twilight adjustment (degrees,
@@ -1750,18 +1767,28 @@ local function getExpressionContext( cdata, tdev )
     -- to reference other variables, makes working order of evaluation.
     ctx.__functions.__resolve = function( name, c2x )
         D("__resolve(%1,c2x)", name)
-        if (c2x.__resolving or {})[name] then
-            luaxp.evalerror("Circular reference detected (" .. name .. ")")
-            return luaxp.NULL
-        end
         if (cdata.variables or {})[ name ] == nil then
             -- If we don't recognize it, we can't resolve it.
             return nil
         end
-        c2x.__resolving = c2x.__resolving or {}
-        c2x.__resolving[name] = true
-        local val = evaluateVariable( name, c2x, cdata, tdev )
-        c2x.__resolving[name] = nil
+        if getVarNumeric( "UseOldVariableResolver", 0, tdev, RSSID ) ~= 0 then
+            -- This is the old (pre-2.4) resolver--recursively resolve.
+            if (c2x.__resolving or {})[name] then
+                luaxp.evalerror("Circular reference detected (" .. name .. ")")
+                return luaxp.NULL
+            end
+            c2x.__resolving = c2x.__resolving or {}
+            c2x.__resolving[name] = true
+            local val = evaluateVariable( name, c2x, cdata, tdev )
+            c2x.__resolving[name] = nil
+            return val
+        end
+        -- Version 2.4+: return current value of referenced variable. Expressions
+        -- in 2.4+ are sequential, so two expression A=B, B=getstate(...) will cause
+        -- A to get the prior value of B on re-eval.
+        local val = luup.variable_get( VARSID, name, tdev ) or ""
+        local n = tonumber( val )
+        if n ~= nil then return n end -- return numeric as number
         return val
     end
     return ctx
@@ -2679,7 +2706,7 @@ local function masterTick(pdev)
         -- Find housemode tracking child. Create it if it doesn't exist.
         local hmt = getHouseModeTracker( true, pdev )
         if hmt then
-            addServiceWatch( hmt, "urn:micasaverde-com:serviceId:SecuritySensor1", "Armed", pdev )
+            addServiceWatch( hmt, SENSOR_SID, "Armed", pdev )
         end
     end
 
@@ -2813,10 +2840,11 @@ local function waitSystemReady( pdev )
             end
         elseif v.id == "hmt" then
             D("waitSystemReady() adding watch for hmt device #%1", k)
-            luup.attr_set( "invisible", 1, k )
-            luup.attr_set( "hidden", 1, k )
-            luup.variable_set( "urn:micasaverde-com:serviceId:HaDevice1", "ModeSetting", "1:;2:A;3:A;4:A", k )
-            addServiceWatch( k, "urn:micasaverde-com:serviceId:SecuritySensor1", "Armed", pdev )
+            luup.attr_set( "invisible", debugMode and 0 or 1, k )
+            luup.attr_set( "hidden", debugMode and 0 or 1, k )
+            setVar( SENSOR_SID, "Tripped", "0", k )
+            setHMTModeSetting( k, pdev )
+            addServiceWatch( k, SENSOR_SID, "Armed", pdev )
         else
             L({level=2,msg="Child device #%1 (%2) is unrecognized type; ignoring! %3"},
                 k, v.description or "nil", v)
@@ -3440,12 +3468,12 @@ function watch( dev, sid, var, oldVal, newVal )
         updateSensor( dev )
     elseif (luup.devices[dev] or {}).id == "hmt" and
             luup.devices[dev].device_num_parent == pluginDevice and
-            sid == "urn:micasaverde-com:serviceId:SecuritySensor1" and
-            var == "Armed" then
+            sid == SENSOR_SID and var == "Armed" then
         -- Arming state changed on HMT, update house mode.
         local mode = luup.attr_get( "Mode", 0 ) or "1"
         D("watch() HMT device arming state changed, updating HouseMode to %1", mode)
         setVar( MYSID, "HouseMode", mode, pluginDevice )
+        setHMTModeSetting( dev, pluginDevice )
     else
         local key = string.format("%d:%s/%s", dev, sid, var)
         if watchData[key] then
