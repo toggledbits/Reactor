@@ -803,9 +803,12 @@ local function getSceneData( sceneId, tdev )
         return r
     end
 
-    -- At this point, we're looking for a Vera scene, so make sure it's valid.
+    -- Vera scene, or just Reactor Activity that doesn't exist?
     local scid = tonumber( sceneId )
-    if scid == nil or luup.scenes[scid] == nil then
+    if scid == nil then return nil end -- silent fail non-numeric (Activity)
+
+    -- At this point, we're looking for a Vera scene, so make sure it's valid.
+    if luup.scenes[scid] == nil then
         -- Nope.
         L({level=1,msg="Scene %1 in configuration for %3 (%2) is no longer available!"}, sceneId,
             tdev, luup.devices[tdev].description)
