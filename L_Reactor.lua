@@ -1690,7 +1690,7 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
     cstate.vars[vname].err = errmsg
 
     -- Store on state variable if exported
-    if ( cdata.variables[vname].export or 1 ) ~= 0 then
+    if ( cdata.variables[vname].export or 1 ) ~= 0 then -- ??? UI for export?
         if not ( err or luaxp.isNull(result) ) then
             -- Save on context for other evals
             ctx[vname] = result
@@ -1878,12 +1878,6 @@ local function getExpressionContext( cdata, tdev )
 end
 
 local function updateVariables( cdata, tdev )
-    if debugMode then
-        local cstate = loadCleanState( tdev )
-        for k,vv in pairs( cstate.vars or {} ) do
-            D("updateVariables() before %1=%2", k, (vv or {}).lastvalue)
-        end
-    end
     -- Make a list of variable names to iterate over. This also facilitates a
     -- quick test in case there are no variables, bypassing a bit of work.
     local vars = {}
@@ -1905,12 +1899,6 @@ local function updateVariables( cdata, tdev )
             evaluateVariable( n, ctx, cdata, tdev )
         else
             ctx[n] = ctx[n] or ""
-        end
-    end
-    if debugMode then
-        local cstate = loadCleanState( tdev )
-        for k,vv in pairs( cstate.vars or {} ) do
-            D("updateVariables() final %1=%2", k, (vv or {}).lastvalue)
         end
     end
 end
