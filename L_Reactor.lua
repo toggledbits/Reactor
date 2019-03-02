@@ -1645,6 +1645,20 @@ local function loadSensorConfig( tdev )
     return cdata
 end
 
+-- We could get really fancy here and track which keys we've seen, etc., but
+-- the most common use cases will be small arrays where the overhead of preparing
+-- for that kind of efficiency exceeds the benefit it might provide.
+local function compareTables( a, b )
+    D("compareTables(%1,%2) a=%3, b=%4", a, b, tostring(a), tostring(b))
+    for k in pairs( b ) do 
+        if b[k] ~= a[k] then return false end
+    end
+    for k in pairs( a ) do
+        if a[k] ~= b[k] then return false end
+    end
+    return true
+end
+
 local function evaluateVariable( vname, ctx, cdata, tdev )
     D("evaluateVariable(%1,cdata,%2)", vname, tdev)
     local vdef = (cdata.variables or {})[vname]
@@ -1660,41 +1674,60 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
     -- if debugMode then luaxp._DEBUG = D end
     ctx.NULL = luaxp.NULL
     local result, err = luaxp.evaluate( vdef.expression or "?", ctx )
-    D("evaluateVariable() %2 (%1) %3 evaluates to %4", tdev, luup.devices[tdev].description,
-        vdef.expression, result)
+    D("evaluateVariable() %2 (%1) %3 evaluates to %4(%5)", tdev, luup.devices[tdev].description,
+        vdef.expression, result, type(result))
 
-    ctx[vname] = (err ~= nil or result == nil) and luaxp.NULL or result
     local errmsg
     if err then
+        -- Error. Null context value, and build error message for multiple uses.
+        result = luaxp.NULL
         errmsg = (err or {}).message or "Failed"
         if (err or {}).location ~= nil then errmsg = errmsg .. " at " .. tostring(err.location) end
         L({level=2,msg="%2 (#%1) failed evaluation of %3: %4"}, tdev, luup.devices[tdev].description,
             vdef.expression, errmsg)
         addEvent{ dev=tdev, event="expression", variable=vname, ['error']=errmsg }
+    elseif result == nil then 
+        result = luaxp.NULL -- map nil to null
     end
-    
+
+    ctx[vname] = result -- update context for future evals
+
     -- Store in cstate. This will make them persistent (with some help).
     local cstate = loadCleanState( tdev )
     cstate.vars = cstate.vars or { ['__']=1 } -- force object type for old dkjson
     local vs = cstate.vars[vname]
     if not vs then
         D("evaluateVariable() creating new state for expr/var %1", vname)
-        cstate.vars[vname] = { name=vname, lastvalue=result, laststamp=sensorState[tostring(tdev)].timebase }
+        vs = { name=vname, lastvalue=result, laststamp=sensorState[tostring(tdev)].timebase, changed=1 }
+        cstate.vars[vname] = vs
         addEvent{ dev=tdev, event="variable", variable=vname, oldval="", newval=result }
-    elseif vs.lastvalue ~= result then
-        D("evaluateVariable() updating value for %1 from %2 to %3", vname, cstate.vars[vname].lastvalue, result)
-        addEvent{ dev=tdev, event="variable", variable=vname, oldval=cstate.vars[vname].lastvalue, newval=result }
-        cstate.vars[vname].lastvalue = result
-        cstate.vars[vname].laststamp = sensorState[tostring(tdev)].timebase
+    else
+        local changed
+        if type(vs.lastvalue) == "table" and type(result) == "table" then
+            changed = not compareTables( vs.lastvalue, result )
+            -- Store shallow copy, so later changes don't interfere with comparison,
+            -- as tables are stored by reference and not by value (this vs.lastvalue and result
+            -- are likely to be references to the same table).
+            ctx[vname] = shallowCopy( result )
+        else
+            changed = vs.lastvalue ~= result
+        end
+        if changed then
+            D("evaluateVariable() updating value for %1 from %2 to %3", vname, cstate.vars[vname].lastvalue, result)
+            addEvent{ dev=tdev, event="variable", variable=vname, oldval=cstate.vars[vname].lastvalue, newval=result }
+            vs.lastvalue = result
+            vs.laststamp = sensorState[tostring(tdev)].timebase
+            vs.changed = 1
+        else
+            vs.changed = nil
+        end
     end
     cstate.vars[vname].err = errmsg
 
     -- Store on state variable if exported
     if ( cdata.variables[vname].export or 1 ) ~= 0 then -- ??? UI for export?
         if not ( err or luaxp.isNull(result) ) then
-            -- Save on context for other evals
-            ctx[vname] = result
-            -- Canonify booleans by converting to number for storage as state variable
+            -- Canonify for storage as state variable
             local sv
             if type(result) == "boolean" then 
                 sv = result and "1" or "0"
@@ -1707,6 +1740,7 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
             setVar( VARSID, vname, sv, tdev ) -- sets (and triggers watches) only if changed
             setVar( VARSID, vname .. "_Error", "", tdev )
         else
+            -- Null or error
             setVar( VARSID, vname, "", tdev )
             setVar( VARSID, vname .. "_Error", errmsg, tdev )
         end
@@ -1798,12 +1832,12 @@ local function getExpressionContext( cdata, tdev )
     -- Append an element to an array, returns the array.
     ctx.__functions.arraypush = function( args )
         local arr, newel, nmax = unpack( args )
-        arr = ( arr == nil or luaxp.isNull( arr ) ) and {} or arr
+        if ( arr == nil ) or luaxp.isNull( arr ) then arr = {} end
         if newel and not luaxp.isNull( newel ) then
             if not nmax and #arr > ARRAYMAX then luaxp.evalerror("Unbounded array growing too large") end
             table.insert( arr, newel ) 
         end
-        if nmax then while #arr > max.max(0,(tonumber(nmax) or 0)) do table.remove( arr, 1 ) end end
+        if nmax then while #arr > math.max(0,(tonumber(nmax) or 0)) do table.remove( arr, 1 ) end end
         return arr
     end
     -- Remove the last element in the array, returns the modified array.

@@ -970,9 +970,10 @@ var ReactorSensor = (function(api, $) {
             grpel.append( '<div class="row"><div id="vartitle" class="grouptitle col-xs-12">Expressions</div></div>' );
             for ( var ix=0; ix<vix.length; ix++ ) {
                 var vd = vix[ix];
+                var vs = ( cstate.vars || {} )[vd.name] || {};
                 el = jQuery( '<div class="row var" />' ).attr( 'id', vd.name );
-                var vv = ((cstate.vars || {})[vd.name] || {}).lastvalue || "(undefined)"
-                if ( typeof(vv) == "object" && vv.__type == "null" ) {
+                var vv = ((cstate.vars || {})[vd.name] || {}).lastvalue;
+                if ( typeof(vv) == "object" && vv.__type == "null" || undefined == vv ) {
                     vv = "(null)";
                 } else {
                     try {
@@ -981,10 +982,15 @@ var ReactorSensor = (function(api, $) {
                         vv = String( vv );
                     }
                 }
-                var ve = ((cstate.vars || {})[vd.name] || {}).err || ""
-                el.append( jQuery('<div class="col-sm-6 col-md-2" />').text(vd.name) );
-                el.append( jQuery('<div class="col-sm-12 col-md-7 tb-sm" />').text(vd.expression) );
-                el.append( jQuery('<div class="col-sm-6 col-md-3" />').text( "" !== ve ? ve : vv ) );
+                var ve = vs.err || ""
+                el.append( jQuery('<div class="col-sm-6 col-md-2" />').text( vd.name ) );
+                el.append( jQuery('<div class="col-sm-12 col-md-7 tb-sm" />').text( vd.expression ) );
+                el.append( jQuery('<div class="col-sm-6 col-md-3 tb-hardwrap" />').text( "" !== ve ? ve : vv ) );
+                if ( "" !== ve ) {
+                    el.addClass( 'tb-exprerr' );
+                } else if ( vs.changed ) {
+                    el.addClass( 'tb-valchanged' );
+                }
                 grpel.append( el );
             }
             stel.append( grpel );
@@ -1042,6 +1048,9 @@ var ReactorSensor = (function(api, $) {
         html += 'div#reactorstatus div.condtext, div.currentvalue { display: inline-block; margin-left: 1em; }';
         html += 'div#reactorstatus button.condbtn { background-color: #bce8f1; width: 5em; border: none; padding: 6px 6px; }';
         html += 'div#reactorstatus div.reactorgroup.truestate > .grouptitle > .condbtn { background-color: #00aa00; color: black; }';
+        html += 'div#reactorstatus div#variables .tb-valchanged { color: #006040; font-weight: bold; }';
+        html += 'div#reactorstatus div#variables .tb-exprerr { color: red; }';
+        html += 'div#reactorstatus div#variables .tb-hardwrap { overflow-wrap: break-word; }';
 
         // html += '.grpcond > *::before, .grpcond > *::after { content: "";  position: absolute; left: -12px; width: 12px; height: calc(50% + 6px); border-color: #333333; border-style: solid; }';
         html += '.grpcond > *::before, .grpcond > *::after { content: "";  position: absolute; left: -12px; width: 12px; height: calc(100%); border-color: #333333; border-style: solid; }';
