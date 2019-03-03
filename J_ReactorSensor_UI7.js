@@ -2364,7 +2364,7 @@ var ReactorSensor = (function(api, $) {
             var parentId = $parentGroup.attr( 'id' );
             var ixCond = getInstanceData().ixCond;
             var grp = ixCond[ parentId ];
-            var newgrp = { id: newId, name: newId, type: "group", conditions: [] };
+            var newgrp = { id: newId, name: newId, operator: "and", type: "group", conditions: [] };
             grp.conditions.push( newgrp );
             newgrp.__parent = grp;
             newgrp.__index = grp.conditions.length - 1; /* ??? for now */
@@ -2554,7 +2554,7 @@ console.log("handleNodeUpdate " + String($el.attr('id')) + " to " + String($targ
         <button id="not" class="btn btn-xs btn-primary" title="Invert the result of the AND/OR/XOR"> NOT </button> \
       </div> \
       <div class="btn-group tb-btn-radio"> \
-        <button id="and" class="btn btn-xs btn-primary" title="AND means group is true only if all conditions/subgroups are true"> AND </button> \
+        <button id="and" class="btn btn-xs btn-primary checked" title="AND means group is true only if all conditions/subgroups are true"> AND </button> \
         <button id="or" class="btn btn-xs btn-primary" title="OR means group is true if any child condition/subgroup is true"> OR </button> \
         <button id="xor" class="btn btn-xs btn-primary" title="XOR (exclusive or) means group is true if one and only one condition/subgroup is true"> XOR </button> \
       </div> \
@@ -2622,7 +2622,8 @@ console.log("handleNodeUpdate " + String($el.attr('id')) + " to " + String($targ
 
             el.addClass( 'level' + grp.__depth ).addClass( 'levelmod' + (grp.__depth % 4) );
             jQuery( 'span#titletext', el ).text( grp.name || grp.id ).attr( 'title', msgGroupIdChange );
-            jQuery( 'div.cond-group-conditions button#' + grp.operator || "and", el ).addClass( "checked" );
+            jQuery( 'div.cond-group-conditions .tb-btn-radio button', el ).removeClass( "checked" );
+            jQuery( 'div.cond-group-conditions .tb-btn-radio button#' + ( grp.operator || "and" ), el ).addClass( "checked" );
             if ( grp.invert ) {
                 jQuery( 'div.cond-group-conditions button#not', el ).addClass( "checked" );
             }
@@ -2981,9 +2982,9 @@ console.log("handleNodeUpdate " + String($el.attr('id')) + " to " + String($targ
     function getVariableRow() {
         var el = jQuery('<div class="row varexp"></div>');
         el.append( '<div id="varname" class="col-xs-12 col-sm-12 col-md-2"></div>' );
-        el.append( '<div class="col-xs-12 col-sm-10 col-md-9"><textarea class="expr form-control form-control-sm" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="off"/></div>' );
+        el.append( '<div class="col-xs-12 col-sm-9 col-md-8"><textarea class="expr form-control form-control-sm" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="off"/></div>' );
         // ??? devices_other is an alternate for insert state variable
-        el.append( '<div class="col-xs-12 col-sm-2 col-md-1 text-right"><i id="tryexpr" class="material-icons md-btn" title="Try this expression">directions_run</i><i id="getstate" class="material-icons md-btn" title="Insert device state variable value">memory</i><i id="deletevar" class="material-icons md-btn" title="Delete this variable">clear</i></div>' );
+        el.append( '<div class="col-xs-12 col-sm-3 col-md-2 text-right"><i class="material-icons md-btn draghandle" title="Change order (drag)">reorder</i><i id="tryexpr" class="material-icons md-btn" title="Try this expression">directions_run</i><i id="getstate" class="material-icons md-btn" title="Insert device state variable value">memory</i><i id="deletevar" class="material-icons md-btn" title="Delete this variable">clear</i></div>' );
         jQuery( 'textarea.expr', el ).on( 'change.reactor', handleVariableChange );
         jQuery( 'i#tryexpr', el ).attr('disabled', true).on('click.reactor', handleTryExprClick);
         jQuery( 'i#getstate', el ).attr('disabled', true).on('click.reactor', handleGetStateClick);
@@ -3032,7 +3033,7 @@ console.log("handleNodeUpdate " + String($el.attr('id')) + " to " + String($targ
         var container = jQuery('div#tab-vars.reactortab div#reactorvars');
         container.empty();
         var gel = jQuery('<div class="vargroup"></div>');
-        gel.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span class="titletext">Defined Variables</span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>');
+        gel.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span class="titletext">Defined Variables</span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-sm btn-success">Save</button> <button id="revertconf" class="btn btn-sm btn-danger">Revert</button></div></div>');
         
         var list = jQuery( '<div class="varlist tb-sortable" />' );
         gel.append( list );
@@ -3080,6 +3081,7 @@ console.log("handleNodeUpdate " + String($el.attr('id')) + " to " + String($targ
             vertical: true,
             containment: 'div.varlist',
             placeholder: 'tb-placeholder',
+            handle: ".draghandle",
             update: handleVariableChange
         });
 
@@ -3128,6 +3130,7 @@ console.log("handleNodeUpdate " + String($el.attr('id')) + " to " + String($targ
             html += 'div#tab-vars.reactortab div.varexp { cursor: default; }';
             html += 'div#tab-vars.reactortab div.varexp:hover { cursor: grab; }';
             html += 'div#tab-vars.reactortab div.varexp.ui-draggable-dragging { cursor: grabbing; }';
+            html += 'div#tab-vars.reactortab div#varname:after { content: " ="; }';
             html += 'div#tab-vars.reactortab .tb-placeholder { min-height: 8px; background-color: #f0f0f0; }';
             html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
             html += 'div#tbbegging { display: block; color: #ff6600; margin-top: 12px; }';
