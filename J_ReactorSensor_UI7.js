@@ -982,7 +982,7 @@ var ReactorSensor = (function(api, $) {
                         vv = String( vv );
                     }
                 }
-                var ve = vs.err || ""
+                var ve = vs.err || "";
                 el.append( jQuery('<div class="col-sm-6 col-md-2" />').text( vd.name ) );
                 el.append( jQuery('<div class="col-sm-12 col-md-7 tb-sm" />').text( vd.expression ) );
                 el.append( jQuery('<div class="col-sm-6 col-md-3 tb-hardwrap" />').text( "" !== ve ? ve : vv ) );
@@ -1110,7 +1110,11 @@ var ReactorSensor = (function(api, $) {
             $el.children().each( function() {
                 var id = jQuery( this ).attr( 'id' );
                 var obj = ixCond[ id ];
-                obj.__index = ix++;
+                if ( obj ) {
+                    grp.conditions[ix] = obj;
+                    obj.__index = ix;
+                    ix++;
+                }
             });
         }
 
@@ -2414,24 +2418,14 @@ var ReactorSensor = (function(api, $) {
         }
 
         /**
-         * Receive a node at the end of a drag/drop.
+         * Receive a node at the end of a drag/drop (list-to-list move).
          */
         function handleNodeReceive( ev, ui ) {
             var $el = jQuery( ui.item );
             var $target = jQuery( ev.target ); /* receiving .cond-list */
             var $from = jQuery( ui.sender );
             var ixCond = getInstanceData().ixCond;
-
-            /* Since we cloned the element, replace the clone with the real object */
-            /* N.B. We would like ui.item or something to be the clone, but in Jquery
-             * 1.10.x (on Vera UI7 7.0.27) it's not, and nothing in either ui or ev
-             * gives it to us. So, draggable.start() adds class tb-dragtarget, for us
-             * to find and use here. The clone is the one with this class in the new
-             * location. Incidentally, the id has also been removed from the clone by
-             * jQuery-UI. */
-            var $clone = $target.children( 'div:not([id])' ); /* direct descendant with no id */
-            $el.detach();
-            $clone.replaceWith( $el );
+console.log("handleNodeReceive " + String($el.attr('id')) + " to " + String($target.closest('div.cond-group-container').attr('id')));
 
             /* Now, disconnect the data object from its current parent */
             var obj = ixCond[ $el.attr( 'id' ) ];
@@ -2440,8 +2434,26 @@ var ReactorSensor = (function(api, $) {
             /* Attach it to new parent. */
             var prid = $target.closest( 'div.cond-group-container' ).attr( 'id' );
             var pr = ixCond[prid];
+            pr.conditions.push( obj ); /* doesn't matter where we put it */
             obj.__parent = pr;
             /* Don't get fancy, just reindex as it now appears. */
+            reindexConditions( pr );
+
+            $el.addClass( 'tbmodified' ); /* ??? Is this really what we want to flag? */
+            configModified = true;
+            updateControls();
+        }
+        
+        function handleNodeUpdate( ev, ui ) {
+            var $el = jQuery( ui.item );
+            var $target = jQuery( ev.target ); /* receiving .cond-list */
+            var $from = jQuery( ui.sender );
+            var ixCond = getInstanceData().ixCond;
+console.log("handleNodeUpdate " + String($el.attr('id')) + " to " + String($target.closest('div.cond-group-container').attr('id')));
+
+            /* UI is handled, so just reindex parent */
+            var prid = $target.closest( 'div.cond-group-container' ).attr( 'id' );
+            var pr = ixCond[prid];
             reindexConditions( pr );
 
             $el.addClass( 'tbmodified' ); /* ??? Is this really what we want to flag? */
@@ -2525,16 +2537,6 @@ var ReactorSensor = (function(api, $) {
             el.attr( 'id', id );
             jQuery('select.condtype', el).on( 'change.reactor', handleTypeChange );
             jQuery('button#delcond', el).on( 'click.reactor', handleConditionDelete );
-            el.draggable({
-                cursorAt: { top: 5, left: 5 },
-                helper: "clone",
-                connectToSortable: ".tb-sortable",
-                start: function( ev, ui ) {
-                    jQuery( '.tb-dragtarget' ).removeClass( 'tb-dragtarget' );
-                    jQuery( ui.helper ).addClass( 'tb-dragtarget' ).attr('id', 'xyzzy').attr('dragdog','xyzzy');
-                },
-                stop: function( ev, ui ) {}
-            });
             return el;
         }
 
@@ -2598,24 +2600,13 @@ var ReactorSensor = (function(api, $) {
             jQuery( 'i#collapse', el ).on( 'click.reactor', handleGroupExpandClick );
             jQuery( '.cond-group-conditions button', el ).on( 'click.reactor', handleGroupControlClick );
             jQuery( '.cond-list', el ).addClass("tb-sortable").sortable({
-                cursorAt: { top: 5, left: 5 },
-                receive: handleNodeReceive
+                helper: 'clone',
+                items: '> *:not([id="root"])',
+                // containment: 'div.cond-list.tb-sortable',
+                connectWith: 'div.cond-list.tb-sortable',
+                receive: handleNodeReceive, /* between cond-lists */
+                update: handleNodeUpdate    /* within one cond-list */
             });
-            /* Root group is not draggable. */
-            if ( 'root' !== grpid ) {
-                el.draggable({
-                    cursorAt: { top: 5, left: 5 },
-                    //helper: "clone",
-                    helper: function() {
-                        return jQuery( '<div class="tb-helper"><i class="glyphicon glyphicon-arrow-right" /></div>' );
-                    },
-                    connectToSortable: ".tb-sortable",
-                    start: function( ev, ui ) {
-                        jQuery( '.tb-dragtarget' ).removeClass( 'tb-dragtarget' );
-                        jQuery( ui.helper ).addClass( 'tb-dragtarget' );
-                    }
-                });
-            }
             return el;
         }
 
@@ -2727,7 +2718,7 @@ var ReactorSensor = (function(api, $) {
             html += 'div#tab-conds.reactortab .cond-group-container.levelmod3 { background-color: #ebccd1; }';
             html += 'div#tab-conds.reactortab .cond-container { position: relative; margin: 4px 0; border-radius: 4px; padding: 5px; border: 1px solid #0c6099; background: #fff; }';
             html += 'div#tab-conds.reactortab .cond-group-header { margin-bottom: 10px; }';
-            html += 'div#tab-conds.reactortab .cond-list { list-style: none; padding: 0 0 0 15px; margin: 0; }';
+            html += 'div#tab-conds.reactortab .cond-list { list-style: none; padding: 0 0 0 15px; margin: 0; min-height: 24px; }';
             html += 'div#tab-conds.reactortab .error-container { display: none; cursor: help; color: #F00; }';
             html += '.cond-list > *:not(.ui-draggable-dragging)::before, .cond-list > *:not(.ui-draggable-dragging)::after { content: "";  position: absolute; left: -12px; width: 12px; height: calc(50% + 4px); border-color: #333333; border-style: solid; }';
             html += '.cond-list > *:not(.ui-draggable-dragging)::before { top: -4px; border-width: 0 0 2px 2px; }';
@@ -2833,9 +2824,8 @@ var ReactorSensor = (function(api, $) {
             var vname = row.attr("id");
             if ( undefined === vname ) return;
             var expr = ( jQuery('textarea.expr', row).val() || "" ).trim();
-            if ( isEmpty( expr ) ) {
-                jQuery('textarea.expr', row).addClass('tberror');
-            }
+            expr = expr.replace( /^=+\s*/, "" ); /* Remove leading =, this isn't Excel people */
+            jQuery( 'textarea.expr', row ).val( expr );
             if ( cd.variables[vname] === undefined ) {
                 cd.variables[vname] = { name: vname, expression: expr, index: ix };
                 configModified = true;
@@ -2989,16 +2979,16 @@ var ReactorSensor = (function(api, $) {
     }
 
     function getVariableRow() {
-        var editrow = jQuery('<div class="row varexp"></div>');
-        editrow.append( '<div id="varname" class="col-xs-12 col-sm-12 col-md-2"></div>' );
-        editrow.append( '<div class="col-xs-12 col-sm-10 col-md-9"><textarea class="expr form-control form-control-sm" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="off"/></div>' );
+        var el = jQuery('<div class="row varexp"></div>');
+        el.append( '<div id="varname" class="col-xs-12 col-sm-12 col-md-2"></div>' );
+        el.append( '<div class="col-xs-12 col-sm-10 col-md-9"><textarea class="expr form-control form-control-sm" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="off"/></div>' );
         // ??? devices_other is an alternate for insert state variable
-        editrow.append( '<div class="col-xs-12 col-sm-2 col-md-1 text-right"><i id="tryexpr" class="material-icons md-btn" title="Try this expression">directions_run</i><i id="getstate" class="material-icons md-btn" title="Insert device state variable value">memory</i><i id="deletevar" class="material-icons md-btn" title="Delete this variable">clear</i></div>' );
-        jQuery( 'textarea.expr', editrow ).on( 'change.reactor', handleVariableChange );
-        jQuery( 'i#tryexpr', editrow ).attr('disabled', true).on('click.reactor', handleTryExprClick);
-        jQuery( 'i#getstate', editrow ).attr('disabled', true).on('click.reactor', handleGetStateClick);
-        jQuery( 'i#deletevar', editrow ).attr('disabled', true).on('click.reactor', handleDeleteVariableClick);
-        return editrow;
+        el.append( '<div class="col-xs-12 col-sm-2 col-md-1 text-right"><i id="tryexpr" class="material-icons md-btn" title="Try this expression">directions_run</i><i id="getstate" class="material-icons md-btn" title="Insert device state variable value">memory</i><i id="deletevar" class="material-icons md-btn" title="Delete this variable">clear</i></div>' );
+        jQuery( 'textarea.expr', el ).on( 'change.reactor', handleVariableChange );
+        jQuery( 'i#tryexpr', el ).attr('disabled', true).on('click.reactor', handleTryExprClick);
+        jQuery( 'i#getstate', el ).attr('disabled', true).on('click.reactor', handleGetStateClick);
+        jQuery( 'i#deletevar', el ).attr('disabled', true).on('click.reactor', handleDeleteVariableClick);
+        return el;
     }
 
     function handleAddVariableClick() {
@@ -3043,6 +3033,10 @@ var ReactorSensor = (function(api, $) {
         container.empty();
         var gel = jQuery('<div class="vargroup"></div>');
         gel.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span class="titletext">Defined Variables</span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>');
+        
+        var list = jQuery( '<div class="varlist tb-sortable" />' );
+        gel.append( list );
+        
         var cdata = getConfiguration();
 
         /* Create a list of variables by index, sorted. cdata.variables is a map/hash,
@@ -3071,7 +3065,7 @@ var ReactorSensor = (function(api, $) {
             jQuery( 'div#varname', el).text( vd.name );
             jQuery( 'textarea.expr', el ).val( vd.expression );
             jQuery( 'i.md-btn', el ).attr( 'disabled', false );
-            gel.append( el );
+            list.append( el );
         }
 
         /* Add "Add" button */
@@ -3081,6 +3075,14 @@ var ReactorSensor = (function(api, $) {
 
         /* Append the group */
         container.append(gel);
+        
+        list.sortable({
+            vertical: true,
+            containment: 'div.varlist',
+            placeholder: 'tb-placeholder',
+            update: handleVariableChange
+        });
+
 
         jQuery("button#addvar", container).on( 'click.reactor', handleAddVariableClick );
         jQuery("button#saveconf", container).on( 'click.reactor', handleSaveClick );
@@ -3123,6 +3125,10 @@ var ReactorSensor = (function(api, $) {
             html += 'div#tab-vars.reactortab div.varexp.tbmodified:not(.tberror) { border-left: 4px solid green; }';
             html += 'div#tab-vars.reactortab div.varexp.tberror { border-left: 4px solid red; }';
             html += 'div#tab-vars.reactortab textarea.expr { font-family: monospace; resize: vertical; width: 100% !important; }';
+            html += 'div#tab-vars.reactortab div.varexp { cursor: default; }';
+            html += 'div#tab-vars.reactortab div.varexp:hover { cursor: grab; }';
+            html += 'div#tab-vars.reactortab div.varexp.ui-draggable-dragging { cursor: grabbing; }';
+            html += 'div#tab-vars.reactortab .tb-placeholder { min-height: 8px; background-color: #f0f0f0; }';
             html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
             html += 'div#tbbegging { display: block; color: #ff6600; margin-top: 12px; }';
             html += "</style>";
@@ -4639,7 +4645,6 @@ var ReactorSensor = (function(api, $) {
         orderly( ( cd.conditions || {} ).root || [ { id: "root" } ] );
 
         jQuery("div#tab-actions.reactortab button.addaction").on( 'click.reactor', handleAddActionClick );
-        //jQuery("div#tab-actions.reactortab i#global-import").on( 'click.reactor', TBD );
         jQuery("div#tab-actions.reactortab ul#activities").empty().append( ul.children() );
         jQuery("div#tab-actions.reactortab ul#activities li").on( 'click.reactor', handleActionCopyClick );
         jQuery("div#tab-actions.reactortab button#saveconf").on( 'click.reactor', handleActionsSaveClick )
