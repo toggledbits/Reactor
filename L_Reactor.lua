@@ -1386,17 +1386,23 @@ local function trip( state, tdev )
     if not state then
         -- Luup keeps (SecuritySensor1/)LastTrip, but we also keep LastReset
         luup.variable_set( RSSID, "LastReset", os.time(), tdev )
-        -- Run the reset scene, if we have one. Scene ID must be unique across sensors!
-        stopScene( tdev, nil, tdev, 'root.true' ) -- stop contra-activity
+        -- Run the reset scene, if we have one.
         local scd = getSceneData( 'root.false', tdev )
-        if scd then execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } ) end
+        if scd then
+            -- Note we only stop trip actions if there are untrip actions.
+            stopScene( tdev, nil, tdev, 'root.true' ) -- stop contra-activity
+            execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } )
+        end
     else
         -- Count a trip.
         luup.variable_set( RSSID, "TripCount", getVarNumeric( "TripCount", 0, tdev, RSSID ) + 1, tdev )
         -- Run the trip scene, if we have one. Scene ID must be unique across sensors!
-        stopScene( tdev, nil, tdev, 'root.false' ) -- stop contra-activity
         local scd = getSceneData( 'root.true', tdev )
-        if scd then execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } ) end
+        if scd then
+            -- Note we only stop untrip actions if there are trip actions.
+            stopScene( tdev, nil, tdev, 'root.false' ) -- stop contra-activity
+            execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } ) 
+        end
     end
 end
 
@@ -2443,14 +2449,13 @@ local function updateSensor( tdev )
                 local activity = gc.groupid .. ( gs.evalstate and ".true" or ".false" )
                 D("updateSensor() group %1 state changed to %2, looking for activity %3",
                     gc.groupid, gs.evalstate, activity)
-                -- Run per-group state-driven activity. Before starting new activity,
-                -- stop any contra-activity (i.e. before run true actions, stop
-                -- the false actions.
-                local alter = gc.groupid .. ( gs.evalstate and ".false" or ".true" )
-                stopScene( tdev, nil, tdev, alter )
+                -- Run per-group state-driven activity.
                 local scd = getSceneData( activity, tdev )
                 if scd then
+                    -- Note we only stop contra-actions if we have actions to perform.
                     D("updateSensor() running %1 activities", activity)
+                    local alter = gc.groupid .. ( gs.evalstate and ".false" or ".true" )
+                    stopScene( tdev, nil, tdev, alter )
                     execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } )
                 end
             end
