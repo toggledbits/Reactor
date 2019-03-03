@@ -2269,7 +2269,7 @@ var ReactorSensor = (function(api, $) {
             var input = jQuery( ev.currentTarget );
             var grpid = input.closest( 'div.cond-group-container' ).attr( 'id' );
             var newname = (input.val() || "").trim();
-            var span = jQuery( 'span', input.parent() );
+            var span = jQuery( 'span#titletext', input.parent() );
             var grp = getInstanceData().ixCond[grpid];
             input.removeClass( 'tberror' );
             if ( newname !== grp.name ) {
@@ -2477,7 +2477,7 @@ var ReactorSensor = (function(api, $) {
          * Handle click on group controls (NOT/AND/OR/XOR)
          */
         function handleGroupControlClick( ev ) {
-            var $el = jQuery( ev.currentTarget );
+            var $el = jQuery( ev.target );
             var action = $el.attr( 'id' );
             var grpid = $el.closest( 'div.cond-group-container' ).attr( 'id' );
             var grp = getInstanceData().ixCond[ grpid ];
@@ -2605,7 +2605,7 @@ var ReactorSensor = (function(api, $) {
             jQuery( 'i#delgroup', el ).on( 'click.reactor', handleDeleteGroupClick );
             jQuery( 'span#titletext,i#edittitle', el ).on( 'click.reactor', handleTitleClick );
             jQuery( 'i#collapse', el ).on( 'click.reactor', handleGroupExpandClick );
-            jQuery( '.cond-group-conditions md-btn', el ).on( 'click.reactor', handleGroupControlClick );
+            jQuery( '.cond-group-conditions > div.tb-btn-radio,div.tb-btn-check > button', el ).on( 'click.reactor', handleGroupControlClick );
             jQuery( '.cond-list', el ).addClass("tb-sortable").sortable({
                 helper: 'clone',
                 handle: '.draghandle',
