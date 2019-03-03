@@ -5,6 +5,12 @@
  *
  * Copyright 2018,2019 Patrick H. Rigney, All Rights Reserved.
  * This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
+ *
+ * TODO: 
+ *       * Standardize classes among tabs
+ *       * Test messing things up... what does Reactor do with incomplete
+ *         conditions, etc. Do we need to flag error in cdata on each cond?
+ *
  */
 /* globals api,jQuery,$,unescape,MultiBox,ace */
 /* jshint multistr: true */
@@ -1227,11 +1233,11 @@ var ReactorSensor = (function(api, $) {
             var nset = jQuery('select.condtype option[value=""]:selected').length > 0;
 
             /* ... or if any group has no conditions */
-            nset = nset || jQuery( 'div.condlist:empty' ).length > 0;
-
+            nset = nset || jQuery( '.cond-list:empty' ).length > 0;
+            
             /* Disable "Add" buttons while the condition is true. */
-            jQuery('button#addcond').prop('disabled', nset );
-            jQuery('button#addgroup').prop('disabled', nset );
+            jQuery('i#addcond').prop( 'disabled', nset );
+            jQuery('i#addgroup').prop( 'disabled', nset );
 
             updateSaveControls();
         }
@@ -2309,13 +2315,21 @@ var ReactorSensor = (function(api, $) {
         function handleGroupExpandClick( ev ) {
             var $el = jQuery( ev.currentTarget );
             var $p = $el.closest( 'div.cond-group-container' );
-            var $l = jQuery( 'div.cond-list:first', $p );
+            var $l = jQuery( 'div.cond-group-body:first', $p );
             if ( "collapse" === $el.attr( 'id' ) ) {
                 $l.slideUp();
-                $el.attr( 'id', 'expand' ).removeClass( 'glyphicon-collapse-up' ).addClass( 'glyphicon-collapse-down' ).attr( 'title', 'Collapse group' );
+                $el.attr( 'id', 'expand' ).text( 'expand_more' ).attr( 'title', 'Expand group' );
+                try {
+                    var n = jQuery( 'div.cond-list:first > div', $p ).length;
+                    jQuery( 'span#titlemessage:first', $p ).text( " (" + n + 
+                        " condition" + ( 1 !== n ? "s" : "" ) + " collapsed)" );
+                } catch( e ) {
+                    jQuery( 'span#titlemessage:first', $p ).text( " (conditions collapsed)" );
+                }
             } else {
                 $l.slideDown();
-                $el.attr( 'id', 'collapse' ).removeClass( 'glyphicon-collapse-down' ).addClass( 'glyphicon-collapse-up' ).attr( 'title', 'Expand group' );
+                $el.attr( 'id', 'collapse' ).text( 'expand_less' ).attr( 'title', 'Collapse group' );
+                jQuery( 'span#titlemessage:first', $p ).text( "" );
             }
         }
 
@@ -2425,7 +2439,6 @@ var ReactorSensor = (function(api, $) {
             var $target = jQuery( ev.target ); /* receiving .cond-list */
             var $from = jQuery( ui.sender );
             var ixCond = getInstanceData().ixCond;
-console.log("handleNodeReceive " + String($el.attr('id')) + " to " + String($target.closest('div.cond-group-container').attr('id')));
 
             /* Now, disconnect the data object from its current parent */
             var obj = ixCond[ $el.attr( 'id' ) ];
@@ -2449,7 +2462,6 @@ console.log("handleNodeReceive " + String($el.attr('id')) + " to " + String($tar
             var $target = jQuery( ev.target ); /* receiving .cond-list */
             var $from = jQuery( ui.sender );
             var ixCond = getInstanceData().ixCond;
-console.log("handleNodeUpdate " + String($el.attr('id')) + " to " + String($target.closest('div.cond-group-container').attr('id')));
 
             /* UI is handled, so just reindex parent */
             var prid = $target.closest( 'div.cond-group-container' ).attr( 'id' );
@@ -2517,10 +2529,9 @@ console.log("handleNodeUpdate " + String($el.attr('id')) + " to " + String($targ
         function getConditionTemplate( id ) {
             var el = jQuery( '\
 <div class="cond-container"> \
-  <div class="btn-group pull-right cond-actions"> \
-    <button id="delcond" type="button" class="btn btn-xs btn-danger"> \
-      <i class="glyphicon glyphicon-remove"></i> Delete \
-    </button> \
+  <div class="pull-right cond-actions"> \
+      <i class="material-icons md-btn draghandle" title="Move condition (drag)">reorder</i> \
+      <i id="delcond" class="material-icons md-btn" title="Delete condition">clear</i> \
   </div> \
   <div class="cond-body form-inline"> \
     <select class="condtype form-control form-control-sm"><option value="">--choose--</option></select> \
@@ -2536,7 +2547,7 @@ console.log("handleNodeUpdate " + String($el.attr('id')) + " to " + String($targ
 
             el.attr( 'id', id );
             jQuery('select.condtype', el).on( 'change.reactor', handleTypeChange );
-            jQuery('button#delcond', el).on( 'click.reactor', handleConditionDelete );
+            jQuery('i#delcond', el).on( 'click.reactor', handleConditionDelete );
             return el;
         }
 
@@ -2544,10 +2555,9 @@ console.log("handleNodeUpdate " + String($el.attr('id')) + " to " + String($targ
             var el = jQuery( '\
 <div class="cond-group-container"> \
   <div class="cond-group-header"> \
-    <div class="btn-group pull-right"> \
-      <button id="delgroup" type="button" class="btn btn-xs btn-danger"> \
-        <i class="glyphicon glyphicon-remove"></i> Delete \
-      </button> \
+    <div class="pull-right"> \
+      <i id="sortdrag" class="material-icons md-btn draghandle noroot" title="Move group (drag)">reorder</i> \
+      <i id="delgroup" class="material-icons md-btn noroot" title="Delete group">clear</i> \
     </div> \
     <div class="cond-group-conditions"> \
       <div class="btn-group tb-tbn-check"> \
@@ -2563,23 +2573,18 @@ console.log("handleNodeUpdate " + String($el.attr('id')) + " to " + String($targ
       </div> \
       <div class="cond-group-title"> \
         <span id="titletext" /> \
-        <i id="edittitle" class="glyphicon glyphicon-wrench"></i> \
-        <i id="collapse" class="glyphicon glyphicon-collapse-up" title="Collapse group"></i> \
+        <i id="edittitle" class="material-icons md-btn" title="Edit group name">edit</i> \
+        <i id="collapse" class="material-icons md-btn noroot" title="Collapse group">expand_less</i> \
+        <span id="titlemessage" /> \
       </div> \
     </div> \
   </div> \
   <div class="error-container"></div> \
   <div class="cond-group-body"> \
     <div class="cond-list"></div> \
-  </div> \
-  <div class="cond-group-actions"> \
-    <div class="btn-group"> \
-      <button id="addcond" type="button" class="btn btn-xs btn-success"> \
-        <i class="glyphicon glyphicon-plus"></i> Add Condition \
-      </button> \
-      <button id="addgroup" type="button" class="btn btn-xs btn-success"> \
-        <i class="glyphicon glyphicon-plus-sign"></i> Add Group \
-      </button> \
+    <div class="cond-group-actions"> \
+      <i id="addcond" class="material-icons md-btn" title="Add condition to this group">playlist_add</i> \
+      <i id="addgroup" class="material-icons md-btn" title="Add subgroup to this group">library_add</i> \
     </div> \
   </div> \
 </div>' );
@@ -2588,19 +2593,22 @@ console.log("handleNodeUpdate " + String($el.attr('id')) + " to " + String($targ
             jQuery( 'div.cond-group-conditions input[type="radio"]', el ).attr('name', grpid);
             if ( 'root' === grpid ) {
                 /* Can't delete root group, but use the space for Save and Revert */
-                jQuery( 'button#delgroup', el ).replaceWith(
-                    jQuery( '<button id="saveconf" class="btn btn-sm btn-success"> Save </button> <button id="revertconf" class="btn btn-sm btn-danger"> Revert </button>' )
+                jQuery( 'i#delgroup', el ).replaceWith(
+                    jQuery( '<button id="saveconf" class="btn btn-xs btn-success"> Save </button> <button id="revertconf" class="btn btn-xs btn-danger"> Revert </button>' )
                 );
-                jQuery( 'button#delgroup', el ).remove(); /* can never delete root group */
+
+                /* For root group, remove all elements with class noroot */
+                jQuery( '.noroot', el ).remove();
             }
-            jQuery( 'button#addcond', el ).on( 'click.reactor', handleAddConditionClick );
-            jQuery( 'button#addgroup', el ).on( 'click.reactor', handleAddGroupClick );
-            jQuery( 'button#delgroup', el ).on( 'click.reactor', handleDeleteGroupClick );
+            jQuery( 'i#addcond', el ).on( 'click.reactor', handleAddConditionClick );
+            jQuery( 'i#addgroup', el ).on( 'click.reactor', handleAddGroupClick );
+            jQuery( 'i#delgroup', el ).on( 'click.reactor', handleDeleteGroupClick );
             jQuery( 'span#titletext,i#edittitle', el ).on( 'click.reactor', handleTitleClick );
             jQuery( 'i#collapse', el ).on( 'click.reactor', handleGroupExpandClick );
-            jQuery( '.cond-group-conditions button', el ).on( 'click.reactor', handleGroupControlClick );
+            jQuery( '.cond-group-conditions md-btn', el ).on( 'click.reactor', handleGroupControlClick );
             jQuery( '.cond-list', el ).addClass("tb-sortable").sortable({
                 helper: 'clone',
+                handle: '.draghandle',
                 items: '> *:not([id="root"])',
                 // containment: 'div.cond-list.tb-sortable',
                 connectWith: 'div.cond-list.tb-sortable',
@@ -2719,6 +2727,7 @@ console.log("handleNodeUpdate " + String($el.attr('id')) + " to " + String($targ
             html += 'div#tab-conds.reactortab .cond-group-container.levelmod3 { background-color: #ebccd1; }';
             html += 'div#tab-conds.reactortab .cond-container { position: relative; margin: 4px 0; border-radius: 4px; padding: 5px; border: 1px solid #0c6099; background: #fff; }';
             html += 'div#tab-conds.reactortab .cond-group-header { margin-bottom: 10px; }';
+            html += 'div#tab-conds.reactortab .cond-group-actions { margin-left: 15px; margin-bottom: 8px; }';
             html += 'div#tab-conds.reactortab .cond-list { list-style: none; padding: 0 0 0 15px; margin: 0; min-height: 24px; }';
             html += 'div#tab-conds.reactortab .error-container { display: none; cursor: help; color: #F00; }';
             html += '.cond-list > *:not(.ui-draggable-dragging)::before, .cond-list > *:not(.ui-draggable-dragging)::after { content: "";  position: absolute; left: -12px; width: 12px; height: calc(50% + 4px); border-color: #333333; border-style: solid; }';
@@ -2727,8 +2736,8 @@ console.log("handleNodeUpdate " + String($el.attr('id')) + " to " + String($targ
             html += '.cond-list > *:not(.ui-draggable-dragging):first-child::before { top: -12px; height: calc(50% + 14px); }';
             html += '.cond-list > *:not(.ui-draggable-dragging):last-child::before {  border-radius: 0 0 0 4px; }';
             html += '.cond-list > *:not(.ui-draggable-dragging):last-child::after { display: none; }';
-            html += 'div#tab-conds.reactortab .cond-group-title { margin-left: 8px; display: inline-block; }';
-            html += 'div#tab-conds.reactortab .cond-group-title span#titletext { font-size: 16px; font-weight: bold; color: #036; }';
+            html += 'div#tab-conds.reactortab .cond-group-title { display: inline-block; }';
+            html += 'div#tab-conds.reactortab .cond-group-title span#titletext { padding: 0 4px; font-size: 16px; font-weight: bold; color: #036; }';
             html += 'div#tab-conds.reactortab .btn.checked { background-color: #5cb85c; }';
             html += 'div#tab-conds.reactortab .btn.tb-disable.checked { background-color: #d9534f; }';
 
@@ -2746,9 +2755,10 @@ console.log("handleNodeUpdate " + String($el.attr('id')) + " to " + String($targ
             html += 'div#tab-conds.reactortab fieldset#nocaseopt { display: inline-block; }';
             html += 'div#tab-conds.reactortab div#currval { font-family: "Courier New", Courier, monospace; font-size: 0.9em; }';
             html += 'div#tab-conds.reactortab div.warning { color: red; }';
-            html += 'div#tab-conds.reactortab i.md-btn:disabled { color: #999999; cursor: auto; }';
-            html += 'div#tab-conds.reactortab i.md-btn[disabled] { color: #999999; cursor: auto; }';
-            html += 'div#tab-conds.reactortab i.md-btn { margin-left: 2px; margin-right: 2px; cursor: pointer; }';
+            html += 'div#tab-conds.reactortab i.md-btn:disabled { color: #999999; cursor: not-allowed; }';
+            html += 'div#tab-conds.reactortab i.md-btn[disabled] { color: #999999; cursor: not-allowed; }';
+            html += 'div#tab-conds.reactortab i.md-btn { font-size: 16pt; cursor: pointer; position: relative; top: 6px; color: #333; background-color: #fff; padding: 2px; border-radius: 4px; box-shadow: #cccccc 2px 2px; }';
+            html += 'div#tab-conds.reactortab i.md-btn.draghandle { cursor: grab; }';
             html += 'div#tab-conds.reactortab .md12 { font-size: 12pt; }';
             html += 'div#tab-conds.reactortab .md14 { font-size: 14pt; }';
             html += 'div#tab-conds.reactortab div#conditions { width: 100%; }';
@@ -2756,7 +2766,6 @@ console.log("handleNodeUpdate " + String($el.attr('id')) + " to " + String($targ
             html += 'div#tab-conds.reactortab input.narrow { max-width: 8em; }';
             html += 'div#tab-conds.reactortab input.tiny { max-width: 3em; }';
             html += 'div#tab-conds.reactortab input.titleedit { font-size: 12px; height: 24px; }';
-            html += 'div#tab-conds.reactortab div.conditiongroup.groupdisabled { background-color: #ccc !important; color: #000 !important }';
             html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
             html += 'div#tbbegging { display: block; color: #ff6600; margin-top: 12px; }';
             html += "</style>";
@@ -2946,7 +2955,7 @@ console.log("handleNodeUpdate " + String($el.attr('id')) + " to " + String($targ
             f = jQuery( 'select#gsvar', row );
             f.on( 'change.reactor', handleGetStateOptionChange );
         }
-        jQuery( 'button#getstateinsert', row ).prop( 'disabled', "" === f.val() );
+        jQuery( 'i#getstateinsert', row ).prop( 'disabled', "" === f.val() );
     }
 
     function handleGetStateClick( ev ) {
@@ -2974,7 +2983,7 @@ console.log("handleNodeUpdate " + String($el.attr('id')) + " to " + String($targ
         jQuery( '<div id="opt-state" class="row" />' ).append( el ).insertAfter( row );
 
         jQuery( 'select.devicemenu', el ).on( 'change.reactor', handleGetStateOptionChange );
-        jQuery( 'button#getstateinsert', el ).prop( 'disabled', true )
+        jQuery( 'i#getstateinsert', el ).prop( 'disabled', true )
             .on( 'click.reactor', handleGetStateInsert );
         jQuery( 'button#getstatecancel', el ).on( 'click.reactor', handleGetStateClear );
     }
@@ -3033,7 +3042,7 @@ console.log("handleNodeUpdate " + String($el.attr('id')) + " to " + String($targ
         var container = jQuery('div#tab-vars.reactortab div#reactorvars');
         container.empty();
         var gel = jQuery('<div class="vargroup"></div>');
-        gel.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span class="titletext">Defined Variables</span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-sm btn-success">Save</button> <button id="revertconf" class="btn btn-sm btn-danger">Revert</button></div></div>');
+        gel.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span class="titletext">Defined Variables</span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>');
         
         var list = jQuery( '<div class="varlist tb-sortable" />' );
         gel.append( list );
@@ -3071,7 +3080,7 @@ console.log("handleNodeUpdate " + String($el.attr('id')) + " to " + String($targ
 
         /* Add "Add" button */
         gel.append('<div class="row buttonrow">' +
-            '<div class="col-xs-12 col-sm-12"><button id="addvar" class="btn btn-sm btn-primary">Add Variable/Expression</button> Need help? Check out the <a href="https://github.com/toggledbits/Reactor/wiki/Expressions-&-Variables" target="_blank">documentation</a> or ask in the <a href="http://forum.micasaverde.com/index.php/board,93.0.html" target="_blank">Vera forums</a>.</div>' +
+            '<div class="col-xs-12 col-sm-12"><button id="addvar" class="btn btn-sm btn-success">Add Variable/Expression</button> Need help? Check out the <a href="https://github.com/toggledbits/Reactor/wiki/Expressions-&-Variables" target="_blank">documentation</a> or ask in the <a href="http://forum.micasaverde.com/index.php/board,93.0.html" target="_blank">Vera forums</a>.</div>' +
             '</div>');
 
         /* Append the group */
@@ -3113,9 +3122,10 @@ console.log("handleNodeUpdate " + String($el.attr('id')) + " to " + String($targ
             html += "div#tab-vars.reactortab .color-green { color: #006040; }";
             html += 'div#tab-vars.reactortab .tberror { border: 1px solid red; }';
             html += 'div#tab-vars.reactortab .tbwarn { border: 1px solid yellow; background-color: yellow; }';
-            html += 'div#tab-vars.reactortab i.md-btn:disabled { color: #cccccc; cursor: auto; }';
-            html += 'div#tab-vars.reactortab i.md-btn[disabled] { color: #cccccc; cursor: auto; }';
-            html += 'div#tab-vars.reactortab i.md-btn { color: #006040; font-size: 14pt; cursor: pointer; }';
+            html += 'div#tab-vars.reactortab i.md-btn:disabled { color: #999999; cursor: not-allowed; }';
+            html += 'div#tab-vars.reactortab i.md-btn[disabled] { color: #999999; cursor: not-allowed; }';
+            html += 'div#tab-vars.reactortab i.md-btn { font-size: 16pt; cursor: pointer; position: relative; top: 6px; color: #333; background-color: #fff; padding: 2px; border-radius: 4px; box-shadow: #cccccc 2px 2px; }';
+            html += 'div#tab-vars.reactortab i.md-btn.draghandle { cursor: grab; }';
             html += 'div#tab-vars.reactortab input.tbinvert { min-width: 16px; min-height: 16px; }';
             html += 'div#tab-vars.reactortab div.tblisttitle { background-color: #444444; color: #fff; padding: 8px; min-height: 42px; }';
             html += 'div#tab-vars.reactortab div.tblisttitle span.titletext { font-size: 16px; font-weight: bold; margin-right: 4em; }';
@@ -3128,8 +3138,6 @@ console.log("handleNodeUpdate " + String($el.attr('id')) + " to " + String($targ
             html += 'div#tab-vars.reactortab div.varexp.tberror { border-left: 4px solid red; }';
             html += 'div#tab-vars.reactortab textarea.expr { font-family: monospace; resize: vertical; width: 100% !important; }';
             html += 'div#tab-vars.reactortab div.varexp { cursor: default; }';
-            html += 'div#tab-vars.reactortab div.varexp:hover { cursor: grab; }';
-            html += 'div#tab-vars.reactortab div.varexp.ui-draggable-dragging { cursor: grabbing; }';
             html += 'div#tab-vars.reactortab div#varname:after { content: " ="; }';
             html += 'div#tab-vars.reactortab .tb-placeholder { min-height: 8px; background-color: #f0f0f0; }';
             html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
@@ -4735,9 +4743,9 @@ console.log("handleNodeUpdate " + String($el.attr('id')) + " to " + String($targ
         html += 'div#tab-actions.reactortab .tberror { border: 1px solid red; }';
         html += 'div#tab-actions.reactortab .tbwarn { border: 2px solid yellow; }';
         html += 'div#tab-actions.reactortab .tberrmsg { padding: 8px 8px 8px 8px; color: red; }';
-        html += 'div#tab-actions.reactortab i.md-btn:disabled { color: #cccccc; cursor: auto; }';
-        html += 'div#tab-actions.reactortab i.md-btn[disabled] { color: #cccccc; cursor: auto; }';
-        html += 'div#tab-actions.reactortab i.md-btn { color: #2d6a9f; font-size: 14pt; cursor: pointer; }';
+        html += 'div#tab-actions.reactortab i.md-btn:disabled { color: #cccccc; cursor: not-allowed; }';
+        html += 'div#tab-actions.reactortab i.md-btn[disabled] { color: #cccccc; cursor: not-allowed; }';
+        html += 'div#tab-actions.reactortab i.md-btn { font-size: 16pt; cursor: pointer; position: relative; top: 6px; color: #333; background-color: #fff; padding: 2px; border-radius: 4px; box-shadow: #cccccc 2px 2px; }';
         html += 'div#tab-actions.reactortab input.tbinvert { min-width: 16px; min-height: 16px; }';
         html += 'div#tab-actions.reactortab input.narrow { max-width: 8em; }';
         html += 'div#tab-actions.reactortab div.actionlist { border-radius: 8px; border: 2px solid #428BCA; margin-bottom: 16px; }';
