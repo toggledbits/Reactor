@@ -1716,7 +1716,7 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
     local vs = cstate.vars[vname]
     if not vs then
         D("evaluateVariable() creating new state for expr/var %1", vname)
-        vs = { name=vname, lastvalue=result, laststamp=sensorState[tostring(tdev)].timebase, changed=1 }
+        vs = { name=vname, lastvalue=result, valuestamp=sensorState[tostring(tdev)].timebase, changed=1 }
         cstate.vars[vname] = vs
         addEvent{ dev=tdev, event="variable", variable=vname, oldval="", newval=result }
     else
@@ -1734,7 +1734,7 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
             D("evaluateVariable() updating value for %1 from %2 to %3", vname, cstate.vars[vname].lastvalue, result)
             addEvent{ dev=tdev, event="variable", variable=vname, oldval=cstate.vars[vname].lastvalue, newval=result }
             vs.lastvalue = result
-            vs.laststamp = sensorState[tostring(tdev)].timebase
+            vs.valuestamp = sensorState[tostring(tdev)].timebase
             vs.changed = 1
         else
             vs.changed = nil
@@ -3507,6 +3507,33 @@ function actionSetGroupEnabled( grpid, enab, dev )
     L({level=1,msg="%1 (%2) action SetGroupEnabled %3 failed, group not found in config"},
         luup.devices[dev].description, dev, grpid)
     return 2,0,"Invalid group"
+end
+
+function actionSetVariable( opt, tdev )
+    local cdata = loadSensorConfig( tdev )
+    if ( cdata.variables or {} )[opt.VariableName or "_"] == nil then
+        L({level=2,msg="Warning: action attempt to set variable %3 on %1 (#%2)failed, variable not defined."},
+            luup.devices[tdev].description, tdev, opt.VariableName )
+        return false
+    end
+    local cstate = loadCleanState( tdev )
+    cstate.vars = cstate.vars or {}
+    local vs = cstate.vars[ opt.VariableName ]
+    -- Value is handled as string because that's how Luup actions roll.
+    local vv = tostring( opt.NewValue or "")
+    if tostring( vs.lastvalue ) ~= vv then
+        vs.lastvalue = vv
+        vs.valuestamp = os.time()
+        vs.changed = 1;
+        -- Update LuaXP evaluation context if it exists.
+        if ( sensorState[tostring(tdev)] or {} ).ctx then
+            sensorState[tostring(tdev)].ctx[ opt.VariableName ] = vv
+        end
+        -- Update state variable if it's exported.
+        if ( cdata.variables[ opt.VariableName ].export or 1 ) ~= 0 then
+            luup.variable_set( VARSID, opt.VariableName, vv, tdev )
+        end
+    end
 end
 
 -- Plugin timer tick. Using the tickTasks table, we keep track of
