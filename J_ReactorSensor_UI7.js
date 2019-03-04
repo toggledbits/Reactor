@@ -291,9 +291,9 @@ var ReactorSensor = (function(api, $) {
         iData[ myid ][ key ] = data;
     }
 
-    function getConfiguration( myid ) {
+    function getConfiguration( myid, force ) {
         var d = getInstanceData( myid );
-        if ( ! d.cdata ) {
+        if ( force || ! d.cdata ) {
             loadConfigData( myid );
         }
         return d.cdata;
@@ -509,7 +509,8 @@ var ReactorSensor = (function(api, $) {
             return;
         }
 
-        getConfiguration();
+        var myid = api.getCpanelDeviceId();
+        getConfiguration( myid, true );
         configModified = false;
 
         /* Be careful about which tab we're on here. */
@@ -518,7 +519,7 @@ var ReactorSensor = (function(api, $) {
         if ( ctx === "tab-vars" ) {
             redrawVariables();
         } else if ( ctx === "tab-conds" ) {
-            CondBuilder.redraw();
+            CondBuilder.redraw( myid );
         } else if ( ctx === "tab-actions" ) {
             redrawActivities();
         } else {
@@ -2722,10 +2723,8 @@ var ReactorSensor = (function(api, $) {
             init: function( dev ) {
                 initModule( dev );
             },
-            start: function( dev ) {
-                redrawConditions( dev );
-            },
-            redraw: myModule.start,
+            start: redrawConditions,
+            redraw: redrawConditions
         };
         return myModule;
 
@@ -2740,8 +2739,8 @@ var ReactorSensor = (function(api, $) {
             }
 
             var myid = api.getCpanelDeviceId();
-
-            CondBuilder.init();
+            
+            CondBuilder.init( myid );
 
             /* Load material design icons */
             jQuery("head").append('<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">');
