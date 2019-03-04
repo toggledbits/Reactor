@@ -1231,7 +1231,7 @@ var ReactorSensor = (function(api, $) {
         }
 
         function makeDateTimeOpMenu( cond ) {
-            var el = jQuery('<select class="opmenu form-control form-control-sm pull-left"></select>');
+            var el = jQuery('<select class="opmenu form-control form-control-sm"></select>');
             el.append( '<option value="bet">between</option>' );
             el.append( '<option value="nob">not between</option>' );
 
@@ -1443,6 +1443,14 @@ var ReactorSensor = (function(api, $) {
                             configModified = true;
                         }
                     }
+                    
+                    /* Options open or not, make sure options expander is highlighted */
+                    if ( "" !== ( cond.after || "" ) || "" !== ( cond.duration || "" ) ||
+                            "" !== ( cond.repeatcount || "" ) || cond.latch ) {
+                        jQuery( 'i#condmore', $row ).addClass( 'attn' );
+                    } else {
+                        jQuery( 'i#condmore', $row ).removeClass( 'attn' );
+                    }
                     break;
 
                 case 'weekday':
@@ -1486,9 +1494,9 @@ var ReactorSensor = (function(api, $) {
                         } else {
                             var losOtros;
                             if ( pdiv.hasClass('start') ) {
-                                losOtros = jQuery('div.end input.year', $row);
+                                losOtros = jQuery('fieldset#end input.year', $row);
                             } else {
-                                losOtros = jQuery('div.start input.year', $row);
+                                losOtros = jQuery('fieldset#start input.year', $row);
                             }
                             if ( newval === "" && losOtros.val() !== "" ) {
                                 losOtros.val("");
@@ -1497,57 +1505,57 @@ var ReactorSensor = (function(api, $) {
                             }
                         }
                     }
-                    var mon = jQuery("div.start select.monthmenu", $row).val() || "";
+                    var mon = jQuery("fieldset#start select.monthmenu", $row).val() || "";
                     if ( isEmpty( mon ) ) {
                         /* No/any month. Disable years. */
                         jQuery( '.datespec', $row ).val( "" ).prop( 'disabled', true );
                         /* Ending month must also be blank */
-                        jQuery( 'div.end select.monthmenu', $row ).val( "" );
+                        jQuery( 'fieldset#end select.monthmenu', $row ).val( "" );
                     } else {
                         /* Month specified, year becomes optional, but either both
                            years must be specified or neither for between/not. */
                         jQuery( '.datespec', $row ).prop( 'disabled', false );
-                        jQuery( 'div.start select.daymenu:has(option[value=""]:selected)', $row ).addClass( 'tberror' );
+                        jQuery( 'fieldset#start select.daymenu:has(option[value=""]:selected)', $row ).addClass( 'tberror' );
                         if ( between ) {
-                            jQuery( 'div.end select.daymenu:has(option[value=""]:selected)', $row ).addClass( 'tberror' );
-                            var y1 = jQuery( 'div.start input.year', $row ).val() || "";
-                            var y2 = jQuery( 'div.end input.year', $row ).val() || "";
+                            jQuery( 'fieldset#end select.daymenu:has(option[value=""]:selected)', $row ).addClass( 'tberror' );
+                            var y1 = jQuery( 'fieldset#start input.year', $row ).val() || "";
+                            var y2 = jQuery( 'fieldset#end input.year', $row ).val() || "";
                             if ( isEmpty( y1 ) !== isEmpty( y2 ) ) {
                                 jQuery( '.datespec', $row ).addClass( 'tberror' );
                             }
-                            var m2 = jQuery( 'div.end select.monthmenu', $row ).val() || "";
+                            var m2 = jQuery( 'fieldset#end select.monthmenu', $row ).val() || "";
                             if ( isEmpty( m2 ) ) {
                                 /* Ending month may not be blank--flag both start/end */
                                 jQuery( 'select.monthmenu', $row ).addClass( 'tberror' );
                             }
                         }
                     }
-                    var dom = jQuery( 'div.start select.daymenu', $row ).val() || "";
+                    var dom = jQuery( 'fieldset#start select.daymenu', $row ).val() || "";
                     if ( isEmpty( dom ) ) {
                         /* Start day is blank. So must be end day */
-                        jQuery( 'div.end select.daymenu', $row ).val( "" );
+                        jQuery( 'fieldset#end select.daymenu', $row ).val( "" );
                     } else if ( between ) {
                         /* Between with start day, end day must also be specified. */
-                        jQuery( 'div.end select.daymenu:has(option[value=""]:selected)', $row ).addClass( 'tberror' );
+                        jQuery( 'fieldset#end select.daymenu:has(option[value=""]:selected)', $row ).addClass( 'tberror' );
                     }
 
                     /* Fetch and load */
                     res = [];
-                    res.push( isEmpty( mon ) ? "" : jQuery("div.start input.year", $row).val() || "" );
+                    res.push( isEmpty( mon ) ? "" : jQuery("fieldset#start input.year", $row).val() || "" );
                     res.push( mon );
-                    res.push( jQuery("div.start select.daymenu", $row).val() || "" );
-                    res.push( jQuery("div.start select.hourmenu", $row).val() || "0" );
-                    res.push( jQuery("div.start select.minmenu", $row).val() || "0" );
+                    res.push( jQuery("fieldset#start select.daymenu", $row).val() || "" );
+                    res.push( jQuery("fieldset#start select.hourmenu", $row).val() || "0" );
+                    res.push( jQuery("fieldset#start select.minmenu", $row).val() || "0" );
                     if ( ! between ) {
                         Array.prototype.push.apply( res, ["","","","",""] );
-                        jQuery('div.end', $row).hide();
+                        jQuery('fieldset#end', $row).hide();
                     } else {
-                        jQuery('div.end', $row).show();
-                        res.push( isEmpty( mon ) ? "" : jQuery("div.end input.year", $row).val() || "" );
-                        res.push( isEmpty( mon ) ? "" : jQuery("div.end select.monthmenu", $row).val() || "" );
-                        res.push( jQuery("div.end select.daymenu", $row).val() || "" );
-                        res.push( jQuery("div.end select.hourmenu", $row).val() || "0" );
-                        res.push( jQuery("div.end select.minmenu", $row).val() || "0" );
+                        jQuery('fieldset#end', $row).show();
+                        res.push( isEmpty( mon ) ? "" : jQuery("fieldset#end input.year", $row).val() || "" );
+                        res.push( isEmpty( mon ) ? "" : jQuery("fieldset#end select.monthmenu", $row).val() || "" );
+                        res.push( jQuery("fieldset#end select.daymenu", $row).val() || "" );
+                        res.push( jQuery("fieldset#end select.hourmenu", $row).val() || "0" );
+                        res.push( jQuery("fieldset#end select.minmenu", $row).val() || "0" );
                     }
                     cond.value = res.join(',');
                     break;
@@ -1565,7 +1573,7 @@ var ReactorSensor = (function(api, $) {
                     }
                     res.push( whence + ( offset < 0 ? '' : '+' ) + String(offset) );
                     if ( cond.operator == "bet" || cond.operator == "nob" ) {
-                        jQuery( 'div.end', $row ).show();
+                        jQuery( 'fieldset#end', $row ).show();
                         whence = jQuery('select#sunend', $row).val() || "sunset";
                         offset = getInteger( jQuery('input#endoffset', $row).val() || "0" );
                         if ( isNaN( offset ) ) {
@@ -1574,7 +1582,7 @@ var ReactorSensor = (function(api, $) {
                         }
                         res.push( whence + ( offset < 0 ? '' : '+' ) + String(offset) );
                     } else {
-                        jQuery( 'div.end', $row ).hide();
+                        jQuery( 'fieldset#end', $row ).hide();
                         res.push("");
                     }
                     cond.value = res.join(',');
@@ -1978,6 +1986,10 @@ var ReactorSensor = (function(api, $) {
                         .on( 'change.reactor', handleConditionRowChange );
                     jQuery("select.devicemenu", container).on( 'change.reactor', handleDeviceChange );
                     jQuery("i#condmore", container).on( 'click.reactor', handleExpandOptionsClick );
+                    if ( "" !== ( cond.after || "" ) || "" !== ( cond.duration || "" ) ||
+                            "" !== ( cond.repeatcount || "" ) || cond.latch ) {
+                        jQuery( 'i#condmore', container ).addClass( 'attn' );
+                    }
 
                     updateCurrentServiceValue( container );
                     break;
@@ -2049,15 +2061,15 @@ var ReactorSensor = (function(api, $) {
                     container.append( makeDateTimeOpMenu( cond.operator ) );
                     jQuery("select.opmenu", container).append('<option value="before">before</option>');
                     jQuery("select.opmenu", container).append('<option value="after">after</option>');
-                    container.append('<div class="start form-inline pull-left">' +
+                    container.append('<fieldset id="start">' +
                         '<select id="sunstart"></select> '+
-                        ' offset&nbsp;<input type="text" id="startoffset" value="" class="narrow form-control form-control-sm" autocomplete="off">&nbsp;minutes' +
-                        '</div>'
+                        ' offset&nbsp;<input type="text" id="startoffset" value="" class="tiny form-control form-control-sm" autocomplete="off">&nbsp;minutes' +
+                        '</fieldset>'
                     );
-                    container.append('<div class="end form-inline pull-left"> and ' +
+                    container.append('<fieldset id="end">&nbsp;and ' +
                         '<select id="sunend"></select> '+
-                        ' offset&nbsp;<input type="text" id="endoffset" value="" class="narrow form-control form-control-sm" autocomplete="off">&nbsp;minutes' +
-                        '</div>'
+                        ' offset&nbsp;<input type="text" id="endoffset" value="" class="tiny form-control form-control-sm" autocomplete="off">&nbsp;minutes' +
+                        '</fieldset>'
                     );
                     mm = jQuery('<select class="form-control form-control-sm">' +
                         '<option value="sunrise">Sunrise</option><option value="sunset">Sunset</option>' +
@@ -2070,10 +2082,10 @@ var ReactorSensor = (function(api, $) {
                     /* Restore. Condition first... */
                     op = cond.operator || "after";
                     jQuery("select.opmenu", container).on( 'change.reactor', handleConditionRowChange ).val( op );
-                    if ( op === "before" || op === "after" ) {
-                        jQuery("div.end", container).hide();
+                    if ( "bet" === op || "nob" === op ) {
+                        jQuery("fieldset#end", container).show();
                     } else {
-                        jQuery("div.end", container).show();
+                        jQuery("fieldset#end", container).hide();
                     }
                     /* Start */
                     var vals = ( cond.value || "sunrise+0,sunset+0" ).split(/,/);
@@ -2118,13 +2130,13 @@ var ReactorSensor = (function(api, $) {
                     for ( var mn=0; mn<60; mn+=5 ) {
                         mins.append('<option value="' + mn + '">:' + (mn < 10 ? '0' : '') + mn + '</option>');
                     }
-                    container.append('<div class="start"></div>').append('<div class="end"> and </div>');
-                    jQuery("div.start", container).append( months.clone() )
+                    container.append('<fieldset id="start" />').append('<fieldset id="end">&nbsp;and </fieldset>');
+                    jQuery("fieldset#start", container).append( months.clone() )
                         .append( days.clone() )
                         .append('<input type="text" placeholder="yyyy or blank" title="Leave blank for any year" class="year narrow datespec form-control form-control-sm" autocomplete="off">')
                         .append( hours.clone() )
                         .append( mins.clone() );
-                    jQuery("div.end", container).append( months )
+                    jQuery("fieldset#end", container).append( months )
                         .append( days )
                         .append('<input type="text" placeholder="yyyy" class="year narrow datespec form-control form-control-sm" autocomplete="off">')
                         .append( hours )
@@ -2134,18 +2146,18 @@ var ReactorSensor = (function(api, $) {
                         jQuery(obj).val( jQuery("option:first", obj ).val() );
                     });
                     /* Restore values. */
-                    op = cond.operator || "between";
+                    op = cond.operator || "bet";
                     jQuery("select.opmenu", container).val( op );
-                    if ( op === "before" || op === "after" ) {
-                        jQuery("div.end", container).hide();
+                    if ( "bet" === op || "nob" === "op" ) {
+                        jQuery("fieldset#end", container).show();
                     } else {
-                        jQuery("div.end", container).show();
+                        jQuery("fieldset#end", container).hide();
                     }
                     var vlist = (cond.value || "").split(',');
-                    var flist = [ 'div.start input.year', 'div.start select.monthmenu','div.start select.daymenu',
-                                  'div.start select.hourmenu', 'div.start select.minmenu',
-                                  'div.end input.year','div.end select.monthmenu', 'div.end select.daymenu',
-                                  'div.end select.hourmenu','div.end select.minmenu'
+                    var flist = [ 'fieldset#start input.year', 'fieldset#start select.monthmenu','fieldset#start select.daymenu',
+                                  'fieldset#start select.hourmenu', 'fieldset#start select.minmenu',
+                                  'fieldset#end input.year','fieldset#end select.monthmenu', 'fieldset#end select.daymenu',
+                                  'fieldset#end select.hourmenu','fieldset#end select.minmenu'
                     ];
                     for ( var fx=0; fx<flist.length; fx++ ) {
                         if ( fx >= vlist.length ) {
@@ -2752,6 +2764,7 @@ var ReactorSensor = (function(api, $) {
 
             /* Our styles. */
             var html = "<style>";
+            html += 'div#tab-conds.reactortab div#conditions { width: 100%; }';
             html += 'div#tab-conds.reactortab .cond-group-container { position: relative; margin: 4px 0; border-radius: 4px; padding: 5px; border: 1px solid #EEE; background: rgba(255, 255, 255, 0.9); }';
             html += 'div#tab-conds.reactortab .cond-group-container { padding: 10px; padding-bottom: 6px; border: 1px solid #0c6099; background: #bce8f1; }';
             html += 'div#tab-conds.reactortab .cond-group-container.levelmod1 { background-color: #faebcc; }';
@@ -2777,28 +2790,27 @@ var ReactorSensor = (function(api, $) {
             html += 'div#tab-conds.reactortab div.cond-group-container.tberror { border-left: 4px solid red; }';
             html += 'div#tab-conds.reactortab div.cond-container.tbmodified:not(.tberror) { }';
             html += 'div#tab-conds.reactortab div.cond-container.tberror { border-left: 4px solid red; }';
-
-            html += 'div#tab-conds.reactortab {}';
+            html += 'div#tab-conds.reactortab div.params { display: inline-block; }';
+            html += 'div#tab-conds.reactortab div.params > fieldset { display: inline-block; border: none; margin: 0; padding: 0; }';
 
             html += "div#tab-conds.reactortab .tb-about { margin-top: 24px; }";
             html += 'div#tab-conds.reactortab .tberror { border: 1px solid red; }';
             html += 'div#tab-conds.reactortab .tbwarn { border: 1px solid yellow; background-color: yellow; }';
             html += 'div#tab-conds.reactortab label { font-weight: normal; }';
-            html += 'div#tab-conds.reactortab fieldset#nocaseopt { display: inline-block; }';
-            html += 'div#tab-conds.reactortab div#currval { font-family: "Courier New", Courier, monospace; font-size: 0.9em; }';
+            html += 'div#tab-conds.reactortab div#currval { font-family: "Courier New", Courier, monospace; font-size: 0.9em; margin: 8px 0px; display: block; }';
             html += 'div#tab-conds.reactortab div.warning { color: red; }';
             html += 'div#tab-conds.reactortab i.md-btn:disabled { color: #999999; cursor: not-allowed; }';
             html += 'div#tab-conds.reactortab i.md-btn[disabled] { color: #999999; cursor: not-allowed; }';
+            html += 'div#tab-conds.reactortab i.md-btn.attn { background-color: #ffff80; }';
             html += 'div#tab-conds.reactortab i.md-btn { font-size: 16pt; cursor: pointer; position: relative; top: 6px; color: #333; background-color: #fff; padding: 2px; border-radius: 4px; box-shadow: #cccccc 2px 2px; }';
             html += 'div#tab-conds.reactortab i.md-btn.draghandle { cursor: grab; }';
             html += 'div#tab-conds.reactortab .md12 { font-size: 12pt; }';
             html += 'div#tab-conds.reactortab .md14 { font-size: 14pt; }';
-            html += 'div#tab-conds.reactortab div#conditions { width: 100%; }';
             html += 'div#tab-conds.reactortab fieldset.condfields { display: inline-block; }';
             html += 'div#tab-conds.reactortab input.narrow { max-width: 8em; }';
-            html += 'div#tab-conds.reactortab input.tiny { max-width: 3em; }';
+            html += 'div#tab-conds.reactortab input.tiny { max-width: 4em; text-align: center; }';
             html += 'div#tab-conds.reactortab input.titleedit { font-size: 12px; height: 24px; }';
-            html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
+            html += 'div#tbcopyright { display: block; margin: 12px 0px; }';
             html += 'div#tbbegging { display: block; color: #ff6600; margin-top: 12px; }';
             html += "</style>";
             jQuery("head").append( html );
