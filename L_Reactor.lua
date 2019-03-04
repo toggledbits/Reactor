@@ -3519,6 +3519,10 @@ function actionSetVariable( opt, tdev )
     local cstate = loadCleanState( tdev )
     cstate.vars = cstate.vars or {}
     local vs = cstate.vars[ opt.VariableName ]
+    if vs == nil then
+        vs = {}
+        cstate.vars[ opt.VariableName ] = vs
+    end
     -- Value is handled as string because that's how Luup actions roll.
     local vv = tostring( opt.NewValue or "")
     if tostring( vs.lastvalue ) ~= vv then
@@ -3533,6 +3537,9 @@ function actionSetVariable( opt, tdev )
         if ( cdata.variables[ opt.VariableName ].export or 1 ) ~= 0 then
             luup.variable_set( VARSID, opt.VariableName, vv, tdev )
         end
+        -- Save updated state.
+        cstate.lastsaved = os.time()
+        luup.variable_set( RSSID, "cstate", json.encode( cstate ), tdev )
     end
 end
 
