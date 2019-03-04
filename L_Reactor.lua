@@ -14,6 +14,7 @@ local _PLUGIN_NAME = "Reactor"
 local _PLUGIN_VERSION = "2.4groupactions"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _CONFIGVERSION = 00206
+local _CDATAVERSION = 19051
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -1557,7 +1558,7 @@ local function loadSensorConfig( tdev )
             }
         }
         upgraded = true
-    elseif ( cdata.version or 0 ) < 19051 then
+    elseif ( cdata.version or 0 ) < _CDATAVERSION then
         local fn = string.format( "reactor-dev%d-config-v%s-backup.json", tdev, tostring( cdata.version or 0 ) )
         if isOpenLuup then
             local loader = require "openLuup.loader"
@@ -1627,9 +1628,9 @@ local function loadSensorConfig( tdev )
     end
 
     -- Backport/downgrade attempt from future version?
-    if cdata.version and cdata.version > 19012 then
-        L({level=1,msg="Configuration loaded is format v%1, max compatible with this version of Reactor is 19012; upgrade Reactor or restore older config from backup."},
-            cdata.version)
+    if cdata.version and cdata.version > _CDATAVERSION then
+        L({level=1,msg="Configuration loaded is format v%1, max compatible with this version of Reactor is %2; upgrade Reactor or restore older config from backup."},
+            cdata.version, _CDATAVERSION)
         error("Incompatible config format version. Upgrade Reactor or restore older config from backup.")
     end
 
@@ -1644,7 +1645,7 @@ local function loadSensorConfig( tdev )
     -- Rewrite if we upgraded.
     if upgraded then
         D("loadSensorConfig() writing updated sensor config")
-        cdata.version = 19051 -- MUST COINCIDE WITH J_ReactorSensor_UI7.js
+        cdata.version = _CDATAVERSION -- MUST COINCIDE WITH J_ReactorSensor_UI7.js
         cdata.timestamp = os.time()
         luup.variable_set( RSSID, "cdata", json.encode( cdata ), tdev )
     end
