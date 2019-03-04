@@ -4,6 +4,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 2.3 (hotfix branch)
 
+* Fix hotfix-19062-01: Fix UI for date/time conditions to allow day of month without month, for recurring dates every month on the same day.
 * Fix hotfix-19040-01: Fix missing pre-init of context variable that causes later spurious error (reported on openLuup).
 
 ## Version 2.3 (released)
