@@ -1950,7 +1950,7 @@ local function evaluateCondition( cond, grp, tdev )
         if tpart[1] < 1970 then tpart[1] = 1970 elseif tpart[1] > 2037 then tpart[1] = 2037 end
         if tpart[6] < 1970 then tpart[6] = 1970 elseif tpart[6] > 2037 then tpart[6] = 2037 end
         D("evaluationCondition() clean tpart=%1", tpart)
-        if tparam[2] == "" then
+        if tparam[3] == "" then
             -- No date specified, only time components. Magnitude comparison.
             D("evaluateCondition() time-only comparison, now is %1, ndt is %2", now, ndt)
             local nowMSM = ndt.hour * 60 + ndt.min
@@ -1981,8 +1981,9 @@ local function evaluateCondition( cond, grp, tdev )
                 end
             end
         elseif tparam[1] == "" then
-            -- No-year given, just M/D H:M. We can do comparison by magnitude,
+            -- No-year given, just [M/]D H:M. We can do comparison by magnitude,
             -- which works better for year-spanning ranges.
+            -- N.B. month defaults to current month by setup of tpart.
             local nowz = ndt.month * 100 + ndt.day
             local stz = tpart[2] * 100 + tpart[3]
             nowz = nowz * 1440 + ndt.hour * 60 + ndt.min
@@ -3615,7 +3616,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
         r = r .. "; " .. tostring((_G or {})._VERSION)
         r = r .. EOL
         r = r .. "Local time: " .. os.date("%Y-%m-%dT%H:%M:%S%z") .. ", DST=" .. tostring(luup.variable_get( MYSID, "LastDST", pluginDevice ) or "") .. EOL
-        r = r .. "House mode: tracking " .. ( usesHouseMode and "off" and "on" ) .. "; current mode " .. tostring(luup.variable_get( MYSID, "HouseMode", pluginDevice ) or "") .. EOL
+        r = r .. "House mode: tracking " .. ( usesHouseMode and "off" or "on" ) .. "; current mode " .. tostring(luup.variable_get( MYSID, "HouseMode", pluginDevice ) or "") .. EOL
         r = r .. "  Sun data: " .. tostring(luup.variable_get( MYSID, "sundata", pluginDevice ) or "") .. EOL
         if geofenceMode ~= 0 then
             local status, p = pcall( showGeofenceData )
