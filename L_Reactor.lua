@@ -1839,7 +1839,7 @@ local function evaluateCondition( cond, grp, tdev )
         if tpart[1] < 1970 then tpart[1] = 1970 elseif tpart[1] > 2037 then tpart[1] = 2037 end
         if tpart[6] < 1970 then tpart[6] = 1970 elseif tpart[6] > 2037 then tpart[6] = 2037 end
         D("evaluationCondition() clean tpart=%1", tpart)
-        if tparam[2] == "" then
+        if tparam[3] == "" then
             -- No date specified, only time components. Magnitude comparison.
             D("evaluateCondition() time-only comparison, now is %1, ndt is %2", now, ndt)
             local nowMSM = ndt.hour * 60 + ndt.min
@@ -1870,7 +1870,7 @@ local function evaluateCondition( cond, grp, tdev )
                 end
             end
         elseif tparam[1] == "" then
-            -- No-year given, just M/D H:M. We can do comparison by magnitude,
+            -- No-year given, just [M/]D H:M. We can do comparison by magnitude,
             -- which works better for year-spanning ranges.
             local nowz = ndt.month * 100 + ndt.day
             local stz = tpart[2] * 100 + tpart[3]
