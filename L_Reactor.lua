@@ -3983,7 +3983,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
         r = r .. "; " .. tostring((_G or {})._VERSION)
         r = r .. EOL
         r = r .. "Local time: " .. os.date("%Y-%m-%dT%H:%M:%S%z") .. ", DST=" .. tostring(luup.variable_get( MYSID, "LastDST", pluginDevice ) or "") .. EOL
-        r = r .. "House mode: tracking " .. ( usesHouseMode and "off" and "on" ) .. "; current mode " .. tostring(luup.variable_get( MYSID, "HouseMode", pluginDevice ) or "") .. EOL
+        r = r .. "House mode: tracking " .. ( usesHouseMode and "off" or "on" ) .. "; current mode " .. tostring(luup.variable_get( MYSID, "HouseMode", pluginDevice ) or "") .. EOL
         r = r .. "  Sun data: " .. tostring(luup.variable_get( MYSID, "sundata", pluginDevice ) or "") .. EOL
         if geofenceMode ~= 0 then
             local status, p = pcall( showGeofenceData )
