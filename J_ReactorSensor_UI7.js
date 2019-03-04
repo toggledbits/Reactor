@@ -1469,7 +1469,7 @@ var ReactorSensor = (function(api, $) {
                     break;
 
                 case 'trange':
-                    cond.operator = jQuery("div.params select.opmenu", row).val() || "bet";
+                    cond.operator = jQuery("div.params select.opmenu", $row).val() || "bet";
                     var between = "bet" === cond.operator || "nob" == cond.operator;
                     if ( target !== undefined && target.hasClass('year') ) {
                         var pdiv = target.closest('div');
@@ -1491,57 +1491,57 @@ var ReactorSensor = (function(api, $) {
                             }
                         }
                     }
-                    var mon = jQuery("div.start select.monthmenu", row).val() || "";
+                    var mon = jQuery("div.start select.monthmenu", $row).val() || "";
                     if ( isEmpty( mon ) ) {
                         /* No/any month. Disable years. */
-                        jQuery( '.datespec', row ).val( "" ).prop( 'disabled', true );
+                        jQuery( '.datespec', $row ).val( "" ).prop( 'disabled', true );
                         /* Ending month must also be blank */
-                        jQuery( 'div.end select.monthmenu', row ).val( "" );
+                        jQuery( 'div.end select.monthmenu', $row ).val( "" );
                     } else {
                         /* Month specified, year becomes optional, but either both
                            years must be specified or neither for between/not. */
-                        jQuery( '.datespec', row ).prop( 'disabled', false );
-                        jQuery( 'div.start select.daymenu:has(option[value=""]:selected)', row ).addClass( 'tberror' );
+                        jQuery( '.datespec', $row ).prop( 'disabled', false );
+                        jQuery( 'div.start select.daymenu:has(option[value=""]:selected)', $row ).addClass( 'tberror' );
                         if ( between ) {
-                            jQuery( 'div.end select.daymenu:has(option[value=""]:selected)', row ).addClass( 'tberror' );
-                            var y1 = jQuery( 'div.start input.year', row ).val() || "";
-                            var y2 = jQuery( 'div.end input.year', row ).val() || "";
+                            jQuery( 'div.end select.daymenu:has(option[value=""]:selected)', $row ).addClass( 'tberror' );
+                            var y1 = jQuery( 'div.start input.year', $row ).val() || "";
+                            var y2 = jQuery( 'div.end input.year', $row ).val() || "";
                             if ( isEmpty( y1 ) !== isEmpty( y2 ) ) {
-                                jQuery( '.datespec', row ).addClass( 'tberror' );
+                                jQuery( '.datespec', $row ).addClass( 'tberror' );
                             }
-                            var m2 = jQuery( 'div.end select.monthmenu', row ).val() || "";
+                            var m2 = jQuery( 'div.end select.monthmenu', $row ).val() || "";
                             if ( isEmpty( m2 ) ) {
                                 /* Ending month may not be blank--flag both start/end */
-                                jQuery( 'select.monthmenu', row ).addClass( 'tberror' );
+                                jQuery( 'select.monthmenu', $row ).addClass( 'tberror' );
                             }
                         }
                     }
-                    var dom = jQuery( 'div.start select.daymenu', row ).val() || "";
+                    var dom = jQuery( 'div.start select.daymenu', $row ).val() || "";
                     if ( isEmpty( dom ) ) {
                         /* Start day is blank. So must be end day */
-                        jQuery( 'div.end select.daymenu', row ).val( "" );
+                        jQuery( 'div.end select.daymenu', $row ).val( "" );
                     } else if ( between ) {
                         /* Between with start day, end day must also be specified. */
-                        jQuery( 'div.end select.daymenu:has(option[value=""]:selected)', row ).addClass( 'tberror' );
+                        jQuery( 'div.end select.daymenu:has(option[value=""]:selected)', $row ).addClass( 'tberror' );
                     }
 
                     /* Fetch and load */
                     res = [];
-                    res.push( isEmpty( mon ) ? "" : jQuery("div.start input.year", row).val() || "" );
+                    res.push( isEmpty( mon ) ? "" : jQuery("div.start input.year", $row).val() || "" );
                     res.push( mon );
-                    res.push( jQuery("div.start select.daymenu", row).val() || "" );
-                    res.push( jQuery("div.start select.hourmenu", row).val() || "0" );
-                    res.push( jQuery("div.start select.minmenu", row).val() || "0" );
+                    res.push( jQuery("div.start select.daymenu", $row).val() || "" );
+                    res.push( jQuery("div.start select.hourmenu", $row).val() || "0" );
+                    res.push( jQuery("div.start select.minmenu", $row).val() || "0" );
                     if ( ! between ) {
                         Array.prototype.push.apply( res, ["","","","",""] );
-                        jQuery('div.end', row).hide();
+                        jQuery('div.end', $row).hide();
                     } else {
-                        jQuery('div.end', row).show();
-                        res.push( isEmpty( mon ) ? "" : jQuery("div.end input.year", row).val() || "" );
-                        res.push( isEmpty( mon ) ? "" : jQuery("div.end select.monthmenu", row).val() || "" );
-                        res.push( jQuery("div.end select.daymenu", row).val() || "" );
-                        res.push( jQuery("div.end select.hourmenu", row).val() || "0" );
-                        res.push( jQuery("div.end select.minmenu", row).val() || "0" );
+                        jQuery('div.end', $row).show();
+                        res.push( isEmpty( mon ) ? "" : jQuery("div.end input.year", $row).val() || "" );
+                        res.push( isEmpty( mon ) ? "" : jQuery("div.end select.monthmenu", $row).val() || "" );
+                        res.push( jQuery("div.end select.daymenu", $row).val() || "" );
+                        res.push( jQuery("div.end select.hourmenu", $row).val() || "0" );
+                        res.push( jQuery("div.end select.minmenu", $row).val() || "0" );
                     }
                     cond.value = res.join(',');
                     break;
