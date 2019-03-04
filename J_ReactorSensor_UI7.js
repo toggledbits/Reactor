@@ -436,7 +436,8 @@ var ReactorSensor = (function(api, $) {
         var ud = api.getUserData();
         var dx = api.getDeviceIndex( myid );
         var deleted = {};
-        var configVars = iData[myid].cdata.variables || {};
+        var cdata = getConfiguration( myid );
+        var configVars = cdata.variables || {};
         for ( var k=0; k<(ud.devices[dx].states || []).length; ++k) {
             var state = ud.devices[dx].states[k];
             if ( state.service.match( /:ReactorValues$/i ) ) {
@@ -904,7 +905,7 @@ var ReactorSensor = (function(api, $) {
                 if ( cond.after !== undefined ) {
                     condDesc += ' (' +
                         ( (cond.aftertime||0) > 0 ? 'within ' + cond.aftertime + ' secs ' : '' ) +
-                        'after ' + makeConditionDescription( iData[pdev].ixCond[cond.after] ) +
+                        'after ' + makeConditionDescription( getInstanceData().ixCond[cond.after] ) +
                         ')';
                 }
 
@@ -1125,13 +1126,17 @@ var ReactorSensor = (function(api, $) {
             var $el = jQuery( 'div#' + idSelector( grp.id ) + '.cond-group-container' ).children( 'div.cond-group-body' ).children( 'div.cond-list' );
             var ixCond = getInstanceData().ixCond;
             var ix = 0;
-            $el.children().each( function() {
-                var id = jQuery( this ).attr( 'id' );
+            $el.children().each( function( n, row ) {
+                var id = jQuery( row ).attr( 'id' );
                 var obj = ixCond[ id ];
+                grp.conditions.splice( 0, grp.conditions.length ); /* empty in place */
                 if ( obj ) {
                     grp.conditions[ix] = obj;
                     obj.__index = ix;
                     ix++;
+                } else {
+                    /* Not found. Remove from UI */
+                    jQuery( row ).remove();
                 }
             });
         }
@@ -2853,7 +2858,7 @@ var ReactorSensor = (function(api, $) {
     function handleVariableChange( ev ) {
         var container = jQuery('div#reactorvars');
         var myid = api.getCpanelDeviceId();
-        var cd = iData[myid].cdata;
+        var cd = getConfiguration( myid );
 
         jQuery('.tberror', container).removeClass( 'tberror' );
         jQuery('div.varexp', container).each( function( ix, obj ) {
@@ -2915,7 +2920,8 @@ var ReactorSensor = (function(api, $) {
         var row = jQuery( ev.currentTarget ).closest( 'div.varexp' );
         var vname = row.attr('id');
         if ( confirm( 'Deleting "' + vname + '" will break conditions, actions, or other expressions that use it.' ) ) {
-            delete iData[api.getCpanelDeviceId()].cdata.variables[vname];
+            var cdata = getConfiguration();
+            delete cdata.variables[vname];
             row.remove();
             configModified = true;
             updateVariableControls();
@@ -2959,7 +2965,7 @@ var ReactorSensor = (function(api, $) {
         f.val( expr );
         f.removeClass( 'tberror' );
         var vname = varrow.attr("id");
-        var cd = iData[api.getCpanelDeviceId()].cdata;
+        var cd = getConfiguration();
         if ( cd.variables[vname] === undefined ) {
             cd.variables[vname] = { name: vname, expression: expr };
         } else {
@@ -3577,8 +3583,7 @@ var ReactorSensor = (function(api, $) {
     }
 
     function handleActionsSaveClick( ev ) {
-        var myid = api.getCpanelDeviceId();
-        var cd = iData[myid].cdata;
+        var cd = getConfiguration( myid );
         var errors = false;
         jQuery( 'div.actionlist' ).each( function() {
             var id = jQuery( this ).attr( 'id' );
@@ -3652,7 +3657,7 @@ var ReactorSensor = (function(api, $) {
     }
 
     function appendVariables( menu ) {
-        var cd = iData[ api.getCpanelDeviceId() ].cdata;
+        var cd = getConfiguration();
         var first = true;
         for ( var vname in ( cd.variables || {} ) ) {
             if ( cd.variables.hasOwnProperty( vname ) ) {
@@ -4637,7 +4642,7 @@ var ReactorSensor = (function(api, $) {
     function redrawActivities() {
         var myid = api.getCpanelDeviceId();
         var devobj = api.getDeviceObject( myid );
-        var cd = iData[myid].cdata;
+        var cd = getConfiguration( myid );
         jQuery( 'div#activities' ).empty();
 
         var el = getActionListContainer();
@@ -4697,6 +4702,7 @@ var ReactorSensor = (function(api, $) {
     function doActivities()
     {
         console.log("doActivities()");
+
         var myid = api.getCpanelDeviceId();
 
         try {
@@ -4709,10 +4715,10 @@ var ReactorSensor = (function(api, $) {
                 handleSaveClick( undefined );
             }
 
-            var cd = iData[myid].cdata;
+            var cd = getConfiguration( myid );
 
             /* Set up a data list with our variables */
-            var dl = jQuery('<datalist id="reactorvarlist"></datalist>');
+            var dl = jQuery( '<datalist id="reactorvarlist" />' );
             if ( cd.variables ) {
                 for ( var vname in cd.variables ) {
                     if ( cd.variables.hasOwnProperty( vname ) ) {
