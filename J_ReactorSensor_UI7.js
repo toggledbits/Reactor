@@ -6,7 +6,7 @@
  * Copyright 2018,2019 Patrick H. Rigney, All Rights Reserved.
  * This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
  *
- * TODO: 
+ * TODO:
  *       * Standardize classes among tabs
  *       * Test messing things up... what does Reactor do with incomplete
  *         conditions, etc. Do we need to flag error in cdata on each cond?
@@ -1014,7 +1014,7 @@ var ReactorSensor = (function(api, $) {
             }
             stel.append( grpel );
         }
-        
+
         showGroupStatus( cdata.conditions.root, stel, cstate );
     }
 
@@ -1251,7 +1251,7 @@ var ReactorSensor = (function(api, $) {
 
             /* ... or if any group has no conditions */
             nset = nset || jQuery( '.cond-list:empty' ).length > 0;
-            
+
             /* Disable "Add" buttons while the condition is true. */
             jQuery('i#addcond').prop( 'disabled', nset );
             jQuery('i#addgroup').prop( 'disabled', nset );
@@ -2355,7 +2355,7 @@ var ReactorSensor = (function(api, $) {
                 $el.attr( 'id', 'expand' ).text( 'expand_more' ).attr( 'title', 'Expand group' );
                 try {
                     var n = jQuery( 'div.cond-list:first > div', $p ).length;
-                    jQuery( 'span#titlemessage:first', $p ).text( " (" + n + 
+                    jQuery( 'span#titlemessage:first', $p ).text( " (" + n +
                         " condition" + ( 1 !== n ? "s" : "" ) + " collapsed)" );
                 } catch( e ) {
                     jQuery( 'span#titlemessage:first', $p ).text( " (conditions collapsed)" );
@@ -2490,7 +2490,7 @@ var ReactorSensor = (function(api, $) {
             configModified = true;
             updateControls();
         }
-        
+
         function handleNodeUpdate( ev, ui ) {
             var $el = jQuery( ui.item );
             var $target = jQuery( ev.target ); /* receiving .cond-list */
@@ -2744,7 +2744,7 @@ var ReactorSensor = (function(api, $) {
             }
 
             var myid = api.getCpanelDeviceId();
-            
+
             CondBuilder.init( myid );
 
             /* Load material design icons */
@@ -3024,7 +3024,7 @@ var ReactorSensor = (function(api, $) {
     function getVariableRow() {
         var el = jQuery('<div class="row varexp"></div>');
         el.append( '<div id="varname" class="col-xs-12 col-sm-12 col-md-2"></div>' );
-        el.append( '<div class="col-xs-12 col-sm-9 col-md-8"><textarea class="expr form-control form-control-sm" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="off"/></div>' );
+        el.append( '<div class="col-xs-12 col-sm-9 col-md-8"><textarea class="expr form-control form-control-sm" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="off"/><div id="currval" /></div>' );
         // ??? devices_other is an alternate for insert state variable
         el.append( '<div class="col-xs-12 col-sm-3 col-md-2 text-right"><i class="material-icons md-btn draghandle" title="Change order (drag)">reorder</i><i id="tryexpr" class="material-icons md-btn" title="Try this expression">directions_run</i><i id="getstate" class="material-icons md-btn" title="Insert device state variable value">memory</i><i id="deletevar" class="material-icons md-btn" title="Delete this variable">clear</i></div>' );
         jQuery( 'textarea.expr', el ).on( 'change.reactor', handleVariableChange );
@@ -3076,11 +3076,25 @@ var ReactorSensor = (function(api, $) {
         container.empty();
         var gel = jQuery('<div class="vargroup"></div>');
         gel.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span class="titletext">Defined Variables</span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button id="saveconf" class="btn btn-xs btn-success">Save</button> <button id="revertconf" class="btn btn-xs btn-danger">Revert</button></div></div>');
-        
+
         var list = jQuery( '<div class="varlist tb-sortable" />' );
         gel.append( list );
-        
-        var cdata = getConfiguration();
+
+        var myid = api.getCpanelDeviceId();
+        var cdata = getConfiguration( myid );
+
+        var s = api.getDeviceState( myid, serviceId, "cstate" ) || "";
+        var cstate = {};
+        if ( ! isEmpty( s ) ) {
+            try {
+                cstate = JSON.parse( s );
+            } catch (e) {
+                console.log("cstate cannot be parsed: " + String(e));
+            }
+        } else {
+            console.log("cstate unavailable");
+        }
+        var csvars = cstate.vars || {};
 
         /* Create a list of variables by index, sorted. cdata.variables is a map/hash,
            not an array */
@@ -3108,6 +3122,19 @@ var ReactorSensor = (function(api, $) {
             jQuery( 'div#varname', el).text( vd.name );
             jQuery( 'textarea.expr', el ).val( vd.expression );
             jQuery( 'i.md-btn', el ).attr( 'disabled', false );
+            var blk = jQuery( 'div#currval', el ).empty();
+            if ( csvars[ vd.name ] && undefined !== csvars[ vd.name ].lastvalue ) {
+                var vs = csvars[ vd.name ];
+                if ( vs.lastvalue.__type && vs.lastvalue.__type == "null" ) {
+                    blk.text( 'Last result: (null)' ).attr( 'title', 'This variable has an empty/null value' );
+                } else {
+                    var val = JSON.stringify( vs.lastvalue );
+                    var abbrev = val.length > 64 ? val.substring(0,61) + '...' : val;
+                    blk.text( 'Last result: ' + abbrev ).attr( 'title', ""===val ? "(empty string)" : val );
+                }
+            } else {
+                blk.text( '(expression has not yet been evaluated or caused an error)' ).attr( 'title', "" );
+            }
             list.append( el );
         }
 
@@ -3118,7 +3145,7 @@ var ReactorSensor = (function(api, $) {
 
         /* Append the group */
         container.append(gel);
-        
+
         list.sortable({
             vertical: true,
             containment: 'div.varlist',
@@ -3173,6 +3200,7 @@ var ReactorSensor = (function(api, $) {
             html += 'div#tab-vars.reactortab div.varexp { cursor: default; }';
             html += 'div#tab-vars.reactortab div#varname:after { content: " ="; }';
             html += 'div#tab-vars.reactortab .tb-placeholder { min-height: 8px; background-color: #f0f0f0; }';
+            html += 'div#tab-vars.reactortab div#currval { font-family: "Courier New", Courier, monospace; font-size: 0.9em; }';
             html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
             html += 'div#tbbegging { display: block; color: #ff6600; margin-top: 12px; }';
             html += "</style>";
