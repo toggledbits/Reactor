@@ -74,7 +74,7 @@ var ReactorSensor = (function(api, $) {
     var msgUnsavedChanges = "You have unsaved changes! Press OK to save them, or Cancel to discard them.";
     var msgGroupNormal = "Normal; click for inverted (false when all conditions are met)";
     var msgGroupInvert = "Inverted; click for normal (true when all conditions are met)";
-    var msgGroupIdChange = "Click to change group ID";
+    var msgGroupIdChange = "Click to change group name";
 
     function TBD( ev ) { alert( String(ev) ); } /* receiver for handlers yet to be written ??? */
 
@@ -192,6 +192,13 @@ var ReactorSensor = (function(api, $) {
                 activities: {}
             };
             upgraded = true;
+        }
+
+        /* Special version check */
+        if ( ( cdata.version || 0 ) > CDATA_VERSION ) {
+            console.log("The configuration for this ReactorSensor is an unsupported format/version (" +
+                String( cdata.version ) + "). Upgrade Reactor or restore an older config from backup.");
+            throw "Incompatible configuration format/version";
         }
 
         /* Check for upgrade tasks from prior versions */
@@ -394,11 +401,15 @@ var ReactorSensor = (function(api, $) {
         hh = parseInt( hh || "0" );
         mm = parseInt( mm || "0" );
         var tstr = ( hh < 10 ? '0' : '' ) + hh + ':' + ( mm < 10 ? '0' : '' ) + mm;
+        /* Possible forms are YMD, MD, D with time, or just time */
         if ( isEmpty( m ) ) {
-            return tstr;
-        }
-        m = parseInt( m );
-        return monthName[m] + ' ' + d + ( isEmpty( y ) ? '' : ' ' + y ) + ' ' + tstr;
+            if ( isEmpty( d ) ) {
+                return tstr;
+            }
+            return tstr + " on day " + d + " of each month";
+         }
+         m = parseInt( m );
+         return monthName[m] + ' ' + d + ( isEmpty( y ) ? '' : ' ' + y ) + ' ' + tstr;
     }
 
     /**
@@ -1458,8 +1469,9 @@ var ReactorSensor = (function(api, $) {
                     break;
 
                 case 'trange':
-                    /* Pre-sanity check */
-                    if ( typ === "trange" && target !== undefined && target.hasClass('year') ) {
+                    cond.operator = jQuery("div.params select.opmenu", row).val() || "bet";
+                    var between = "bet" === cond.operator || "nob" == cond.operator;
+                    if ( target !== undefined && target.hasClass('year') ) {
                         var pdiv = target.closest('div');
                         var newval = target.val().trim();
                         /* Vera's a 32-bit system, so date range is bound to MAXINT32 (2038-Jan-19 03:14:07 aka Y2K38) */
@@ -1479,42 +1491,59 @@ var ReactorSensor = (function(api, $) {
                             }
                         }
                     }
-                    /* Fetch and load */
-                    cond.operator = jQuery("div.params select.opmenu", $row).val() || "bet";
-                    res = [];
-                    var mon = jQuery("div.start select.monthmenu", $row).val();
-                    if ( ! isEmpty( mon ) ) {
-                        res.push( jQuery("div.start input.year", $row).val() || "" );
-                        res.push( jQuery("div.start select.monthmenu", $row).val() || "" );
-                        res.push( jQuery("div.start select.daymenu", $row).val() || "1" );
+                    var mon = jQuery("div.start select.monthmenu", row).val() || "";
+                    if ( isEmpty( mon ) ) {
+                        /* No/any month. Disable years. */
+                        jQuery( '.datespec', row ).val( "" ).prop( 'disabled', true );
+                        /* Ending month must also be blank */
+                        jQuery( 'div.end select.monthmenu', row ).val( "" );
                     } else {
-                        Array.prototype.push.apply( res, ["","",""] );
-                    }
-                    res.push( jQuery("div.start select.hourmenu", $row).val() || "0" );
-                    res.push( jQuery("div.start select.minmenu", $row).val() || "0" );
-                    if ( cond.operator === "before" || cond.operator === "after" ) {
-                        Array.prototype.push.apply( res, ["","","","",""] );
-                    } else {
-                        jQuery('div.end', $row).show();
-                        if ( ! isEmpty( mon ) ) {
-                            res.push( jQuery("div.end input.year", $row).val() || "" );
-                            res.push( jQuery("div.end select.monthmenu", $row).val() || "" );
-                            res.push( jQuery("div.end select.daymenu", $row).val() || "1" );
-                        } else {
-                            Array.prototype.push.apply( res, ["","",""] );
+                        /* Month specified, year becomes optional, but either both
+                           years must be specified or neither for between/not. */
+                        jQuery( '.datespec', row ).prop( 'disabled', false );
+                        jQuery( 'div.start select.daymenu:has(option[value=""]:selected)', row ).addClass( 'tberror' );
+                        if ( between ) {
+                            jQuery( 'div.end select.daymenu:has(option[value=""]:selected)', row ).addClass( 'tberror' );
+                            var y1 = jQuery( 'div.start input.year', row ).val() || "";
+                            var y2 = jQuery( 'div.end input.year', row ).val() || "";
+                            if ( isEmpty( y1 ) !== isEmpty( y2 ) ) {
+                                jQuery( '.datespec', row ).addClass( 'tberror' );
+                            }
+                            var m2 = jQuery( 'div.end select.monthmenu', row ).val() || "";
+                            if ( isEmpty( m2 ) ) {
+                                /* Ending month may not be blank--flag both start/end */
+                                jQuery( 'select.monthmenu', row ).addClass( 'tberror' );
+                            }
                         }
-                        res.push( jQuery("div.end select.hourmenu", $row).val() || "0" );
-                        res.push( jQuery("div.end select.minmenu", $row).val() || "0" );
+                    }
+                    var dom = jQuery( 'div.start select.daymenu', row ).val() || "";
+                    if ( isEmpty( dom ) ) {
+                        /* Start day is blank. So must be end day */
+                        jQuery( 'div.end select.daymenu', row ).val( "" );
+                    } else if ( between ) {
+                        /* Between with start day, end day must also be specified. */
+                        jQuery( 'div.end select.daymenu:has(option[value=""]:selected)', row ).addClass( 'tberror' );
+                    }
+
+                    /* Fetch and load */
+                    res = [];
+                    res.push( isEmpty( mon ) ? "" : jQuery("div.start input.year", row).val() || "" );
+                    res.push( mon );
+                    res.push( jQuery("div.start select.daymenu", row).val() || "" );
+                    res.push( jQuery("div.start select.hourmenu", row).val() || "0" );
+                    res.push( jQuery("div.start select.minmenu", row).val() || "0" );
+                    if ( ! between ) {
+                        Array.prototype.push.apply( res, ["","","","",""] );
+                        jQuery('div.end', row).hide();
+                    } else {
+                        jQuery('div.end', row).show();
+                        res.push( isEmpty( mon ) ? "" : jQuery("div.end input.year", row).val() || "" );
+                        res.push( isEmpty( mon ) ? "" : jQuery("div.end select.monthmenu", row).val() || "" );
+                        res.push( jQuery("div.end select.daymenu", row).val() || "" );
+                        res.push( jQuery("div.end select.hourmenu", row).val() || "0" );
+                        res.push( jQuery("div.end select.minmenu", row).val() || "0" );
                     }
                     cond.value = res.join(',');
-                    if ( typ === "trange" ) {
-                        jQuery('.datespec', $row).prop('disabled', res[1]==="");
-                        if ( cond.operator !== "bet" && cond.operator !== "nob" ) {
-                            jQuery('div.end', $row).hide();
-                        } else {
-                            jQuery('div.end', $row).show();
-                        }
-                    }
                     break;
 
                 case 'sun':
@@ -2063,11 +2092,11 @@ var ReactorSensor = (function(api, $) {
                     container.append( makeDateTimeOpMenu( cond.operator ) );
                     jQuery("select.opmenu", container).append('<option value="before">before</option>');
                     jQuery("select.opmenu", container).append('<option value="after">after</option>');
-                    var months = jQuery('<select class="monthmenu form-control form-control-sm"><option value=""></option></select>');
+                    var months = jQuery('<select class="monthmenu form-control form-control-sm"><option value="">(any month)</option></select>');
                     for ( k=1; k<=12; k++ ) {
                         months.append('<option value="' + k + '">' + monthName[k] + ' (' + k + ')</option>');
                     }
-                    var days = jQuery('<select class="daymenu datespec form-control form-control-sm"></select>');
+                    var days = jQuery('<select class="daymenu form-control form-control-sm"><option value="">(any day)</option></select>');
                     for ( k=1; k<=31; k++ ) {
                         days.append('<option value="' + k + '">' + k + '</option>');
                     }
@@ -2094,8 +2123,6 @@ var ReactorSensor = (function(api, $) {
                         .append('<input type="text" placeholder="yyyy" class="year narrow datespec form-control form-control-sm" autocomplete="off">')
                         .append( hours )
                         .append( mins );
-                    jQuery("div.end select.monthmenu", container).addClass("datespec"); /* ability to disable */
-                    jQuery('div.end select.monthmenu option[value=""]', container).remove();
                     /* Default all menus to first option */
                     jQuery("select", container).each( function( ix, obj ) {
                         jQuery(obj).val( jQuery("option:first", obj ).val() );
@@ -2168,6 +2195,7 @@ var ReactorSensor = (function(api, $) {
                         jQuery( '#relhour', container ).val( mm[0] || '00' );
                         jQuery( '#relmin', container ).val( mm[1] || '00' );
                     }
+
                     jQuery("select,input", container).on( 'change.reactor', handleConditionRowChange );
                     break;
 

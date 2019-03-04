@@ -321,11 +321,7 @@ local function rateLimit( rh, rateMax, bump)
 end
 
 -- Set HMT ModeSetting
-local function setHMTModeSetting( hmtdev, pdev )
-    if hmtdev == nil then
-        hmtdev = childDevices( pdev, { id="hmt" } )
-        if hmtdev then hmtdev = hmtdev[1] end -- array to number
-    end
+local function setHMTModeSetting( hmtdev )
     local chm = luup.attr_get( 'Mode', 0 ) or "1"
     local armed = getVarNumeric( "Armed", 0, hmtdev, SENSOR_SID ) ~= 0
     local s = {}
@@ -743,7 +739,7 @@ local function loadCleanState( tdev )
         -- Delete them
         modified = modified or #dels > 0
         for _,k in ipairs( dels ) do cstate[k] = nil end
-        
+
         -- Clean variables no longer in use
         dels = {}
         for n in pairs( cstate.vars or {} ) do
@@ -867,17 +863,19 @@ local function getSceneData( sceneId, tdev )
     -- This is the "old" way of finding trip and untrip actions for the ReactorSensor.
     -- Keep it around for unchanged configs.
     if skey == "root.true" or skey == "root.false" then
-        local pt = skey:match( ".true" ) and "tripactions" or "untripactions"
+        local pt = skey:match("%.true") and "tripactions" or "untripactions"
         local r = sensorState[tostring(tdev)].configData[pt]
         if r then r.id = skey r.name = skey end
         return r
     end
 
-    -- At this point, we're looking for a Vera scene, so make sure it's valid.
+    -- Vera scene, or just Reactor Activity that doesn't exist?
     local scid = tonumber( sceneId )
-    if scid == nil then return end -- quietly return if scene ID is non-numeric.
+    if scid == nil then return nil end -- silent fail non-numeric (Activity)
+
+    -- At this point, we're looking for a Vera scene, so make sure it's valid.
     if luup.scenes[scid] == nil then
-        -- Numeric scene ID, but scene doesn't exist
+        -- Nope.
         L({level=1,msg="Scene %1 in configuration for %3 (%2) is no longer available!"}, sceneId,
             tdev, luup.devices[tdev].description)
         addEvent{ dev=tdev, event="runscene", scene=tostring(sceneId), sceneName="", ['error']="ERROR: scene not found" }
@@ -1627,6 +1625,14 @@ local function loadSensorConfig( tdev )
         cdata.untripactions = nil
         upgraded = true
     end
+
+    -- Backport/downgrade attempt from future version?
+    if cdata.version and cdata.version > 19012 then
+        L({level=1,msg="Configuration loaded is format v%1, max compatible with this version of Reactor is 19012; upgrade Reactor or restore older config from backup."},
+            cdata.version)
+        error("Incompatible config format version. Upgrade Reactor or restore older config from backup.")
+    end
+
     -- Special meta to control encode rendering when needed.
     local mt = { __jsontype="object" } -- empty tables render as object
     if debugMode then
@@ -1646,8 +1652,13 @@ local function loadSensorConfig( tdev )
     -- Save to cache.
     sensorState[tostring(tdev)].configData = cdata
     -- When loading sensor config, dump luaFunc so that any changes to code
-    -- in actions or scenes are honored immediately.
-    luaFunc = {}
+    -- in actions or scenes are honored immediately. This empties without
+    -- changing metatable (which defines mode).
+    local t = next( luaFunc )
+    while t do
+        luaFunc[t] = nil
+        t = next( luaFunc )
+    end
     return cdata
 end
 
@@ -1656,7 +1667,7 @@ end
 -- for that kind of efficiency exceeds the benefit it might provide.
 local function compareTables( a, b )
     D("compareTables(%1,%2) a=%3, b=%4", a, b, tostring(a), tostring(b))
-    for k in pairs( b ) do 
+    for k in pairs( b ) do
         if b[k] ~= a[k] then return false end
     end
     for k in pairs( a ) do
@@ -1692,7 +1703,7 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
         L({level=2,msg="%2 (#%1) failed evaluation of %3: %4"}, tdev, luup.devices[tdev].description,
             vdef.expression, errmsg)
         addEvent{ dev=tdev, event="expression", variable=vname, ['error']=errmsg }
-    elseif result == nil then 
+    elseif result == nil then
         result = luaxp.NULL -- map nil to null
     end
 
@@ -1735,9 +1746,9 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
         if not ( err or luaxp.isNull(result) ) then
             -- Canonify for storage as state variable
             local sv
-            if type(result) == "boolean" then 
+            if type(result) == "boolean" then
                 sv = result and "1" or "0"
-            elseif type(result) == "table" then 
+            elseif type(result) == "table" then
                 _,sv = pcall( json.encode, result )
                 if sv == nil then sv = "" end
             else
@@ -1841,7 +1852,7 @@ local function getExpressionContext( cdata, tdev )
         if ( arr == nil ) or luaxp.isNull( arr ) then arr = {} end
         if newel and not luaxp.isNull( newel ) then
             if not nmax and #arr > ARRAYMAX then luaxp.evalerror("Unbounded array growing too large") end
-            table.insert( arr, newel ) 
+            table.insert( arr, newel )
         end
         if nmax then while #arr > math.max(0,(tonumber(nmax) or 0)) do table.remove( arr, 1 ) end end
         return arr
@@ -1857,9 +1868,9 @@ local function getExpressionContext( cdata, tdev )
     ctx.__functions.arrayunshift = function( args )
         local arr, newel, nmax = unpack( args )
         arr = ( arr == nil or luaxp.isNull( arr ) ) and {} or arr
-        if newel and not luaxp.isNull( newel ) then 
+        if newel and not luaxp.isNull( newel ) then
             if not nmax and #arr > ARRAYMAX then luaxp.evalerror("Unbounded array growing too large") end
-            table.insert( arr, newel, 1 ) 
+            table.insert( arr, newel, 1 )
         end
         if nmax then while #arr > math.max(0,(tonumber(nmax) or 0)) do table.remove( arr ) end end
         return arr
@@ -1871,8 +1882,8 @@ local function getExpressionContext( cdata, tdev )
         ctx.__lvars.__element = table.remove( arr, 1 ) or luaxp.NULL
         return arr
     end
-    ctx.__functions.sum = function( args ) 
-        local function sum( v ) 
+    ctx.__functions.sum = function( args )
+        local function sum( v )
             local t = 0
             if luaxp.isNull( v ) then
                 -- nada
@@ -1902,7 +1913,7 @@ local function getExpressionContext( cdata, tdev )
             return val
         end
     end
-    -- Add previous values to Luaxp context. We use the cstate versions rather 
+    -- Add previous values to Luaxp context. We use the cstate versions rather
     -- than the state variables to preserve original data type. Every defined
     -- variable must have an entry in ctx.
     local cstate = loadCleanState( tdev )
@@ -2221,7 +2232,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
         if tpart[1] < 1970 then tpart[1] = 1970 elseif tpart[1] > 2037 then tpart[1] = 2037 end
         if tpart[6] < 1970 then tpart[6] = 1970 elseif tpart[6] > 2037 then tpart[6] = 2037 end
         D("evaluationCondition() clean tpart=%1", tpart)
-        if tparam[2] == "" then
+        if tparam[3] == "" then
             -- No date specified, only time components. Magnitude comparison.
             D("evaluateCondition() time-only comparison, now is %1, ndt is %2", now, ndt)
             local nowMSM = ndt.hour * 60 + ndt.min
@@ -2252,8 +2263,9 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
                 end
             end
         elseif tparam[1] == "" then
-            -- No-year given, just M/D H:M. We can do comparison by magnitude,
+            -- No-year given, just [M/]D H:M. We can do comparison by magnitude,
             -- which works better for year-spanning ranges.
+            -- N.B. month defaults to current month by setup of tpart.
             local nowz = ndt.month * 100 + ndt.day
             local stz = tpart[2] * 100 + tpart[3]
             nowz = nowz * 1440 + ndt.hour * 60 + ndt.min
@@ -2760,7 +2772,7 @@ local function updateSensor( tdev )
         end
         hasTimer = true -- force, so sensor gets checked later.
     end
-    
+
     -- Save the condition state.
     sensorState[skey].condState.lastSaved = os.time()
     luup.variable_set( RSSID, "cstate", json.encode(sensorState[skey].condState), tdev )
@@ -2974,7 +2986,7 @@ local function waitSystemReady( pdev )
             luup.attr_set( "invisible", debugMode and 0 or 1, k )
             luup.attr_set( "hidden", debugMode and 0 or 1, k )
             setVar( SENSOR_SID, "Tripped", "0", k )
-            setHMTModeSetting( k, pdev )
+            setHMTModeSetting( k )
             addServiceWatch( k, SENSOR_SID, "Armed", pdev )
         else
             L({level=2,msg="Child device #%1 (%2) is unrecognized type; ignoring! %3"},
@@ -3022,6 +3034,9 @@ function startPlugin( pdev )
     watchData = {}
     sceneData = {}
     luaFunc = {}
+    if getVarNumeric( "SuppressWeakLuaFunc", 0, pdev, MYSID ) == 0 then
+        setmetatable( luaFunc, { __mode="v" } ) -- weak values
+    end
     sceneWaiting = {}
     sceneState = {}
     luaEnv = nil
@@ -3141,8 +3156,7 @@ function actionAddSensor( pdev )
         local df = dfMap[ v.device_type ]
         luup.chdev.append( pdev, ptr, v.id, v.description, "", df.device_file, "", "", false )
     end
-    highd = highd + 1
-    D("addSensor() creating child r%1s%2", pdev, highd)
+    highd = highd + 1    D("addSensor() creating child r%1s%2", pdev, highd)
     luup.chdev.append( pdev, ptr, string.format("r%ds%d", pdev, highd),
         "Reactor Sensor " .. highd, "", "D_ReactorSensor.xml", "", "", false )
     luup.chdev.sync( pdev, ptr )
@@ -3604,7 +3618,7 @@ function watch( dev, sid, var, oldVal, newVal )
         local mode = luup.attr_get( "Mode", 0 ) or "1"
         D("watch() HMT device arming state changed, updating HouseMode to %1", mode)
         setVar( MYSID, "HouseMode", mode, pluginDevice )
-        setHMTModeSetting( dev, pluginDevice )
+        setHMTModeSetting( dev )
     else
         local key = string.format("%d:%s/%s", dev, sid, var)
         if watchData[key] then

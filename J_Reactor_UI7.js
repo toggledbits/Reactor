@@ -16,7 +16,7 @@ var Reactor = (function(api, $) {
     /* unique identifier for this plugin... */
     var uuid = '72acc6ea-f24d-11e8-bd87-74d4351650de';
 
-    var pluginVersion = '2.4develop';
+    var pluginVersion = '2.4develop-19058';
 
     var myModule = {};
 
@@ -28,6 +28,16 @@ var Reactor = (function(api, $) {
     // unused: var isALTUI = undefined !== MultiBox;
     var backupInfo = false;
 
+    /* Quote string */
+    function quot( s ) {
+        return JSON.stringify( String(s) );
+    }
+
+    /* Return a "safe" selector for ID passed */
+    function idSelector( id ) {
+        return String( id ).replace( /([^a-z0-9_-])/ig, "\\\1" );
+    }
+
     /* Return footer */
     function footer() {
         var html = '';
@@ -35,7 +45,7 @@ var Reactor = (function(api, $) {
         html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
         html += '<div id="tbcopyright">Reactor ver ' + pluginVersion + ' &copy; 2018,2019 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
             ' All Rights Reserved. Please check out the <a href="https://github.com/toggledbits/Reactor/wiki" target="_blank">online documentation</a>' +
-            ' and <a href="http://forum.micasaverde.com/index.php/board,93.0.html" target="_blank">forum board</a> for support.</div>';
+            ' and <a href="http://forum.micasaverde.com/index.php/board,93.0.html" target="_blank">forum board</a> for support. Double-ring spinner by <a href="https://loading.io/spinner/double-ring" target="_blank">loading.io</a>.</div>';
         html += '<div id="supportlinks">Support links: ' +
             ' <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=debug" target="_blank">Toggle&nbsp;Debug</a>' +
             ' &bull; <a href="/cgi-bin/cmh/log.sh?Device=LuaUPnP" target="_blank">Log&nbsp;File</a>' +
@@ -153,33 +163,29 @@ var Reactor = (function(api, $) {
     function restore( item, dev, tries ) {
         if ( undefined === tries ) tries = 0;
 
-        /* Stop all running scenes on this ReactorSensor */
-        api.performActionOnDevice( dev.id,  "urn:toggledbits-com:serviceId:ReactorSensor",
-            "StopScene", { actionArguments: { SceneNum: 0, contextDevice: dev.id } } );
-
-        /* Erase its condition state */
-        api.setDeviceStateVariablePersistent( dev.id, "urn:toggledbits-com:serviceId:ReactorSensor", "cstate", "{}" );
-
         /* Write new (old/restored) config */
         /* Writing cdata restarts the sensor, so no explicit action call needed after. */
         api.setDeviceStateVariablePersistent( dev.id, "urn:toggledbits-com:serviceId:ReactorSensor",
             "cdata", JSON.stringify( backupInfo.sensors[item].config || {} ),
             {
                 'onSuccess' : function() {
-                    jQuery( '.reactortab div#restorestatus p#' + String(item) ).append( " succeeded." );
+                    console.log('Success ' + String(item));
+                    jQuery( '.reactortab div#restorestatus p#' + idSelector(item) + ' > img' ).replaceWith( "<span> succeeded.</span>" );
                 },
                 'onFailure' : function() {
-                    if ( tries < 12 ) {
-                        var el = jQuery( '.reactortab div#restorestatus p#' + String(item) );
-                        if ( 0 === tries ) {
-                            el.append(" waiting for Luup...");
+                    try {
+                        var el = jQuery( '.reactortab div#restorestatus p#' + idSelector(item) + ' > img' );
+                        if ( tries < 12 ) {
+                            if ( 0 === tries ) {
+                                jQuery( "<span> waiting for Luup...</span>" ).insertBefore( el );
+                            } else {
+                                jQuery( "<span> &sdot;</span>" ).insertBefore( el );
+                            }
+                            setTimeout( function() { restore( item, dev, tries+1 ); }, 5000 );
                         } else {
-                            el.append(" &sdot;");
+                            el.replaceWith( '<b> FAILED!</b>' );
                         }
-                        setTimeout( function() { restore( item, dev, tries+1 ); }, 5000 );
-                    } else {
-                        jQuery( '.reactortab div#restorestatus p#' + String(item) ).append( ' <b>FAILED!</b>' );
-                    }
+                    } catch(e) { console.log(String(e)); console.log(e.stack); }
                 }
             }
         );
@@ -203,17 +209,25 @@ var Reactor = (function(api, $) {
                     dev = api.getDeviceObject( parseInt( dev ) );
                 }
                 if ( ! dev ) {
-                    jQuery( '.reactortab div#restorestatus' ).append( '<p id="' + item + '">Cannot restore ' +
+                    jQuery( '.reactortab div#restorestatus' ).append( '<p id=' + quot(item) + '>Cannot restore ' +
                         backupInfo.sensors[item].name + ' -- no device with matching name found.</p>' );
                 } else if ( dev.device_type != rsType ) {
-                    jQuery( '.reactortab div#restorestatus' ).append( '<p id="' + item + '">Cannot restore ' +
+                    jQuery( '.reactortab div#restorestatus' ).append( '<p id=' + quot(item) + '>Cannot restore ' +
                         backupInfo.sensors[item].name + ' to device #' + dev.id +
                         ' -- device with that name is not a ReactorSensor.</p>' );
                 } else {
                     /* Writing cdata restarts the sensor, so no explicit action call needed */
-                    jQuery( '.reactortab div#restorestatus' ).append( '<p id="' + item + '">Restoring ' +
+                    jQuery( '.reactortab div#restorestatus' ).append( '<p id=' + quot(item) + '>Restoring ' +
                         backupInfo.sensors[item].name + ' configuration to device #' + String(dev.id) +
-                        ' (' + String(dev.name) + ')...</p>' );
+                        ' (' + String(dev.name) + ')... <img id="spinner" src="https://www.toggledbits.com/assets/reactor/spinner-animated.gif" alt="Busy... please wait" border="0"></p>' );
+                        
+                    /* Stop all running scenes on the target ReactorSensor */
+                    api.performActionOnDevice( dev.id,  "urn:toggledbits-com:serviceId:ReactorSensor",
+                        "StopScene", { actionArguments: { SceneNum: 0, contextDevice: dev.id } } );
+
+                    /* Erase its condition state */
+                    api.setDeviceStateVariablePersistent( dev.id, "urn:toggledbits-com:serviceId:ReactorSensor", "cstate", "{}" );
+
                     restore( item, dev );
                 }
             }

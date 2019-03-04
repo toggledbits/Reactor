@@ -11,7 +11,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 * Enhancement: Users may now create Activities for each condition group, not just the over trip/untrip of the sensor.
 * Enhancement: It is now possible to copy the contents of one activity to another.
 * Enhancement: The restore facility can now restore a configuration to a selected ReactorSensor, rather than only to an RS with the same name; this makes it possible to copy Reactor configuration between devices. Incorporates hotfix-19044-01.
-* Fix hotfix-19044-01: Restore of configuration not being written to device correctly, so restore appears to succeed, but device is unchanged.
+* Fix hotfix-19062-01: Fix UI for date/time conditions to allow day of month without month, for recurring dates every month on the same day.* Fix hotfix-19044-01: Restore of configuration not being written to device correctly, so restore appears to succeed, but device is unchanged.
 * Fix hotfix-19040-01: Fix missing pre-init of context variable that causes later spurious error (reported on openLuup).
 * Change: Remove deprecated execLua context values "reactor_device" and "reactor_ext_arg"
 
