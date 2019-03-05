@@ -165,6 +165,7 @@ var Reactor = (function(api, $) {
 
         /* Write new (old/restored) config */
         /* Writing cdata restarts the sensor, so no explicit action call needed after. */
+        cdata.device = dev.id;
         api.setDeviceStateVariablePersistent( dev.id, "urn:toggledbits-com:serviceId:ReactorSensor",
             "cdata", JSON.stringify( backupInfo.sensors[item].config || {} ),
             {
