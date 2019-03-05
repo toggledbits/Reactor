@@ -1126,10 +1126,10 @@ var ReactorSensor = (function(api, $) {
             var $el = jQuery( 'div#' + idSelector( grp.id ) + '.cond-group-container' ).children( 'div.cond-group-body' ).children( 'div.cond-list' );
             var ixCond = getInstanceData().ixCond;
             var ix = 0;
+            grp.conditions.splice( 0, grp.conditions.length ); /* empty in place */
             $el.children().each( function( n, row ) {
                 var id = jQuery( row ).attr( 'id' );
                 var obj = ixCond[ id ];
-                grp.conditions.splice( 0, grp.conditions.length ); /* empty in place */
                 if ( obj ) {
                     grp.conditions[ix] = obj;
                     obj.__index = ix;
@@ -1604,7 +1604,7 @@ var ReactorSensor = (function(api, $) {
                             nmin = nmin + 1440 * v;
                         }
                     }
-                    jQuery('div.params #hours', $row).val();
+                    v = jQuery('div.params #hours', $row).val();
                     if ( v.match( varRefPattern ) ) {
                         cond.hours = v;
                         nmin = 60;
@@ -2290,7 +2290,7 @@ var ReactorSensor = (function(api, $) {
             var parentId = $parentGroup.attr( 'id' );
 
             /* Create a new condition in data, assign an ID */
-            var cond = { id: getUID("cond"), type: "comment", data: {} };
+            var cond = { id: getUID("cond"), type: "comment" }; // ???
 
             /* Insert new condition in UI */
             var condel = getConditionTemplate( cond.id );
