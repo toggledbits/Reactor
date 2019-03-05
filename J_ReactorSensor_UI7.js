@@ -258,6 +258,16 @@ var ReactorSensor = (function(api, $) {
                 }
             }
             cdata.conditions = { root: root };
+
+            /* Handle cdata.variables indexing upgrade. */
+            var ix = 0;
+            for ( var vn in ( cdata.variables || {} ) ) {
+                if ( cdata.variables.hasOwnProperty( vn ) ) {
+                    cdata.variables[vn].index = ix++;
+                }
+            }
+
+            upgraded = true;
         }
 
         /* Keep version on config as highest that has edited it. */
@@ -1443,7 +1453,7 @@ var ReactorSensor = (function(api, $) {
                             configModified = true;
                         }
                     }
-                    
+
                     /* Options open or not, make sure options expander is highlighted */
                     if ( "" !== ( cond.after || "" ) || "" !== ( cond.duration || "" ) ||
                             "" !== ( cond.repeatcount || "" ) || cond.latch ) {
@@ -1914,7 +1924,7 @@ var ReactorSensor = (function(api, $) {
          * Handle user selector changed event.
          */
         function handleGeofenceUserChange( ev ) {
-            var row = jQuery( ev.currentTarget ).closest( 'div.conditionrow' );
+            var row = jQuery( ev.currentTarget ).closest( 'div.cond-container' );
             updateGeofenceLocations( row, "" );
             handleConditionRowChange( ev );
         }
@@ -1924,7 +1934,7 @@ var ReactorSensor = (function(api, $) {
          */
         function handleGeofenceOperatorChange( ev ) {
             var el = jQuery( ev.currentTarget );
-            var row = el.closest( 'div.conditionrow' );
+            var row = el.closest( 'div.cond-container' );
             var val = el.val() || "is";
             if ( "at" === val || "notat" === val ) {
                 jQuery( 'select#userid,select#location', row ).show();
@@ -3125,10 +3135,6 @@ var ReactorSensor = (function(api, $) {
         });
         for ( var ix=0; ix<vix.length; ix++ ) {
             var vd = vix[ix];
-            if ( vix[ix].index !== ix ) {
-                configModified = true; /* flag change we need to save */ /* ??? do where config is read? */
-                vix[ix].index = ix;
-            }
             var el = getVariableRow();
             el.attr( 'id', vd.name );
             jQuery( 'div#varname', el).text( vd.name );
