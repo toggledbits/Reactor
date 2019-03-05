@@ -2800,7 +2800,7 @@ var ReactorSensor = (function(api, $) {
             html += 'div#tab-conds.reactortab div.cond-group-container.tberror { border-left: 4px solid red; }';
             html += 'div#tab-conds.reactortab div.cond-container.tbmodified:not(.tberror) { }';
             html += 'div#tab-conds.reactortab div.cond-container.tberror { border-left: 4px solid red; }';
-            html += 'div#tab-conds.reactortab div.params { display: inline-block; }';
+            html += 'div#tab-conds.reactortab div.params { display: inline-block; width: 100%; }';
             html += 'div#tab-conds.reactortab div.params > fieldset { display: inline-block; border: none; margin: 0; padding: 0; }';
 
             html += "div#tab-conds.reactortab .tb-about { margin-top: 24px; }";
