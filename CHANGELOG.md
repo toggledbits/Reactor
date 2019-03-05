@@ -5,6 +5,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 ## Version 2.4 (groupactions)
 
 * Enhancement: The status display now highlights errors and changed values.
+* Enhancement: The expressions editor now shows the most recent sensor evaluation result for each expression.
 * Enhancement: **POSSIBLE BREAKING CHANGE** As of this version, the evaluation order of expressions is explicitly sequential. Previously, the order was system-determined. By going to sequential evaluation, it is possible for variable to store the previous value of another (e.g. by the expression "OldVal=Val" preceding the expression/calculation of Val). In addition, the values stored in state variables are no longer the primary values used in evaluations. Now, the actual returned values from LuaXP are stored on the ReactorSensor state and saved between sensor updates, and across restarts and reboots (that is, they are now persistent).
 * Enhancement: The response time for house mode changes has been dramatically improved, without more frequent polling. Polling for house mode may now be obsolete, but I'm leaving it as a hedge against missed events--it doesn't cost much, because it's done on the master tick, which has to run to handle other tasks anyway.
 * Enhancement: Condition groups are now a hierarchical construct, and group logic is user-settable (AND/OR/XOR + NOT). This adds considerable flexibility to the condition logic for users, at the expense of some complexity in the UI (implementation/operation is not significantly different).
