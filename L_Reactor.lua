@@ -536,7 +536,7 @@ local function sensor_runOnce( tdev )
         initVar( "Invert", "0", tdev, RSSID )
         initVar( "Retrigger", "0", tdev, RSSID )
         initVar( "Message", "", tdev, RSSID )
-        initVar( "cdata", "{}", tdev, RSSID )
+        initVar( "cdata", "", tdev, RSSID )
         initVar( "cstate", "", tdev, RSSID )
         initVar( "Runtime", 0, tdev, RSSID )
         initVar( "TripCount", 0, tdev, RSSID )
@@ -1486,22 +1486,22 @@ local function trip( state, tdev )
     end
 end
 
--- Find a group in array
-local function findConditionGroup( grpid, cdata )
-    for ix,g in ipairs( cdata.conditions or {} ) do
-        if g.id == grpid then return g,ix end
-    end
-    return nil
-end
-
--- Find a condition hiding in a group (or is it?)
-local function findCondition( condid, cdata )
-    for _,g in ipairs( cdata.conditions or {} ) do
-        for _,c in ipairs( g.groupconditions or {} ) do
-            if c.id == condid then return c end
+-- Find a condition (or group) by ID. Type may also be included (so to find a
+-- group, pass findType="group").
+local function findCondition( findId, cdata, findType )
+    local function tr( grp, condid, typ )
+        if grp.id == condid and ( typ==nil or (grp.type or "group") == typ ) then return grp end
+        for _,cond in ipairs( grp.conditions or {} ) do
+            if ( cond.type or "group" ) == "group" then
+                local r = tr( cond, condid, typ )
+                if r then return r end
+            elseif cond.id == condid and ( typ==nil or (cond.type or "group") == typ ) then
+                return cond
+            end
         end
+        return false
     end
-    return nil
+    return tr( cdata.conditions.root or {}, findId, findType )
 end
 
 -- Find device type name or UDN
@@ -1551,10 +1551,15 @@ local function loadSensorConfig( tdev )
     if cdata == nil then
         L("Initializing new configuration")
         cdata = {
+            version=_CDATAVERSION,
             variables={},
             activities={},
             conditions={
-                root={ id="root", name=luup.devices[tdev].description, ['type']="group", conditions={}, operator="and" }
+                root={ id="root", name=luup.devices[tdev].description, ['type']="group", operator="and",
+                    conditions={
+                        { id="cond0", ['type']="comment", comment="Welcome to your new ReactorSensor!" }
+                    }
+                }
             }
         }
         upgraded = true
@@ -1635,7 +1640,7 @@ local function loadSensorConfig( tdev )
     end
 
     -- Special meta to control encode rendering when needed.
-    local mt = { __jsontype="object" } -- empty tables render as object
+    local mt = { __jsontype="object" } -- dkjson (later revs) empty tables render as object
     if debugMode then
         mt.__index = function(t, n) if debugMode then L({level=1,msg="access to %1 in cdata, which is undefined!"},n) end return rawget(t,n) end
         mt.__newindex = function(t, n, v) rawset(t,n,v) if debugMode then L({level=2,msg="setting %1=%2 in cdata"}, n, v) end end
@@ -1893,7 +1898,7 @@ local function getExpressionContext( cdata, tdev )
             if luaxp.isNull( v ) then
                 -- nada
             elseif type(v) == "table" then
-                for _,n in ipairs( v ) do 
+                for _,n in ipairs( v ) do
                     local d = tsum( n )
                     if not luaxp.isNull( d ) then t = ( luaxp.isNull(t) and 0 or t ) + d end
                 end
@@ -3515,7 +3520,7 @@ function actionSetGroupEnabled( grpid, enab, dev )
     D("actionSetGroupEnabled(%1,%2,%3)", grpid, enab, dev)
     -- Load a clean copy of the configuration.
     local cdata = loadSensorConfig( dev )
-    local grp = findConditionGroup( grpid, cdata )
+    local grp = findCondition( grpid, cdata, "group" )
     if grp then
         if type(enab) == "string" then
             -- Lean towards enabled; only small set of strings disables.
