@@ -1883,20 +1883,48 @@ local function getExpressionContext( cdata, tdev )
         ctx.__lvars.__element = table.remove( arr, 1 ) or luaxp.NULL
         return arr
     end
+    -- sum( arg[, ...] ) returns the sum of its arguments. It any argument is
+    -- an array, the array contents are summed. Nulls do not count to the sum,
+    -- thus if no valid values are found, the result may be null. Strings are
+    -- coerced to numbers if possible.
     ctx.__functions.sum = function( args )
-        local function sum( v )
-            local t = 0
+        local function tsum( v )
+            local t = luaxp.NULL
             if luaxp.isNull( v ) then
                 -- nada
             elseif type(v) == "table" then
-                for _,n in ipairs( v ) do t = t + sum( n ) end
-            else
-                t = tonumber( v ) or 0
+                for _,n in ipairs( v ) do 
+                    local d = tsum( n )
+                    if not luaxp.isNull( d ) then t = ( luaxp.isNull(t) and 0 or t ) + d end
+                end
+            elseif type(v) == "string" or type(v) == "number" then
+                v = tonumber( v )
+                if v ~= nil then t = v end
             end
             return t
         end
-        return sum( args )
+        return tsum( args )
     end
+    -- count( arg[, ...] ) returns the number of non-null elements in the arguments.
+    -- Handling of arguments is identical to sum(), so average/mean is easily computed
+    -- via sum( args ) / count( args ).
+    ctx.__functions.count = function( args )
+        local function tcount( v )
+            if luaxp.isNull( v ) then
+                return 0
+            elseif type( v ) == "table" then
+                local t = 0
+                for _,n in ipairs( v ) do
+                    t = t + tcount( n )
+                end
+                return t
+            else
+                return 1
+            end
+        end
+        return tcount( args )
+    end
+
     if getVarNumeric( "UseOldVariableResolver", 0, tdev, RSSID ) ~= 0 then
         -- This is the old (pre-2.4) resolver--recursively resolve.
         -- Implement LuaXP extension resolver as recursive evaluation. This allows expressions
