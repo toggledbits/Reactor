@@ -200,7 +200,6 @@ end
 local function setVar( sid, name, val, dev )
     val = (val == nil) and "" or tostring(val)
     local s = luup.variable_get( sid, name, dev ) or ""
-    -- D("setVar(%1,%2,%3,%4) old value %5", sid, name, val, dev, s )
     if s ~= val then
         luup.variable_set( sid, name, val, dev )
     end
@@ -330,7 +329,7 @@ local function setHMTModeSetting( hmtdev )
         table.insert( s, string.format( "%d:%s", ix, ( tostring(ix) == chm ) and ( armed and "A" or "" ) or ( armed and "" or "A" ) ) )
     end
     s = table.concat( s, ";" )
-    D("setHMTModeSetting() current mode is %1, current armed is %2; setting HMT ModeSetting=%3", chm, armed, s)
+    D("setHMTModeSetting(%4) HM=%1 armed=%2; new ModeSetting=%3", chm, armed, s, hmtdev)
     luup.variable_set( "urn:micasaverde-com:serviceId:HaDevice1", "ModeSetting", s, hmtdev )
 end
 
@@ -431,7 +430,6 @@ local function scheduleTick( tinfo, timeTick, flags )
             -- Not scheduled, requested sooner than currently scheduled, or forced replacement
             tickTasks[tkey].when = timeTick
         end
-        D("scheduleTick() updated %1 to %2", tkey, tickTasks[tkey])
     else
         -- New task
         assert(tinfo.owner ~= nil) -- required for new task
@@ -1067,8 +1065,7 @@ local function execLua( fname, luafragment, extarg, tdev )
     local _R = { id=tdev, groups={}, trip={}, untrip={}, variables={},
         script=fname, version=_PLUGIN_VERSION }
     _R.dump = stringify -- handy
-    local condState = loadCleanState( tdev )
-    D("execLua() loaded condState %1", condState)
+    local condState = loadCleanState( tdev ) or {}
     for gr,gs in pairs( condState ) do
         if type(gs) == "table" and (gs.type or "group") == "group" then
             _R.groups[gr] = { state=gs.evalstate, since=gs.evalstamp }
@@ -1078,36 +1075,30 @@ local function execLua( fname, luafragment, extarg, tdev )
             end
         end
     end
-    local vars = {}
-    for n,_ in pairs( sensorState[tostring(tdev)].configData.variables or {} ) do
-        D("execLua() presetting variable %1", n)
-        vars[n] = luup.variable_get( VARSID, n, tdev )
-    end
     -- Special metatable for Reactor.variables table. Uses a proxy table to that
     -- all access pass through __index/__newindex, but in 5.1 this makes the table
     -- "un-iterable" without additional work. That's why next() and pairs() are
     -- overriden above--they provide a way for this metatable to create its own
     -- iterator.
     local rmt = {}
-    rmt.__newindex =    function(t, n, v) -- luacheck: ignore 212
-                            addEvent{ dev=tdev, event="lua", script=fname, message="WARNING: Reactor.variables is read-only and cannot be modified! The attempt to modify key "..
-                                n.." will be ignored!" }
-                        end
-    rmt.__index =   function(t, n)
+    rmt.__newindex = function(t, n, v) -- luacheck: ignore 212
+                         addEvent{ dev=tdev, event="lua", script=fname, message="WARNING: Reactor.variables is read-only and cannot be modified! The attempt to modify key "..
+                             n.." will be ignored!" }
+                     end
+    rmt.__index = function(t, n)
                         -- Always fetch, because it could be changing dynamically
-                        local v = luup.variable_get( VARSID, n, tdev )
+                        local v = rawget(getmetatable(t).__vars, n)
                         if v == nil then
-                            L({level=1,msg="%1 (%2) runLua action: your code accesses undeclared Reactor variable 'Reactor.variables."..n.."'"},
+                            L({level=1,msg="%1 (%2) Run Lua action: your code attempts to access undefined Reactor variable "..tostring(n)},
                                 luup.devices[tdev].description, tdev, n)
-                            addEvent{ dev=tdev, event="lua", script=fname, message="WARNING: Attempt to access undefined Reactor variable "..n }
-                        else
-                            rawset(getmetatable(t).__vars, n, v) -- store locally
+                            addEvent{ dev=tdev, event="lua", script=fname, message="WARNING: Attempt to access undefined Reactor variable "..tostring(n) }
+                            return nil
                         end
-                        return v
-                    end
+                        return v.lastvalue
+                  end
     -- Define __next meta so env-standard next() accesses proxy table.
-    rmt.__next =    function(t, k) return luaEnv.rawnxt( getmetatable(t).__vars, k ) end
-    rmt.__vars = vars -- this is the proxy table
+    rmt.__next =    function(t, k) local k2,vs = luaEnv.rawnxt( getmetatable(t).__vars, k ) if vs then return k2, vs.lastvalue else return nil end end
+    rmt.__vars = condState.vars or {}
     setmetatable( _R.variables, rmt )
     -- Finally. post our device environment and run the code.
     luaEnv.Reactor = _R
@@ -1502,6 +1493,28 @@ local function findCondition( findId, cdata, findType )
         return false
     end
     return tr( cdata.conditions.root or {}, findId, findType )
+end
+
+-- Return iterator for variables in eval order
+local function variables( cdata )
+    local map = {}
+    for _,v in pairs( cdata.variables or {} ) do
+        table.insert( map, v )
+    end
+    table.sort( map, function( a, b ) 
+        local i1 = a.index or -1
+        local i2 = b.index or -1
+        if i1 == i2 then
+            return (a.name or ""):lower() < (b.name or ""):lower()
+        end
+        return i1 < i2
+    end )
+    local ix = 0
+    return function()
+        ix = ix + 1
+        if ix > #map then return nil end
+        return ix, map[ix]
+    end
 end
 
 -- Find device type name or UDN
@@ -3568,7 +3581,7 @@ function actionSetVariable( opt, tdev )
         end
         -- Update state variable if it's exported.
         if ( cdata.variables[ opt.VariableName ].export or 1 ) ~= 0 then
-            luup.variable_set( VARSID, opt.VariableName, vv, tdev )
+            setVar( VARSID, opt.VariableName, vv, tdev )
         end
         -- Save updated state.
         cstate.lastsaved = os.time()
@@ -3758,8 +3771,7 @@ local function getLuaSummary( lua, encoded, fmt )
 end
 
 local function getReactorScene( t, s, tdev, runscenes )
-    runscenes = runscenes or {}
-    local resp = "    " .. t .. ( s and "" or " (none)" ) .. EOL
+    local resp = "    Activity " .. t .. ( s and "" or " (none)" ) .. EOL
     local pfx = "        "
     if s then
         for _,gr in ipairs( s.groups or {}) do
@@ -3774,7 +3786,9 @@ local function getReactorScene( t, s, tdev, runscenes )
                     resp = resp .. getLuaSummary( act.lua, act.encoded_lua, pfx .. "%6d: %s" )
                 elseif act.type == "runscene" then
                     resp = resp .. pfx .. "Run scene " .. tostring(act.scene) .. " " .. ((luup.scenes[act.scene] or {}).description or (act.sceneName or "").."?") .. EOL
-                    runscenes[tostring(act.scene)] = getSceneData( act.scene, tdev )
+                    if not runscenes[tostring(act.scene)] then
+                        runscenes[tostring(act.scene)] = getSceneData( act.scene, tdev )
+                    end
                 elseif act.type == "device" then
                     local p = {}
                     for _,pp in ipairs( act.parameters or {} ) do
@@ -3802,7 +3816,7 @@ local function getReactorScene( t, s, tdev, runscenes )
             end
         end
     end
-    return resp, runscenes
+    return resp
 end
 
 local function getEvents( deviceNum )
@@ -3940,12 +3954,13 @@ function RG( grp, condState, level, r )
         ( grp.disabled and " DISABLED" or "" ) ..
         ' <' .. tostring(grp.id) .. '>' ..
         EOL
+    local opch = ({ ['and']="&", ['or']="|", xor="^" })[grp.operator or "and"] or "+"
     for _,cond in ipairs( grp.conditions or {} ) do
         local condtype = cond.type or "group"
         local cs = condState[cond.id] or {}
         r = r .. "    " .. string.rep( "  |   ", level-1 ) ..
-            "  +-" .. ( (cs.evalstate == nil) and "X" or ( cs.evalstate and "T" or "F" ) ) .. "-" ..
-            condtype .. " "
+            "  " .. opch .. "-" .. ( cond.disabled and "X" or ( (cs.evalstate == nil) and "?" or ( cs.evalstate and "T" or "F" ) ) ) .. 
+            "-" .. condtype .. " "
         if condtype == "group" then
             r = r .. RG( cond, condState, level+1 )
         elseif condtype == "service" then
@@ -4090,45 +4105,48 @@ function request( lul_request, lul_parameters, lul_outputformat )
                     r = r .. string.format("    Test house mode set: %d", s) .. EOL
                 end
                 local first = true
-                for _,vv in pairs( cdata.variables or {} ) do
+                for _,vv in variables( cdata ) do
                     if first then
                         r = r .. "    Variable/expressions" .. EOL
                         first = false
                     end
-                    local lv = luup.variable_get( VARSID, vv.name, n ) or "(no value)"
-                    local le = luup.variable_get( VARSID, vv.name .. "_Error", n ) or ""
-                    r = r .. string.format("        %s=%s (last %q)", vv.name or "?", vv.expression or "?", lv) .. EOL
-                    if le ~= "" then r = r .. "        ******** Error: " .. le .. EOL end
+                    local vs = (condState.vars or {})[vv.name] or {}
+                    local lv = vs.lastvalue
+                    local vt = type(lv)
+                    if vt == "table" and lv.__type == "null" then lv = "null" vt = "luaxp.null"
+                    elseif vt == "string" or vt == "table" then lv = json.encode( lv )
+                    elseif lv == nil then lv = "(no value)"
+                    else lv = tostring( lv ) end
+                    r = r .. string.format("     %3d: %-24s %s [last %s(%s)]", vv.index or 0, vv.name or "?", vv.expression or "?", lv, vt) .. 
+                        ( (vs.export or 1) ~= 0 and " (exported)" or "" ) ..
+                        EOL
+                    if vs.err then r = r .. "          *** Error: " .. tostring(vs.err) .. EOL end
                 end
                 r = r .. "    Condition group " .. RG( cdata.conditions.root or {}, condState )
 
-                local t
-                if cdata.tripactions then
-                    t, scenesUsed = getReactorScene( "Trip Actions (old format)", cdata.tripactions, n, scenesUsed )
-                    r = r .. t
-                end
-                if cdata.untripactions then
-                    t, scenesUsed = getReactorScene( "Untrip Actions (old format)", cdata.untripactions, n, scenesUsed )
-                    r = r .. t
-                end
                 for k,v in pairs( cdata.activities or {} ) do
-                    t, scenesUsed = getReactorScene( k, v, n, scenesUsed )
-                    r = r .. t
+                    r = r .. getReactorScene( k, v, n, scenesUsed )
                 end
                 r = r .. getEvents( n )
             end
         end
-        r = r .. string.rep( "=", 132 ) .. EOL
+        local rs = ""
         for scid, scd in pairs( scenesUsed ) do
-            r = r .. 'Scene #' .. scid .. " " .. tostring(scd.name)
+            rs = rs .. 'Scene #' .. scid .. " " .. tostring(scd.name)
             local success, t = pcall( getLuupSceneSummary, scd )
             if success and t then
-                r = r .. t
+                rs = rs .. t
             else
-                r = r .. " - summary not available: " .. tostring(t) .. EOL
+                rs = rs .. " - summary not available: " .. tostring(t) .. EOL
             end
         end
-        r = r .. showStartupLua()
+        if getVarNumeric("SummaryShowStartupLua", 0, pluginDevice, MYSID) ~= 0 then
+            -- ??? 2019-03-05: this may not be relevant, since plugin env can't see startup/scene lua env
+            rs = rs .. showStartupLua()
+        end
+        if rs ~= "" then
+            r = r .. string.rep( "=", 132 ) .. EOL .. rs
+        end
         return r, "text/plain"
 
     elseif action == "tryexpression" then
