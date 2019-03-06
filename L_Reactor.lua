@@ -924,7 +924,7 @@ local function stopScene( ctx, taskid, tdev, scene )
     assert(luup.devices[tdev].device_type == MYTYPE or luup.devices[tdev].device_type == RSTYPE)
     for tid,d in pairs(sceneState) do
         if ( ctx == nil or ctx == d.context ) and ( taskid == nil or taskid == tid ) and ( scene == nil or d.scene == scene) then
-            D("stopScene() stopping scene run task %1", tid)
+            D("stopScene() stopping scene task %1", tid)
             clearTask( tid )
             sceneState[tid] = nil
         end
@@ -1189,8 +1189,8 @@ local function execSceneGroups( tdev, taskid, scd )
                 luup.devices[tdev].description, tdev, nextGroup)
             delay = 0
         end
-        D("execSceneGroups() delay is %1 %2", delay, scd.groups[nextGroup].delaytype)
         if delay > 0 then
+            D("execSceneGroups() delay is %1 %2", delay, scd.groups[nextGroup].delaytype)
             local delaytype = scd.groups[nextGroup].delaytype or "inline"
             local tt
             -- Vera (7.x.x) scenes are always "start" delay type.
@@ -1218,7 +1218,6 @@ local function execSceneGroups( tdev, taskid, scd )
                     addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, warning="Action skipped, device number invalid or does not exist: " .. tostring( action.device ) }
                     L({level=2,msg="%5 (%6): invalid device number (%4) in scene %1 (%2) group %3; skipping action."},
                         scd.id, scd.name, nextGroup, action.device, tdev, luup.devices[tdev].description)
-                    D("execSceneGroups() action=%1, all group %2 actions=%3", action, nextGroup, scd.groups[nextGroup].actions)
                 else
                     local param = {}
                     for k,p in ipairs( action.arguments or {} ) do
@@ -1300,30 +1299,25 @@ local function execSceneGroups( tdev, taskid, scd )
                         end
                     end
                     local more, err = execLua( fname, lua, nil, tdev )
-                    D("execSceneGroups() execLua returned %1,%2", more, err)
                     if err then
-                        addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, ['error']="Aborting; Lua error in action #" .. tostring(ix) .. ": " .. tostring(err) }
                         L({level=1,msg="%1 (%2) aborting scene %3 Lua execution at group step %4, Lua run failed: %5"},
                             luup.devices[tdev].description, tdev, scd.id, ix, err)
                         L{level=2,msg="Lua:\n"..lua} -- concat to avoid formatting
+                        addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, ['error']="Aborting; Lua error in action #" .. tostring(ix) .. ": " .. tostring(err) }
                         -- Throw on the brakes! (stop all scenes in context)
                         stopScene( tdev, nil, tdev )
                         return nil
                     elseif more == false then -- N.B. specific test to match exactly boolean type false (but not nil)
-                        addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, notice="Stopping; Run Lua action #" .. tostring(ix) .. " returned (" .. type(more) .. ")" .. tostring(more) }
                         L("%1 (%2) scene %3 Lua at step %4 returned (%5)%6, stopping actions.",
                             luup.devices[tdev].description, tdev, scd.id, ix, type(more), more)
+                        addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, notice="Stopping; Run Lua action #" .. tostring(ix) .. " returned (" .. type(more) .. ")" .. tostring(more) }
                         stopScene( nil, taskid, tdev ) -- stop just this scene.
                         return nil
-                    --[[
-                    else
-                        addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, notice="Run Lua action #" .. tostring(ix) .. " OK, return value (" .. type(more) .. ")" .. tostring(more) }
-                    --]]
                     end
                 else
-                    addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, warning="Action #" .. tostring(ix) .. " unrecognized type: " .. tostring(action.type) .. ", ignored." }
                     L({level=1,msg="Unhandled action type %1 at %2 in scene %3 for %4 (%5)"},
                         action.type, ix, scd.id, tdev, luup.devices[tdev].description)
+                    addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, warning="Action #" .. tostring(ix) .. " unrecognized type: " .. tostring(action.type) .. ", ignored." }
                 end
             end
         end
@@ -1701,7 +1695,6 @@ end
 -- the most common use cases will be small arrays where the overhead of preparing
 -- for that kind of efficiency exceeds the benefit it might provide.
 local function compareTables( a, b )
-    D("compareTables(%1,%2) a=%3, b=%4", a, b, tostring(a), tostring(b))
     for k in pairs( b ) do
         if b[k] ~= a[k] then return false end
     end
@@ -2538,7 +2531,7 @@ local function processCondition( cond, grp, cdata, tdev )
     -- Preserve the result of the condition eval. We are edge-triggered,
     -- so only save changes, with timestamp.
     if state ~= cs.laststate then
-        D("processCondition() condition %1 value state changed from %2 to %3", cond.id, cs.laststate, state)
+        D("processCondition() handling %1 state changed from %2 to %3", cond.id, cs.laststate, state)
         -- ??? At certain times, Vera gets a time that is in the future, or so it appears. It looks like the TZ offset isn't applied, randomly.
         -- Maybe if call is during ntp update, don't know. Investigating... This log message helps detection and analysis.
         if now < ( cs.statestamp or 0 ) then L({level=1,msg="Time moved backwards! Sensor %4 cond %1 last change at %2, but time now %3"}, cond.id, cs.statestamp, now, tdev) end
@@ -2993,6 +2986,7 @@ local function startSensor( tdev, pdev )
         -- Run immediate update.
         updateSensor( tdev )
     else
+        L("%1 (#%2) is disabled.", luup.devices[tdev].description, tdev)
         addEvent{ dev=tdev, event='disabled at startup' }
         setMessage( "Disabled", tdev )
     end
