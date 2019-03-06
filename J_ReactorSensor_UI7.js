@@ -26,7 +26,9 @@ var ReactorSensor = (function(api, $) {
 
     var DEVINFO_MINSERIAL = 71.222;
 
-    var CDATA_VERSION = 19051; /* must coincide with (Lua) loadSensorConfig! */
+    var UI_VERSION = 19065;     /* must coincide with Lua core */
+
+    var CDATA_VERSION = 19051;  /* must coincide with Lua core */
 
     var myModule = {};
 
@@ -313,14 +315,27 @@ var ReactorSensor = (function(api, $) {
     /* Initialize the module */
     function initModule( myid ) {
         myid = myid || api.getCpanelDeviceId();
-        console.log("initModule() for device " + myid);
-        var devices = api.cloneObject( api.getListOfDevices() );
+
+        /* Check agreement of plugin core and UI */
+        var s = api.getDeviceState( myid, "urn:toggledbits-com:serviceId:ReactorSensor", "UIVersion" ) || "0";
+        console.log("initModule() for device " + myid + " requires UI version " + UI_VERSION + ", seeing " + s);
+        if ( String(UI_VERSION) != s ) {
+            api.setCpanelContent( '<div class="reactorwarning" style="border: 4px solid red; padding: 8px;">' +
+                " ERROR! The Reactor plugin core version and UI version do not agree." +
+                " This may cause errors or corrupt your ReactorSensor configuration." +
+                " Please hard-reload your browser and try again " +
+                ' (<a href="https://duckduckgo.com/?q=hard+reload+browser" target="_blank">how?</a>).' +
+                " If you have installed hotfix patches, you may not have successfully installed all required files." +
+                " Expected " + String(UI_VERSION) + " got " + String(s) +
+                ".</div>" );
+            return false;
+        }
 
         /* Load ACE. Since the jury is still out with LuaView on this, default is no
            ACE for now. As of 2019-01-06, one user has reported that ACE does not function
            on Chrome Mac (unknown version, but does function with Safari and Firefox on Mac).
            That's just one browser, but still... */
-        var s = getParentState( "UseACE" ) || "";
+        s = getParentState( "UseACE" ) || "";
         if ( "1" === s && ! window.ace ) {
             s = getParentState( "ACEURL" ) || "https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.2/ace.js";
             jQuery( "head" ).append( '<script src="' + s + '"></script>' );
@@ -338,6 +353,7 @@ var ReactorSensor = (function(api, $) {
         getConfiguration( myid );
 
         /* Make our own list of devices, sorted by room, and alpha within room. */
+        var devices = api.cloneObject( api.getListOfDevices() );
         var rooms = [];
         var noroom = { "id": 0, "name": "No Room", "devices": [] };
         rooms[noroom.id] = noroom;
@@ -406,6 +422,8 @@ var ReactorSensor = (function(api, $) {
         }
 
         api.registerEventHandler('on_ui_cpanel_before_close', ReactorSensor, 'onBeforeCpanelClose');
+        
+        return true;
     }
 
     function textDateTime( y, m, d, hh, mm, isEnd ) {
@@ -440,44 +458,64 @@ var ReactorSensor = (function(api, $) {
     }
 
     /**
-     * Attempt to remove variables that are no longer used.
+     * Delete a state variable (with callback). Note that failing to delete a
+     * variable isn't fatal, as we get ample opportunities to try again later.
      */
-    function clearUnusedVariables() {
-        var myid = api.getCpanelDeviceId();
+    function deleteStateVariable( devnum, serviceId, variable, fnext ) {
+        console.log("deleteStateVariable: deleting " + devnum + "." + serviceId + "/" + variable);
+        jQuery.ajax({
+            url: api.getDataRequestURL(),
+            data: {
+                id: "variableset",
+                DeviceNum: devnum,
+                serviceId: serviceId,
+                Variable: variable,
+                Value: "",
+                output_format: "json"
+            },
+            dataType: "json"
+        }).fail( function( jqXHR, textStatus, errorThrown ) {
+            console.log( "deleteStateVariable: failed, maybe try again later" );
+        }).always( function() {
+            console.log("deleteStateVariable: finished, calling next");
+            if ( fnext ) { fnext(); }
+        });
+    }
+
+    /**
+     * Attempt to remove state variables that are no longer used.
+     */
+    function clearUnusedStateVariables( myid, cdata ) {
         var ud = api.getUserData();
         var dx = api.getDeviceIndex( myid );
-        var deleted = {};
-        var cdata = getConfiguration( myid );
-        var configVars = cdata.variables || {};
-        for ( var k=0; k<(ud.devices[dx].states || []).length; ++k) {
-            var state = ud.devices[dx].states[k];
-            if ( state.service.match( /:ReactorValues$/i ) ) {
-                if ( state.variable.match( /_Error$/i ) ) {
-                    if ( undefined === configVars[ state.variable.replace( /_Error$/i, "" ) ] ) {
-                        deleted[state.variable] = state;
-                    }
-                } else if ( undefined === configVars[state.variable] ) {
-                    deleted[state.variable] = state;
+        var deletes = [];
+        var myinfo = ud.devices[dx];
+        if ( undefined == myinfo ) return;
+        /* N.B. ixCond will be present in the condition editor only */
+        var ixCond = getInstanceData( myid ).ixCond;
+        for ( var ix=0; ix<myinfo.states.length; ix++ ) {
+            var st = myinfo.states[ix];
+            var vname;
+            if ( st.service === "urn:toggledbits-com:serviceId:ReactorValues" ) {
+                vname = st.variable.replace( /_Error$/, "" );
+                if ( ! ( cdata.variables || {} )[vname] ) {
+                    deletes.push( { service: st.service, variable: vname } );
+                    deletes.push( { service: st.service, variable: vname + "_Error" } );
+                }
+            } else if ( ixCond && st.service === "urn:toggledbits-com:serviceId:ReactorGroup" ) {
+                vname = st.variable.replace( /^GroupStatus_/, "" );
+                if ( ! ixCond[ vname ] ) {
+                    deletes.push( { service: st.service, variable: st.variable } );
                 }
             }
         }
-        for ( var vn in deleted ) {
-            if ( deleted.hasOwnProperty( vn ) ) {
-                console.log("Removing unused state variable for deleted expression " + vn);
-                $.ajax({
-                    url: api.getDataRequestURL(),
-                    data: {
-                        id: "variableset",
-                        DeviceNum: myid,
-                        serviceId: deleted[vn].service,
-                        Variable: vn,
-                        Value: ""
-                    }
-                }).done( function( data, statusText, jqXHR ) {
-                    /* nothing */
-                });
+        function dodel() {
+            var v = deletes.shift();
+            if ( v ) {
+                deleteStateVariable( myid, v.service, v.variable, dodel );
             }
         }
+        dodel();
     }
 
     /**
@@ -499,7 +537,7 @@ var ReactorSensor = (function(api, $) {
                     }
                     configModified = false;
                     updateSaveControls();
-                    clearUnusedVariables();
+                    clearUnusedStateVariables( myid, cdata );
                 },
                 'onFailure' : function() {
                     alert('There was a problem saving the configuration. Vera/Luup may have been restarting. Please try hitting the "Save" button again.');
@@ -962,14 +1000,14 @@ var ReactorSensor = (function(api, $) {
             /* If not displayed, do nothing. */
             return;
         }
-        stel.empty();
 
+        /* Get configuration data and current state */
         var cdata = getConfiguration( pdev );
         if ( undefined === cdata ) {
+            stel.empty().text("An error occurred while attempting to fetch the configuration data. Luup may be reloading. Try again in a few moments.");
             console.log("cdata unavailable");
             return;
         }
-
         var s = api.getDeviceState( pdev, serviceId, "cstate" ) || "";
         var cstate = {};
         if ( ! isEmpty( s ) ) {
@@ -982,6 +1020,13 @@ var ReactorSensor = (function(api, $) {
             console.log("cstate unavailable");
         }
 
+        /* If starting from scratch (first call), purge unused state */
+        if ( 0 === stel.children( 'div' ).length ) {
+            clearUnusedStateVariables( pdev, cdata );
+        }
+
+        stel.empty();
+
         var vix = [];
         for ( var vn in ( cdata.variables || {} ) ) {
             if ( cdata.variables.hasOwnProperty( vn ) ) {
@@ -993,7 +1038,12 @@ var ReactorSensor = (function(api, $) {
             vix.sort( function( a, b ) {
                 var i1 = a.index || -1;
                 var i2 = b.index || -1;
-                if ( i1 === i2 ) return 0; // ??? fix both to sort by name secondarily
+                if ( i1 === i2 ) {
+                    i1 = (a.name || "").toLowerCase();
+                    i2 = (b.name || "").toLowerCase();
+                    if ( i1 === i2 ) return 0;
+                    /* fall through */
+                }
                 return ( i1 < i2 ) ? -1 : 1;
             });
             var grpel = jQuery( '<div class="reactorgroup" id="variables"/>' );
@@ -1063,7 +1113,9 @@ var ReactorSensor = (function(api, $) {
             handleSaveClick( undefined );
         }
 
-        initModule();
+        if ( ! initModule() ) {
+            return;
+        }
 
         /* Our styles. */
         var html = "<style>";
@@ -2743,13 +2795,17 @@ var ReactorSensor = (function(api, $) {
             jQuery("button#revertconf").on( 'click.reactor', handleRevertClick );
 
             updateControls();
+
+            /* Clear unused state variables here so that we catch ReactorGroup
+             * service, for which the function requires ixCond. */
+            clearUnusedStateVariables( myid, cdata );
         }
 
         /* Public interface */
         console.log("Initializing ConditionBuilder module");
         myModule = {
             init: function( dev ) {
-                initModule( dev );
+                return initModule( dev );
             },
             start: redrawConditions,
             redraw: redrawConditions
@@ -2768,7 +2824,9 @@ var ReactorSensor = (function(api, $) {
 
             var myid = api.getCpanelDeviceId();
 
-            CondBuilder.init( myid );
+            if ( ! CondBuilder.init( myid ) ) {
+                return;
+            }
 
             /* Load material design icons */
             jQuery("head").append('<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">');
@@ -3190,7 +3248,9 @@ var ReactorSensor = (function(api, $) {
                 handleSaveClick( undefined );
             }
 
-            initModule();
+            if ( ! initModule() ) {
+                return;
+            }
 
             /* Load material design icons */
             jQuery("head").append('<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">');
@@ -4758,10 +4818,6 @@ var ReactorSensor = (function(api, $) {
         catch (e) {}
 
         try {
-            if ( configModified && confirm( msgUnsavedChanges) ) {
-                handleSaveClick( undefined );
-            }
-
             var cd = getConfiguration( myid );
 
             /* Set up a data list with our variables */
@@ -4809,7 +4865,13 @@ var ReactorSensor = (function(api, $) {
     }
 
     function preloadActivities() {
-        initModule();
+        if ( configModified && confirm( msgUnsavedChanges) ) {
+            handleSaveClick( undefined );
+        }
+
+        if ( ! initModule() ) {
+            return;
+        }
 
         /* Load material design icons */
         jQuery("head").append('<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">');
@@ -5232,43 +5294,6 @@ var ReactorSensor = (function(api, $) {
         });
     }
 
-    function housekeeper() {
-        var myid = api.getCpanelDeviceId();
-        jQuery.ajax({
-            url: api.getDataRequestURL(),
-            data: {
-                id: "lu_status",
-                DeviceNum: myid,
-                output_format: "json"
-            },
-            dataType: "json"
-        }).done( function( data, statusText, jqXHR ) {
-            // console.log("Response from server is " + JSON.stringify(data));
-            var myinfo = data[ 'Device_Num_' + String(myid) ];
-            if ( undefined == myinfo ) return;
-            for ( var ix=0; ix<myinfo.states.length; ix++ ) {
-                var st = myinfo.states[ix];
-                if ( st.service.match( /^urn:toggledbits-com:serviceId:Reactor(Values|Group)$/ ) ) {
-                    console.log( "housekeeper: deleting " + st.service + "/" + st.variable );
-                    jQuery.ajax({
-                        url: api.getDataRequestURL(),
-                        data: {
-                            id: "variableset",
-                            DeviceNum: myid,
-                            serviceId: st.service,
-                            Variable: st.variable,
-                            Value: "",
-                            output_format: "json"
-                        },
-                        dataType: "json"
-                    });
-                }
-            }
-        }).fail( function( jqXHR, textStatus, errorThrown ) {
-            console.log( "housekeeper: " + textStatus );
-        });
-    }
-
     function doTools()
     {
         console.log("doTools()");
@@ -5277,7 +5302,9 @@ var ReactorSensor = (function(api, $) {
             handleSaveClick( undefined );
         }
 
-        initModule();
+        if ( ! initModule() ) {
+            return;
+        }
 
         var html = "";
 

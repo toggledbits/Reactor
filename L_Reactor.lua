@@ -13,8 +13,9 @@ local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
 local _PLUGIN_VERSION = "2.4groupactions"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
-local _CONFIGVERSION = 00206
-local _CDATAVERSION = 19051
+local _CONFIGVERSION = 00207
+local _CDATAVERSION = 19051     -- must coincide with JS
+local _UIVERSION = 19065        -- must coincide with JS
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -1498,11 +1499,11 @@ end
 
 -- Return iterator for variables in eval order
 local function variables( cdata )
-    local map = {}
+    local ar = {}
     for _,v in pairs( cdata.variables or {} ) do
-        table.insert( map, v )
+        table.insert( ar, v )
     end
-    table.sort( map, function( a, b ) 
+    table.sort( ar, function( a, b )
         local i1 = a.index or -1
         local i2 = b.index or -1
         if i1 == i2 then
@@ -1513,8 +1514,8 @@ local function variables( cdata )
     local ix = 0
     return function()
         ix = ix + 1
-        if ix > #map then return nil end
-        return ix, map[ix]
+        if ix > #ar then return nil end
+        return ix, ar[ix]
     end
 end
 
@@ -2939,8 +2940,8 @@ local function startSensor( tdev, pdev )
     -- Device one-time initialization
     sensor_runOnce( tdev )
 
-    -- ??? Cleanup
-    luup.variable_set( MYSID, "cdata", nil, tdev )
+    -- Save required UI version for collision detection.
+    setVar( RSSID, "UIVersion", _UIVERSION, tdev )
 
     -- Initialize instance data; take care not to scrub eventList
     local skey = tostring( tdev )
@@ -3082,6 +3083,9 @@ function startPlugin( pdev )
     runStamp = 1
     geofenceMode = 0
     usesHouseMode = false
+
+    -- Save required UI version for collision detection.
+    setVar( MYSID, "UIVersion", _UIVERSION, pdev )
 
     -- Debug?
     if getVarNumeric( "DebugMode", 0, pdev, MYSID ) ~= 0 then
@@ -3951,7 +3955,7 @@ function RG( grp, condState, level, r )
         local condtype = cond.type or "group"
         local cs = condState[cond.id] or {}
         r = r .. "    " .. string.rep( "  |   ", level-1 ) ..
-            "  " .. opch .. "-" .. ( cond.disabled and "X" or ( (cs.evalstate == nil) and "?" or ( cs.evalstate and "T" or "F" ) ) ) .. 
+            "  " .. opch .. "-" .. ( cond.disabled and "X" or ( (cs.evalstate == nil) and "?" or ( cs.evalstate and "T" or "F" ) ) ) ..
             "-" .. condtype .. " "
         if condtype == "group" then
             r = r .. RG( cond, condState, level+1 )
@@ -4035,11 +4039,15 @@ function request( lul_request, lul_parameters, lul_outputformat )
         -- ??? Need to show startup Lua, and scene data (incl lua) for scenes named
         local r = ""
         r = r .. string.rep("*", 51) .. " REACTOR LOGIC SUMMARY REPORT " .. string.rep("*", 51) .. EOL
-        r = r .. "   Version: " .. tostring(_PLUGIN_VERSION) .. " config " .. tostring(_CONFIGVERSION) .. " pluginDevice " .. pluginDevice .. EOL
-        r = r .. "    System:"
+        r = r .. "   Version: " .. tostring(_PLUGIN_VERSION) ..
+            " config " .. tostring(_CONFIGVERSION) ..
+            " cdata " .. tostring(_CDATAVERSION) ..
+            " ui " .. tostring(_UIVERSION) ..
+            " pluginDevice " .. pluginDevice .. EOL
+        r = r .. "    System: "
         if isOpenLuup then
             local v = getVarNumeric( "Vnumber", 0, isOpenLuup, "openLuup" )
-            r = r .. " openLuup version " .. tostring(v)
+            r = r .. "openLuup version " .. tostring(v)
             local p = io.popen( "uname -a" )
             if p then
                 v = p:read("*l")
@@ -4047,8 +4055,10 @@ function request( lul_request, lul_parameters, lul_outputformat )
                 r = r .. " on " .. tostring(v)
             end
         else
-            r = r .. " Vera " .. tostring(luup.attr_get("model",0)) .. " firmware " .. tostring(luup.version)
+            r = r .. "Vera version " .. tostring(luup.version) .. " on "..
+                tostring(luup.attr_get("model",0))
         end
+        r = r .. "; loadtime " .. tostring( luup.attr_get('LoadTime',0) or "" )
         if isALTUI then
             r = r .. "; ALTUI"
             local v = luup.variable_get( "urn:upnp-org:serviceId:altui1", "Version", isALTUI )
@@ -4056,8 +4066,12 @@ function request( lul_request, lul_parameters, lul_outputformat )
         end
         r = r .. "; " .. tostring((_G or {})._VERSION)
         r = r .. EOL
-        r = r .. "Local time: " .. os.date("%Y-%m-%dT%H:%M:%S%z") .. ", DST=" .. tostring(luup.variable_get( MYSID, "LastDST", pluginDevice ) or "") .. EOL
-        r = r .. "House mode: tracking " .. ( usesHouseMode and "off" or "on" ) .. "; current mode " .. tostring(luup.variable_get( MYSID, "HouseMode", pluginDevice ) or "") .. EOL
+        r = r .. "Local time: " .. os.date("%Y-%m-%dT%H:%M:%S%z") .. 
+            "; DST=" .. tostring(luup.variable_get( MYSID, "LastDST", pluginDevice ) or "") .. 
+            EOL
+        r = r .. "House mode: plugin " .. tostring(luup.variable_get( MYSID, "HouseMode", pluginDevice ) or "?") .. 
+            "; system " .. tostring( luup.attr_get('Mode',0) or "" ) ..
+            "; tracking " .. ( usesHouseMode and "off" or "on" ) .. EOL
         r = r .. "  Sun data: " .. tostring(luup.variable_get( MYSID, "sundata", pluginDevice ) or "") .. EOL
         if geofenceMode ~= 0 then
             local status, p = pcall( showGeofenceData )
@@ -4070,8 +4084,8 @@ function request( lul_request, lul_parameters, lul_outputformat )
             r = r .. "  Geofence: not running" .. EOL
         end
         if hasBattery then
-            r = r .. "     Power: " .. tostring(luup.variable_get( MYSID, "SystemPowerSource", pluginDevice ) or "")
-            r = r .. ", battery level " .. tostring(luup.variable_get( MYSID, "SystemBatteryLevel", pluginDevice ) or "") .. EOL
+            r = r .. "     Power: " .. tostring(luup.variable_get( MYSID, "SystemPowerSource", pluginDevice ) or "?")
+            r = r .. ", battery level " .. tostring(luup.variable_get( MYSID, "SystemBatteryLevel", pluginDevice ) or "?") .. EOL
         end
         local scenesUsed = {}
         for n,d in pairs( luup.devices ) do
@@ -4109,7 +4123,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
                     elseif vt == "string" or vt == "table" then lv = json.encode( lv )
                     elseif lv == nil then lv = "(no value)"
                     else lv = tostring( lv ) end
-                    r = r .. string.format("     %3d: %-24s %s [last %s(%s)]", vv.index or 0, vv.name or "?", vv.expression or "?", lv, vt) .. 
+                    r = r .. string.format("     %3d: %-24s %s [last %s(%s)]", vv.index or 0, vv.name or "?", vv.expression or "?", lv, vt) ..
                         ( (vs.export or 1) ~= 0 and " (exported)" or "" ) ..
                         EOL
                     if vs.err then r = r .. "          *** Error: " .. tostring(vs.err) .. EOL end
@@ -4293,6 +4307,8 @@ function request( lul_request, lul_parameters, lul_outputformat )
             plugin=_PLUGIN_ID,
             version=_PLUGIN_VERSION,
             configversion=_CONFIGVERSION,
+            cdataversion=_CDATAVERSION,
+            uiversion=_UIVERSION,
             author="Patrick H. Rigney (rigpapa)",
             url=_PLUGIN_URL,
             ['type']=MYTYPE,
