@@ -239,6 +239,7 @@ var ReactorSensor = (function(api, $) {
         }
         if ( undefined === cdata.conditions.root ) {
             /* Fixup any pre to 19052 */
+            var ix;
             var root = { id: "root", name: api.getDeviceObject( myid ).name, type: "group", operator: "and", conditions: [] };
             var ng = (cdata.conditions || []).length;
             if ( ng == 0 || ( ng == 1 && ( cdata.conditions[0].groupconditions || [] ).length == 0 ) ) {
@@ -251,7 +252,7 @@ var ReactorSensor = (function(api, $) {
             } else {
                 /* Multiple groups. */
                 root.operator = "or"; /* OR between groups */
-                for (var ix=0; ix<cdata.conditions.length; ix++ ) {
+                for ( ix=0; ix<cdata.conditions.length; ix++ ) {
                     var grp = cdata.conditions[ix];
                     root.conditions[ix] = { id: grp.groupid || ix, name: grp.name || grp.groupid, operator: "and" }; /* AND within groups */
                     root.conditions[ix].conditions = grp.groupconditions || [];
@@ -260,7 +261,7 @@ var ReactorSensor = (function(api, $) {
             cdata.conditions = { root: root };
 
             /* Handle cdata.variables indexing upgrade. */
-            var ix = 0;
+            ix = 0;
             for ( var vn in ( cdata.variables || {} ) ) {
                 if ( cdata.variables.hasOwnProperty( vn ) ) {
                     cdata.variables[vn].index = ix++;
@@ -1185,7 +1186,7 @@ var ReactorSensor = (function(api, $) {
                     var st = devobj.states[k];
                     if ( undefined === st.variable || undefined === st.service ) continue;
                     /* For self-reference, only allow variables created from configured expressions */
-                    if ( device == myid && st.service != "urn:toggledbits-com:serviceId:ReactorValues" ) continue;
+                    if ( device == myid && ! st.service.match( /^urn:toggledbits-com:serviceId:Reactor(Values|Group)$/ ) ) continue;
                     var vnm = st.variable.toLowerCase();
                     if ( undefined === mm[vnm] ) {
                         /* Just use variable name as menu text, unless multiple with same name (collision) */
@@ -1838,14 +1839,14 @@ var ReactorSensor = (function(api, $) {
             $el.hide();
 
             /* If the options container already exists, just show it. */
-            var $container = jQuery( 'div.cond-body div.condopts' );
+            var $container = jQuery( 'div.cond-body > div.condopts', $row );
             if ( $container.length > 0 ) {
                 $container.slideDown();
                 return;
             }
 
-            /* Create the options container and add options */
-            $container = jQuery('<div class="condopts"></div>');
+            /* Doesn't exist. Create the options container and add options */
+            $container = jQuery( '<div class="condopts"></div>' );
 
             /* Predecessor */
             var $preds = jQuery('<select id="pred" class="form-control form-control-sm"><option value="">(any time/no sequence)</option></select>');
@@ -2616,15 +2617,15 @@ var ReactorSensor = (function(api, $) {
       <i id="delgroup" class="material-icons md-btn noroot" title="Delete group">clear</i> \
     </div> \
     <div class="cond-group-conditions"> \
-      <div class="btn-group tb-tbn-check"> \
+      <div class="btn-group cond-group-control tb-tbn-check"> \
         <button id="not" class="btn btn-xs btn-primary" title="Invert the result of the AND/OR/XOR"> NOT </button> \
       </div> \
-      <div class="btn-group tb-btn-radio"> \
+      <div class="btn-group cond-group-control tb-btn-radio"> \
         <button id="and" class="btn btn-xs btn-primary checked" title="AND means group is true only if all conditions/subgroups are true"> AND </button> \
         <button id="or" class="btn btn-xs btn-primary" title="OR means group is true if any child condition/subgroup is true"> OR </button> \
         <button id="xor" class="btn btn-xs btn-primary" title="XOR (exclusive or) means group is true if one and only one condition/subgroup is true"> XOR </button> \
       </div> \
-      <div class="btn-group tb-btn-check"> \
+      <div class="btn-group cond-group-control tb-btn-check"> \
         <button id="disable" class="btn btn-xs btn-primary tb-disable" title="Disabled groups are ignored, as if they did not exist"> DISABLE </button> \
       </div> \
       <div class="cond-group-title"> \
@@ -2661,7 +2662,7 @@ var ReactorSensor = (function(api, $) {
             jQuery( 'i#delgroup', el ).on( 'click.reactor', handleDeleteGroupClick );
             jQuery( 'span#titletext,i#edittitle', el ).on( 'click.reactor', handleTitleClick );
             jQuery( 'i#collapse', el ).on( 'click.reactor', handleGroupExpandClick );
-            jQuery( '.cond-group-conditions > div.tb-btn-radio,div.tb-btn-check > button', el ).on( 'click.reactor', handleGroupControlClick );
+            jQuery( '.cond-group-control > button', el ).on( 'click.reactor', handleGroupControlClick );
             jQuery( '.cond-list', el ).addClass("tb-sortable").sortable({
                 helper: 'clone',
                 handle: '.draghandle',
@@ -5228,6 +5229,43 @@ var ReactorSensor = (function(api, $) {
         }).fail( function( jqXHR, textStatus, errorThrown ) {
             jQuery( 'span#di-ver-info' ).text( "Information about the current version is not available." );
             console.log( "deviceInfo version check failed: " + String(errorThrown) );
+        });
+    }
+
+    function housekeeper() {
+        var myid = api.getCpanelDeviceId();
+        jQuery.ajax({
+            url: api.getDataRequestURL(),
+            data: {
+                id: "lu_status",
+                DeviceNum: myid,
+                output_format: "json"
+            },
+            dataType: "json"
+        }).done( function( data, statusText, jqXHR ) {
+            // console.log("Response from server is " + JSON.stringify(data));
+            var myinfo = data[ 'Device_Num_' + String(myid) ];
+            if ( undefined == myinfo ) return;
+            for ( var ix=0; ix<myinfo.states.length; ix++ ) {
+                var st = myinfo.states[ix];
+                if ( st.service.match( /^urn:toggledbits-com:serviceId:Reactor(Values|Group)$/ ) ) {
+                    console.log( "housekeeper: deleting " + st.service + "/" + st.variable );
+                    jQuery.ajax({
+                        url: api.getDataRequestURL(),
+                        data: {
+                            id: "variableset",
+                            DeviceNum: myid,
+                            serviceId: st.service,
+                            Variable: st.variable,
+                            Value: "",
+                            output_format: "json"
+                        },
+                        dataType: "json"
+                    });
+                }
+            }
+        }).fail( function( jqXHR, textStatus, errorThrown ) {
+            console.log( "housekeeper: " + textStatus );
         });
     }
 
