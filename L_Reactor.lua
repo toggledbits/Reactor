@@ -431,7 +431,7 @@ local function scheduleTick( tinfo, timeTick, flags )
         tickTasks[tkey].func = tinfo.func or tickTasks[tkey].func
         tickTasks[tkey].args = tinfo.args or tickTasks[tkey].args
         tickTasks[tkey].info = tinfo.info or tickTasks[tkey].info
-        if tickTasks[tkey].when == nil or timeTick < tickTasks[tkey].when or flags.replace then
+        if timeTick == nil or tickTasks[tkey].when == nil or timeTick < tickTasks[tkey].when or flags.replace then
             -- Not scheduled, requested sooner than currently scheduled, or forced replacement
             tickTasks[tkey].when = timeTick
         end
@@ -1992,15 +1992,16 @@ local function getExpressionContext( cdata, tdev )
 end
 
 local function updateVariables( cdata, tdev )
+    D("updateVariables(cdata,%1)", tdev)
     -- Perform evaluations.
     local ctx = sensorState[tostring(tdev)].ctx or getExpressionContext( cdata, tdev )
     sensorState[tostring(tdev)].ctx = ctx
-    for _,n in variables( cdata.variables or {} )do
-        D("updateVariables() evaluate %1 (index %2): %3", n, cdata.variables[n].index, cdata.variables[n].expression)
-        if ( cdata.variables[n].expression or "" ) ~= "" then
-            evaluateVariable( n, ctx, cdata, tdev )
+    for _,v in variables( cdata ) do
+        D("updateVariables() evaluate %1", v)
+        if ( v.expression or "" ) ~= "" then
+            evaluateVariable( v.name, ctx, cdata, tdev )
         else
-            ctx[n] = ctx[n] or ""
+            ctx[v.name] = ctx[v.name] or "" -- make sure defined in context
         end
     end
 end
