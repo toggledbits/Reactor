@@ -2938,8 +2938,7 @@ var ReactorSensor = (function(api, $) {
 
     function handleVariableChange( ev ) {
         var container = jQuery('div#reactorvars');
-        var myid = api.getCpanelDeviceId();
-        var cd = getConfiguration( myid );
+        var cd = getConfiguration();
 
         jQuery('.tberror', container).removeClass( 'tberror' );
         jQuery('div.varexp', container).each( function( ix, obj ) {
@@ -3690,7 +3689,7 @@ var ReactorSensor = (function(api, $) {
     }
 
     function handleActionsSaveClick( ev ) {
-        var cd = getConfiguration( myid );
+        var cd = getConfiguration();
         var errors = false;
         jQuery( 'div.actionlist' ).each( function() {
             var id = jQuery( this ).attr( 'id' );
