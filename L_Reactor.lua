@@ -19,10 +19,11 @@ local _CDATAVERSION = 19051
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
 
-local VARSID = "urn:toggledbits-com:serviceId:ReactorValues"
-
 local RSSID = "urn:toggledbits-com:serviceId:ReactorSensor"
 local RSTYPE = "urn:schemas-toggledbits-com:device:ReactorSensor:1"
+
+local VARSID = "urn:toggledbits-com:serviceId:ReactorValues"
+local GRPSID = "urn:toggledbits-com:serviceId:ReactorGroup"
 
 local SENSOR_SID = "urn:micasaverde-com:serviceId:SecuritySensor1"
 local SWITCH_SID = "urn:upnp-org:serviceId:SwitchPower1"
@@ -1976,22 +1977,10 @@ local function getExpressionContext( cdata, tdev )
 end
 
 local function updateVariables( cdata, tdev )
-    -- Make a list of variable names to iterate over. This also facilitates a
-    -- quick test in case there are no variables, bypassing a bit of work.
-    local vars = {}
-    for n in pairs(cdata.variables or {}) do table.insert( vars, n ) end
-    if #vars == 0 then return end
-    table.sort( vars, function( a, b )
-        local ix1 = cdata.variables[a].index or -1
-        local ix2 = cdata.variables[b].index or -1
-        return ix1 < ix2
-    end )
-
     -- Perform evaluations.
     local ctx = sensorState[tostring(tdev)].ctx or getExpressionContext( cdata, tdev )
     sensorState[tostring(tdev)].ctx = ctx
-    D("updateVariables() updating vars=%1", vars)
-    for _,n in ipairs( vars ) do
+    for _,n in variables( cdata.variables or {} )do
         D("updateVariables() evaluate %1 (index %2): %3", n, cdata.variables[n].index, cdata.variables[n].expression)
         if ( cdata.variables[n].expression or "" ) ~= "" then
             evaluateVariable( n, ctx, cdata, tdev )
@@ -2658,6 +2647,9 @@ local function processCondition( cond, grp, cdata, tdev )
         cs.changed = true
     else
         cs.changed = nil
+    end
+    if ( cond.type or "group" ) == "group" then
+        luup.variable_set( GRPSID, "GroupStatus_" .. cond.id, state and "1" or "0", tdev )
     end
 
     return cs.lastvalue, state, condTimer
