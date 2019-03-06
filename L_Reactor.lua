@@ -29,6 +29,7 @@ local GRPSID = "urn:toggledbits-com:serviceId:ReactorGroup"
 local SENSOR_SID = "urn:micasaverde-com:serviceId:SecuritySensor1"
 local SWITCH_SID = "urn:upnp-org:serviceId:SwitchPower1"
 
+local systemReady = false
 local sensorState = {}
 local tickTasks = {}
 local watchData = {}
@@ -408,6 +409,12 @@ local function isEnabled( dev )
     return getVarNumeric( "Enabled", 1, dev, RSSID ) ~= 0
 end
 
+-- Clear a scheduled timer task
+local function clearTask( taskid )
+    D("clearTask(%1)", taskid)
+    tickTasks[tostring(taskid)] = nil
+end
+
 -- Schedule a timer tick for a future (absolute) time. If the time is sooner than
 -- any currently scheduled time, the task tick is advanced; otherwise, it is
 -- ignored (as the existing task will come sooner), unless repl=true, in which
@@ -419,11 +426,7 @@ local function scheduleTick( tinfo, timeTick, flags )
     local tkey = tostring( tinfo.id or error("task ID or obj required") )
     assert( not tinfo.args or type(tinfo.args)=="table" )
     assert( not tinfo.func or type(tinfo.func)=="function" )
-    if ( timeTick or 0 ) == 0 then
-        D("scheduleTick() clearing task %1", tinfo)
-        tickTasks[tkey] = nil
-        return
-    elseif tickTasks[tkey] then
+    if tickTasks[tkey] then
         -- timer already set, update
         tickTasks[tkey].func = tinfo.func or tickTasks[tkey].func
         tickTasks[tkey].args = tinfo.args or tickTasks[tkey].args
@@ -441,6 +444,7 @@ local function scheduleTick( tinfo, timeTick, flags )
             info=tinfo.info or "" }
         D("scheduleTick() new task %1 at %2", tinfo, timeTick)
     end
+    if timeTick == nil then return end -- no next tick for task
     -- If new tick is earlier than next plugin tick, reschedule
     tickTasks._plugin = tickTasks._plugin or {}
     if tickTasks._plugin.when == nil or timeTick < tickTasks._plugin.when then
@@ -921,7 +925,7 @@ local function stopScene( ctx, taskid, tdev, scene )
     for tid,d in pairs(sceneState) do
         if ( ctx == nil or ctx == d.context ) and ( taskid == nil or taskid == tid ) and ( scene == nil or d.scene == scene) then
             D("stopScene() stopping scene run task %1", tid)
-            scheduleTick( tid, 0 )
+            clearTask( tid )
             sceneState[tid] = nil
         end
     end
@@ -1148,10 +1152,10 @@ local function execSceneGroups( tdev, taskid, scd )
     local sst = sceneState[taskid]
     D("execSceneGroups() scene state %1", sst)
     if sst == nil then
-        scheduleTick( taskid, 0 )
+        clearTask( taskid )
         return nil
     end
-
+    
     -- Reload the scene if it wasn't passed to us (from cache)
     if not scd then
         D("execSceneGroups() reloading scene data for %1", sst.scene)
@@ -1160,6 +1164,16 @@ local function execSceneGroups( tdev, taskid, scd )
             L({level=1,msg="Previously running scene %1 now not found/loaded. Aborting run."}, sst.scene)
             return stopScene( nil, taskid, tdev )
         end
+    end
+
+    -- If system is not ready, wait. We don't want to run actions until devices
+    -- are well and truly ready to respond.
+    if not systemReady then
+        L("%1 (#%2) attempting to run actions %3 (%4) but system is not yet ready; deferring 5 seconds.",
+            luup.devices[tdev].description, tdev, scd.name or scd.id, scd.id)
+        addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, notice="Deferring scene execution; waiting for system ready." }
+        scheduleDelay( { id=sst.taskid, owner=sst.owner, func=execSceneGroups, args={ scd } }, 5 )
+        return taskid
     end
 
     -- Run next scene group (and keep running groups until no more or delay needed)
@@ -2371,13 +2385,13 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
         return cond.comment,nil
     elseif cond.type == "reload" then
         -- True when loadtime changes. Self-resetting.
-        local loadtime = tonumber( ( luup.attr_get("LoadTime", 0) ) ) or 0
+        local loadtime = getVarNumeric( "LoadTime", 0, pluginDevice, MYSID )
         local lastload = getVarNumeric( "LastLoad", 0, tdev, RSSID )
         local reloaded = loadtime ~= lastload
         D("evaluateCondition() loadtime %1 lastload %2 reloaded %3", loadtime, lastload, reloaded)
         luup.variable_set( RSSID, "LastLoad", loadtime, tdev )
-        -- Return timer flag true when reloaded is true, so we get a reset shortly after.
-        return reloaded,reloaded,reloaded
+        scheduleDelay( tdev, getVarNumeric( "ReloadConditionHoldTime", 60, tdev, RSSID ) )
+        return reloaded,reloaded
     elseif cond.type == "interval" then
         local _,nmins = getValue( cond.mins, nil, tdev )
         local _,nhours = getValue( cond.hours, nil, tdev )
@@ -2761,10 +2775,11 @@ local function updateSensor( tdev )
         end
         luup.variable_set( RSSID, "lastacc", now, tdev )
 
-        -- Pass through groups again, and run activities for any changed groups.
+        -- Pass through groups again, and run activities for any changed groups,
+        -- except root, which is handle by trip() below.
         for grp in conditionGroups( cdata.conditions.root ) do
             local gs = condState[ grp.id ]
-            if gs.changed then
+            if grp.id ~= "root" and gs.changed then
                 local activity = grp.id .. ( gs.evalstate and ".true" or ".false" )
                 D("updateSensor() group %1 <%2> state changed to %3, looking for activity %4",
                     grp.name or grp.id, grp.id, gs.evalstate, activity)
@@ -2823,7 +2838,7 @@ local function updateSensor( tdev )
     if hasTimer or getVarNumeric( "ContinuousTimer", 0, tdev, RSSID ) ~= 0 then
         D("updateSensor() hasTimer or ContinuousTimer, scheduling update")
         local v = ( 60 - ( os.time() % 60 ) ) + TICKOFFS
-        scheduleDelay( {id=skey,info="hasTimer"}, v )
+        scheduleDelay( tdev, v )
     end
 end
 
@@ -2962,40 +2977,29 @@ local function startSensor( tdev, pdev )
     -- Clean and restore our condition state.
     sensorState[tostring(tdev)].condState = nil
     loadCleanState( tdev )
+    
+    if isEnabled( tdev ) then
+        addEvent{ dev=tdev, event='start' }
+        setMessage("Starting...", tdev)
+        
+        -- Watch our own cdata; when it changes, re-evaluate.
+        -- NOTE: MUST BE *AFTER* INITIAL LOAD OF CDATA
+        luup.variable_watch( "reactorWatch", RSSID, "cdata", tdev )
 
-    addEvent{ dev=tdev, event='start' }
+        -- Insert tick task with no runtime to define task.
+        scheduleTick( { id=tostring(tdev), owner=tdev, func=updateSensor }, nil, { replace=true } )
 
-    -- Watch our own cdata; when it changes, re-evaluate.
-    -- NOTE: MUST BE *AFTER* INITIAL LOAD OF CDATA
-    luup.variable_watch( "reactorWatch", RSSID, "cdata", tdev )
-
-    setMessage("Starting...", tdev)
-
-    -- Start the sensor's tick.
-    scheduleDelay( { id=tostring(tdev), func=sensorTick, owner=tdev }, 5 )
-
-    luup.set_failure( false, tdev )
+        -- Run immediate update.
+        updateSensor( tdev )
+    else
+        addEvent{ dev=tdev, event='disabled at startup' }
+        setMessage( "Disabled", tdev )
+    end
     return true
 end
 
-local function waitSystemReady( pdev )
-    D("waitSystemReady(%1)", pdev)
-    for n,d in pairs(luup.devices) do
-        if d.device_type == "urn:schemas-micasaverde-com:device:ZWaveNetwork:1" then
-            local sysStatus = luup.variable_get( "urn:micasaverde-com:serviceId:ZWaveNetwork1", "NetStatusID", n )
-            if sysStatus ~= nil and sysStatus ~= "1" then
-                -- Z-Wave not yet ready
-                L("Waiting for Z-Wave ready, status %1", sysStatus)
-                luup.variable_set( MYSID, "Message", "Waiting for Z-Wave ready", pdev )
-                scheduleDelay( { id=tostring(pdev), func=waitSystemReady, owner=pluginDevice }, 5 )
-                return
-            end
-            break
-        end
-    end
-
-    -- System is now ready. Finish initialization and start timers.
-    L("Z-Wave ready, starting ReactorSensors.")
+local function startSensors( pdev )
+    L("Starting ReactorSensors")
     luup.variable_set( MYSID, "Message", "Starting ReactorSensors...", pdev )
 
     -- Start the master tick
@@ -3011,14 +3015,16 @@ local function waitSystemReady( pdev )
     for k,v in childDevices( pdev ) do
         if v.device_type == RSTYPE then
             count = count + 1
-            L("Starting sensor %1 (%2)", k, luup.devices[k].description)
+            L("Starting %1 (#%2)", luup.devices[k].description, k)
+            setVar( MYSID, "Message", "Starting " .. luup.devices[k].description, pdev )
             local status, err = pcall( startSensor, k, pdev )
             if not status then
-                L({level=2,msg="Failed to start %1 (%2): %3"}, k, luup.devices[k].description, err)
+                L({level=1,msg="%1 (#%2) failed to start: %3"}, luup.devices[k].description, k, err)
                 addEvent{ dev=k, event="error", message="Startup failed", reason=err }
                 setMessage( "Failed (see log)", k )
                 luup.set_failure( 1, k ) -- error on timer device
             else
+                luup.set_failure( 0, k )
                 started = started + 1
             end
         elseif v.id == "hmt" then
@@ -3040,6 +3046,27 @@ local function waitSystemReady( pdev )
     else
         luup.variable_set( MYSID, "Message", string.format("Started %d of %d at %s", started, count, os.date("%x %X")), pdev )
     end
+end
+
+local function waitSystemReady( pdev, taskid, callback )
+    D("waitSystemReady(%1,%2,%3)", pdev, taskid, callback)
+    if getVarNumeric( "SuppressSystemReadyCheck", 0, pdev, MYSID ) == 0 then
+        for n,d in pairs(luup.devices) do
+            if d.device_type == "urn:schemas-micasaverde-com:device:ZWaveNetwork:1" then
+                local sysStatus = luup.variable_get( "urn:micasaverde-com:serviceId:ZWaveNetwork1", "NetStatusID", n )
+                if sysStatus ~= nil and sysStatus ~= "1" then
+                    -- Z-Wave not yet ready
+                    L("Waiting for Z-Wave ready, status %1", sysStatus)
+                    scheduleDelay( taskid, 5 )
+                    return
+                end
+                break
+            end
+        end
+        L("Z-Wave ready detected!")
+    end
+    systemReady = os.time() -- save when, more useful than just "true"
+    if callback then pcall( callback, pdev ) end
 end
 
 -- Start plugin running.
@@ -3065,9 +3092,11 @@ function startPlugin( pdev )
 
     luup.variable_set( MYSID, "Message", "Initializing...", pdev )
     luup.variable_set( MYSID, "NumRunning", "0", pdev )
+    luup.variable_set( MYSID, "LoadTime", os.time(), pdev )
 
     -- Early inits
     pluginDevice = pdev
+    systemReady = false
     isALTUI = false
     isOpenLuup = false
     sensorState = {}
@@ -3166,8 +3195,11 @@ function startPlugin( pdev )
         refreshScene( scd.id )
     end
 
-    -- Do this after scene queue refresh for optimal timer handling.
-    scheduleDelay( { id=tostring(pdev), func=waitSystemReady, owner=pdev }, 5 )
+    -- Start sensors
+    startSensors( pdev )
+    
+    -- Launch the system (Z-Wave) ready check.
+    scheduleDelay( { id="sysready", func=waitSystemReady, owner=pdev }, 5 )
 
     -- Return success
     luup.set_failure( 0, pdev )
@@ -4059,6 +4091,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
                 tostring(luup.attr_get("model",0))
         end
         r = r .. "; loadtime " .. tostring( luup.attr_get('LoadTime',0) or "" )
+        r = r .. "; systemReady " .. tostring( systemReady )
         if isALTUI then
             r = r .. "; ALTUI"
             local v = luup.variable_get( "urn:upnp-org:serviceId:altui1", "Version", isALTUI )
@@ -4071,7 +4104,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
             EOL
         r = r .. "House mode: plugin " .. tostring(luup.variable_get( MYSID, "HouseMode", pluginDevice ) or "?") .. 
             "; system " .. tostring( luup.attr_get('Mode',0) or "" ) ..
-            "; tracking " .. ( usesHouseMode and "off" or "on" ) .. EOL
+            "; tracking " .. ( usesHouseMode and "on" or "off" ) .. EOL
         r = r .. "  Sun data: " .. tostring(luup.variable_get( MYSID, "sundata", pluginDevice ) or "") .. EOL
         if geofenceMode ~= 0 then
             local status, p = pcall( showGeofenceData )
