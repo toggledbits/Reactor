@@ -165,9 +165,15 @@ var Reactor = (function(api, $) {
 
         /* Write new (old/restored) config */
         /* Writing cdata restarts the sensor, so no explicit action call needed after. */
-        cdata.device = dev.id;
+        var cdata = backupInfo.sensors[item].config;
+        if ( undefined === cdata ) {
+            var img = jQuery( '.reactortab div#restorestatus p#' + idSelector(item) + ' > img' );
+            img.replaceWith( '<span> <b>FAILED!</b> No data.</span>' );
+            return;
+        }
+        cdata.device = dev.id; /* Make sure device agrees with config (new target?) */
         api.setDeviceStateVariablePersistent( dev.id, "urn:toggledbits-com:serviceId:ReactorSensor",
-            "cdata", JSON.stringify( backupInfo.sensors[item].config || {} ),
+            "cdata", JSON.stringify( cdata ),
             {
                 'onSuccess' : function() {
                     console.log('Success ' + String(item));
