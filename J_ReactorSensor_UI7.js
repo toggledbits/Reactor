@@ -1055,7 +1055,7 @@ var ReactorSensor = (function(api, $) {
                 var vs = ( cstate.vars || {} )[vd.name] || {};
                 el = jQuery( '<div class="row var" />' ).attr( 'id', vd.name );
                 var vv = ((cstate.vars || {})[vd.name] || {}).lastvalue;
-                if ( typeof(vv) == "object" && vv.__type == "null" || undefined == vv ) {
+                if ( null === vv ) {
                     vv = "(null)";
                 } else {
                     try {
@@ -3193,7 +3193,7 @@ var ReactorSensor = (function(api, $) {
             var blk = jQuery( 'div#currval', el ).empty();
             if ( csvars[ vd.name ] && undefined !== csvars[ vd.name ].lastvalue ) {
                 var vs = csvars[ vd.name ];
-                if ( vs.lastvalue.__type && vs.lastvalue.__type == "null" ) {
+                if ( null === vs.lastvalue ) {
                     blk.text( 'Last result: (null)' ).attr( 'title', 'This variable has an empty/null value' );
                 } else {
                     var val = JSON.stringify( vs.lastvalue );
