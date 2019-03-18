@@ -3004,7 +3004,7 @@ var ReactorSensor = (function(api, $) {
         var container = jQuery('div#reactorvars');
         var row = jQuery( 'div#opt-state', container );
         row.remove();
-        jQuery( 'button#addvar', container ).attr( 'disabled', false );
+        jQuery( 'button#addvar', container ).prop( 'disabled', false );
         jQuery( 'textarea.expr,i.md-btn', container ).attr( 'disabled', false );
     }
 
@@ -3067,9 +3067,8 @@ var ReactorSensor = (function(api, $) {
         var row = jQuery( ev.currentTarget ).closest( 'div.varexp' );
         var container = jQuery('div#reactorvars');
 
-        jQuery( 'button#addvar', container ).attr( 'disabled', true );
-        jQuery( 'textarea.expr,i.md-btn', container ).attr( 'disabled', true );
-
+        jQuery( 'button#addvar', container ).prop( 'disabled', true );
+        jQuery( 'i.md-btn', container ).attr( 'disabled', true );
         jQuery( 'textarea.expr', row ).attr( 'disabled', false );
 
         var el = jQuery( '<div class="col-xs-12 col-md-9 col-md-offset-2 form-inline" />' );
@@ -3109,7 +3108,7 @@ var ReactorSensor = (function(api, $) {
     function handleAddVariableClick() {
         var container = jQuery('div#reactorvars');
 
-        jQuery( 'button#addvar', container ).attr( 'disabled', true );
+        jQuery( 'button#addvar', container ).prop( 'disabled', true );
         jQuery( 'div.varexp textarea.expr,i.md-btn', container ).attr( 'disabled', true );
 
         var editrow = getVariableRow();
@@ -3130,7 +3129,7 @@ var ReactorSensor = (function(api, $) {
                 f.parent().empty().text(vname);
                 /* Re-enable fields and add button */
                 jQuery( 'div.varexp textarea.expr,i.md-btn', container ).attr('disabled', false);
-                jQuery( 'button#addvar', container ).attr( 'disabled', false );
+                jQuery( 'button#addvar', container ).prop( 'disabled', false );
                 jQuery( 'textarea.expr', row ).focus();
                 /* Do the regular stuff */
                 handleVariableChange( null );
@@ -4121,7 +4120,7 @@ var ReactorSensor = (function(api, $) {
         var actionMenu = jQuery( 'select#actionmenu', ct );
 
         // Clear the action menu and remove all arguments.
-        actionMenu.empty().attr( 'disabled', true );
+        actionMenu.empty().prop( 'disabled', true );
         jQuery('label,.argument', ct).remove();
         if ( newVal == "" ) { return; }
 
@@ -4184,7 +4183,7 @@ var ReactorSensor = (function(api, $) {
                 }
                 if ( jQuery("option", section).length > 0 ) {
                     opt = jQuery("<option/>").val("").text( "---Service " + service.serviceId.replace(/^([^:]+:)+/, "") + "---" );
-                    opt.attr( 'disabled', true );
+                    opt.prop( 'disabled', true );
                     opt.addClass("optheading");
                     section.prepend( opt );
                     actionMenu.append( section.children() );
@@ -4226,7 +4225,7 @@ var ReactorSensor = (function(api, $) {
             }
             var lopt = jQuery( '<option selected/>' ).val( "" ).text( hasAction ? "--choose action--" : "(invalid device--no actions)" );
             actionMenu.prepend( lopt );
-            actionMenu.attr( 'disabled', false );
+            actionMenu.prop( 'disabled', false );
             jQuery( 'option:first', actionMenu ).prop( 'selected' );
             if ( undefined !== fnext ) {
                 fnext.apply( null, fargs );
@@ -4241,8 +4240,8 @@ var ReactorSensor = (function(api, $) {
                 console.log(jqXHR.responseText);
             }
             actionMenu.prepend( '<option value="">--choose--</option>' );
+            actionMenu.prop( 'disabled', false );
             actionMenu.val("");
-            actionMenu.attr( 'disabled', false );
             if ( undefined !== fnext ) {
                 fnext.apply( null, fargs );
             }

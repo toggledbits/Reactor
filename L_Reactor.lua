@@ -2812,9 +2812,6 @@ local function showDisabled( tdev )
     assert( tdev ~= nil )
     setVar( RSSID, "Message", "Disabled", tdev )
     setVar( RSSID, "Trouble", "0", tdev )
-    if luup.device_message then
-        luup.device_message( tdev, -1, " ", 0, _PLUGIN_NAME )
-    end
     luup.set_failure( 0, tdev )
 end
 
@@ -2930,13 +2927,6 @@ local function updateSensor( tdev )
     -- Trouble?
     D("updateSensor() trouble %1", sst.trouble)
     setVar( RSSID, "Trouble", sst.trouble and "1" or "0", tdev )
-    if luup.device_message then
-        if sst.trouble then
-            luup.device_message( tdev, -1, "See Logic Summary events list", 0, _PLUGIN_NAME )
-        else
-            luup.device_message( tdev, -1, "Updated "..os.date("%c"), 10, _PLUGIN_NAME )
-        end
-    end
     if getVarNumeric( "FailOnTrouble", 0, tdev, RSSID ) ~= 0 then
         luup.set_failure( sst.trouble and 1 or 0, tdev )
     end
