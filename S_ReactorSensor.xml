@@ -18,6 +18,12 @@
             <defaultValue></defaultValue>
             <shortCode>message</shortCode>
         </stateVariable>
+        <stateVariable sendEvents="yes">
+            <name>Trouble</name>
+            <dataType>boolean</dataType>
+            <defaultValue>0</defaultValue>
+            <shortCode>trouble</shortCode>
+        </stateVariable>
         <stateVariable sendEvents="no">
             <name>Invert</name>
             <dataType>boolean</dataType>
