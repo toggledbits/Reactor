@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "2.4develop-19060"
+local _PLUGIN_VERSION = "2.4develop-19077"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _CONFIGVERSION = 00206
 
@@ -2184,8 +2184,8 @@ end
 local function evaluateGroup( grp, cdata, tdev )
     D("evaluateGroup(%1,cdata,%2)", grp.groupid, tdev)
     if grp.groupconditions == nil or #grp.groupconditions == 0 then return false end -- empty group always false
-    local hasTimer = false;
-    local passed = true; -- innocent until proven guilty
+    local hasTimer = false
+    local passed = true -- innocent until proven guilty
     local skey = tostring(tdev)
     local now = sensorState[skey].timebase
     sensorState[skey].condState[grp.groupid] = sensorState[skey].condState[grp.groupid] or {}
@@ -2249,7 +2249,7 @@ local function evaluateGroup( grp, cdata, tdev )
                     D("evaluateCondition() testing predecessor %1 state %2", predCond, predState)
                     if predState == nil then
                         state = false
-                        L({level=2,msg="Condition %1 can't meet sequence requirement, condition %2 missing!"}, cond.id, cond.after);
+                        L({level=2,msg="Condition %1 can't meet sequence requirement, condition %2 missing!"}, cond.id, cond.after)
                     else
                         local age = cs.statestamp - predState.statestamp
                         local window = cond.aftertime or 0
@@ -2731,7 +2731,7 @@ function startPlugin( pdev )
     if uilang ~= "en" then
         local f = io.open("T_Reactor_i18n-" .. uilang .. ".json", "r")
         if not f then
-            os.execute("curl -s https://raw.githubusercontent.com/toggledbits/Reactor/master/{T_Reactor_i18n-"..uilang..".json} -o '#1'");
+            os.execute("curl -s https://raw.githubusercontent.com/toggledbits/Reactor/master/{T_Reactor_i18n-"..uilang..".json} -o '#1'")
         else f:close() end
         local success, err = pcall( i18n.loadFile, "T_Reactor_i18n-" .. uilang .. ".json" )
         if success then
@@ -3108,7 +3108,7 @@ function actionTrip( dev )
     L("Sensor %1 (%2) trip action!", dev, luup.devices[dev].description)
     addEvent{ dev=dev, event="action", action="Trip" }
     trip( true, dev )
-    setMessage("Tripped", dev);
+    setMessage("Tripped", dev)
 end
 
 -- Force reset (untrip) a ReactorSensor
