@@ -2112,7 +2112,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
                 luup.devices[tdev].description, tdev, cond.id, cond.device, cond.devicename or "unknown")
             addEvent{ dev=tdev, event="condition", condition=cond.id, ['error']='Missing device #'..tostring(cond.device or "nil") }
             sst.trouble = true -- flag trouble
-            return nil,false,false
+            return nil,nil
         end
 
         -- Add service watch if we don't have one
@@ -2201,7 +2201,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
             L({level=1,msg="evaluateCondition() unknown op %1 in cond %2"}, op, cv)
             addEvent{ dev=tdev, event="condition", condition=cond.id, ['error']="Unrecognized operator "..tostring(op or "nil") }
             sst.trouble = true
-            return nil,false
+            return vv,nil
         end
         D("evaluateCondition() default true exit for cond %1, new value=%2", cond.id, vv)
         return vv,true
@@ -2261,7 +2261,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
                         op, cond.id, (luup.devices[tdev] or {}).description, tdev)
                     addEvent{ dev=tdev, event="condition", condition=cond.id, ['error']="Unrecognized operator "..tostring(op or "nil") }
                     sst.trouble = true
-                    return val,false -- never met
+                    return val,nil
                 end
                 -- Move back N-1 weeks; we should still be in same month. Then
                 -- move back one more week, should be in prior month.
@@ -2458,7 +2458,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
                     cp, cond.id, tdev, luup.devices[tdev].description)
                 addEvent{ dev=tdev, event="condition", condition=cond.id, ['error']="Unrecognized operator "..tostring(cp or "nil") }
                 sst.trouble = true
-                return now,false
+                return now,nil
             end
         end
         return now,true
@@ -2539,7 +2539,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
             -- First run. Delay until the first interval.
         end
         -- Go true.
-        D("evaluateConditions() triggering interval condition %1", cond.id)
+        D("evaluateCondition() triggering interval condition %1", cond.id)
         -- On time greater of 15 seconds or duty cycle as % of interval, but never more than interval-5 seconds.
         scheduleDelay( { id=tdev,info="interval "..cond.id }, math.min( math.max( 15, interval * (cond.duty or 0) / 100 ), interval-5 ) )
         return now,true
@@ -2591,7 +2591,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
             tdev, luup.devices[tdev].description, cond.type, cond.id, grp.id)
         addEvent{ dev=tdev, event="condition", condition=cond.id, ['error']="Unrecognized condition type "..tostring(cond.type or "nil") }
         sst.trouble = true
-        return nil,false,false
+        return nil,nil
     end
 
     return cond.laststate.lastvalue, cond.laststate.state -- luacheck: ignore 511
