@@ -3190,7 +3190,7 @@ function startPlugin( pdev )
     if uilang ~= "en" then
         local f = io.open("T_Reactor_i18n-" .. uilang .. ".json", "r")
         if not f then
-            os.execute("curl -s https://raw.githubusercontent.com/toggledbits/Reactor/master/{T_Reactor_i18n-"..uilang..".json} -o '#1'");
+            os.execute("curl -s https://raw.githubusercontent.com/toggledbits/Reactor/master/{T_Reactor_i18n-"..uilang..".json} -o '#1'")
         else f:close() end
         local success, err = pcall( i18n.loadFile, "T_Reactor_i18n-" .. uilang .. ".json" )
         if success then
@@ -3573,7 +3573,7 @@ function actionTrip( dev )
     L("Sensor %1 (%2) trip action!", dev, luup.devices[dev].description)
     addEvent{ dev=dev, event="action", action="Trip" }
     trip( true, dev )
-    setMessage("Tripped", dev);
+    setMessage("Tripped", dev)
 end
 
 -- Force reset (untrip) a ReactorSensor
@@ -3714,7 +3714,7 @@ function actionSetVariable( opt, tdev )
     if tostring( vs.lastvalue ) ~= vv then
         vs.lastvalue = vv
         vs.valuestamp = os.time()
-        vs.changed = 1;
+        vs.changed = 1
         -- Update LuaXP evaluation context if it exists.
         local sst = getSensorState( tdev )
         if sst.ctx then
