@@ -13,6 +13,7 @@ local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
 local _PLUGIN_VERSION = "3.0dev-19077"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
+
 local _CONFIGVERSION = 00208    -- aka 19077
 local _CDATAVERSION = 19051     -- must coincide with JS
 local _UIVERSION = 19065        -- must coincide with JS
@@ -361,7 +362,10 @@ function sun( lon, lat, elev, t )
     local rlat = lat * pi / 180.0
     local rlon = lon * pi / 180.0
     -- Apply TZ offset for JD in local TZ not UTC; truncate time and force noon.
-    local locale_offset = os.difftime( t, os.time( os.date("!*t", t) ) )
+    local gmtnow = os.date("!*t", t) -- get GMT as table
+    local nownow = os.date("*t", t) -- get local as table
+    gmtnow.isdst = nownow.isdst -- make sure dst agrees
+    local locale_offset = os.difftime( t, os.time( gmtnow ) )
     local n = math.floor( ( t + locale_offset ) / 86400 + 0.5 + 2440587.5 ) - 2451545.0
     local N = n - rlon / tau
     local M = ( 6.24006 + 0.017202 * N ) % tau
