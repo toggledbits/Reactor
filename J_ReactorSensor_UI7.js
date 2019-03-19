@@ -1897,7 +1897,7 @@ var ReactorSensor = (function(api, $) {
             for ( var ic=0; ic<(grp.conditions || []).length; ic++) {
                 var gc = grp.conditions[ic];
                 /* Must be service, not this condition, and not the predecessor to this condition (recursive) */
-                if ( cond.id !== gc.id && ( gc.after === undefined || gc.after !== cond.id ) ) {
+                if ( cond.id !== gc.id && "comment" !== gc.type && ( gc.after === undefined || gc.after !== cond.id ) ) {
                     var $opt = jQuery( '<option/>' ).val( gc.id );
                     var t = makeConditionDescription( gc );
                     if ( t.length > 40 ) {
@@ -1913,7 +1913,7 @@ var ReactorSensor = (function(api, $) {
             jQuery('select#pred', $container).val( cond.after );
             jQuery('input#predtime', $container).val( cond.aftertime || 0 );
             /* Duration */
-            $container.append('<div id="duropt" class="form-inline"><label>Condition is sustained for&nbsp;<select id="durop" class="form-control form-control-sm"><option value="ge">at least</option><option value="lt">less than</option></select>&nbsp;<input type="text" id="duration" class="form-control form-control-sm narrow" autocomplete="off"> seconds</label></div>');
+            $container.append('<div id="duropt" class="form-inline"><label>Condition is sustained for&nbsp;</label><select id="durop" class="form-control form-control-sm"><option value="ge">at least</option><option value="lt">less than</option></select><input type="text" id="duration" class="form-control form-control-sm narrow" autocomplete="off"><label>&nbsp;seconds</label></div>');
             /* Repeat */
             $container.append('<div id="repopt" class="form-inline"><label>Condition repeats <input type="text" id="rcount" class="form-control form-control-sm narrow" autocomplete="off"> times within <input type="text" id="rspan" class="form-control form-control-sm narrow" autocomplete="off"> seconds</label></div>');
             $container.append('<div id="latchopt" class="form-inline"><label class="checkbox-inline"><input type="checkbox" id="latchcond" class="form-check">&nbsp;Latch (once met, condition remains true until group resets)<label></div>');
