@@ -6,7 +6,7 @@
  * Copyright 2018 Patrick H. Rigney, All Rights Reserved.
  * This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
  */
-/* globals MultiBox,ALTUI_PluginDisplays,_T */
+/* globals window,MultiBox,ALTUI_PluginDisplays,_T */
 
 "use strict";
 
