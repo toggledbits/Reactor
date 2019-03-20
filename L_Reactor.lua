@@ -2197,10 +2197,18 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
             end
             D("evaluateCondition() service change op without terms, currval=%1, prior=%2, term=%3",
                 vv, cond.laststate.lastvalue, cv)
-            if vv == cond.laststate.lastvalue then return vv,false end
+            local hold = getVarNumeric( "ValueChangeHoldTime", 2, tdev, RSSID )
+            if vv == cond.laststate.lastvalue then 
+                -- No change. If we haven't yet met the hold time, continue delay.
+                local later = ( cond.laststate.valuestamp or 0 ) + hold
+                if now >= later then
+                    return vv,false -- time to reset
+                end
+                hold = later - now
+                D("evaluationCondition() no change, but hold time from prior change not yet met, continuing delay for %1 more...", hold)
+            end
             -- Changed without terminal values, pulse.
-            scheduleDelay( { id=tdev, info="change "..cond.id },
-                getVarNumeric( "ValueChangeHoldTime", 2, tdev, RSSID ) )
+            scheduleDelay( { id=tdev, info="change "..cond.id }, hold )
         else
             L({level=1,msg="evaluateCondition() unknown op %1 in cond %2"}, op, cv)
             addEvent{ dev=tdev, event="condition", condition=cond.id, ['error']="Unrecognized operator "..tostring(op or "nil") }
