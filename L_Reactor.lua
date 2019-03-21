@@ -7,7 +7,7 @@
 
 module("L_Reactor", package.seeall)
 
-local debugMode = false
+local debugMode = true
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
