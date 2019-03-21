@@ -11,9 +11,12 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "2.4stable-19079"
+local _PLUGIN_VERSION = "2.4stable-19080"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
+
 local _CONFIGVERSION = 00206
+local _CDATAVERSION = 19012     -- must coincide with JS
+local _UIVERSION = 19079        -- must coincide with JS
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -1464,9 +1467,9 @@ local function loadSensorConfig( tdev )
     end
 
     -- Backport/downgrade attempt from future version?
-    if cdata.version and cdata.version > 19012 then
-        L({level=1,msg="Configuration loaded is format v%1, max compatible with this version of Reactor is 19012; upgrade Reactor or restore older config from backup."},
-            cdata.version)
+    if cdata.version and cdata.version > _CDATAVERSION then
+        L({level=1,msg="Configuration loaded is format v%1, max compatible with this version of Reactor is %2; upgrade Reactor or restore older config from backup."},
+            cdata.version, _CDATAVERSION)
         error("Incompatible config format version. Upgrade Reactor or restore older config from backup.")
     end
 
@@ -2625,6 +2628,9 @@ local function startSensor( tdev, pdev )
     -- Device one-time initialization
     sensor_runOnce( tdev )
 
+    -- Save required UI version for collision detection.
+    setVar( RSSID, "UIVersion", _UIVERSION, tdev )
+
     -- Initialize instance data; take care not to scrub eventList
     local skey = tostring( tdev )
     sensorState[skey] = sensorState[skey] or {}
@@ -2768,6 +2774,9 @@ function startPlugin( pdev )
         debugMode = true
         D("startPlugin() debug enabled by state variable DebugMode")
     end
+
+    -- Save required UI version for collision detection.
+    setVar( MYSID, "UIVersion", _UIVERSION, pdev )
 
     -- Check for ALTUI and OpenLuup
     local failmsg = false

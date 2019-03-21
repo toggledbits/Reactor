@@ -15,11 +15,13 @@ var ReactorSensor = (function(api, $) {
     /* unique identifier for this plugin... */
     var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-    var pluginVersion = '2.4stable-19079';
+    var pluginVersion = '2.4stable-19080';
 
     var DEVINFO_MINSERIAL = 71.222;
 
-    var CDATA_VERSION = 19012;
+    var UI_VERSION = 19079;     /* must coincide with Lua core */
+
+    var CDATA_VERSION = 19012;  /* must coincide with Lua core */
 
     var myModule = {};
 
@@ -211,16 +213,29 @@ var ReactorSensor = (function(api, $) {
     }
 
     /* Initialize the module */
-    function initModule() {
-        var myid = api.getCpanelDeviceId();
-        console.log("initModule() for device " + myid);
-        var devices = api.cloneObject( api.getListOfDevices() );
+    function initModule( myid ) {
+        myid = myid || api.getCpanelDeviceId();
+
+        /* Check agreement of plugin core and UI */
+        var s = api.getDeviceState( myid, "urn:toggledbits-com:serviceId:ReactorSensor", "UIVersion" ) || "0";
+        console.log("initModule() for device " + myid + " requires UI version " + UI_VERSION + ", seeing " + s);
+        if ( String(UI_VERSION) != s ) {
+            api.setCpanelContent( '<div class="reactorwarning" style="border: 4px solid red; padding: 8px;">' +
+                " ERROR! The Reactor plugin core version and UI version do not agree." +
+                " This may cause errors or corrupt your ReactorSensor configuration." +
+                " Please hard-reload your browser and try again " +
+                ' (<a href="https://duckduckgo.com/?q=hard+reload+browser" target="_blank">how?</a>).' +
+                " If you have installed hotfix patches, you may not have successfully installed all required files." +
+                " Expected " + String(UI_VERSION) + " got " + String(s) +
+                ".</div>" );
+            return false;
+        }
 
         /* Load ACE. Since the jury is still out with LuaView on this, default is no
            ACE for now. As of 2019-01-06, one user has reported that ACE does not function
            on Chrome Mac (unknown version, but does function with Safari and Firefox on Mac).
            That's just one browser, but still... */
-        var s = getParentState( "UseACE" ) || "";
+        s = getParentState( "UseACE" ) || "";
         if ( "1" === s && ! window.ace ) {
             s = getParentState( "ACEURL" ) || "https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.2/ace.js";
             jQuery( "head" ).append( '<script src="' + s + '"></script>' );
@@ -238,6 +253,7 @@ var ReactorSensor = (function(api, $) {
         loadConfigData( myid );
 
         /* Make our own list of devices, sorted by room, and alpha within room. */
+        var devices = api.cloneObject( api.getListOfDevices() );
         var rooms = [];
         var noroom = { "id": 0, "name": "No Room", "devices": [] };
         rooms[noroom.id] = noroom;
@@ -921,7 +937,9 @@ var ReactorSensor = (function(api, $) {
             handleSaveClick( undefined );
         }
 
-        initModule();
+        if ( ! initModule() ) {
+            return;
+        }
 
         /* Our styles. */
         var html = "<style>";
@@ -2560,7 +2578,9 @@ var ReactorSensor = (function(api, $) {
                 handleSaveClick( undefined );
             }
 
-            initModule();
+            if ( ! initModule() ) {
+                return;
+            }
 
             var myid = api.getCpanelDeviceId();
 
@@ -2915,7 +2935,9 @@ var ReactorSensor = (function(api, $) {
                 handleSaveClick( undefined );
             }
 
-            initModule();
+            if ( ! initModule() ) {
+                return;
+            }
 
             /* Load material design icons */
             jQuery("head").append('<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">');
@@ -4466,7 +4488,9 @@ var ReactorSensor = (function(api, $) {
     }
 
     function preloadActivities() {
-        initModule();
+        if ( ! initModule() ) {
+            return;
+        }
 
         /* Load material design icons */
         jQuery("head").append('<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">');
@@ -4904,7 +4928,9 @@ var ReactorSensor = (function(api, $) {
             handleSaveClick( undefined );
         }
 
-        initModule();
+        if ( ! initModule() ) {
+            return;
+        }
 
         var html = "";
 
@@ -5057,7 +5083,6 @@ var ReactorSensor = (function(api, $) {
 
     myModule = {
         uuid: uuid,
-        initModule: initModule,
         onBeforeCpanelClose: onBeforeCpanelClose,
         onUIDeviceStatusChanged: onUIDeviceStatusChanged,
         doTools: doTools,
