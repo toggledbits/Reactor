@@ -21,7 +21,7 @@ var ReactorSensor = (function(api, $) {
 
     var UI_VERSION = 19079;     /* must coincide with Lua core */
 
-    var CDATA_VERSION = 19012;
+    var CDATA_VERSION = 19012;  /* must coincide with Lua core */
 
     var myModule = {};
 
@@ -213,7 +213,7 @@ var ReactorSensor = (function(api, $) {
     }
 
     /* Initialize the module */
-    function initModule() {
+    function initModule( myid ) {
         myid = myid || api.getCpanelDeviceId();
 
         /* Check agreement of plugin core and UI */
@@ -937,7 +937,9 @@ var ReactorSensor = (function(api, $) {
             handleSaveClick( undefined );
         }
 
-        initModule();
+        if ( ! initModule() ) {
+            return;
+        }
 
         /* Our styles. */
         var html = "<style>";
@@ -2576,7 +2578,9 @@ var ReactorSensor = (function(api, $) {
                 handleSaveClick( undefined );
             }
 
-            initModule();
+            if ( ! initModule() ) {
+                return;
+            }
 
             var myid = api.getCpanelDeviceId();
 
@@ -2931,7 +2935,9 @@ var ReactorSensor = (function(api, $) {
                 handleSaveClick( undefined );
             }
 
-            initModule();
+            if ( ! initModule() ) {
+                return;
+            }
 
             /* Load material design icons */
             jQuery("head").append('<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">');
@@ -4482,7 +4488,9 @@ var ReactorSensor = (function(api, $) {
     }
 
     function preloadActivities() {
-        initModule();
+        if ( ! initModule() ) {
+            return;
+        }
 
         /* Load material design icons */
         jQuery("head").append('<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">');
@@ -4920,7 +4928,9 @@ var ReactorSensor = (function(api, $) {
             handleSaveClick( undefined );
         }
 
-        initModule();
+        if ( ! initModule() ) {
+            return;
+        }
 
         var html = "";
 
@@ -5073,7 +5083,6 @@ var ReactorSensor = (function(api, $) {
 
     myModule = {
         uuid: uuid,
-        initModule: initModule,
         onBeforeCpanelClose: onBeforeCpanelClose,
         onUIDeviceStatusChanged: onUIDeviceStatusChanged,
         doTools: doTools,
