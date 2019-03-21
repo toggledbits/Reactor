@@ -231,13 +231,11 @@ var ReactorSensor = (function(api, $) {
             return false;
         }
 
-        var devices = api.cloneObject( api.getListOfDevices() );
-
         /* Load ACE. Since the jury is still out with LuaView on this, default is no
            ACE for now. As of 2019-01-06, one user has reported that ACE does not function
            on Chrome Mac (unknown version, but does function with Safari and Firefox on Mac).
            That's just one browser, but still... */
-        var s = getParentState( "UseACE" ) || "";
+        s = getParentState( "UseACE" ) || "";
         if ( "1" === s && ! window.ace ) {
             s = getParentState( "ACEURL" ) || "https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.2/ace.js";
             jQuery( "head" ).append( '<script src="' + s + '"></script>' );
@@ -255,6 +253,7 @@ var ReactorSensor = (function(api, $) {
         loadConfigData( myid );
 
         /* Make our own list of devices, sorted by room, and alpha within room. */
+        var devices = api.cloneObject( api.getListOfDevices() );
         var rooms = [];
         var noroom = { "id": 0, "name": "No Room", "devices": [] };
         rooms[noroom.id] = noroom;
