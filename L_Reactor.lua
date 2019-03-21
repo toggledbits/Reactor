@@ -2775,6 +2775,9 @@ function startPlugin( pdev )
         D("startPlugin() debug enabled by state variable DebugMode")
     end
 
+    -- Save required UI version for collision detection.
+    setVar( MYSID, "UIVersion", _UIVERSION, pdev )
+
     -- Check for ALTUI and OpenLuup
     local failmsg = false
     for k,v in pairs(luup.devices) do
