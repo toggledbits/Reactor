@@ -15,7 +15,7 @@ var ReactorSensor = (function(api, $) {
     /* unique identifier for this plugin... */
     var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-    var pluginVersion = '2.4stable-19062';
+    var pluginVersion = '2.4stable-19079';
 
     var DEVINFO_MINSERIAL = 71.222;
 
@@ -1646,7 +1646,7 @@ var ReactorSensor = (function(api, $) {
         for ( var ic=0; ic<(grp.groupconditions || []).length; ic++) {
             var gc = grp.groupconditions[ic];
             /* Must be service, not this condition, and not the predecessor to this condition (recursive) */
-            if ( cond.id !== gc.id && ( gc.after === undefined || gc.after !== cond.id ) ) {
+            if ( cond.id !== gc.id && "comment" !== gc.type && ( gc.after === undefined || gc.after !== cond.id ) ) {
                 var opt = jQuery('<option/>').val( gc.id );
                 var t = makeConditionDescription( gc );
                 if ( t.length > 40 ) {
@@ -1662,7 +1662,7 @@ var ReactorSensor = (function(api, $) {
         jQuery('select#pred', container).val( cond.after );
         jQuery('input#predtime', container).val( cond.aftertime || 0 );
         /* Duration */
-        container.append('<div id="duropt" class="form-inline"><label>Condition is sustained for&nbsp;<select id="durop" class="form-control form-control-sm"><option value="ge">at least</option><option value="lt">less than</option></select>&nbsp;<input type="text" id="duration" class="form-control form-control-sm narrow" autocomplete="off"> seconds</label></div>');
+        container.append('<div id="duropt" class="form-inline"><label>Condition is sustained for&nbsp;</label><select id="durop" class="form-control form-control-sm"><option value="ge">at least</option><option value="lt">less than</option></select><input type="text" id="duration" class="form-control form-control-sm narrow" autocomplete="off"><label>&nbsp;seconds</label></div>');
         /* Repeat */
         container.append('<div id="repopt" class="form-inline"><label>Condition repeats <input type="text" id="rcount" class="form-control form-control-sm narrow" autocomplete="off"> times within <input type="text" id="rspan" class="form-control form-control-sm narrow" autocomplete="off"> seconds</label></div>');
         container.append('<div id="latchopt" class="form-inline"><label class="checkbox-inline"><input type="checkbox" id="latchcond" class="form-check">&nbsp;Latch (once met, condition remains true until group resets)<label></div>');
