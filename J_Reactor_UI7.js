@@ -16,9 +16,9 @@ var Reactor = (function(api, $) {
     /* unique identifier for this plugin... */
     var uuid = '72acc6ea-f24d-11e8-bd87-74d4351650de';
 
-    var pluginVersion = '3.0dev-19079';
+    var pluginVersion = '3.0dev-19080';
     
-    var UI_VERSION = 19079;
+    var UI_VERSION = 19080;     /* must coincide with Lua core */
 
     var myModule = {};
 
@@ -57,7 +57,7 @@ var Reactor = (function(api, $) {
         return html;
     }
     
-    function initModule() {
+    function initModule( myid ) {
         myid = myid || api.getCpanelDeviceId();
 
         /* Check agreement of plugin core and UI */
@@ -72,7 +72,6 @@ var Reactor = (function(api, $) {
                 " If you have installed hotfix patches, you may not have successfully installed all required files." +
                 " Expected " + String(UI_VERSION) + " got " + String(s) +
                 ".</div>" );
-            throw "Incompatible UI module";
             return false;
         }
         
