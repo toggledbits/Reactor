@@ -2204,7 +2204,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
                 if now >= later then
                     return vv,false -- time to reset
                 end
-                hold = later - now
+                hold = math.min( hold, later - now )
                 D("evaluationCondition() no change, but hold time from prior change not yet met, continuing delay for %1 more...", hold)
             end
             -- Changed without terminal values, pulse.
@@ -2236,10 +2236,18 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
             end
             -- Simple change (any to any).
             D("evaluateCondition() housemode change op, currval=%1, prior=%2 (no term)", mode, cond.laststate.lastvalue)
-            if mode == cond.laststate.lastvalue then return mode,false end
-            -- Changed without terminal values, pulse.
-            scheduleDelay( { id=tdev,info="change "..cond.id },
-                getVarNumeric( "ValueChangeHoldTime", 2, tdev, RSSID ) )
+            local hold = getVarNumeric( "ValueChangeHoldTime", 2, tdev, RSSID )
+            if mode == cond.laststate.lastvalue then 
+                -- No change. If we haven't yet met the hold time, continue delay.
+                local later = ( cond.laststate.valuestamp or 0 ) + hold
+                if now >= later then
+                    return mode,false
+                end
+                hold = math.min( hold, later - now )
+                D("evaluationCondition() no change, but hold time from prior change not yet met, continuing delay for %1 more...", hold)
+            end
+            -- Changed, pulse.
+            scheduleDelay( { id=tdev,info="change "..cond.id }, hold )
         else
             -- Default "is" operator
             D("evaluateCondition() housemode %1 among %2?", mode, modes)
@@ -2475,7 +2483,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
         end
         return now,true
     elseif cond.type == "comment" then
-        -- Shortcut. Comments are always true.
+        -- Shortcut. Comments are always null (don't contribute to logic).
         return cond.comment,nil
     elseif cond.type == "reload" then
         -- True when loadtime changes. Self-resetting.
@@ -2483,9 +2491,19 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
         local lastload = getVarNumeric( "LastLoad", 0, tdev, RSSID )
         local reloaded = loadtime ~= lastload
         D("evaluateCondition() loadtime %1 lastload %2 reloaded %3", loadtime, lastload, reloaded)
-        luup.variable_set( RSSID, "LastLoad", loadtime, tdev )
-        scheduleDelay( tdev, getVarNumeric( "ReloadConditionHoldTime", 60, tdev, RSSID ) )
-        return reloaded,reloaded
+        local hold = getVarNumeric( "ReloadConditionHoldTime", 60, tdev, RSSID )
+        if not reloaded then
+            -- Not reloaded. Hold on until we've satisfied hold time.
+            local later = ( cond.laststate.valuestamp or 0 ) + hold
+            if now >= later then
+                return false,false
+            end
+            hold = math.min( hold, later - now )
+        else
+            luup.variable_set( RSSID, "LastLoad", loadtime, tdev )
+        end
+        scheduleDelay( tdev, hold )
+        return true,true
     elseif cond.type == "interval" then
         local _,nmins = getValue( cond.mins, nil, tdev )
         local _,nhours = getValue( cond.hours, nil, tdev )
