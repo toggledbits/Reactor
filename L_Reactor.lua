@@ -2628,6 +2628,9 @@ local function startSensor( tdev, pdev )
     -- Device one-time initialization
     sensor_runOnce( tdev )
 
+    -- Save required UI version for collision detection.
+    setVar( RSSID, "UIVersion", _UIVERSION, tdev )
+
     -- Initialize instance data; take care not to scrub eventList
     local skey = tostring( tdev )
     sensorState[skey] = sensorState[skey] or {}
