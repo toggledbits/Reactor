@@ -5522,7 +5522,6 @@ var ReactorSensor = (function(api, $) {
 
     myModule = {
         uuid: uuid,
-        initModule: initModule,
         onBeforeCpanelClose: onBeforeCpanelClose,
         onUIDeviceStatusChanged: onUIDeviceStatusChanged,
         doTools: doTools,
