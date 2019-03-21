@@ -15,8 +15,8 @@ local _PLUGIN_VERSION = "3.0dev-19080"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION = 00208    -- aka 19077
-local _CDATAVERSION = 19051     -- must coincide with JS
-local _UIVERSION = 19065        -- must coincide with JS
+local _CDATAVERSION = 19080     -- must coincide with JS
+local _UIVERSION = 19080        -- must coincide with JS
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -1690,6 +1690,13 @@ local function loadSensorConfig( tdev )
             end
         end
         cdata.conditions = { root=root }
+        -- Do variables index upgrade
+        cdata.variables = cdata.variables or {}
+        local ix = 0
+        for _,vv in pairs( cdata.variables ) do
+            vv.index = ix
+            ix = ix + 1
+        end
         upgraded = true
     end
     cdata.activities = cdata.activities or {}
@@ -1706,6 +1713,27 @@ local function loadSensorConfig( tdev )
         cdata.activities['root.false'].id = 'root.false'
         cdata.untripactions = nil
         upgraded = true
+    end
+
+    if ( cdata.version or 0 ) < 19080 then
+        -- Upgrade condition options
+        local function scanconds( grp )
+            for _,cond in ipairs( grp.conditions or {} ) do
+                if "group" == ( cond.type or "group" ) then
+                    scanconds( cond )
+                else
+                    for _,k in pairs( { 'duration','duration_op','after','aftertime','repeatcount','repeatwithin','latch' } ) do
+                        if cond[k] then
+                            cond.options = cond.options or {}
+                            cond.options[k] = cond[k]
+                            cond[k] = nil
+                            upgraded = true
+                        end
+                    end
+                end
+            end
+        end
+        scanconds( cdata.conditions.root or {} )
     end
 
     -- Backport/downgrade attempt from future version?
@@ -2198,7 +2226,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
             D("evaluateCondition() service change op without terms, currval=%1, prior=%2, term=%3",
                 vv, cond.laststate.lastvalue, cv)
             local hold = getVarNumeric( "ValueChangeHoldTime", 2, tdev, RSSID )
-            if vv == cond.laststate.lastvalue then 
+            if vv == cond.laststate.lastvalue then
                 -- No change. If we haven't yet met the hold time, continue delay.
                 local later = ( cond.laststate.valuestamp or 0 ) + hold
                 if now >= later then
@@ -2237,7 +2265,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
             -- Simple change (any to any).
             D("evaluateCondition() housemode change op, currval=%1, prior=%2 (no term)", mode, cond.laststate.lastvalue)
             local hold = getVarNumeric( "ValueChangeHoldTime", 2, tdev, RSSID )
-            if mode == cond.laststate.lastvalue then 
+            if mode == cond.laststate.lastvalue then
                 -- No change. If we haven't yet met the hold time, continue delay.
                 local later = ( cond.laststate.valuestamp or 0 ) + hold
                 if now >= later then
@@ -2631,6 +2659,7 @@ local function processCondition( cond, grp, cdata, tdev )
     D("processCondition(%1,%2,cdata,%3)", cond.id, (grp or {}).id, tdev)
     local sst = getSensorState( tdev )
     local now = sst.timebase
+    local condopt = cond.options or {}
 
     -- Fetch prior state/value
     local cs = sst.condState[cond.id]
@@ -2660,11 +2689,11 @@ local function processCondition( cond, grp, cdata, tdev )
         cs.statestamp = now
         cs.stateedge = cs.stateedge or {}
         cs.stateedge[state and 1 or 0] = now
-        if state and ( cond.repeatcount or 0 ) > 1 then
+        if state and ( condopt.repeatcount or 0 ) > 1 then
             -- If condition now true and counting repeats, append time to list and prune
             cs.repeats = cs.repeats or {}
             table.insert( cs.repeats, now )
-            while #cs.repeats > cond.repeatcount do table.remove( cs.repeats, 1 ) end
+            while #cs.repeats > condopt.repeatcount do table.remove( cs.repeats, 1 ) end
         end
     end
 
@@ -2676,10 +2705,10 @@ local function processCondition( cond, grp, cdata, tdev )
     end
 
     -- Check for predecessor/sequence
-    if state and ( cond.after or "" ) ~= "" then
+    if state and ( condopt.after or "" ) ~= "" then
         -- Sequence; this condition must become true after named sequence becomes true
-        local predCond = findCondition( cond.after, cdata )
-        D("evaluateCondition() sequence predecessor %1=%2", cond.after, predCond)
+        local predCond = findCondition( condopt.after, cdata )
+        D("evaluateCondition() sequence predecessor %1=%2", condopt.after, predCond)
         if predCond == nil then
             state = false
         else
@@ -2687,72 +2716,72 @@ local function processCondition( cond, grp, cdata, tdev )
             D("evaluateCondition() testing predecessor %1 state %2", predCond, predState)
             if predState == nil then
                 state = false
-                L({level=2,msg="Condition %1 can't meet sequence requirement, condition %2 missing!"}, cond.id, cond.after)
+                L({level=2,msg="Condition %1 can't meet sequence requirement, condition %2 missing!"}, cond.id, condopt.after)
                 addEvent{ dev=tdev, event="condition", condition=cond.id, ['error']="Predecessor condition could not be found" }
                 sst.trouble = true
             else
                 local age = cs.statestamp - predState.statestamp
-                local window = cond.aftertime or 0
+                local window = condopt.aftertime or 0
                 -- To clear, pred must be true, pred's true precedes our true, and if window, age within window
                 D("evaluateCondition() pred %1, window %2, age %3", predCond.id, window, age)
                 if not ( predState.evalstate and age >= 0 and ( window==0 or age <= window ) ) then
                     D("evaluateCondition() didn't meet sequence requirement %1 after %2(=%3) within %4 (%5 ago)",
-                        cond.id, predCond.id, predState.evalstate, cond.aftertime or "any", age)
+                        cond.id, predCond.id, predState.evalstate, condopt.aftertime or "any", age)
                     state = false
                 end
             end
         end
     end
 
-    if state and ( cond.repeatcount or 0 ) > 1 then
+    if state and ( condopt.repeatcount or 0 ) > 1 then
         -- Repeat count over duration (don't need hasTimer, it's leading-edge-driven)
         -- The repeats array contains the most recent repeatcount (or fewer) timestamps
         -- of when the condition was met. If (a) the array has the required number of
         -- events, and (b) the delta from the first to now is <= the repeat window, we're
         -- true.
         D("processCondition() cond %1 repeat check %2x in %3s from %4", cond.id,
-            cond.repeatcount, cond.repeatwithin, cond.repeats)
-        if #( cs.repeats or {} ) < cond.repeatcount then
+            condopt.repeatcount, condopt.repeatwithin, cs.repeats)
+        if #( cs.repeats or {} ) < condopt.repeatcount then
             -- Not enough samples yet
             state = false
-        elseif ( now - cs.repeats[1] ) > ( cond.repeatwithin or 60 ) then
+        elseif ( now - cs.repeats[1] ) > ( condopt.repeatwithin or 60 ) then
             -- Gap between first sample and now too long
             D("processCondition() cond %1 repeated %2x in %3s--too long!",
                 cond.id, #cs.repeats, now - cs.repeats[1])
             state = false
         else
             D("processCondition() cond %1 repeated %2x in %3s (seeking %4 within %5, good!)",
-                cond.id, #cs.repeats, now-cs.repeats[1], cond.repeatcount, cond.repeatwithin)
+                cond.id, #cs.repeats, now-cs.repeats[1], condopt.repeatcount, condopt.repeatwithin)
         end
-    elseif ( cond.duration or 0 ) > 0 then
+    elseif ( condopt.duration or 0 ) > 0 then
         -- Duration restriction?
         -- Age is seconds since last state change.
-        local op = cond.duration_op or "ge"
+        local op = condopt.duration_op or "ge"
         if op == "lt" then
             -- If duration < X, then eval is true only if last true interval
             -- lasted less than X seconds, meaning, we act when the condition goes
             -- false, checking the "back interval".
             if not state then
                 local age = (cs.stateedge[0] or now) - (cs.stateedge[1] or 0)
-                state = age < cond.duration
+                state = age < condopt.duration
                 D("processCondition() cond %1 was true for %2, limit is %3, state now %4", cond.id,
-                    age, cond.duration, state)
+                    age, condopt.duration, state)
             else
                 -- Not ready yet.
-                D("processCondition() cond %1 duration < %2, not ready yet", cond.id, cond.duration)
+                D("processCondition() cond %1 duration < %2, not ready yet", cond.id, condopt.duration)
                 state = false
             end
         elseif state then
             -- Handle "at least" duration. Eval true only when sustained for period
             local age = now - cs.statestamp
-            if age < cond.duration then
+            if age < condopt.duration then
                 D("processCondition() cond %1 suppressed, age %2, has not yet met duration %3",
-                    cond.id, age, cond.duration)
+                    cond.id, age, condopt.duration)
                 state = false
-                local rem = math.max( 1, cond.duration - age )
+                local rem = math.max( 1, condopt.duration - age )
                 scheduleDelay( tostring(tdev), rem )
             else
-                D("processCondition() cond %1 age %2 (>=%3) success", cond.id, age, cond.duration)
+                D("processCondition() cond %1 age %2 (>=%3) success", cond.id, age, condopt.duration)
             end
         end
     end
@@ -2760,7 +2789,7 @@ local function processCondition( cond, grp, cdata, tdev )
     -- Latching option. When latched, a condition that goes true remains true until the
     -- ReactorSensor untrips (another non-latched condition goes false), even if its
     -- other test conditions are no longer met.
-    if ( cond.latch or 0 ) ~= 0 then
+    if ( condopt.latch or 0 ) ~= 0 then
         cs.latched = true -- flag for reset actions/untrip
         if cs.evalstate and not state then
             -- Attempting to transition from true to false with latch option set. Override.
@@ -2802,7 +2831,7 @@ evaluateGroup = function( grp, parentGroup, cdata, tdev )
             hasTimer = condTimer or hasTimer
 
             -- Accumulate latched conditions for this group.
-            if ( cond.latch or 0 ) ~= 0 then
+            if ( ( cond.options or {} ).latch or 0 ) ~= 0 then
                 table.insert( latched, cond.id )
             end
 
@@ -4129,6 +4158,7 @@ function RG( grp, condState, level, r )
     local opch = ({ ['and']="&", ['or']="|", xor="^" })[grp.operator or "and"] or "+"
     for _,cond in ipairs( grp.conditions or {} ) do
         local condtype = cond.type or "group"
+        local condopt = cond.options or {}
         local cs = condState[cond.id] or {}
         r = r .. "    " .. string.rep( "  |   ", level-1 ) ..
             "  " .. opch .. "-" .. ( cond.disabled and "X" or ( (cs.evalstate == nil) and "?" or ( cs.evalstate and "T" or "F" ) ) ) ..
@@ -4141,21 +4171,21 @@ function RG( grp, condState, level, r )
             r = r .. string.format("%s/%s %s %s", cond.service or "?", cond.variable or "?", cond.operator or cond.condition or "?",
                 cond.value or "")
             if cond.nocase == 0 then r = r .. " (match case)" end
-            if cond.duration then
-                r = r .. " for " .. ( cond.duration_op or "ge" ) ..
-                    " " .. cond.duration .. "s"
+            if condopt.duration then
+                r = r .. " for " .. ( condopt.duration_op or "ge" ) ..
+                    " " .. condopt.duration .. "s"
             end
-            if cond.after then
-                if ( cond.aftertime or 0 ) > 0 then
-                    r = r .. " within " .. tostring(cond.aftertime) .. "s"
+            if condopt.after then
+                if ( condopt.aftertime or 0 ) > 0 then
+                    r = r .. " within " .. tostring(condopt.aftertime) .. "s"
                 end
-                r = r .. " after " .. cond.after
+                r = r .. " after " .. condopt.after
             end
-            if cond.repeatcount then
-                r = r .. " repeat " .. cond.repeatcount ..
-                    " within " .. ( cond.repeatwithin or 60 ).. "s"
+            if condopt.repeatcount then
+                r = r .. " repeat " .. condopt.repeatcount ..
+                    " within " .. ( condopt.repeatwithin or 60 ).. "s"
             end
-            if (cond.latch or 0) ~= 0 then
+            if (condopt.latch or 0) ~= 0 then
                 r = r .. " (latching)"
             end
         elseif condtype == "comment" then
