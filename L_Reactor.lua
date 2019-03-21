@@ -2930,6 +2930,7 @@ local function updateSensor( tdev )
 
         -- Pass through groups again, and run activities for any changed groups,
         -- except root, which is handle by trip() below.
+        D("updateSensors() checking groups for state changes")
         for grp in conditionGroups( cdata.conditions.root ) do
             local gs = condState[ grp.id ]
             if grp.id ~= "root" and gs.changed then
@@ -2948,11 +2949,13 @@ local function updateSensor( tdev )
         end
 
         -- Set tripped state based on change in status.
+        D("updateSensor() evaluating RS trip state")
         if currTrip ~= newTrip or ( newTrip and retrig ) then
             -- Changed, or retriggerable.
             local maxTrip = getVarNumeric( "MaxChangeRate", 5, tdev, RSSID )
             _, _, rate60 = rateLimit( sst.changeRate, maxTrip, false )
             if maxTrip == 0 or rate60 <= maxTrip then
+                D("updateSensor() new RS state %1", newTrip)
                 rateBump( sst.changeRate )
                 sst.changeThrottled = false
                 trip( newTrip, tdev )
@@ -3002,6 +3005,7 @@ local function updateSensor( tdev )
         local v = ( 60 - ( os.time() % 60 ) ) + TICKOFFS
         scheduleDelay( tdev, v )
     end
+    D("updateSensor() finished")
 end
 
 local function sensorTick(tdev)
