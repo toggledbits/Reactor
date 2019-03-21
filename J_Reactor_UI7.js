@@ -16,7 +16,7 @@ var Reactor = (function(api, $) {
     /* unique identifier for this plugin... */
     var uuid = '72acc6ea-f24d-11e8-bd87-74d4351650de';
 
-    var pluginVersion = '2.4develop-19058';
+    var pluginVersion = '2.4develop-19080';
 
     var myModule = {};
 

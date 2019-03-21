@@ -15,9 +15,11 @@ var ReactorSensor = (function(api, $) {
     /* unique identifier for this plugin... */
     var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-    var pluginVersion = '2.4develop-19058';
+    var pluginVersion = '2.4develop-19080';
 
     var DEVINFO_MINSERIAL = 71.222;
+
+    var UI_VERSION = 19079;     /* must coincide with Lua core */
 
     var CDATA_VERSION = 19012;
 
@@ -212,8 +214,23 @@ var ReactorSensor = (function(api, $) {
 
     /* Initialize the module */
     function initModule() {
-        var myid = api.getCpanelDeviceId();
-        console.log("initModule() for device " + myid);
+        myid = myid || api.getCpanelDeviceId();
+
+        /* Check agreement of plugin core and UI */
+        var s = api.getDeviceState( myid, "urn:toggledbits-com:serviceId:ReactorSensor", "UIVersion" ) || "0";
+        console.log("initModule() for device " + myid + " requires UI version " + UI_VERSION + ", seeing " + s);
+        if ( String(UI_VERSION) != s ) {
+            api.setCpanelContent( '<div class="reactorwarning" style="border: 4px solid red; padding: 8px;">' +
+                " ERROR! The Reactor plugin core version and UI version do not agree." +
+                " This may cause errors or corrupt your ReactorSensor configuration." +
+                " Please hard-reload your browser and try again " +
+                ' (<a href="https://duckduckgo.com/?q=hard+reload+browser" target="_blank">how?</a>).' +
+                " If you have installed hotfix patches, you may not have successfully installed all required files." +
+                " Expected " + String(UI_VERSION) + " got " + String(s) +
+                ".</div>" );
+            return false;
+        }
+
         var devices = api.cloneObject( api.getListOfDevices() );
 
         /* Load ACE. Since the jury is still out with LuaView on this, default is no
