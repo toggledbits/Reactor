@@ -22,7 +22,7 @@ var ReactorSensor = (function(api, $) {
     /* unique identifier for this plugin... */
     var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-    var pluginVersion = '3.0dev-19080';
+    var pluginVersion = '3.0dev-19081';
 
     var DEVINFO_MINSERIAL = 71.222;
 
@@ -400,7 +400,7 @@ var ReactorSensor = (function(api, $) {
         inStatusPanel = false;
 
         /* Get the config and parse it */
-        getConfiguration( myid );
+        getConfiguration( myid, true );
 
         /* Make our own list of devices, sorted by room, and alpha within room. */
         var devices = api.cloneObject( api.getListOfDevices() );
@@ -1053,7 +1053,7 @@ var ReactorSensor = (function(api, $) {
         }
 
         /* Get configuration data and current state */
-        var cdata = getConfiguration( pdev );
+        var cdata = getConfiguration( pdev, true );
         if ( undefined === cdata ) {
             stel.empty().text("An error occurred while attempting to fetch the configuration data. Luup may be reloading. Try again in a few moments.");
             console.log("cdata unavailable");
