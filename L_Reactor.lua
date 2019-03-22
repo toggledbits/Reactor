@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.0dev-19080"
+local _PLUGIN_VERSION = "3.0dev-19081"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION = 00208    -- aka 19077
@@ -1756,7 +1756,8 @@ local function loadSensorConfig( tdev )
         D("loadSensorConfig() writing updated sensor config")
         cdata.version = _CDATAVERSION -- MUST COINCIDE WITH J_ReactorSensor_UI7.js
         cdata.timestamp = os.time()
-        luup.variable_set( RSSID, "cdata", json.encode( cdata ), tdev )
+        -- NOTA BENE: startup=true passed here! Don't fire watch for this rewrite.
+        luup.variable_set( RSSID, "cdata", json.encode( cdata ), tdev, true )
     end
 
     -- Save to cache.
