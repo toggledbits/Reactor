@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "2.4stable-19080"
+local _PLUGIN_VERSION = "2.4stable-19081"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION = 00206
@@ -2629,7 +2629,7 @@ local function startSensor( tdev, pdev )
     sensor_runOnce( tdev )
 
     -- Save required UI version for collision detection.
-    setVar( RSSID, "UIVersion", _UIVERSION, tdev )
+    setVar( RSSID, "_UIV", _UIVERSION, tdev )
 
     -- Initialize instance data; take care not to scrub eventList
     local skey = tostring( tdev )
@@ -2776,7 +2776,7 @@ function startPlugin( pdev )
     end
 
     -- Save required UI version for collision detection.
-    setVar( MYSID, "UIVersion", _UIVERSION, pdev )
+    setVar( MYSID, "_UIV", _UIVERSION, pdev )
 
     -- Check for ALTUI and OpenLuup
     local failmsg = false
