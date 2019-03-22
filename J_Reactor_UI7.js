@@ -16,7 +16,7 @@ var Reactor = (function(api, $) {
     /* unique identifier for this plugin... */
     var uuid = '72acc6ea-f24d-11e8-bd87-74d4351650de';
 
-    var pluginVersion = '2.4develop-19080';
+    var pluginVersion = '2.4develop-19081';
     
     var UI_VERSION = 19079;
 
@@ -61,7 +61,7 @@ var Reactor = (function(api, $) {
         myid = myid || api.getCpanelDeviceId();
 
         /* Check agreement of plugin core and UI */
-        var s = api.getDeviceState( myid, serviceId, "UIVersion" ) || "0";
+        var s = api.getDeviceState( myid, serviceId, "_UIV" ) || "0";
         console.log("initModule() for device " + myid + " requires UI version " + UI_VERSION + ", seeing " + s);
         if ( String(UI_VERSION) != s ) {
             api.setCpanelContent( '<div class="reactorwarning" style="border: 4px solid red; padding: 8px;">' +
