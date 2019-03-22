@@ -2109,8 +2109,9 @@ local function updateVariables( cdata, tdev )
 end
 
 -- Helper to schedule next condition update. Times are MSM (mins since midnight)
-local function doNextCondCheck( taskinfo, nowMSM, startMSM, endMSM )
-    D("doNextCondCheck(%1,%2,%3)", nowMSM, startMSM, endMSM)
+local function doNextCondCheck( taskinfo, nowMSM, startMSM, endMSM, testing )
+    D("doNextCondCheck(%1,%2,%3,%4,%5)", taskinfo, nowMSM, startMSM, endMSM, testing)
+    if testing then return end -- Do nothing when testing at the moment
     local edge = 1440
     if nowMSM < startMSM then
         edge = startMSM
@@ -2330,10 +2331,9 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
     elseif cond.type == "sun" then
         -- Sun condition (sunrise/set)
         -- Figure out sunrise/sunset. Keep cached to reduce load.
-        local usingTestTime = getVarNumeric( "TestTime", 0, tdev, RSSID ) ~= 0
         local stamp = ndt.year * 1000 + ndt.yday
         local sundata = getVarJSON( "sundata", {}, pluginDevice, MYSID )
-        if ( sundata.stamp or 0 ) ~= stamp or usingTestTime then
+        if ( sundata.stamp or 0 ) ~= stamp or sst.timetest then
             if getVarNumeric( "UseLuupSunrise", 0, pluginDevice, MYSID ) ~= 0 then
                 L({level=2,msg="Reactor is configured to use Luup's sunrise/sunset calculations; twilight times cannot be correctly evaluated and will evaluate as dawn=sunrise, dusk=sunset"})
                 addEvent{ dev=tdev, event="condition", condition=cond.id, ['warning']="Configured to use Luup sunrise/sunset; twilight not available" }
@@ -2347,7 +2347,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
             end
             sundata.longitude = luup.longitude
             sundata.latitude = luup.latitude
-            if not usingTestTime then
+            if not sst.timetest then
                 -- Only write if not testing.
                 sundata.stamp = stamp
                 luup.variable_set( MYSID, "sundata", json.encode(sundata), pluginDevice )
@@ -2368,7 +2368,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
             sdt = os.date("*t", ett)
             local endMSM = sdt.hour * 60 + sdt.min
             D("evaluateCondition() cond %1 check %2 %3 %4 and %5", cond.id, nowMSM, op, startMSM, endMSM)
-            doNextCondCheck( { id=tdev,info="sun "..cond.id }, nowMSM, startMSM, endMSM )
+            doNextCondCheck( { id=tdev,info="sun "..cond.id }, nowMSM, startMSM, endMSM, sst.timetest )
             local between
             if endMSM <= startMSM then
                 between = nowMSM >= startMSM or nowMSM < endMSM
@@ -2381,11 +2381,11 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
             end
         elseif cond.operator == "before" then
             D("evaluateCondition() cond %1 check %2 before %3", cond.id, nowMSM, startMSM)
-            doNextCondCheck( { id=tdev,info="sun "..cond.id }, nowMSM, startMSM )
+            doNextCondCheck( { id=tdev,info="sun "..cond.id }, nowMSM, startMSM, nil, sst.timetest )
             if nowMSM >= startMSM then return now,false end
         else
             D("evaluateCondition() cond %1 check %2 after %3", cond.id, nowMSM, startMSM)
-            doNextCondCheck( { id=tdev,info="sun "..cond.id }, nowMSM, startMSM )
+            doNextCondCheck( { id=tdev,info="sun "..cond.id }, nowMSM, startMSM, nil, sst.timetest )
             if nowMSM < startMSM then return now,false end -- after
         end
         return now,true
@@ -2418,11 +2418,11 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
             local startMSM = tpart[4] * 60 + tpart[5]
             if op == "after" then
                 D("evaluateCondition() time-only comparison %1 after %2", nowMSM, startMSM)
-                doNextCondCheck( { id=tdev,info="trangeHM "..cond.id }, nowMSM, startMSM )
+                doNextCondCheck( { id=tdev,info="trangeHM "..cond.id }, nowMSM, startMSM, nil, sst.timetest )
                 if nowMSM < startMSM then return now,false end
             elseif op == "before" then
                 D("evaluateCondition() time-only comparison %1 before %2", nowMSM, startMSM)
-                doNextCondCheck( { id=tdev,info="trangeHM "..cond.id }, nowMSM, startMSM )
+                doNextCondCheck( { id=tdev,info="trangeHM "..cond.id }, nowMSM, startMSM, nil, sst.timetest )
                 if nowMSM >= startMSM then return now,false end
             else
                 -- Between, or not
@@ -2435,7 +2435,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
                 end
                 D("evaluateCondition() time-only comparison %1 %2 %3 %4 (between=%5)",
                     nowMSM, op, startMSM, endMSM, between)
-                doNextCondCheck( { id=tdev,info="trangeHM "..cond.id }, nowMSM, startMSM, endMSM )
+                doNextCondCheck( { id=tdev,info="trangeHM "..cond.id }, nowMSM, startMSM, endMSM, sst.timetest )
                 if ( op == "nob" and between ) or
                     ( op == "bet" and not between ) then
                     return now,false
@@ -2451,17 +2451,17 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
             stz = stz * 1440 + tpart[4] * 60 + tpart[5]
             if op == "before" then
                 D("evaluateCondition() M/D H:M test %1 %2 %3", nowz, op, stz)
-                doNextCondCheck( { id=tdev,info="trangeMDHM " .. cond.id }, nowz % 1440, stz % 1440 )
+                doNextCondCheck( { id=tdev,info="trangeMDHM " .. cond.id }, nowz % 1440, stz % 1440, nil, sst.timetest )
                 if nowz >= stz then return now,false end
             elseif op == "after" then
                 D("evaluateCondition() M/D H:M test %1 %2 %3", nowz, op, stz)
-                doNextCondCheck( { id=tdev,info="trangeMDHM " .. cond.id }, nowz % 1440, stz % 1440 )
+                doNextCondCheck( { id=tdev,info="trangeMDHM " .. cond.id }, nowz % 1440, stz % 1440, nil, sst.timetest )
                 if nowz < stz then return now,false end
             else
                 local enz = tpart[7] * 100 + tpart[8]
                 enz = enz * 1440 + tpart[9] * 60 + tpart[10]
                 D("evaluateCondition() M/D H:M test %1 %2 %3 and %4", nowz, op, stz, enz)
-                doNextCondCheck( { id=tdev,info="trangeMDHM " .. cond.id }, nowz % 1440, stz % 1440, enz % 1440 )
+                doNextCondCheck( { id=tdev,info="trangeMDHM " .. cond.id }, nowz % 1440, stz % 1440, enz % 1440, sst.timetest )
                 local between
                 if stz < enz then -- check for year-spanning
                     between = nowz >= stz and nowz < enz
@@ -2487,7 +2487,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
             D("evaluateCondition() compare tmnow %1 %2 %3 and %4", tmnow, op, stt, ett)
             -- Before doing condition check, schedule next time for condition check
             local edge = ( tmnow < stt ) and stt or ( ( tmnow < ett ) and ett or nil )
-            if edge ~= nil then
+            if edge ~= nil and not sst.timetest then
                 scheduleTick( { id=tdev,info="trangeFULL "..cond.id }, edge )
             else
                 D("evaluateCondition() cond %1 past end time, not scheduling further checks", cond.id)
@@ -2904,7 +2904,8 @@ local function updateSensor( tdev )
         local tt = getVarNumeric( "TestTime", 0, tdev, RSSID )
         sst.timebase = tt == 0 and os.time() or tt
         sst.timeparts = os.date("*t", sst.timebase)
-        D("updateSensor() base time is %1 (%2)", sst.timebase, sst.timeparts)
+        sst.timetest = tt > 0
+        D("updateSensor() base time is %1 (%2) testing=%3", sst.timebase, sst.timeparts, sst.timetest)
 
         -- Update state (if changed)
         updateVariables( cdata, tdev )
