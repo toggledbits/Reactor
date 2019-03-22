@@ -3129,7 +3129,7 @@ local function startSensor( tdev, pdev )
     sensor_runOnce( tdev )
 
     -- Save required UI version for collision detection.
-    setVar( RSSID, "UIVersion", _UIVERSION, tdev )
+    setVar( RSSID, "_UIV", _UIVERSION, tdev )
 
     -- Remove old and deprecated values
     deleteVar( RSSID, "Scenes", pdev )
@@ -3290,7 +3290,7 @@ function startPlugin( pdev )
     usesHouseMode = false
 
     -- Save required UI version for collision detection.
-    setVar( MYSID, "UIVersion", _UIVERSION, pdev )
+    setVar( MYSID, "_UIV", _UIVERSION, pdev )
 
     -- Debug?
     if getVarNumeric( "DebugMode", 0, pdev, MYSID ) ~= 0 then

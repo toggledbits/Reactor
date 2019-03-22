@@ -367,7 +367,7 @@ var ReactorSensor = (function(api, $) {
         myid = myid || api.getCpanelDeviceId();
 
         /* Check agreement of plugin core and UI */
-        var s = api.getDeviceState( myid, "urn:toggledbits-com:serviceId:ReactorSensor", "UIVersion" ) || "0";
+        var s = api.getDeviceState( myid, "urn:toggledbits-com:serviceId:ReactorSensor", "_UIV" ) || "0";
         console.log("initModule() for device " + myid + " requires UI version " + UI_VERSION + ", seeing " + s);
         if ( String(UI_VERSION) != s ) {
             api.setCpanelContent( '<div class="reactorwarning" style="border: 4px solid red; padding: 8px;">' +
@@ -5445,17 +5445,15 @@ var ReactorSensor = (function(api, $) {
         }
 
         /* Restore test date */
-        var s = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "TestTime" ) || "";
+        var s = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "TestTime" ) || "0";
         jQuery('input#testdateenable', container).prop('checked', false);
         jQuery('select#testyear,select#testmonth,select#testday,input#testtime', container).prop('disabled', true);
-        if ( ! isEmpty( s ) ) {
-            s = parseInt( s );
-            if ( ! isNaN( s ) ) {
-                /* Test time spec overrides now */
-                now = new Date( s * 1000 );
-                jQuery('input#testdateenable', container).prop('checked', true);
-                jQuery('select#testyear,select#testmonth,select#testday,input#testtime', container).prop('disabled', false);
-            }
+        s = parseInt( s );
+        if ( ! isNaN( s ) && 0 !== s ) {
+            /* Test time spec overrides now */
+            now = new Date( s * 1000 );
+            jQuery('input#testdateenable', container).prop('checked', true);
+            jQuery('select#testyear,select#testmonth,select#testday,input#testtime', container).prop('disabled', false);
         }
         jQuery('select#testyear', container).on( 'change.reactor', handleTestChange ).val( now.getFullYear() );
         jQuery('select#testmonth', container).on( 'change.reactor', handleTestChange ).val( now.getMonth() + 1 );
