@@ -1051,7 +1051,7 @@ var ReactorSensor = (function(api, $) {
                     el.text( '(' + String(currentValue) + ') ' +
                         ( cs.laststate ? "true" : "false" ) +
                         ' as of ' + shortLuaTime( cs.statestamp ) +
-                        ( ( condOpts.latch || false ) && cs.evalstate && !cs.laststate ? " (latched true)" : "" )
+                        ( cs.evalstate && cs.latched ? " (latched true)" : "" )
                     );
                     if ( condOptions[ cond.type || "group" ].repeat && ( condOpts.repeatcount || 0 ) > 1 ) {
                         if ( cs.repeats !== undefined && cs.repeats.length > 1 ) {
