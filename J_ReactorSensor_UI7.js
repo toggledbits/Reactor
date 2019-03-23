@@ -54,7 +54,8 @@ var ReactorSensor = (function(api, $) {
         "trange": "Date/Time",
         "interval": "Interval",
         "ishome": "Geofence",
-        "reload": "Luup Reloaded"
+        "reload": "Luup Reloaded",
+        "grpstate": "Group State"
     };
     var condOptions = {
         "service": { sequence: true, duration: true, repeat: true, latch: true },
@@ -64,7 +65,8 @@ var ReactorSensor = (function(api, $) {
         "trange": { latch: true },
         "interval": { latch: true },
         "ishome": { sequence: true, duration: true, latch: true },
-        "reload": { latch: true }
+        "reload": { latch: true },
+        "grpstate": { sequence: true, duration: true, repeat:true, latch: true }
     };
     var weekDayName = [ '?', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat' ];
     var monthName = [ '?', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec' ];
@@ -345,7 +347,7 @@ var ReactorSensor = (function(api, $) {
         if ( undefined === d.ixCond ) {
             var cf = getConfiguration( myid );
             d.ixCond = {};
-            function makeix( grp, level ) {
+            var makeix = function( grp, level ) {
                 d.ixCond[grp.id] = grp;
                 grp.__depth = level;
                 for ( var ix=0; ix<(grp.conditions || []).length; ix++ ) {
@@ -356,10 +358,20 @@ var ReactorSensor = (function(api, $) {
                         makeix( grp.conditions[ix], level+1 );
                     }
                 }
-            }
+            };
             makeix( cf.conditions.root || {}, 0 );
         }
         return d.ixCond;
+    }
+
+    /* Return true if the grp (id) is an ancestor of condition (id) */
+    function isAncestor( grp, cond, myid ) {
+        myid = myid || api.getCpanelDeviceId();
+        var c = getConditionIndex( myid )[cond];
+        if ( c.__parent.id === grp ) return true;
+        if ( "root" === c.__parent.id ) return false; /* Can't go more */
+        /* Move up tree looking for matching group */
+        return isAncestor( grp, c.__parent.id, myid );
     }
 
     /* Initialize the module */
@@ -657,7 +669,7 @@ var ReactorSensor = (function(api, $) {
             case 'service':
                 t = getDeviceFriendlyName( cond.device );
                 str += t ? t : '#' + cond.device + ' ' + ( cond.devicename === undefined ? "name unknown" : cond.devicename ) + ' (missing)';
-                str += ' ' + cond.variable;
+                str += ' ' + ( cond.variable || "?" );
                 t = serviceOpsIndex[cond.operator || ""];
                 if ( undefined === t ) {
                     str += ' ' + cond.operator + '?' + cond.value;
@@ -680,6 +692,18 @@ var ReactorSensor = (function(api, $) {
                 if ( ( cond.operator || "=" ).match( noCaseOptPattern ) &&
                         coalesce( cond.nocase, 1 ) == 0 ) {
                     str += ' (match case)';
+                }
+                break;
+
+            case 'grpstate':
+                t = getDeviceFriendlyName( cond.device );
+                str += t ? t : '#' + cond.device + ' ' + ( cond.devicename === undefined ? "name unknown" : cond.devicename ) + ' (missing)';
+                str += ' ' + ( cond.groupname || cond.groupid || "?" );
+                t = serviceOpsIndex[cond.operator || ""];
+                if ( t ) {
+                    str += ' ' + ( t.desc || t.op );
+                } else {
+                    str += ' ' + cond.operator + '?';
                 }
                 break;
 
@@ -853,13 +877,16 @@ var ReactorSensor = (function(api, $) {
      * Create a device menu from available devices, sorted alpha with room
      * names sorted alpha.
      */
-    function makeDeviceMenu( val, name ) {
+    function makeDeviceMenu( val, name, filter ) {
         val = val || "";
         var el = jQuery('<select class="devicemenu form-control form-control-sm"></select>');
         roomsByName.forEach( function( roomObj ) {
             var first = true; /* per-room first */
             for ( var j=0; j<roomObj.devices.length; j++ ) {
                 var devid = roomObj.devices[j];
+                if ( filter && !filter( api.getDeviceObject( devid ) || {} ) ) {
+                    continue;
+                }
                 if ( first ) {
                     el.append( jQuery( '<option class="optheading" disabled/>' ).val("").text( "--" + roomObj.name + "--" ) );
                     first = false;
@@ -946,17 +973,7 @@ var ReactorSensor = (function(api, $) {
                 var condOpts = cond.options || {};
                 switch ( cond.type ) {
                     case 'service':
-                        if ( ( condOpts.repeatcount || 0 ) > 1 ) {
-                            condDesc += " repeats " + condOpts.repeatcount +
-                                " times within " + ( condOpts.repeatwithin || 60 ) + " secs";
-                        } else if ( ( condOpts.duration || 0 ) > 0 ) {
-                            condDesc += " for " +
-                                ( condOpts.duration_op === "lt" ? "less than " : "at least " ) +
-                                condOpts.duration + " secs";
-                        }
-                        if ( ( condOpts.latch || 0 ) != 0 ) {
-                            condDesc += " (latching)";
-                        }
+                    case 'grpstate':
                         break;
 
                     case 'weekday':
@@ -1002,11 +1019,24 @@ var ReactorSensor = (function(api, $) {
                     default:
                         /* Nada */
                 }
+
+                /* Apply options to condition description */
                 if ( undefined !== condOpts.after ) {
                     condDesc += ' (' +
                         ( ( condOpts.aftertime || 0 ) > 0 ? 'within ' + condOpts.aftertime + ' secs ' : '' ) +
                         'after ' + makeConditionDescription( getConditionIndex()[ condOpts.after] ) +
                         ')';
+                }
+                if ( ( condOpts.repeatcount || 0 ) > 1 ) {
+                    condDesc += " repeats " + condOpts.repeatcount +
+                        " times within " + ( condOpts.repeatwithin || 60 ) + " secs";
+                } else if ( ( condOpts.duration || 0 ) > 0 ) {
+                    condDesc += " for " +
+                        ( condOpts.duration_op === "lt" ? "less than " : "at least " ) +
+                        condOpts.duration + " secs";
+                }
+                if ( ( condOpts.latch || 0 ) != 0 ) {
+                    condDesc += " (latching)";
                 }
 
                 row.append( jQuery( '<button class="btn condbtn" />' ).text( '=' ) );
@@ -1023,7 +1053,7 @@ var ReactorSensor = (function(api, $) {
                         ' as of ' + shortLuaTime( cs.statestamp ) +
                         ( ( condOpts.latch || false ) && cs.evalstate && !cs.laststate ? " (latched true)" : "" )
                     );
-                    if ( "service" === cond.type && ( condOpts.repeatcount || 0 ) > 1 ) {
+                    if ( condOptions[ cond.type || "group" ].repeat && ( condOpts.repeatcount || 0 ) > 1 ) {
                         if ( cs.repeats !== undefined && cs.repeats.length > 1 ) {
                             var dtime = cs.repeats[ cs.repeats.length - 1 ] - cs.repeats[0];
                             el.append( " (last " + cs.repeats.length + " span " + dtime + " secs)" );
@@ -1347,13 +1377,74 @@ var ReactorSensor = (function(api, $) {
             return el;
         }
 
+        /* Make a menu of groups in a ReactorSensor */
+        function makeRSGroupMenu( cond ) {
+            var mm = jQuery( '<select id="grpmenu" class="form-control form-control-sm tberror" />' );
+            try {
+                var dc;
+                var myid = api.getCpanelDeviceId();
+                if ( cond.device == myid ) {
+                    /* Our own groups */
+                    dc = getConfiguration( myid );
+                } else {
+                    /* Get config of another device */
+                    dc = api.getDeviceState( cond.device, "urn:toggledbits-com:serviceId:ReactorSensor", "cdata" );
+                    dc = JSON.parse( dc );
+                }
+                if ( dc ) {
+                    var appendgrp = function ( grp, sel, pg ) {
+                        /* Don't add ancestors in same RS */
+                        if ( ! ( cond.device == myid && isAncestor( grp.id, cond.id, myid ) ) ) {
+                            sel.append(
+                                jQuery( '<option/>' ).val( grp.id )
+                                    .text( "root"===grp.id ? "Tripped/Untripped (root)" : ( grp.name || grp.id ) )
+                            );
+                        }
+                        /* Don't scan siblings or anything below. */
+                        if ( cond.device == myid && grp.id == pg.id ) return;
+                        if ( grp.id == pg.id ) return;
+                        for ( var ix=0; ix<(grp.conditions || []).length; ix++ ) {
+                            if ( "group" === ( grp.conditions[ix].type || "group" ) ) {
+                                appendgrp( grp.conditions[ix], sel, pg );
+                            }
+                        }
+                    };
+                    /* Get the parent group of this condition */
+                    var pgrp = ( getConditionIndex( myid )[cond.id] || {}).__parent || {};
+                    appendgrp( dc.conditions.root, mm, pgrp );
+                }
+            } catch( e ) {
+                console.log( "makeRSGroupMenu: " + String(e) );
+            }
+            /* Default-select the current value, or root if none. */
+            if ( !isEmpty( cond.groupid ) ) {
+                var gid = cond.groupid || "?";
+                var el = jQuery( 'option[value="' + gid + '"]', mm );
+                if ( el.length == 0 ) {
+                    /* Current value not in menu, may refer to deleted group! */
+                    el = jQuery( '<option/>' ).val( gid ).text( gid + " (missing?)" );
+                    mm.append( el );
+                } else {
+                    mm.removeClass( 'tberror' );
+                }
+                mm.val( gid );
+                if ( cond.groupname !== el.text() ) {
+                    cond.groupname = el.text();
+                    configModified = true;
+                }
+            } else {
+                mm.val( 'root' );
+            }
+            return mm;
+        }
+
          /**
          * Update controls for current conditions.
          */
         function updateControls() {
             /* Disable all "Add Condition" buttons if any condition type menu
                has no selection. */
-            var nset = jQuery('select.condtype option[value=""]:selected').length > 0;
+            var nset = jQuery('select.condtype option:selected[value=""]').length > 0;
 
             /* ... or if any group has no conditions */
             nset = nset || jQuery( '.cond-list:empty' ).length > 0;
@@ -1428,6 +1519,14 @@ var ReactorSensor = (function(api, $) {
                             jQuery( 'input#value', $row ).addClass( 'tberror' );
                         }
                     }
+                    break;
+
+                case 'grpstate':
+                    removeConditionProperties( cond, "device,devicename,groupid,groupname,operator,options" );
+                    cond.device = parseInt( jQuery( 'div.params select.devicemenu', $row ).val(), $row );
+                    cond.groupid = jQuery( 'div.params select#grpmenu', $row ).val() || "root";
+                    cond.groupname = jQuery( 'div.params select#grpmenu option:selected', $row ).text();
+                    cond.operator = jQuery( 'div.params select.opmenu', $row ).val() || "istrue";
                     break;
 
                 case 'weekday':
@@ -1885,6 +1984,8 @@ var ReactorSensor = (function(api, $) {
                 } else {
                     $opt.hide();
                 }
+            } else if ( "grpstate" == cond.type ) {
+                /* nada */
             } else {
                 console.log( "Invalid row type in handleConditionOperatorChange(): " + String( cond.type ) );
                 return;
@@ -2065,7 +2166,7 @@ var ReactorSensor = (function(api, $) {
          * empty).
          */
         function setConditionForType( cond, row ) {
-            var op, k, v, mm;
+            var op, k, v, mm, dobj;
             if ( undefined === row ) {
                 row = jQuery( 'div.cond-container#' + idSelector( cond.id ) );
             }
@@ -2084,7 +2185,7 @@ var ReactorSensor = (function(api, $) {
                     /* Fix-up: makeDeviceMenu will display current userdata name
                                for device, but if that's changed from what we've stored,
                                we need to update our store. */
-                    var dobj = api.getDeviceObject( cond.device );
+                    dobj = api.getDeviceObject( cond.device );
                     if ( dobj && dobj.name !== cond.devicename ) {
                         cond.devicename = dobj.name;
                         configModified = true;
@@ -2106,6 +2207,57 @@ var ReactorSensor = (function(api, $) {
                     jQuery('input#nocase', container).prop( 'checked', coalesce( cond.nocase, 1 ) !== 0 )
                         .on( 'change.reactor', handleConditionRowChange );
                     jQuery("select.devicemenu", container).on( 'change.reactor', handleDeviceChange );
+
+                    updateCurrentServiceValue( container );
+                    break;
+
+                case 'grpstate':
+                    /* Make a device menu that shows ReactorSensors only. */
+                    container.append( makeDeviceMenu( cond.device, cond.devicename || "?", function( dev ) {
+                        return "urn:schemas-toggledbits-com:device:ReactorSensor:1" === dev.device_type;
+                    }));
+                    /* Fix-up: makeDeviceMenu will display current userdata name
+                               for device, but if that's changed from what we've stored,
+                               we need to update our store. */
+                    dobj = api.getDeviceObject( cond.device );
+                    if ( dobj && dobj.name !== cond.devicename ) {
+                        cond.devicename = dobj.name;
+                        configModified = true;
+                    }
+                    /* Create group menu for selected device (if any) */
+                    container.append( makeRSGroupMenu( cond ) );
+                    /* Make operator menu, short: only boolean and change */
+                    mm = jQuery( '<select class="opmenu form-control form-control-sm" />' );
+                    mm.append( jQuery( '<option/>' ).val( "istrue" ).text( "is TRUE" ) );
+                    mm.append( jQuery( '<option/>' ).val( "isfalse" ).text( "is FALSE" ) );
+                    mm.append( jQuery( '<option/>' ).val( "change" ).text( "changes" ) );
+                    mm.val( cond.operator || "istrue" );
+                    container.append( mm );
+                    container.append('<div id="currval"/>');
+
+                    jQuery("select.opmenu", container).on( 'change.reactor', handleConditionRowChange );
+                    jQuery("select#grpmenu", container).on( 'change.reactor', handleConditionRowChange );
+                    jQuery("select.devicemenu", container).on( 'change.reactor', function( ev ) {
+                        var $el = jQuery( ev.currentTarget );
+                        var newDev = $el.val();
+                        var $row = $el.closest( 'div.cond-container' );
+                        var condId = $row.attr( 'id' );
+                        var cond = getConditionIndex()[condId];
+                        if ( undefined !== cond.device ) {
+                            cond.device = parseInt( newDev );
+                            var dobj = api.getDeviceObject( cond.device );
+                            cond.devicename = dobj ? dobj.name : ( "#" + String(cond.device) + "?" );
+                            delete cond.groupname;
+                            delete cond.groupid;
+                            configModified = true;
+                        }
+
+                        /* Make a new service/variable menu and replace it on the row. */
+                        var newMenu = makeRSGroupMenu( cond );
+                        jQuery("select#grpmenu", $row).empty().append( newMenu.children() );
+
+                        updateConditionRow( $row ); /* pass it on */
+                    });
 
                     updateCurrentServiceValue( container );
                     break;
@@ -2723,7 +2875,7 @@ var ReactorSensor = (function(api, $) {
   </div> \
 </div>' );
 
-            [ "comment", "service", "housemode", "sun", "weekday", "trange", "interval", "ishome", "reload" ].forEach( function( k ) {
+            [ "comment", "service", "grpstate", "housemode", "sun", "weekday", "trange", "interval", "ishome", "reload" ].forEach( function( k ) {
                 if ( ! ( isOpenLuup && k == "ishome" ) ) {
                     jQuery( "select.condtype", el ).append( jQuery( "<option/>" ).val( k ).text( condTypeName[k] ) );
                 }

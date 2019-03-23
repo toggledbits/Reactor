@@ -4,6 +4,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 3.0 (development)
 
+* Enhancement: New "Group State" condition allows the user to condition upon the state of another group in the same or another ReactorSensor.
 * Enhancement: Reporting of errors (such as reference to a device or scene that no longer exists) in conditions and activities is improved through the use of the (notification-capable) `Trouble` state variable. Related diagnostic information is written to the Logic Summary events list. A new icon with a yellow warning triangle superimposed calls attention to ReactorSensors reporting trouble. 
 * Enhancement: The new expression function `trouble( msg [, title] )` has been added to allow expressions to signal trouble for any purpose. The *msg* argument is written to the Logic Summary event list, along with the optional *title*. The default title is simply "trouble()".
 * Enhancement: The `finddevice()` expression function now takes an optional second boolean argument that determines if an error is thrown (and thus trouble is reported) if the referenced device is not found. If not provided or *false*, `null` is returned (the legacy behavior); if *true*, an eval error is thrown and trouble is signalled.
