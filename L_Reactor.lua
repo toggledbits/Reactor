@@ -11,12 +11,12 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.0dev-19081"
+local _PLUGIN_VERSION = "3.0dev-19082"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION = 00208    -- aka 19077
-local _CDATAVERSION = 19080     -- must coincide with JS
-local _UIVERSION = 19080        -- must coincide with JS
+local _CDATAVERSION = 19082     -- must coincide with JS
+local _UIVERSION = 19082        -- must coincide with JS
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -2973,6 +2973,7 @@ local function processSensorUpdate( tdev, sst )
         -- except root, which is handle by trip() below.
         D("updateSensors() checking groups for state changes")
         for grp in conditionGroups( cdata.conditions.root ) do
+            D("processSensorUpdate() checking group %1 for state change", grp.id)
             local gs = condState[ grp.id ]
             if grp.id ~= "root" and gs.changed then
                 local activity = grp.id .. ( gs.evalstate and ".true" or ".false" )

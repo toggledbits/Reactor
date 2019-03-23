@@ -22,13 +22,13 @@ var ReactorSensor = (function(api, $) {
     /* unique identifier for this plugin... */
     var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-    var pluginVersion = '3.0dev-19081';
+    var pluginVersion = '3.0dev-19082';
 
     var DEVINFO_MINSERIAL = 71.222;
 
-    var UI_VERSION = 19080;     /* must coincide with Lua core */
+    var UI_VERSION = 19082;     /* must coincide with Lua core */
 
-    var CDATA_VERSION = 19080;  /* must coincide with Lua core */
+    var CDATA_VERSION = 19082;  /* must coincide with Lua core */
 
     var myModule = {};
 
@@ -5571,7 +5571,7 @@ var ReactorSensor = (function(api, $) {
             html += '<li>If you are asked for a "debug log snippet", use this procedure (unless given other instructions in the request):<ol><li>Turn on debug by clicking this link: <a href="' +
             api.getDataRequestURL() + '?id=lr_Reactor&action=debug&debug=1" target="_blank">Turn debug ON</a></li><li>Restart this sensor to force a re-evaluation of all conditions: <a href="' +
             api.getDataRequestURL() + '?id=action&output_format=xml&DeviceNum=' + api.getCpanelDeviceId() + '&serviceId=' +
-            encodeURIComponent( serviceId ) + '&action=Restart" target="_blank">Restart this ReactorSensor</a></li><li><strong>Wait at least 60 seconds, not less.</strong> This is very important&mdash;proceeding too soon may result in incomplete log data.</li><li>Click this link to <a href="javascript:void();" id="grablog">generate the log snippet</a> (the relevant part the log file). It should magically appear at the bottom of this page&mdash;scroll down!</li><li>Post the log snippet to the forum thread, or email it <em>together with your logic summary report and your forum username</em> to <a href="mailto:reactor-logs@toggledbits.com" target="_blank">reactor-logs@toggledbits.com</a>. Note: this email address is for receiving logs only; do not submit questions or other requests to this address.</li></ol>';
+            encodeURIComponent( serviceId ) + '&action=Restart" target="_blank">Restart this ReactorSensor</a></li><li><strong>Wait at least 60 seconds, not less.</strong> This is very important&mdash;proceeding too soon may result in incomplete log data. During this period, you should also provide any "stimulus" needed to demonstrate the issue (e.g. turn devices on/off).</li><li>Click this link to <a href="javascript:void();" id="grablog">generate the log snippet</a> (the relevant part the log file). It should magically appear at the bottom of this page&mdash;scroll down!</li><li>Post the log snippet to the forum thread, or email it <em>together with your logic summary report and your forum username</em> to <a href="mailto:reactor-logs@toggledbits.com" target="_blank">reactor-logs@toggledbits.com</a>. Note: this email address is for receiving logs only; do not submit questions or other requests to this address.</li></ol>';
         }
         html += '</ul></div>';
 
