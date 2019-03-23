@@ -472,7 +472,7 @@ local function scheduleTick( tinfo, timeTick, flags )
     if tickTasks._plugin.when == nil or timeTick < tickTasks._plugin.when then
         tickTasks._plugin.when = timeTick
         local delay = timeTick - os.time()
-        if delay < 1 then delay = 1 end
+        if delay < 0 then delay = 0 end
         D("scheduleTick() rescheduling plugin tick for %1s to %2", delay, timeTick)
         runStamp = runStamp + 1
         luup.call_delay( "reactorTick", delay, runStamp )
@@ -484,7 +484,6 @@ end
 -- for additional info.
 local function scheduleDelay( tinfo, delay, flags )
     D("scheduleDelay(%1,%2,%3)", tinfo, delay, flags )
-    if delay < 1 then delay = 1 end
     return scheduleTick( tinfo, os.time()+delay, flags )
 end
 
@@ -2149,7 +2148,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
             return nil,nil
         end
 
-        -- Add service watch if we don't have one
+        -- Add service watch if we don't have one.
         addServiceWatch( cond.device, cond.service, cond.variable, tdev )
 
         -- Get state variable value.
@@ -2875,17 +2874,8 @@ local function showDisabled( tdev )
     luup.set_failure( 0, tdev )
 end
 
--- Perform update tasks
-local function updateSensor( tdev )
-    D("updateSensor(%1) %2", tdev, luup.devices[tdev].description)
-    local sst = getSensorState( tdev )
-    sst.trouble = false -- presumption of innocence
-
-    -- If not enabled, no work to do.
-    if not isEnabled( tdev ) then
-        D("updateSensor() disabled; no action")
-        return showDisabled( tdev )
-    end
+local function processSensorUpdate( tdev, sst )
+    D("processSensorUpdate(%1)", tdev)
 
     -- Reload sensor state if cache purged
     local condState = loadCleanState( tdev )
@@ -2906,7 +2896,7 @@ local function updateSensor( tdev )
         sst.timebase = tt == 0 and os.time() or tt
         sst.timeparts = os.date("*t", sst.timebase)
         sst.timetest = tt > 0
-        D("updateSensor() base time is %1 (%2) testing=%3", sst.timebase, sst.timeparts, sst.timetest)
+        D("processSensorUpdate() base time is %1 (%2) testing=%3", sst.timebase, sst.timeparts, sst.timetest)
 
         -- Update state (if changed)
         updateVariables( cdata, tdev )
@@ -2918,7 +2908,7 @@ local function updateSensor( tdev )
         _,newTrip,hasTimer = processCondition( cdata.conditions.root, nil, cdata, tdev )
 
         if invert then newTrip = not newTrip end
-        D("updateSensor() trip %4was %1 now %2, retrig %3", currTrip, newTrip,
+        D("processSensorUpdate() trip %4was %1 now %2, retrig %3", currTrip, newTrip,
             retrig, invert and "(inverted) " or "" )
 
         -- Update runtime based on last status
@@ -2937,12 +2927,12 @@ local function updateSensor( tdev )
             local gs = condState[ grp.id ]
             if grp.id ~= "root" and gs.changed then
                 local activity = grp.id .. ( gs.evalstate and ".true" or ".false" )
-                D("updateSensor() group %1 <%2> state changed to %3, looking for activity %4",
+                D("processSensorUpdate() group %1 <%2> state changed to %3, looking for activity %4",
                     grp.name or grp.id, grp.id, gs.evalstate, activity)
                 local scd = getSceneData( activity, tdev )
                 if scd then
                     -- Note we only stop contra-actions if we have actions to perform.
-                    D("updateSensor() running %1 activities", activity)
+                    D("processSensorUpdate() running %1 activities", activity)
                     local contra = grp.id .. ( gs.evalstate and ".false" or ".true" )
                     stopScene( tdev, nil, tdev, contra )
                     execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } )
@@ -2951,13 +2941,13 @@ local function updateSensor( tdev )
         end
 
         -- Set tripped state based on change in status.
-        D("updateSensor() evaluating RS trip state")
+        D("processSensorUpdate() evaluating RS trip state")
         if currTrip ~= newTrip or ( newTrip and retrig ) then
             -- Changed, or retriggerable.
             local maxTrip = getVarNumeric( "MaxChangeRate", 5, tdev, RSSID )
             _, _, rate60 = rateLimit( sst.changeRate, maxTrip, false )
             if maxTrip == 0 or rate60 <= maxTrip then
-                D("updateSensor() new RS state %1", newTrip)
+                D("processSensorUpdate() new RS state %1", newTrip)
                 rateBump( sst.changeRate )
                 sst.changeThrottled = false
                 trip( newTrip, tdev )
@@ -2989,7 +2979,7 @@ local function updateSensor( tdev )
     end
 
     -- Trouble?
-    D("updateSensor() trouble %1", sst.trouble)
+    D("processSensorUpdate() trouble %1", sst.trouble)
     setVar( RSSID, "Trouble", sst.trouble and "1" or "0", tdev )
     if getVarNumeric( "FailOnTrouble", 0, tdev, RSSID ) ~= 0 then
         luup.set_failure( sst.trouble and 1 or 0, tdev )
@@ -3003,11 +2993,36 @@ local function updateSensor( tdev )
     -- itself (no need to set hasTimer), so at the moment, hasTimer is only used
     -- for throttle recovery.
     if hasTimer or getVarNumeric( "ContinuousTimer", 0, tdev, RSSID ) ~= 0 then
-        D("updateSensor() hasTimer or ContinuousTimer, scheduling update")
+        D("processSensorUpdate() hasTimer or ContinuousTimer, scheduling update")
         local v = ( 60 - ( os.time() % 60 ) ) + TICKOFFS
         scheduleDelay( tdev, v )
     end
-    D("updateSensor() finished")
+    D("processSensorUpdate() finished")
+end
+
+-- Perform update tasks
+local function updateSensor( tdev )
+    D("updateSensor(%1) %2", tdev, luup.devices[tdev].description)
+
+    -- If not enabled, no work to do.
+    if not isEnabled( tdev ) then
+        D("updateSensor() disabled; no action")
+        return showDisabled( tdev )
+    end
+
+    local sst = getSensorState( tdev )
+
+    if sst.updating then return end -- not if we're already updating
+
+    sst.updating = true
+
+    sst.trouble = false -- presumption of innocence
+    local success,err = pcall( processSensorUpdate, tdev, sst )
+    if not success then
+        L({level=1,msg="Sensor update failed: %1"}, err)
+    end
+
+    sst.updating = false
 end
 
 local function sensorTick(tdev)
@@ -3164,7 +3179,7 @@ local function startSensor( tdev, pdev )
         luup.variable_watch( "reactorWatch", RSSID, "cdata", tdev )
 
         -- Start tick
-        scheduleTick( { id=tostring(tdev), owner=tdev, func=updateSensor }, 1, { replace=true } )
+        scheduleDelay( { id=tostring(tdev), owner=tdev, func=updateSensor }, 1, { replace=true } )
     else
         L("%1 (#%2) is disabled.", luup.devices[tdev].description, tdev)
         addEvent{ dev=tdev, event='disabled at startup' }
@@ -3883,7 +3898,8 @@ local function sensorWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
             old=string.format("%q", tostring(oldVal):sub(1,64)),
             new=string.format("%q", tostring(newVal):sub(1,64)) }
     end
-    updateSensor( tdev )
+    -- updateSensor( tdev )
+    scheduleDelay( { id=tostring(tdev), owner=tdev, func=updateSensor }, 1 )
 end
 
 -- Watch callback. Dispatches to sensor-specific handling.
@@ -3897,7 +3913,8 @@ function watch( dev, sid, var, oldVal, newVal )
         addEvent{ dev=dev, event="configchange" }
         stopScene( dev, nil, dev ) -- Stop all scenes in this device context.
         loadSensorConfig( dev )
-        updateSensor( dev )
+        -- updateSensor( dev )
+        scheduleDelay( { id=tostring(dev), owner=dev, func=updateSensor }, 1 )
     elseif (luup.devices[dev] or {}).id == "hmt" and
             luup.devices[dev].device_num_parent == pluginDevice and
             sid == SENSOR_SID and var == "Armed" then
