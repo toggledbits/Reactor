@@ -796,7 +796,7 @@ local function loadCleanState( tdev )
     -- Save updated state
     sst.condState = cstate
     if modified then
-        D("loadCleanState() saving updated state %1", cstate)
+        D("loadCleanState() saving updated state")
         cstate.lastUsed = os.time()
         luup.variable_set( RSSID, "cstate", json.encode( cstate ), tdev )
     end
@@ -2722,18 +2722,18 @@ local function processCondition( cond, grp, cdata, tdev )
 
     -- Evaluate for state and value
     local newvalue, state, condTimer = evaluateCondition( cond, grp, cdata, tdev )
-    D("processCondition() eval group %1 cond %2 result is state %3 timer %4", (grp or {}).id,
+    D("processCondition() group %1 cond %2 result %3 timer %4", (grp or {}).id,
         cond.id, state, condTimer)
     if state == nil then return newvalue, nil end -- as if it doesn't exist
 
     -- Preserve the result of the condition eval. We are edge-triggered,
     -- so only save changes, with timestamp.
     if state ~= cs.laststate then
-        D("processCondition() handling %1 state changed from %2 to %3", cond.id, cs.laststate, state)
+        D("processCondition() recording %1 state change", cond.id)
         -- ??? At certain times, Vera gets a time that is in the future, or so it appears. It looks like the TZ offset isn't applied, randomly.
         -- Maybe if call is during ntp update, don't know. Investigating... This log message helps detection and analysis.
         if now < ( cs.statestamp or 0 ) then L({level=1,msg="Time moved backwards! Sensor %4 cond %1 last change at %2, but time now %3"}, cond.id, cs.statestamp, now, tdev) end
-        addEvent{dev=tdev,event='condchange',cond=cond.id,oldState=cs.laststate,newState=state}
+        addEvent{ dev=tdev,event='condchange',cond=cond.id,oldState=cs.laststate,newState=state }
         cs.laststate = state
         cs.statestamp = now
         cs.stateedge = cs.stateedge or {}
@@ -2757,17 +2757,19 @@ local function processCondition( cond, grp, cdata, tdev )
     if state and ( condopt.after or "" ) ~= "" then
         -- Sequence; this condition must become true after named sequence becomes true
         local predCond = findCondition( condopt.after, cdata )
-        D("evaluateCondition() sequence predecessor %1=%2", condopt.after, predCond)
         if predCond == nil then
-            state = false
+            L({level=1,msg="%1 (#%2) group %3 condition %4 uses sequence, but predecessor condition %5 not found (deleted?)"},
+                luup.devices[tdev].description, tdev, grp.id, cond.id, condopt.after)
+            sst.trouble = true
+            return newvalue,nil
         else
             local predState = sst.condState[ predCond.id ]
             D("evaluateCondition() testing predecessor %1 state %2", predCond, predState)
             if predState == nil then
-                state = false
                 L({level=2,msg="Condition %1 can't meet sequence requirement, condition %2 missing!"}, cond.id, condopt.after)
                 addEvent{ dev=tdev, event="condition", condition=cond.id, ['error']="Predecessor condition could not be found" }
                 sst.trouble = true
+                return newvalue,nil
             else
                 local age = cs.statestamp - predState.statestamp
                 local window = condopt.aftertime or 0
@@ -2839,9 +2841,9 @@ local function processCondition( cond, grp, cdata, tdev )
     -- ReactorSensor untrips (another non-latched condition goes false), even if its
     -- other test conditions are no longer met.
     if ( condopt.latch or 0 ) ~= 0 then
-        cs.latched = true -- flag for reset actions/untrip
         if cs.evalstate and not state then
             -- Attempting to transition from true to false with latch option set. Override.
+            cs.latched = true
             state = true
         end
     else
@@ -2874,7 +2876,7 @@ evaluateGroup = function( grp, parentGroup, cdata, tdev )
     local latched = {}
     local hasTimer = false
     for ix,cond in ipairs( grp.conditions or {} ) do
-        D("evaluateGroup() process #%1 in %2: %3", ix, (grp or {}).id, cond )
+        D("evaluateGroup() process %3 #%1/%2: %4 %5", ix, #grp.conditions, grp.id, cond.type, cond.id )
         local _, state, condTimer = processCondition( cond, grp, cdata, tdev )
         if state ~= nil then
             hasTimer = condTimer or hasTimer
@@ -2894,11 +2896,8 @@ evaluateGroup = function( grp, parentGroup, cdata, tdev )
             else
                 passed = passed and state
             end
-
-            D("evaluateGroup() cond %1 %2 final %3, group now %4", cond.id, cond.type, state, passed)
-        else
-            D("evaluateGroup() cond %1 %2 skipped, disabled", cond.id, cond.type)
         end
+        D("evaluateGroup() result %3 #%1/%2: %4 %5 = %6; passed %7", ix, #grp.conditions, grp.id, cond.type, cond.id, state or "nil", passed or "nil" )
     end
 
     -- Save group state.
@@ -2939,6 +2938,7 @@ local function processSensorUpdate( tdev, sst )
 
         -- Fetch the condition data.
         local cdata = sst.configData
+        if debugMode then luup.log( json.encode( cdata ), 2 ) end
 
         -- Mark a stable base of time
         local tt = getVarNumeric( "TestTime", 0, tdev, RSSID )
