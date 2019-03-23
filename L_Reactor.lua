@@ -2246,6 +2246,47 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
         end
         D("evaluateCondition() default true exit for cond %1, new value=%2", cond.id, vv)
         return vv,true
+
+    elseif cond.type == "grpstate" then
+        -- Can't succeed if referenced device doesn't exist.
+        if luup.devices[cond.device or -1] == nil then
+            L({level=2,msg="%1 (%2) condition %3 refers to device %4 (%5), does not exist, skipped"},
+                luup.devices[tdev].description, tdev, cond.id, cond.device, cond.devicename or "unknown")
+            addEvent{ dev=tdev, event="condition", condition=cond.id, ['error']='Missing device #'..tostring(cond.device or "nil") }
+            sst.trouble = true -- flag trouble
+            return nil,nil
+        end
+
+        local varname = string.format( "GroupStatus_%s", cond.groupid or "?" )
+        local vv = getVarNumeric( varname, 0, tdev, GRPSID ) ~= 0 -- boolean!
+
+        -- Add service watch if we don't have one.
+        addServiceWatch( cond.device, GRPSID, varname, tdev )
+
+        if cond.operator == "change" then
+            D("evaluateCondition() group state change, curr=%1, prior=%2",
+                vv, cond.laststate.lastvalue)
+            local hold = getVarNumeric( "ValueChangeHoldTime", 2, tdev, RSSID )
+            if vv == cond.laststate.lastvalue then
+                -- No change. If we haven't yet met the hold time, continue delay.
+                local later = ( cond.laststate.valuestamp or 0 ) + hold
+                if now >= later then
+                    return vv,false -- time to reset
+                end
+                hold = math.min( hold, later - now )
+                D("evaluationCondition() no change, but hold time from prior change not yet met, continuing delay for %1 more...", hold)
+            end
+            -- Changed without terminal values, pulse.
+            scheduleDelay( { id=tdev, info="change "..cond.id }, hold )
+        else
+            -- istrue or isfalse
+            if cond.operator == "isfalse" then
+                return vv,not vv
+            end
+            return vv,vv
+        end
+        return vv,true -- default exit always true
+
     elseif cond.type == "housemode" then
         -- Add watch on parent if we don't already have one.
         usesHouseMode = true
@@ -2283,6 +2324,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
             if not isOnList( modes, mode ) then return mode,false end
         end
         return mode,true
+
     elseif cond.type == "weekday" then
         local val = ndt.wday
         -- Weekday; Lua 1=Sunday, 2=Monday, ..., 7=Saturday
@@ -2328,6 +2370,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
                 ndt.month, ndt.day, op)
         end
         return val, true
+
     elseif cond.type == "sun" then
         -- Sun condition (sunrise/set)
         -- Figure out sunrise/sunset. Keep cached to reduce load.
@@ -2389,6 +2432,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
             if nowMSM < startMSM then return now,false end -- after
         end
         return now,true
+
     elseif cond.type == "trange" then
         -- Time, with various components specified, or not.
         local op = cond.operator or "bet"
@@ -2510,9 +2554,11 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
             end
         end
         return now,true
+
     elseif cond.type == "comment" then
         -- Shortcut. Comments are always null (don't contribute to logic).
         return cond.comment,nil
+
     elseif cond.type == "reload" then
         -- True when loadtime changes. Self-resetting.
         local loadtime = getVarNumeric( "LoadTime", 0, pluginDevice, MYSID )
@@ -2532,6 +2578,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
         end
         scheduleDelay( tdev, hold )
         return true,true
+
     elseif cond.type == "interval" then
         local _,nmins = getValue( cond.mins, nil, tdev )
         local _,nhours = getValue( cond.hours, nil, tdev )
@@ -2601,6 +2648,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
         -- On time greater of 15 seconds or duty cycle as % of interval, but never more than interval-5 seconds.
         scheduleDelay( { id=tdev,info="interval "..cond.id }, math.min( math.max( 15, interval * (cond.duty or 0) / 100 ), interval-5 ) )
         return now,true
+
     elseif cond.type == "ishome" then
         -- Geofence, is user home?
         -- Add watch on parent if we don't already have one.
@@ -2644,6 +2692,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
             end
             return "",false
         end
+
     else
         L({level=2,msg="Sensor %1 (%2) unknown condition type %3 for cond %4 in group %5; fails."},
             tdev, luup.devices[tdev].description, cond.type, cond.id, grp.id)
@@ -4211,6 +4260,11 @@ function RG( grp, condState, level, r )
             if (condopt.latch or 0) ~= 0 then
                 r = r .. " (latching)"
             end
+        elseif condtype == "grpstate" then
+            r = r .. string.format("%s (%d) ", ( luup.devices[cond.device]==nil ) and ( "*** missing " .. ( cond.devicename or "unknown" ) ) or
+                luup.devices[cond.device].description, cond.device )
+            r = r .. ( cond.groupname or cond.groupid or "?" ) .. " (" .. ( cond.groupid or "?" ) .. ")"
+            r = r .. ' ' .. ( cond.operator or "op?" )
         elseif condtype == "comment" then
             r = r .. string.format("%q", cond.comment)
         elseif condtype == "housemode" then
