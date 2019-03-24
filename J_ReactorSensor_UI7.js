@@ -169,7 +169,7 @@ var ReactorSensor = (function(api, $) {
             };
             upgraded = true;
         }
-        
+
         /* Special version check */
         if ( ( cdata.version || 0 ) > CDATA_VERSION ) {
             console.log("The configuration for this ReactorSensor is an unsupported format/version (" +
@@ -320,6 +320,8 @@ var ReactorSensor = (function(api, $) {
             console.log("Error applying usergeofences to userIx: " + String(e));
             console.log( e.stack );
         }
+
+        return true;
     }
 
     /**
