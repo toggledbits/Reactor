@@ -16,8 +16,8 @@ var Reactor = (function(api, $) {
     /* unique identifier for this plugin... */
     var uuid = '72acc6ea-f24d-11e8-bd87-74d4351650de';
 
-    var pluginVersion = '3.0dev-19082';
-    
+    var pluginVersion = '3.0dev-19083';
+
     var UI_VERSION = 19082;     /* must coincide with Lua core */
 
     var myModule = {};
@@ -56,7 +56,7 @@ var Reactor = (function(api, $) {
             '</div>';
         return html;
     }
-    
+
     function initModule( myid ) {
         myid = myid || api.getCpanelDeviceId();
 
@@ -74,7 +74,7 @@ var Reactor = (function(api, $) {
                 ".</div>" );
             return false;
         }
-        
+
         return true;
     }
 
@@ -250,7 +250,7 @@ var Reactor = (function(api, $) {
                     jQuery( '.reactortab div#restorestatus' ).append( '<p id=' + quot(item) + '>Restoring ' +
                         backupInfo.sensors[item].name + ' configuration to device #' + String(dev.id) +
                         ' (' + String(dev.name) + ')... <img id="spinner" src="https://www.toggledbits.com/assets/reactor/spinner-animated.gif" alt="Busy... please wait" border="0"></p>' );
-                        
+
                     /* Stop all running scenes on the target ReactorSensor */
                     api.performActionOnDevice( dev.id,  "urn:toggledbits-com:serviceId:ReactorSensor",
                         "StopScene", { actionArguments: { SceneNum: 0, contextDevice: dev.id } } );
