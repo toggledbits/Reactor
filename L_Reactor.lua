@@ -2660,7 +2660,7 @@ local function startSensor( tdev, pdev )
     setMessage("Starting...", tdev)
 
     -- Start the sensor's tick.
-    scheduleDelay( { id=tostring(tdev), func=sensorTick, owner=tdev }, 5 )
+    scheduleDelay( { id=tostring(tdev), func=sensorTick, owner=tdev }, 5, { replace=true } )
 
     luup.set_failure( false, tdev )
     return true
@@ -3310,7 +3310,7 @@ local function sensorWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
             old=string.format("%q", tostring(oldVal):sub(1,64)),
             new=string.format("%q", tostring(newVal):sub(1,64)) }
     end
-    updateSensor( tdev )
+    scheduleDelay( { id=tostring(tdev), func=sensorTick, owner=tdev }, 1 )
 end
 
 -- Watch callback. Dispatches to sensor-specific handling.
@@ -3324,7 +3324,7 @@ function watch( dev, sid, var, oldVal, newVal )
         addEvent{ dev=dev, event="configchange" }
         stopScene( dev, nil, dev ) -- Stop all scenes in this device context.
         loadSensorConfig( dev )
-        updateSensor( dev )
+        scheduleDelay( { id=tostring(dev), func=sensorTick, owner=dev }, 1 )
     elseif (luup.devices[dev] or {}).id == "hmt" and
             luup.devices[dev].device_num_parent == pluginDevice and
             sid == SENSOR_SID and var == "Armed" then
