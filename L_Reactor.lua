@@ -2971,7 +2971,7 @@ local function processSensorUpdate( tdev, sst )
 
         -- Pass through groups again, and run activities for any changed groups,
         -- except root, which is handle by trip() below.
-        D("updateSensors() checking groups for state changes")
+        D("processSensorUpdate() checking groups for state changes")
         for grp in conditionGroups( cdata.conditions.root ) do
             D("processSensorUpdate() checking group %1 for state change", grp.id)
             local gs = condState[ grp.id ]
@@ -3075,7 +3075,7 @@ local function updateSensor( tdev )
     sst.updating = false
 end
 
-local function sensorTick(tdev)
+local function sensorTick( tdev)
     D("sensorTick(%1)", tdev)
 
     -- updateSensor will schedule next tick if needed
@@ -3229,7 +3229,7 @@ local function startSensor( tdev, pdev )
         luup.variable_watch( "reactorWatch", RSSID, "cdata", tdev )
 
         -- Start tick
-        scheduleDelay( { id=tostring(tdev), owner=tdev, func=updateSensor }, 1, { replace=true } )
+        scheduleDelay( { id=tostring(tdev), owner=tdev, func=sensorTick }, 1, { replace=true } )
     else
         L("%1 (#%2) is disabled.", luup.devices[tdev].description, tdev)
         addEvent{ dev=tdev, event='disabled at startup' }
@@ -3948,8 +3948,7 @@ local function sensorWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
             old=string.format("%q", tostring(oldVal):sub(1,64)),
             new=string.format("%q", tostring(newVal):sub(1,64)) }
     end
-    -- updateSensor( tdev )
-    scheduleDelay( { id=tostring(tdev), owner=tdev, func=updateSensor }, 1 )
+    scheduleDelay( { id=tostring(tdev), owner=tdev, func=sensorTick }, 1 )
 end
 
 -- Watch callback. Dispatches to sensor-specific handling.
@@ -3963,8 +3962,7 @@ function watch( dev, sid, var, oldVal, newVal )
         addEvent{ dev=dev, event="configchange" }
         stopScene( dev, nil, dev ) -- Stop all scenes in this device context.
         loadSensorConfig( dev )
-        -- updateSensor( dev )
-        scheduleDelay( { id=tostring(dev), owner=dev, func=updateSensor }, 1 )
+        scheduleDelay( { id=tostring(dev), owner=dev, func=sensorTick }, 1 )
     elseif (luup.devices[dev] or {}).id == "hmt" and
             luup.devices[dev].device_num_parent == pluginDevice and
             sid == SENSOR_SID and var == "Armed" then
