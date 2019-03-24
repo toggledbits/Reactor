@@ -3227,6 +3227,7 @@ end
 -- keeps us light on resources: typically one system timer only for any
 -- number of devices.
 local functions = { [tostring(masterTick)]="masterTick", [tostring(sensorTick)]="sensorTick",
+    [tostring(updateSensor)]="updateSensor",
     [tostring(loadWaitingScenes)]="loadWaitingScenes", [tostring(execSceneGroups)]="execSceneGroups" }
 function tick(p)
     D("tick(%1) pluginDevice=%2", p, pluginDevice)
@@ -3310,7 +3311,7 @@ local function sensorWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
             old=string.format("%q", tostring(oldVal):sub(1,64)),
             new=string.format("%q", tostring(newVal):sub(1,64)) }
     end
-    updateSensor( tdev )
+    scheduleDelay( { id=tostring(tdev), func=updateSensor, owner=tdev }, 1 )
 end
 
 -- Watch callback. Dispatches to sensor-specific handling.
@@ -3324,7 +3325,7 @@ function watch( dev, sid, var, oldVal, newVal )
         addEvent{ dev=dev, event="configchange" }
         stopScene( dev, nil, dev ) -- Stop all scenes in this device context.
         loadSensorConfig( dev )
-        updateSensor( dev )
+        scheduleDelay( { id=tostring(dev), func=updateSensor, owner=dev }, 1 )
     elseif (luup.devices[dev] or {}).id == "hmt" and
             luup.devices[dev].device_num_parent == pluginDevice and
             sid == SENSOR_SID and var == "Armed" then
