@@ -16,7 +16,9 @@ var Reactor = (function(api, $) {
     /* unique identifier for this plugin... */
     var uuid = '72acc6ea-f24d-11e8-bd87-74d4351650de';
 
-    var pluginVersion = '3.0beta-19079';
+    var pluginVersion = '3.0beta-19083';
+    
+    var UI_VERSION = 19082;     /* must coincide with Lua core */
 
     var myModule = {};
 
@@ -53,6 +55,27 @@ var Reactor = (function(api, $) {
             ' &bull; <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=summary&device=' + api.getCpanelDeviceId() + '" target="_blank">Logic&nbsp;Summary</a>' +
             '</div>';
         return html;
+    }
+    
+    function initModule( myid ) {
+        myid = myid || api.getCpanelDeviceId();
+
+        /* Check agreement of plugin core and UI */
+        var s = api.getDeviceState( myid, serviceId, "_UIV" ) || "0";
+        console.log("initModule() for device " + myid + " requires UI version " + UI_VERSION + ", seeing " + s);
+        if ( String(UI_VERSION) != s ) {
+            api.setCpanelContent( '<div class="reactorwarning" style="border: 4px solid red; padding: 8px;">' +
+                " ERROR! The Reactor plugin core version and UI version do not agree." +
+                " This may cause errors or corrupt your ReactorSensor configuration." +
+                " Please hard-reload your browser and try again " +
+                ' (<a href="https://duckduckgo.com/?q=hard+reload+browser" target="_blank">how?</a>).' +
+                " If you have installed hotfix patches, you may not have successfully installed all required files." +
+                " Expected " + String(UI_VERSION) + " got " + String(s) +
+                ".</div>" );
+            return false;
+        }
+        
+        return true;
     }
 
     function updateBackupInfo() {
@@ -264,7 +287,9 @@ var Reactor = (function(api, $) {
     }
 
     function doBackupRestore() {
-        // initModule();
+        if ( ! initModule() ) {
+            return;
+        }
 
         try {
 
