@@ -1149,7 +1149,7 @@ local function execLua( fname, luafragment, extarg, tdev )
     rmt.__next =    function(t, k) local k2,vs = luaEnv.rawnxt( getmetatable(t).__vars, k ) if vs then return k2, vs.lastvalue else return nil end end
     rmt.__vars = condState.vars or {}
     setmetatable( _R.variables, rmt )
-    D("execLua() Reactor.variables = %1", condState.vars)
+    D("execLua() Reactor.variables = %1", rmt.__vars)
     -- Finally. post our device environment and run the code.
     luaEnv.Reactor = _R
     luaEnv.__reactor_getdevice = function() return tdev end
@@ -4318,7 +4318,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
         return json.encode( { status=status,message=msg } ), "application/json"
 
     elseif action == "summary" then
-        local r = ""
+        local r = "```" .. EOL
         r = r .. string.rep("*", 51) .. " REACTOR LOGIC SUMMARY REPORT " .. string.rep("*", 51) .. EOL
         r = r .. "   Version: " .. tostring(_PLUGIN_VERSION) ..
             " config " .. tostring(_CONFIGVERSION) ..
@@ -4435,6 +4435,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
         if rs ~= "" then
             r = r .. string.rep( "=", 132 ) .. EOL .. rs
         end
+        r = r .. "```</pre>"
         return r, "text/plain"
 
     elseif action == "tryexpression" then
