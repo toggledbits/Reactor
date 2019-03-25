@@ -78,7 +78,7 @@ var ReactorSensor = (function(api, $) {
         html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
         html += '<div id="tbcopyright">Reactor ver ' + pluginVersion + ' &copy; 2018,2019 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
             ' All Rights Reserved. Please check out the <a href="https://github.com/toggledbits/Reactor/wiki" target="_blank">online documentation</a>' +
-            ' and <a href="http://forum.micasaverde.com/index.php/board,93.0.html" target="_blank">forum board</a> for support.</div>';
+            ' and <a href="http://community.getvera.com/c/plugins-amp-plugin-development/reactor" target="_blank">forum board</a> for support.</div>';
         try {
             html += '<div id="browserident">' + navigator.userAgent + '</div>';
         } catch( e ) {}
