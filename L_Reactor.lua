@@ -3922,7 +3922,7 @@ function tick(p)
 
     -- Figure out next master tick, or don't resched if no tasks waiting.
     if nextTick ~= nil then
-        D("tick() next eligible task scheduled for %1", os.date("%x %X", nextTick))
+        D("tick() finished, next eligible task at %1", os.date("%x %X", nextTick))
         now = os.time() -- Get the actual time now; above tasks can take a while.
         local delay = nextTick - now
         if delay < 1 then delay = 1 end
@@ -3930,7 +3930,7 @@ function tick(p)
         D("tick() scheduling next tick(%3) for %1 (%2)", delay, tickTasks._plugin.when, p)
         luup.call_delay( "reactorTick", delay, p )
     else
-        D("tick() not rescheduling, nextTick=%1, stepStamp=%2, runStamp=%3", nextTick, stepStamp, runStamp)
+        D("tick() finished, not rescheduling, nextTick=%1, stepStamp=%2, runStamp=%3", nextTick, stepStamp, runStamp)
         tickTasks._plugin = nil
     end
 end
@@ -4435,7 +4435,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
         if rs ~= "" then
             r = r .. string.rep( "=", 132 ) .. EOL .. rs
         end
-        r = r .. "```</pre>"
+        r = r .. "```" .. EOL
         return r, "text/plain"
 
     elseif action == "tryexpression" then
