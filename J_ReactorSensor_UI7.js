@@ -179,9 +179,15 @@ var ReactorSensor = (function(api, $) {
     }
 
     /* Get parent state */
-    function getParentState( varName ) {
-        var me = api.getDeviceObject( api.getCpanelDeviceId() );
+    function getParentState( varName, myid ) {
+        var me = api.getDeviceObject( myid || api.getCpanelDeviceId() );
         return api.getDeviceState( me.id_parent || me.id, "urn:toggledbits-com:serviceId:Reactor", varName );
+    }
+
+    /* Set parent state */
+    function setParentState( varName, val, myid ) {
+        var me = api.getDeviceObject( myid || api.getCpanelDeviceId() );
+        return api.setDeviceStatePersistent( me.id_parent || me.id, "urn:toggledbits-com:serviceId:Reactor", varName, val );
     }
 
     /* Get data for this instance */
@@ -4931,6 +4937,30 @@ var ReactorSensor = (function(api, $) {
         updateActionControls();
     }
 
+    /**
+     * Handle click on activity expand/collapse.
+     */
+    function handleActivityCollapseClick( ev ) {
+        var $el = jQuery( ev.currentTarget );
+        var $p = $el.closest( 'div.actionlist' );
+        var $g = jQuery( 'div.activity-group', $p );
+        if ( "collapse" === $el.attr( 'id' ) ) {
+            $g.slideUp();
+            $el.attr( 'id', 'expand' ).text( 'expand_more' ).attr( 'title', 'Expand action' );
+            try {
+                var n = jQuery( 'div.actionrow', $g ).length;
+                jQuery( 'span#titlemessage', $p ).text( " (" + n +
+                    " action" + ( 1 !== n ? "s" : "" ) + " collapsed)" );
+            } catch( e ) {
+                jQuery( 'span#titlemessage', $p ).text( " (actions collapsed)" );
+            }
+        } else {
+            $g.slideDown();
+            $el.attr( 'id', 'collapse' ).text( 'expand_less' ).attr( 'title', 'Collapse action' );
+            jQuery( 'span#titlemessage', $p ).text( "" );
+        }
+    }
+
     /* */
     function getActionListContainer() {
         var el = jQuery( "<div/>" ).addClass( "actionlist" );
@@ -4938,6 +4968,8 @@ var ReactorSensor = (function(api, $) {
         row.append( '\
 <div class="tblisttitle col-xs-9 col-sm-9 col-lg-10"> \
   <span class="titletext">?title?</span> \
+  <i id="collapse" class="material-icons md-btn" title="Collapse action">expand_less</i> \
+  <span id="titlemessage" /> \
 </div> \
 <div class="tblisttitle col-xs-3 col-sm-3 col-lg-2 text-right"> \
   <div class="btn-group"> \
@@ -4946,6 +4978,8 @@ var ReactorSensor = (function(api, $) {
   </div> \
 </div>' );
         el.append( row );
+        /* activity-group is container for actionrows and buttonrow */
+        var g = jQuery( '<div class="activity-group" />' );
         row = jQuery( '<div class="row buttonrow"/>' );
         row.append( '\
 <div class="col-xs-12 col-sm-12"> \
@@ -4959,8 +4993,41 @@ var ReactorSensor = (function(api, $) {
     </div> \
   </div> \
 </div>' );
-        el.append( row );
+        g.append( row );
+        el.append( g );
         return el;
+    }
+
+    function isEmptyActivity( act ) {
+        return !act ||
+            (act.groups || []).length == 0 ||
+            (act.groups.length == 1 && (act.groups[0].actions || []).length == 0);
+    }
+
+    /* Handle change of activity visibility */
+    function handleActivityVisChange( ev ) {
+        var el = jQuery( ev.currentTarget );
+        vis = el.val() || "";
+        setParentState( "showactivities", vis );
+        var cd = getConfiguration();
+        var ac = cd.activities || {};
+        var decide = function( id ) {
+            if ( "inuse" === vis && isEmptyActivity( ac[id] ) ) {
+                jQuery( 'div#' + idSelector( id ) + ".actionlist" ).slideUp();
+            } else {
+                jQuery( 'div#' + idSelector( id ) + ".actionlist" ).slideDown();
+            }
+        };
+        var scanActivities = function( grp ) {
+            decide( grp.id + ".true" );
+            decide( grp.id + ".false" );
+            for ( var ix=0; ix<(grp.conditions || []).length; ix++ ) {
+                if ( "group" === ( grp.conditions[ix].type || "group" ) ) {
+                    scanActivities( grp.conditions[ix] );
+                }
+            }
+        };
+        scanActivities( cd.conditions.root );
     }
 
     /* Redraw the activities lists within the existing tab structure. */
@@ -4968,50 +5035,62 @@ var ReactorSensor = (function(api, $) {
         var myid = api.getCpanelDeviceId();
         var devobj = api.getDeviceObject( myid );
         var cd = getConfiguration( myid );
-        jQuery( 'div#activities' ).empty();
+        var container = jQuery( 'div#activities' ).empty();
 
-        var el = getActionListContainer();
-        el.attr( 'id', 'root.true' );
-        jQuery( 'span.titletext', el ).text( 'When ' + devobj.name + ' Trips' );
-        jQuery( 'div#activities' ).append( el );
-        loadActions( el, cd.activities['root.true'] || {} );
-
-        el = getActionListContainer();
-        el.attr( 'id', 'root.false' );
-        jQuery( 'span.titletext', el ).text( 'When ' + devobj.name + ' Untrips' );
-        jQuery( 'div#activities' ).append( el );
-        loadActions( el, cd.activities['root.false'] || {} );
+        var el = jQuery( '<div class="form-inline" />' )
+            .append( jQuery( "<label>" ).text( "Show Activities: " )
+                .append( jQuery( '<select id="whatshow" class="form-control form-control-sm" />' )
+                    .append( jQuery( '<option value="">All</option>' ) )
+                    .append( jQuery( '<option value="inuse">In Use</option>' ) )
+                )
+            );
+        container.append( el );
+        var showWhich = getParentState( "showactivities", myid ) || "";
+        jQuery( 'select#whatshow', container ).on( 'change.reactor', handleActivityVisChange )
+            .val( showWhich );
 
         var ul = jQuery( '<ul />' );
-        function orderly( gr ) {
+        var orderly = function( gr ) {
             ul.append( jQuery( '<li />' ).attr( 'id', gr.id + ".true" ).text( ( gr.name || gr.id ) + " True" ) );
             ul.append( jQuery( '<li />' ).attr( 'id', gr.id + ".false" ).text( ( gr.name || gr.id ) + " False" ) );
-            if ( "root" !== gr.id ) {
-                var scene = gr.id + '.true';
-                el = getActionListContainer();
-                el.attr( 'id', scene );
-                jQuery( 'span.titletext', el ).text( 'When ' +
-                    ( gr.name || gr.id ) + ' <' + gr.id + '> = True' );
-                jQuery( 'div#activities' ).append( el );
-                loadActions( el, cd.activities[scene] || {} );
-
-                scene = gr.id + '.false';
-                el = getActionListContainer();
-                el.attr( 'id', scene );
-                jQuery( 'span.titletext', el ).text( 'When ' +
-                    ( gr.name || gr.id ) + ' <' + gr.id + '> = False' );
-                jQuery( 'div#activities' ).append( el );
-                loadActions( el, cd.activities[scene] || {} );
+            var scene = gr.id + '.true';
+            el = getActionListContainer();
+            el.attr( 'id', scene );
+            jQuery( 'span.titletext', el ).text( 'When ' +
+                ( gr.name || gr.id ) + ' is TRUE' );
+            container.append( el );
+            loadActions( el, cd.activities[scene] || {} );
+            if ( "inuse" === showWhich && isEmptyActivity( cd.activities[scene] ) ) {
+                el.hide();
             }
+
+            scene = gr.id + '.false';
+            el = getActionListContainer();
+            el.attr( 'id', scene );
+            jQuery( 'span.titletext', el ).text( 'When ' +
+                ( gr.name || gr.id ) + ' is FALSE' );
+            container.append( el );
+            loadActions( el, cd.activities[scene] || {} );
+            if ( "inuse" === showWhich && isEmptyActivity( cd.activities[scene] ) ) {
+                el.hide();
+            }
+
+            /* Handle children of this group */
             for ( var ix=0; ix<(gr.conditions || []).length; ix++ ) {
                 var cond = gr.conditions[ix];
                 if ( "group" === ( cond.type || "group" ) ) {
                     orderly( cond );
                 }
             }
-        }
+        };
         orderly( ( cd.conditions || {} ).root || [ { id: "root" } ] );
 
+        if ( "" !== showWhich ) {
+            container.append( jQuery( '<div>' )
+                .text( 'Not all possible activities are being shown. Choose "All" from the "Show Activities" menu at top to see everything.' ) );
+        }
+
+        jQuery("div#tab-actions.reactortab i#collapse").on( 'click.reactor', handleActivityCollapseClick );
         jQuery("div#tab-actions.reactortab button.addaction").on( 'click.reactor', handleAddActionClick );
         jQuery("div#tab-actions.reactortab ul#activities").empty().append( ul.children() );
         jQuery("div#tab-actions.reactortab ul#activities li").on( 'click.reactor', handleActionCopyClick );
@@ -5110,8 +5189,8 @@ var ReactorSensor = (function(api, $) {
         html += 'div#tab-actions.reactortab input.narrow { max-width: 8em; }';
         html += 'div#tab-actions.reactortab div.actionlist { border-radius: 8px; border: 2px solid #428BCA; margin-bottom: 16px; }';
         html += 'div#tab-actions.reactortab div.actionlist .row { margin-right: 0px; margin-left: 0px; }';
-        html += 'div#tab-actions.reactortab div.tblisttitle { background-color: #428BCA; color: #fff; padding: 8px; min-height: 42px; }';
-        html += 'div#tab-actions.reactortab div.tblisttitle span.titletext { font-size: 16px; font-weight: bold; margin-right: 4em; }';
+        html += 'div#tab-actions.reactortab div.tblisttitle { background-color: #428BCA; color: #fff; padding: 4px 8px; min-height: 45px; }';
+        html += 'div#tab-actions.reactortab div.tblisttitle span.titletext { font-size: 16px; font-weight: bold; margin-right: 1em; }';
         html += 'div#tab-actions.reactortab div.actionlist label:not(.required) { font-weight: normal; }';
         html += 'div#tab-actions.reactortab div.actionlist label.required { font-weight: bold; }';
         html += 'div#tab-actions.reactortab div.actionlist.tbmodified div.tblisttitle span.titletext:after { content: " (unsaved)" }';
