@@ -4,7 +4,10 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 3.0 (development)
 
-* Fix: Apply timezone fix from LuaXP distribution (applies to parsing dates/times with embedded TZ spec only).
+* Beta19087: Fix for #23, getstate() insert tool was not coming up when called;
+* Beta19087: Ongoing #22, occasional blank action menu in Activities when using remote access to UI; this version improves messaging and logging in an attempt to gather more data;
+* Beta19083: Fix for #20, status tab not updating completely/timely;
+* Beta19083: Fix for #19, scheduling problem causing inconsistent execution of activities in certain group configurations;* Fix: Apply timezone fix from LuaXP distribution (applies to parsing dates/times with embedded TZ spec only).
 * Enhancement: New "Group State" condition allows the user to condition upon the state of another group in the same or another ReactorSensor.
 * Enhancement: Reporting of errors (such as reference to a device or scene that no longer exists) in conditions and activities is improved through the use of the (notification-capable) `Trouble` state variable. Related diagnostic information is written to the Logic Summary events list. A new icon with a yellow warning triangle superimposed calls attention to ReactorSensors reporting trouble.
 * Enhancement: The new expression function `trouble( msg [, title] )` has been added to allow expressions to signal trouble for any purpose. The *msg* argument is written to the Logic Summary event list, along with the optional *title*. The default title is simply "trouble()".
