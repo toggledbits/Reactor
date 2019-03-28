@@ -3026,7 +3026,8 @@ var ReactorSensor = (function(api, $) {
                 return initModule( dev );
             },
             start: redrawConditions,
-            redraw: redrawConditions
+            redraw: redrawConditions,
+            makeVariableMenu: makeVariableMenu
         };
         return myModule;
 
@@ -3281,13 +3282,13 @@ var ReactorSensor = (function(api, $) {
         var f = jQuery( ev.currentTarget );
         if ( f.attr( 'id' ) == "gsdev" ) {
             var device = parseInt( f.val() || "" );
-            var s = makeVariableMenu( device, "", "" ).attr( 'id', 'gsvar' );
+            var s = CondBuilder.makeVariableMenu( device, "", "" ).attr( 'id', 'gsvar' );
             jQuery( 'select#gsvar', row ).replaceWith( s );
             /* Switch to new varmenu */
             f = jQuery( 'select#gsvar', row );
             f.on( 'change.reactor', handleGetStateOptionChange );
         }
-        jQuery( 'i#getstateinsert', row ).prop( 'disabled', "" === f.val() );
+        jQuery( 'button#getstateinsert', row ).prop( 'disabled', "" === f.val() );
     }
 
     function handleGetStateClick( ev ) {
@@ -3300,7 +3301,7 @@ var ReactorSensor = (function(api, $) {
 
         var el = jQuery( '<div class="col-xs-12 col-md-9 col-md-offset-2 form-inline" />' );
         el.append( makeDeviceMenu( "", "" ).attr( 'id', 'gsdev' ) );
-        el.append( makeVariableMenu( parseInt( jQuery( 'select#gsdev', el ).val() ), "", "" )
+        el.append( CondBuilder.makeVariableMenu( parseInt( jQuery( 'select#gsdev', el ).val() ), "", "" )
             .attr( 'id', 'gsvar' ) );
         el.append(' ');
         el.append( '<label class="checkbox-inline" for="usename"><input id="usename" type="checkbox">&nbsp;Use&nbsp;Name</label>' );
@@ -3314,9 +3315,10 @@ var ReactorSensor = (function(api, $) {
         jQuery( '<div id="opt-state" class="row" />' ).append( el ).insertAfter( row );
 
         jQuery( 'select.devicemenu', el ).on( 'change.reactor', handleGetStateOptionChange );
-        jQuery( 'i#getstateinsert', el ).prop( 'disabled', true )
+        jQuery( 'button#getstateinsert', el ).prop( 'disabled', true )
             .on( 'click.reactor', handleGetStateInsert );
         jQuery( 'button#getstatecancel', el ).on( 'click.reactor', handleGetStateClear );
+        jQuery( 'button#saveconf' ).prop( 'disabled', true );
     }
 
     function getVariableRow() {
