@@ -11,12 +11,12 @@ local debugMode = true
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.0beta-19083"
+local _PLUGIN_VERSION = "3.0beta-19087"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION = 00208    -- aka 19077
 local _CDATAVERSION = 19082     -- must coincide with JS
-local _UIVERSION = 19082        -- must coincide with JS
+local _UIVERSION = 19087        -- must coincide with JS
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -1149,7 +1149,7 @@ local function execLua( fname, luafragment, extarg, tdev )
     rmt.__next =    function(t, k) local k2,vs = luaEnv.rawnxt( getmetatable(t).__vars, k ) if vs then return k2, vs.lastvalue else return nil end end
     rmt.__vars = condState.vars or {}
     setmetatable( _R.variables, rmt )
-    D("execLua() Reactor.variables = %1", condState.vars)
+    D("execLua() Reactor.variables = %1", rmt.__vars)
     -- Finally. post our device environment and run the code.
     luaEnv.Reactor = _R
     luaEnv.__reactor_getdevice = function() return tdev end
@@ -3922,7 +3922,7 @@ function tick(p)
 
     -- Figure out next master tick, or don't resched if no tasks waiting.
     if nextTick ~= nil then
-        D("tick() next eligible task scheduled for %1", os.date("%x %X", nextTick))
+        D("tick() finished, next eligible task at %1", os.date("%x %X", nextTick))
         now = os.time() -- Get the actual time now; above tasks can take a while.
         local delay = nextTick - now
         if delay < 1 then delay = 1 end
@@ -3930,7 +3930,7 @@ function tick(p)
         D("tick() scheduling next tick(%3) for %1 (%2)", delay, tickTasks._plugin.when, p)
         luup.call_delay( "reactorTick", delay, p )
     else
-        D("tick() not rescheduling, nextTick=%1, stepStamp=%2, runStamp=%3", nextTick, stepStamp, runStamp)
+        D("tick() finished, not rescheduling, nextTick=%1, stepStamp=%2, runStamp=%3", nextTick, stepStamp, runStamp)
         tickTasks._plugin = nil
     end
 end
@@ -4318,7 +4318,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
         return json.encode( { status=status,message=msg } ), "application/json"
 
     elseif action == "summary" then
-        local r = ""
+        local r = "```" .. EOL
         r = r .. string.rep("*", 51) .. " REACTOR LOGIC SUMMARY REPORT " .. string.rep("*", 51) .. EOL
         r = r .. "   Version: " .. tostring(_PLUGIN_VERSION) ..
             " config " .. tostring(_CONFIGVERSION) ..
@@ -4435,6 +4435,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
         if rs ~= "" then
             r = r .. string.rep( "=", 132 ) .. EOL .. rs
         end
+        r = r .. "```" .. EOL
         return r, "text/plain"
 
     elseif action == "tryexpression" then

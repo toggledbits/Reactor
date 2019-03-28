@@ -69,7 +69,7 @@
                 return true
             </run>
         </action>
-        
+
         <action>
             <serviceId>urn:micasaverde-com:serviceId:SecuritySensor1</serviceId>
             <name>SetArmed</name>

@@ -22,11 +22,11 @@ var ReactorSensor = (function(api, $) {
     /* unique identifier for this plugin... */
     var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-    var pluginVersion = '3.0beta-19083';
+    var pluginVersion = '3.0beta-19087';
 
     var DEVINFO_MINSERIAL = 71.222;
 
-    var UI_VERSION = 19082;     /* must coincide with Lua core */
+    var UI_VERSION = 19087;     /* must coincide with Lua core */
 
     var CDATA_VERSION = 19082;  /* must coincide with Lua core */
 
@@ -109,7 +109,7 @@ var ReactorSensor = (function(api, $) {
         html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
         html += '<div id="tbcopyright">Reactor ver ' + pluginVersion + ' &copy; 2018,2019 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
             ' All Rights Reserved. Please check out the <a href="https://github.com/toggledbits/Reactor/wiki" target="_blank">online documentation</a>' +
-            ' and <a href="http://forum.micasaverde.com/index.php/board,93.0.html" target="_blank">forum board</a> for support.</div>';
+            ' and <a href="https://community.getvera.com/c/plugins-amp-plugin-development/reactor" target="_blank">forum board</a> for support.</div>';
         try {
             html += '<div id="browserident">' + navigator.userAgent + '</div>';
         } catch( e ) {}
@@ -3026,7 +3026,8 @@ var ReactorSensor = (function(api, $) {
                 return initModule( dev );
             },
             start: redrawConditions,
-            redraw: redrawConditions
+            redraw: redrawConditions,
+            makeVariableMenu: makeVariableMenu
         };
         return myModule;
 
@@ -3281,13 +3282,13 @@ var ReactorSensor = (function(api, $) {
         var f = jQuery( ev.currentTarget );
         if ( f.attr( 'id' ) == "gsdev" ) {
             var device = parseInt( f.val() || "" );
-            var s = makeVariableMenu( device, "", "" ).attr( 'id', 'gsvar' );
+            var s = CondBuilder.makeVariableMenu( device, "", "" ).attr( 'id', 'gsvar' );
             jQuery( 'select#gsvar', row ).replaceWith( s );
             /* Switch to new varmenu */
             f = jQuery( 'select#gsvar', row );
             f.on( 'change.reactor', handleGetStateOptionChange );
         }
-        jQuery( 'i#getstateinsert', row ).prop( 'disabled', "" === f.val() );
+        jQuery( 'button#getstateinsert', row ).prop( 'disabled', "" === f.val() );
     }
 
     function handleGetStateClick( ev ) {
@@ -3300,7 +3301,7 @@ var ReactorSensor = (function(api, $) {
 
         var el = jQuery( '<div class="col-xs-12 col-md-9 col-md-offset-2 form-inline" />' );
         el.append( makeDeviceMenu( "", "" ).attr( 'id', 'gsdev' ) );
-        el.append( makeVariableMenu( parseInt( jQuery( 'select#gsdev', el ).val() ), "", "" )
+        el.append( CondBuilder.makeVariableMenu( parseInt( jQuery( 'select#gsdev', el ).val() ), "", "" )
             .attr( 'id', 'gsvar' ) );
         el.append(' ');
         el.append( '<label class="checkbox-inline" for="usename"><input id="usename" type="checkbox">&nbsp;Use&nbsp;Name</label>' );
@@ -3314,9 +3315,10 @@ var ReactorSensor = (function(api, $) {
         jQuery( '<div id="opt-state" class="row" />' ).append( el ).insertAfter( row );
 
         jQuery( 'select.devicemenu', el ).on( 'change.reactor', handleGetStateOptionChange );
-        jQuery( 'i#getstateinsert', el ).prop( 'disabled', true )
+        jQuery( 'button#getstateinsert', el ).prop( 'disabled', true )
             .on( 'click.reactor', handleGetStateInsert );
         jQuery( 'button#getstatecancel', el ).on( 'click.reactor', handleGetStateClear );
+        jQuery( 'button#saveconf' ).prop( 'disabled', true );
     }
 
     function getVariableRow() {
@@ -4347,7 +4349,8 @@ var ReactorSensor = (function(api, $) {
         var actionMenu = jQuery( 'select#actionmenu', ct );
 
         // Clear the action menu and remove all arguments.
-        actionMenu.empty().prop( 'disabled', true );
+        actionMenu.empty().prop( 'disabled', true )
+            .append( jQuery( '<option/>' ).val("").text( '[please wait...loading]' ) );
         jQuery('label,.argument', ct).remove();
         if ( newVal == "" ) { return; }
 
@@ -4362,8 +4365,9 @@ var ReactorSensor = (function(api, $) {
                 output_format: "json"
             },
             dataType: "json",
-            timeout: 5000
+            timeout: 10000
         }).done( function( data, statusText, jqXHR ) {
+            actionMenu.empty();
             var hasAction = false;
             var i, j, key;
             for ( i=0; i<(data.serviceList || []).length; i++ ) {
@@ -4458,15 +4462,12 @@ var ReactorSensor = (function(api, $) {
                 fnext.apply( null, fargs );
             }
         }).fail( function( jqXHR, textStatus, errorThrown ) {
-            // Bummer.
-            // ??? Simple(too) way? foreach service in deviceInfo { if device_supports_service { add actions to menu } }
-            if ( 500 === jqXHR.status ) {
-                alert("Can't load service data for device. Luup may be reloading. Try again in a moment.");
-            } else {
-                console.log("changeActionDevice: failed to load service data: " + textStatus + "; " + String(errorThrown));
-                console.log(jqXHR.responseText);
-            }
-            actionMenu.prepend( '<option value="">--choose--</option>' );
+            /* Bummer. And deviceinfo as a fallback isn't really appropriate here (only lists exceptions) */
+            alert("Can't load service data for this device. Luup may be reloading. If you are on a remote connection, there may be an issue between you and the remote server, or the remote server and your Vera. Try again in a moment.");
+            console.log("changeActionDevice: failed to load service data: " + textStatus + "; " + String(errorThrown));
+            console.log(jqXHR.responseText);
+
+            actionMenu.empty().append( '<option value="">[ERROR]</option>' );
             actionMenu.prop( 'disabled', false );
             actionMenu.val("");
             if ( undefined !== fnext ) {
@@ -5564,7 +5565,7 @@ var ReactorSensor = (function(api, $) {
         }
 
         html += '<div id="troubleshooting"><h3>Troubleshooting &amp; Support</h3>If you are having trouble working out your condition logic, or you think you have found a bug, here are some steps and tools you can use:';
-        html += '<ul><li>Check the documentation in the <a href="https://github.com/toggledbits/Reactor/wiki" target="_blank">Reactor Wiki</a>.</li><li>The <a href="http://forum.micasaverde.com/index.php/board,93.0.html" target="_blank">Reactor Board</a> in the Vera Community Forums is a great way to get support for questions, how-to\'s, etc.</li><li>Generate and examine a <a href="' +
+        html += '<ul><li>Check the documentation in the <a href="https://github.com/toggledbits/Reactor/wiki" target="_blank">Reactor Wiki</a>.</li><li>The <a href="https://community.getvera.com/c/plugins-amp-plugin-development/reactor" target="_blank">Reactor Board</a> in the Vera Community Forums is a great way to get support for questions, how-to\'s, etc.</li><li>Generate and examine a <a href="' +
             api.getDataRequestURL() + '?id=lr_Reactor&action=summary&device=' + api.getCpanelDeviceId() + '" target="_blank">Logic&nbsp;Summary</a> report. This text-based report shows your ReactorSensor\'s current state, and its event list, which may tell you a lot about what led up to that state.</li>' +
             '<li>If the logic summary is not helping you, please post it in its entirety, together with a description of what you are trying to accomplish and/or the problem you are having, to a new thread on the Reactor Board (linked above). <strong>Please do not post screenshots</strong> unless you are reporting a UI/appearance bug. Generally speaking, the logic summary is far more useful (and easier to make and post, by design).</li>';
         if ( ! isOpenLuup ) {
