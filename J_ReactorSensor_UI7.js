@@ -4349,7 +4349,8 @@ var ReactorSensor = (function(api, $) {
         var actionMenu = jQuery( 'select#actionmenu', ct );
 
         // Clear the action menu and remove all arguments.
-        actionMenu.empty().prop( 'disabled', true );
+        actionMenu.empty().prop( 'disabled', true )
+            .append( jQuery( '<option/>' ).val("").text( '[please wait...loading]' ) );
         jQuery('label,.argument', ct).remove();
         if ( newVal == "" ) { return; }
 
@@ -4364,8 +4365,9 @@ var ReactorSensor = (function(api, $) {
                 output_format: "json"
             },
             dataType: "json",
-            timeout: 5000
+            timeout: 10000
         }).done( function( data, statusText, jqXHR ) {
+            actionMenu.empty();
             var hasAction = false;
             var i, j, key;
             for ( i=0; i<(data.serviceList || []).length; i++ ) {
@@ -4460,15 +4462,12 @@ var ReactorSensor = (function(api, $) {
                 fnext.apply( null, fargs );
             }
         }).fail( function( jqXHR, textStatus, errorThrown ) {
-            // Bummer.
-            // ??? Simple(too) way? foreach service in deviceInfo { if device_supports_service { add actions to menu } }
-            if ( 500 === jqXHR.status ) {
-                alert("Can't load service data for device. Luup may be reloading. Try again in a moment.");
-            } else {
-                console.log("changeActionDevice: failed to load service data: " + textStatus + "; " + String(errorThrown));
-                console.log(jqXHR.responseText);
-            }
-            actionMenu.prepend( '<option value="">--choose--</option>' );
+            /* Bummer. And deviceinfo as a fallback isn't really appropriate here (only lists exceptions) */
+            alert("Can't load service data for this device. Luup may be reloading. If you are on a remote connection, there may be an issue between you and the remote server, or the remote server and your Vera. Try again in a moment.");
+            console.log("changeActionDevice: failed to load service data: " + textStatus + "; " + String(errorThrown));
+            console.log(jqXHR.responseText);
+
+            actionMenu.empty().append( '<option value="">[ERROR]</option>' );
             actionMenu.prop( 'disabled', false );
             actionMenu.val("");
             if ( undefined !== fnext ) {
