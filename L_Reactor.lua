@@ -2837,6 +2837,32 @@ local function processCondition( cond, grp, cdata, tdev )
         end
     end
 
+    -- Hold time (delay reset)
+    if ( condopt.holdtime or 0 ) > 0 then
+        -- If trying to go false, make sure hold time is honored.
+        D("processCondition() hold time %1, going %1 to %2", condopt.holdtime, cs.evalstate, state)
+        if cs.evalstate and not state then
+            if not cs.holduntil then
+                cs.holduntil = now + condopt.holdtime
+                state = true
+                D("processCondition() reset, delay until %1", cs.holduntil)
+                scheduleDelay( tostring(tdev), condopt.holdtime )
+            elseif now < cs.holduntil then
+                D("processCondition() continue reset delay until %1", cs.holduntil)
+                state = true
+                scheduleDelay( tostring(tdev), cs.holduntil - now )
+            else
+                -- OK to reset
+                D("processCondition() OK to reset, after %1", cs.holduntil)
+                cs.holduntil = nil
+            end
+        else
+            cs.holduntil = nil
+        end
+    else
+        cs.holduntil = nil
+    end
+
     -- Latching option. When latched, a condition that goes true remains true until the
     -- ReactorSensor untrips (another non-latched condition goes false), even if its
     -- other test conditions are no longer met.
@@ -4258,8 +4284,11 @@ function RG( grp, condState, level, r )
                 r = r .. " repeat " .. condopt.repeatcount ..
                     " within " .. ( condopt.repeatwithin or 60 ).. "s"
             end
+            if (condopt.holdtime or 0) > 0 then
+                r = r .. "; delay reset for " .. condopt.holdtime .. "s"
+            end
             if (condopt.latch or 0) ~= 0 then
-                r = r .. " (latching)"
+                r = r .. "; latching"
             end
         elseif condtype == "grpstate" then
             r = r .. string.format("%s (%d) ", ( luup.devices[cond.device]==nil ) and ( "*** missing " .. ( cond.devicename or "unknown" ) ) or

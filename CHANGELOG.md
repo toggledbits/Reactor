@@ -4,6 +4,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 3.0dev-19087
 
+* Enhancement: New "Delay reset" option allows false state of condition to be delay by the specified number of seconds (this can be used to debounce device states, or as an "off" delay for motion sensing, for example) [issue #16];
 * Beta19087: Fix for #23, getstate() insert tool was not coming up when called;
 * Beta19087: Ongoing #22, occasional blank action menu in Activities when using remote access to UI; this version improves messaging and logging in an attempt to gather more data;
 * Beta19083: Fix for #20, status tab not updating completely/timely;
