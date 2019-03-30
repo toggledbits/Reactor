@@ -58,15 +58,15 @@ var ReactorSensor = (function(api, $) {
         "grpstate": "Group State"
     };
     var condOptions = {
-        "service": { sequence: true, duration: true, repeat: true, latch: true },
-        "housemode": { sequence: true, duration: true, latch: true },
+        "service": { sequence: true, duration: true, repeat: true, latch: true, hold: true },
+        "housemode": { sequence: true, duration: true, latch: true, hold: true },
         "weekday": { latch: true },
         "sun": { sequence: true, latch: true },
         "trange": { latch: true },
-        "interval": { latch: true },
-        "ishome": { sequence: true, duration: true, latch: true },
-        "reload": { latch: true },
-        "grpstate": { sequence: true, duration: true, repeat:true, latch: true }
+        "interval": { latch: true, hold: true },
+        "ishome": { sequence: true, duration: true, latch: true, hold: true },
+        "reload": { latch: true, hold: true },
+        "grpstate": { sequence: true, duration: true, repeat:true, latch: true, hold: true }
     };
     var weekDayName = [ '?', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat' ];
     var monthName = [ '?', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec' ];
@@ -1041,8 +1041,11 @@ var ReactorSensor = (function(api, $) {
                         ( condOpts.duration_op === "lt" ? "less than " : "at least " ) +
                         condOpts.duration + " secs";
                 }
+                if ( ( condOpts.holdtime || 0 ) > 0 ) {
+                    condDesc += "; delay reset for " + condOpts.holdtime + " secs";
+                }
                 if ( ( condOpts.latch || 0 ) != 0 ) {
-                    condDesc += " (latching)";
+                    condDesc += "; latching";
                 }
 
                 row.append( jQuery( '<button class="btn condbtn" />' ).text( '=' ) );
@@ -1498,8 +1501,8 @@ var ReactorSensor = (function(api, $) {
                     cond.service = cond.service.replace( /\/.*$/, "" );
                     cond.operator = jQuery("div.params select.opmenu", $row).val() || "=";
                     if ( cond.operator.match( noCaseOptPattern ) ) {
-                        /* Case-insensitive is the default */
-                        n = ( jQuery( 'input#nocase', $row ).prop( 'checked' ) || false ) ? 0 : 1;
+                        /* Case-insensitive (nocase==1) is the default */
+                        n = ( jQuery( 'input#nocase', $row ).prop( 'checked' ) || false ) ? 1 : 0;
                         if ( n !== cond.nocase ) {
                             cond.nocase = ( 0 === n ) ? 0 : undefined;
                             configModified = true;
@@ -1863,6 +1866,31 @@ var ReactorSensor = (function(api, $) {
                     }
                 }
 
+                /* Hold time (delay reset) */
+                $dd = jQuery( 'input#holdtime', $row );
+                if ( isEmpty( $dd.val() ) || $dd.prop( 'disabled' ) ) {
+                    if ( undefined !== (cond.options || {}).holdtime ) {
+                        delete cond.options.holdtime;
+                        configModified = true;
+                    }
+                } else {
+                    var holdtime = getInteger( $dd.val() );
+                    if ( isNaN( holdtime ) ) {
+                        $dd.addClass( 'tberror' );
+                    } else if ( cond.options.holdtime !== holdtime ) {
+                        if ( holdtime > 0 ) {
+                            cond.options.holdtime = holdtime;
+                        } else if ( 0 === holdtime ) {
+                            $dd.val("");
+                            delete cond.options.holdtime;
+                        } else {
+                            /* Negative */
+                            $dd.addClass( 'tberror' );
+                        }
+                        configModified = true;
+                    }
+                }
+
                 /* Latching */
                 var latchval = jQuery('input#latchcond', $row).prop('checked') ? 1 : 0;
                 if ( latchval != ( cond.options.latch || 0 ) ) {
@@ -1983,7 +2011,7 @@ var ReactorSensor = (function(api, $) {
                     }
                     $inp.css( "visibility", ( undefined !== op && 0 === op.args ) ? "hidden" : "visible" );
                 }
-                var $opt = jQuery( '#nocaseopt', $row );
+                var $opt = jQuery( 'fieldset#nocaseopt', $row );
                 if ( val.match( noCaseOptPattern ) ) {
                     $opt.show();
                     jQuery( 'input#nocase', $opt ).prop( 'checked', coalesce( cond.nocase, 1 ) !== 0 );
@@ -2086,6 +2114,11 @@ var ReactorSensor = (function(api, $) {
             if ( displayed.repeat ) {
                 $container.append('<div id="repopt" class="form-inline"><label>Condition repeats <input type="text" id="rcount" class="form-control form-control-sm narrow" autocomplete="off"> times within <input type="text" id="rspan" class="form-control form-control-sm narrow" autocomplete="off"> seconds</label></div>');
             }
+            
+            /* Hold time (delay reset) */
+            if ( displayed.hold ) {
+                $container.append('<div id="holdopt class="form-inline"><label for="holdtime">Delay reset of condition for <input type="text" id="holdtime" class="form-control form-control-sm narrow" autocomplete="off"> seconds</div>');
+            }
 
             /* Latching */
             if ( displayed.latch ) {
@@ -2104,7 +2137,13 @@ var ReactorSensor = (function(api, $) {
                 jQuery('input#rcount', $container).val( rc );
                 jQuery('input#rspan', $container).prop('disabled', rc=="").val( rc == "" ? "" : ( condOpts.repeatwithin || "60" ) );
             }
-            jQuery('input#latchcond', $container).prop('checked', ( condOpts.latch || 0 ) != 0 );
+            if ( ( condOpts.holdtime || 0 ) > 0 ) {
+                jQuery( 'input#holdtime', $container ).prop( 'disabled', false ).val( condOpts.holdtime );
+                jQuery( 'input#latchcond', $container ).prop( 'disabled', true );
+            } else {
+                jQuery('input#latchcond', $container).prop('checked', ( condOpts.latch || 0 ) != 0 );
+                jQuery( 'input#holdtime', $container ).prop( 'disabled', ( condOpts.latch || 0 ) != 0 ).val( "" );
+            }
 
             /* Add the options container (specific immediate child of this row selection) */
             $row.children( 'div.cond-body' ).append( $container );
@@ -2199,9 +2238,10 @@ var ReactorSensor = (function(api, $) {
                     container.append( makeVariableMenu( cond.device, cond.service, cond.variable ) );
                     container.append( makeServiceOpMenu( cond.operator || "=" ) );
                     container.append('<input type="text" id="value" class="form-control form-control-sm" autocomplete="off" list="reactorvarlist">');
-                    container.append(' ');
-                    container.append('<fieldset id="nocaseopt"><label class="checkbox-inline" for="nocase"><input id="nocase" type="checkbox" class="form-check">Ignore&nbsp;case</label></fieldset>');
-                    container.append(' ');
+                    if ( ( cond.operator || "=" ).match( noCaseOptPattern ) ) {
+                        container.append(' ');
+                        container.append('<fieldset id="nocaseopt"><label class="checkbox-inline" for="nocase"><input id="nocase" type="checkbox" class="form-check">Ignore&nbsp;case</label></fieldset>');
+                    }
                     container.append('<div id="currval"/>');
 
                     op = serviceOpsIndex[cond.operator || "="];
