@@ -1756,7 +1756,7 @@ local function loadSensorConfig( tdev )
         cdata.version = _CDATAVERSION -- MUST COINCIDE WITH J_ReactorSensor_UI7.js
         cdata.timestamp = os.time()
         -- NOTA BENE: startup=true passed here! Don't fire watch for this rewrite.
-        luup.variable_set( RSSID, "cdata", json.encode( cdata ), tdev, true )
+        luup.variable_set( RSSID, "cdata", json.encode( cdata ), tdev, false )
     end
 
     -- Save to cache.
@@ -2887,13 +2887,15 @@ evaluateGroup = function( grp, parentGroup, cdata, tdev )
             end
 
             -- And apply to ongoing group state
-            if passed == nil then
+            if grp.operator == "nul" then
+                -- ignore
+            elseif passed == nil then
                 passed = state
             elseif grp.operator == "xor" then
                 passed = state ~= passed
             elseif grp.operator == "or" then
                 passed = passed or state
-            else
+            else -- default "and"
                 passed = passed and state
             end
         end
@@ -2901,8 +2903,8 @@ evaluateGroup = function( grp, parentGroup, cdata, tdev )
     end
 
     -- Save group state.
-    if grp.invert then passed = not passed end
-    if not passed then
+    if grp.invert and passed ~= nil then passed = not passed end
+    if passed == false then -- but not nil
         -- Reset latched conditions when group resets
         for _,l in ipairs( latched ) do
             local cs = sst.condState[l]
@@ -2911,7 +2913,7 @@ evaluateGroup = function( grp, parentGroup, cdata, tdev )
         end
     end
 
-    return passed or false, passed, hasTimer -- allow pass of nil state for no data
+    return passed, passed, hasTimer -- allow pass of nil state for no data
 end
 
 -- Clear errors and show disabled state for disabled sensor.

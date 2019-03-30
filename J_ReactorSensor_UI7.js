@@ -2815,7 +2815,7 @@ var ReactorSensor = (function(api, $) {
         }
 
         /**
-         * Handle click on group controls (NOT/AND/OR/XOR)
+         * Handle click on group controls (NOT/AND/OR/XOR/NUL)
          */
         function handleGroupControlClick( ev ) {
             var $el = jQuery( ev.target );
@@ -2849,6 +2849,10 @@ var ReactorSensor = (function(api, $) {
 
                 case 'xor':
                     grp.operator = "xor";
+                    break;
+
+                case 'nul':
+                    grp.operator = "nul";
                     break;
 
                 case 'disable':
@@ -2910,9 +2914,10 @@ var ReactorSensor = (function(api, $) {
         <button id="and" class="btn btn-xs btn-primary checked" title="AND means group is true only if all conditions/subgroups are true"> AND </button> \
         <button id="or" class="btn btn-xs btn-primary" title="OR means group is true if any child condition/subgroup is true"> OR </button> \
         <button id="xor" class="btn btn-xs btn-primary" title="XOR (exclusive or) means group is true if one and only one condition/subgroup is true"> XOR </button> \
+        <button id="nul" class="btn btn-xs btn-primary" title="NUL means group does not affect logic state of parent group"> NUL </button> \
       </div> \
       <div class="btn-group cond-group-control tb-btn-check"> \
-        <button id="disable" class="btn btn-xs btn-primary tb-disable" title="Disabled groups are ignored, as if they did not exist"> DISABLE </button> \
+        <button id="disable" class="btn btn-xs btn-primary tb-disable" title="Disabled groups are ignored, as if they did not exist (conditions don\'t run)"> DISABLE </button> \
       </div> \
       <div class="cond-group-title"> \
         <span id="titletext" /> \
