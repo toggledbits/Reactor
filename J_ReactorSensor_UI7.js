@@ -1507,9 +1507,11 @@ var ReactorSensor = (function(api, $) {
                             cond.nocase = ( 0 === n ) ? 0 : undefined;
                             configModified = true;
                         }
+                    } else if ( undefined !== cond.nocase ) {
+                        delete cond.nocase;
+                        configModified = true;
                     }
                     var op = serviceOpsIndex[cond.operator || ""];
-                    jQuery( "input#value", $row ).css( "visibility", ( undefined !== op && 0 === op.args ) ? "hidden" : "visible" );
                     // use op.args???
                     if ( "change" == cond.operator ) {
                         // Join simple two value list, but don't save "," on its own.
@@ -1972,23 +1974,24 @@ var ReactorSensor = (function(api, $) {
             updateConditionRow( $row, $el );
         }
 
-        /**
-         * Handler for operator change
-         */
-        function handleConditionOperatorChange( ev ) {
-            var $el = jQuery( ev.currentTarget );
-            var $row = $el.closest('div.cond-container');
-            var cond = getConditionIndex()[ $row.attr( 'id' || "" ) ];
-            var val = $el.val() || "";
+        /* Set up fields for condition based on current operator */
+        function setUpConditionOpFields( $row, cond ) {
+            var val = cond.operator || "";
             var op = serviceOpsIndex[val];
+            var vv = (cond.value || "").split(/,/);
 
             if ( "housemode" === cond.type ) {
                 if ( val == "change" ) {
                     jQuery( 'fieldset#housemodechecks', $row ).hide();
                     jQuery( 'fieldset#housemodeselects', $row ).show();
+                    jQuery( 'select#frommode', $row ).val( vv.length > 0 && "" !== vv[0] ? vv[0] : "" );
+                    jQuery( 'select#tomode', $row   ).val( vv.length > 1 && "" !== vv[1] ? vv[1] : "" );
                 } else {
                     jQuery( 'fieldset#housemodechecks', $row ).show();
                     jQuery( 'fieldset#housemodeselects', $row ).hide();
+                    vv.forEach( function( val ) {
+                        jQuery('input#opts[value="' + val + '"]', $row).prop('checked', true);
+                    });
                 }
             } else if ( "service" === cond.type ) {
                 var $inp = jQuery( 'input#value', $row );
@@ -1996,20 +1999,29 @@ var ReactorSensor = (function(api, $) {
                     if ( $inp.length > 0 ) {
                         // Change single input field to double fields.
                         $inp.show();
-                        var lab = jQuery( '<label class="tbsecondaryinput"> to </label>' );
-                        lab.append( $inp.clone().attr('id', 'val2').val( '' )
-                            .attr( 'placeholder', 'blank=any value' )
-                            .off( 'change.reactor' ).on( 'change.reactor', handleConditionRowChange ) );
-                        lab.insertAfter( $inp );
                         $inp.attr( 'id', 'val1' ).attr( 'placeholder', 'blank=any value' );
+                        var $in2 = $inp.clone().attr('id', 'val2')
+                            .attr( 'placeholder', 'blank=any value' )
+                            .off( 'change.reactor' ).on( 'change.reactor', handleConditionRowChange );
+                        $in2.insertAfter( $inp );
+                        jQuery( '<label for="val1" class="tbsecondaryinput"> from </label>' ).insertBefore( $inp );
+                        jQuery( '<label for="val2" class="tbsecondaryinput"> to </label>' ).insertBefore( $in2 );
                     }
+                    /* Restore values */
+                    $inp.val( vv.length > 0 ? String(vv[0]) : "" );
+                    jQuery( 'input#val2', $row ).val( vv.length > 1 ? String(vv[1]) : "" );
                 } else {
                     if ( $inp.length == 0 ) {
-                        $inp = jQuery( 'input#val1', $row );
-                        jQuery( 'label.tbsecondaryinput', $row ).remove();
-                        $inp.attr('id', 'value').attr('placeholder', '');
+                        /* Convert double fields back to single */
+                        $inp = jQuery( 'input#val1', $row ).attr( 'id', 'value' ).attr( 'placeholder', '' );
+                        jQuery( 'input#val2,label.tbsecondaryinput', $row ).remove();
                     }
-                    $inp.css( "visibility", ( undefined !== op && 0 === op.args ) ? "hidden" : "visible" );
+                    $inp.val( vv.length > 0 ? String(vv[0]) : "" );
+                    if ( op && 0 === op.args ) {
+                        $inp.hide();
+                    } else {
+                        $inp.show();
+                    }
                 }
                 var $opt = jQuery( 'fieldset#nocaseopt', $row );
                 if ( val.match( noCaseOptPattern ) ) {
@@ -2024,7 +2036,20 @@ var ReactorSensor = (function(api, $) {
                 console.log( "Invalid row type in handleConditionOperatorChange(): " + String( cond.type ) );
                 return;
             }
+        }
 
+        /**
+         * Handler for operator change
+         */
+        function handleConditionOperatorChange( ev ) {
+            var $el = jQuery( ev.currentTarget );
+            var val = $el.val();
+            var $row = $el.closest('div.cond-container');
+            var cond = getConditionIndex()[ $row.attr( 'id' ) ];
+
+            cond.value = "";
+            cond.operator = val;
+            setUpConditionOpFields( $row, cond );
             configModified = true;
             updateConditionRow( $row, $el );
         }
@@ -2114,7 +2139,7 @@ var ReactorSensor = (function(api, $) {
             if ( displayed.repeat ) {
                 $container.append('<div id="repopt" class="form-inline"><label>Condition repeats <input type="text" id="rcount" class="form-control form-control-sm narrow" autocomplete="off"> times within <input type="text" id="rspan" class="form-control form-control-sm narrow" autocomplete="off"> seconds</label></div>');
             }
-            
+
             /* Hold time (delay reset) */
             if ( displayed.hold ) {
                 $container.append('<div id="holdopt class="form-inline"><label for="holdtime">Delay reset of condition for <input type="text" id="holdtime" class="form-control form-control-sm narrow" autocomplete="off"> seconds</div>');
@@ -2238,20 +2263,14 @@ var ReactorSensor = (function(api, $) {
                     container.append( makeVariableMenu( cond.device, cond.service, cond.variable ) );
                     container.append( makeServiceOpMenu( cond.operator || "=" ) );
                     container.append('<input type="text" id="value" class="form-control form-control-sm" autocomplete="off" list="reactorvarlist">');
-                    if ( ( cond.operator || "=" ).match( noCaseOptPattern ) ) {
-                        container.append(' ');
-                        container.append('<fieldset id="nocaseopt"><label class="checkbox-inline" for="nocase"><input id="nocase" type="checkbox" class="form-check">Ignore&nbsp;case</label></fieldset>');
-                    }
+                    container.append('<fieldset id="nocaseopt"><label class="checkbox-inline" for="nocase"><input id="nocase" type="checkbox" class="form-check">Ignore&nbsp;case</label></fieldset>');
                     container.append('<div id="currval"/>');
 
-                    op = serviceOpsIndex[cond.operator || "="];
-                    jQuery( "input#value", container).val( cond.value || "" )
-                        .css( "visibility", ( undefined !== op && 0 === op.args ) ? "hidden" : "visible" )
-                        .on( 'change.reactor', handleConditionRowChange );
-                    jQuery("select.varmenu", container).on( 'change.reactor', handleConditionVarChange );
+                    setUpConditionOpFields( container, cond );
+                    jQuery( "input#value", container).on( 'change.reactor', handleConditionRowChange );
+                    jQuery('input#nocase', container).on( 'change.reactor', handleConditionRowChange );
                     jQuery("select.opmenu", container).on( 'change.reactor', handleConditionOperatorChange );
-                    jQuery('input#nocase', container).prop( 'checked', coalesce( cond.nocase, 1 ) !== 0 )
-                        .on( 'change.reactor', handleConditionRowChange );
+                    jQuery("select.varmenu", container).on( 'change.reactor', handleConditionVarChange );
                     jQuery("select.devicemenu", container).on( 'change.reactor', handleDeviceChange );
 
                     updateCurrentServiceValue( container );
@@ -2281,6 +2300,7 @@ var ReactorSensor = (function(api, $) {
                     container.append( mm );
                     container.append('<div id="currval"/>');
 
+                    setUpConditionOpFields( container, cond );
                     jQuery("select.opmenu", container).on( 'change.reactor', handleConditionRowChange );
                     jQuery("select#grpmenu", container).on( 'change.reactor', handleConditionRowChange );
                     jQuery("select.devicemenu", container).on( 'change.reactor', function( ev ) {
@@ -2339,18 +2359,9 @@ var ReactorSensor = (function(api, $) {
                     d.append( mm.attr( 'id', 'tomode' ) );
                     container.append( d );
                     jQuery( 'select#frommode,select#tomode', container).on( 'change.reactor', handleConditionRowChange );
+
                     // Restore values and set up correct display.
-                    v = ( cond.value || "" ).split( /,/ );
-                    if ( "change" === cond.operator ) {
-                        jQuery( 'fieldset#housemodechecks', container ).hide();
-                        jQuery( 'select#frommode', container ).val( v.length > 0 && "" !== v[0] ? v[0] : "" );
-                        jQuery( 'select#tomode', container ).val( v.length > 1 && "" !== v[1] ? v[1] : "" );
-                    } else {
-                        jQuery( 'fieldset#housemodeselects', container ).hide();
-                        v.forEach( function( val ) {
-                            jQuery('input#opts[value="' + val + '"]', container).prop('checked', true);
-                        });
-                    }
+                    setUpConditionOpFields( container, cond );
                     break;
 
                 case 'weekday':
@@ -2920,7 +2931,9 @@ var ReactorSensor = (function(api, $) {
       <i id="delcond" class="material-icons md-btn" title="Delete condition">clear</i> \
   </div> \
   <div class="cond-body form-inline"> \
-    <select class="condtype form-control form-control-sm"><option value="">--choose--</option></select> \
+    <div id="cond-type"> \
+      <select class="condtype form-control form-control-sm"><option value="">--choose--</option></select> \
+    </div> \
     <div class="params" /> \
   </div> \
 </div>' );
@@ -3130,8 +3143,8 @@ var ReactorSensor = (function(api, $) {
             html += 'div#tab-conds.reactortab div.cond-container.tbmodified:not(.tberror) { }';
             html += 'div#tab-conds.reactortab div.cond-container.tberror { border-left: 4px solid red; }';
             html += 'div#tab-conds.reactortab div.condopts { padding-left: 32px; }';
-            html += 'div#tab-conds.reactortab div.params { display: inline-block; width: 100%; }';
-            html += 'div#tab-conds.reactortab div.params > fieldset { display: inline-block; border: none; margin: 0; padding: 0; }';
+            html += 'div#tab-conds.reactortab div.params { display: inline-block; }';
+            html += 'div#tab-conds.reactortab div.params > fieldset { display: inline-block; border: none; margin: 0 4px; padding: 0 0; }';
 
             html += "div#tab-conds.reactortab .tb-about { margin-top: 24px; }";
             html += 'div#tab-conds.reactortab .tberror { border: 1px solid red; }';
