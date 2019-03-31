@@ -1,5 +1,5 @@
 //# sourceURL=J_ReactorSensor_ALTUI.js
-/** 
+/**
  * J_ReactorSensor_ALTUI.js
  * Special presentation for ALTUI for ReactorSensor
  *
@@ -17,7 +17,7 @@ var ReactorSensor_ALTUI = ( function( window, undefined ) {
         style += ".dXelaylight-cpbutton { height: 24px; }";
         return style;
     }
-    
+
     function _draw( device ) {
             var html ="";
             var message = MultiBox.getStatus( device, "urn:toggledbits-com:serviceId:ReactorSensor", "Message");
@@ -43,11 +43,11 @@ var ReactorSensor_ALTUI = ( function( window, undefined ) {
             html += '</script>';
             return html;
     }
-    
+
     function _deviceAction( altuiid, action ) {
         MultiBox.runActionByAltuiID( altuiid, "urn:toggledbits-com:serviceId:ReactorSensor", action, {} );
     }
-    
+
     return {
         /* convenience exports */
         _deviceAction: _deviceAction,

@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "2.4stable-19083"
+local _PLUGIN_VERSION = "2.4"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION = 00206
@@ -1404,7 +1404,7 @@ local function trip( state, tdev )
         if scd then
             -- Note we only stop untrip actions if there are trip actions.
             stopScene( tdev, nil, tdev, 'root.false' ) -- stop contra-activity
-            execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } ) 
+            execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } )
         end
     end
 end
@@ -3600,8 +3600,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
         return json.encode( { status=status,message=msg } ), "application/json"
 
     elseif action == "summary" then
-        -- ??? Need to show startup Lua, and scene data (incl lua) for scenes named
-        local r = ""
+        local r = "```" .. EOL
         r = r .. string.rep("*", 51) .. " REACTOR LOGIC SUMMARY REPORT " .. string.rep("*", 51) .. EOL
         r = r .. "   Version: " .. tostring(_PLUGIN_VERSION) .. " config " .. tostring(_CONFIGVERSION) .. " pluginDevice " .. pluginDevice .. EOL
         r = r .. "    System:"
@@ -3751,6 +3750,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
             end
         end
         r = r .. showStartupLua()
+        r = r .. "```" .. EOL
         return r, "text/plain"
 
     elseif action == "tryexpression" then

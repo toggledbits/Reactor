@@ -15,7 +15,7 @@ var ReactorSensor = (function(api, $) {
     /* unique identifier for this plugin... */
     var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-    var pluginVersion = '2.4stable-19083';
+    var pluginVersion = '2.4';
 
     var DEVINFO_MINSERIAL = 71.222;
 
@@ -78,7 +78,7 @@ var ReactorSensor = (function(api, $) {
         html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
         html += '<div id="tbcopyright">Reactor ver ' + pluginVersion + ' &copy; 2018,2019 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
             ' All Rights Reserved. Please check out the <a href="https://github.com/toggledbits/Reactor/wiki" target="_blank">online documentation</a>' +
-            ' and <a href="http://forum.micasaverde.com/index.php/board,93.0.html" target="_blank">forum board</a> for support.</div>';
+            ' and <a href="https://community.getvera.com/c/plugins-amp-plugin-development/reactor" target="_blank">forum board</a> for support.</div>';
         try {
             html += '<div id="browserident">' + navigator.userAgent + '</div>';
         } catch( e ) {}
@@ -1140,17 +1140,22 @@ var ReactorSensor = (function(api, $) {
                 break;
 
             case 'service':
-                /* Below removes nocase, but we put it back if needed */
-                removeConditionProperties( cond, "device,devicename,service,variable,operator,value" );
+                removeConditionProperties( cond, "device,devicename,service,variable,operator,value,nocase" );
                 cond.device = parseInt( jQuery("div.params select.devicemenu", row).val() );
                 cond.service = jQuery("div.params select.varmenu", row).val() || "";
                 cond.variable = cond.service.replace( /^[^\/]+\//, "" );
                 cond.service = cond.service.replace( /\/.*$/, "" );
                 cond.operator = jQuery("div.params select.opmenu", row).val() || "=";
                 if ( cond.operator.match( noCaseOptPattern ) ) {
-                    if ( ! jQuery( 'input#nocase', row ).prop( 'checked' ) ) {
-                        cond.nocase = 0;
+                    /* Case-insensitive (nocase==1) is the default */
+                    n = ( jQuery( 'input#nocase', row ).prop( 'checked' ) || false ) ? 1 : 0;
+                    if ( n !== cond.nocase ) {
+                        cond.nocase = ( 0 === n ) ? 0 : undefined;
+                        configModified = true;
                     }
+                } else if ( undefined !== cond.nocase ) {
+                    delete cond.nocase;
+                    configModified = true;
                 }
                 var op = serviceOpsIndex[cond.operator || ""];
                 jQuery( "input#value", row ).css( "visibility", ( undefined !== op && 0 === op.args ) ? "hidden" : "visible" );
@@ -2915,7 +2920,7 @@ var ReactorSensor = (function(api, $) {
 
         /* Add "Add" button */
         gel.append('<div class="row buttonrow">' +
-            '<div class="col-xs-12 col-sm-12"><button id="addvar" class="btn btn-sm btn-primary">Add Variable/Expression</button> Need help? Check out the <a href="https://github.com/toggledbits/Reactor/wiki/Expressions-&-Variables" target="_blank">documentation</a> or ask in the <a href="http://forum.micasaverde.com/index.php/board,93.0.html" target="_blank">Vera forums</a>.</div>' +
+            '<div class="col-xs-12 col-sm-12"><button id="addvar" class="btn btn-sm btn-primary">Add Variable/Expression</button> Need help? Check out the <a href="https://github.com/toggledbits/Reactor/wiki/Expressions-&-Variables" target="_blank">documentation</a> or ask in the <a href="https://community.getvera.com/c/plugins-amp-plugin-development/reactor" target="_blank">Vera forums</a>.</div>' +
             '</div>');
 
         /* Append the group */
@@ -4975,7 +4980,7 @@ var ReactorSensor = (function(api, $) {
         }
 
         html += '<div id="troubleshooting"><h3>Troubleshooting &amp; Support</h3>If you are having trouble working out your condition logic, or you think you have found a bug, here are some steps and tools you can use:';
-        html += '<ul><li>Check the documentation in the <a href="https://github.com/toggledbits/Reactor/wiki" target="_blank">Reactor Wiki</a>.</li><li>The <a href="http://forum.micasaverde.com/index.php/board,93.0.html" target="_blank">Reactor Board</a> in the Vera Community Forums is a great way to get support for questions, how-to\'s, etc.</li><li>Generate and examine a <a href="' +
+        html += '<ul><li>Check the documentation in the <a href="https://github.com/toggledbits/Reactor/wiki" target="_blank">Reactor Wiki</a>.</li><li>The <a href="http://community.getvera.com/c/plugins-amp-plugin-development/reactor" target="_blank">Reactor Board</a> in the Vera Community Forums is a great way to get support for questions, how-to\'s, etc.</li><li>Generate and examine a <a href="' +
             api.getDataRequestURL() + '?id=lr_Reactor&action=summary&device=' + api.getCpanelDeviceId() + '" target="_blank">Logic&nbsp;Summary</a> report. This text-based report shows your ReactorSensor\'s current state, and its event list, which may tell you a lot about what led up to that state.</li>' +
             '<li>If the logic summary is not helping you, please post it in its entirety, together with a description of what you are trying to accomplish and/or the problem you are having, to a new thread on the Reactor Board (linked above). <strong>Please do not post screenshots</strong> unless you are reporting a UI/appearance bug. Generally speaking, the logic summary is far more useful (and easier to make and post, by design).</li>';
         if ( ! isOpenLuup ) {

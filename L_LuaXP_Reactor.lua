@@ -59,10 +59,10 @@ local NULLATOM = { __type=TNUL }
 
 local charmap = { t = "\t", r = "\r", n = "\n" }
 
-local reservedWords = { 
+local reservedWords = {
       ['false']=false, ['true']=true
     , pi=math.pi, PI=math.pi
-    , ['null']=NULLATOM, ['NULL']=NULLATOM, ['nil']=NULLATOM 
+    , ['null']=NULLATOM, ['NULL']=NULLATOM, ['nil']=NULLATOM
 }
 
 function dump(t, seen)

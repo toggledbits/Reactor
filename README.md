@@ -18,8 +18,8 @@ trigger standard Vera scenes, Lua, other plugins, etc.).
 
 ## Features and Operation ##
 
-Reactor is the parent of a set of a ReactorSensors. Each ReactorSensor contains 
-one or more condition groups, which cause the sensor to trip when all of the 
+Reactor is the parent of a set of a ReactorSensors. Each ReactorSensor contains
+one or more condition groups, which cause the sensor to trip when all of the
 conditions in any group are met. So conditions within a group are "AND", and
 groups are "OR". When no group's conditions are met, the
 sensor is untripped. This basic binary output can be used to trigger actions

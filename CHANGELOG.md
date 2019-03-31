@@ -2,8 +2,9 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
-## Version 2.4stable-19083 (stable)
+## Version 2.4 (released)
 
+* Change: Embedded URLs to Vera community forums updated to new Discourse-based community.
 * Fix: fix an issue with Safari 12 user not being able to edit "sustained for" time on service conditions.
 * Enhancement: The response time for house mode changes has been dramatically improved (without increased polling).
 * Enhancement: Reactor now uses a weak table to cache compiled Lua. This allows the system to purge the compiled fragments if the memory is needed elsewhere. This can be disabled by setting SuppressWeakLuaFunc to 1 in the Reactor master device (+reload).
