@@ -15,9 +15,13 @@ var ReactorSensor = (function(api, $) {
     /* unique identifier for this plugin... */
     var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-    var DEVINFO_MINSERIAL = 2.88;
+    var pluginVersion = '2.4';
 
-    var CDATA_VERSION = 19012;
+    var DEVINFO_MINSERIAL = 71.222;
+
+    var UI_VERSION = 19079;     /* must coincide with Lua core */
+
+    var CDATA_VERSION = 19012;  /* must coincide with Lua core */
 
     var myModule = {};
 
@@ -60,19 +64,21 @@ var ReactorSensor = (function(api, $) {
     var noCaseOptPattern = /(=|<>|contains|notcontains|starts|notstarts|ends|notends|in|notin|change)/i;
     var serviceOpsIndex = {};
 
+    var varRefPattern = /^\{[^}]+\}\s*$/;
+
     var msgUnsavedChanges = "You have unsaved changes! Press OK to save them, or Cancel to discard them.";
     var msgGroupNormal = "Normal; click for inverted (false when all conditions are met)";
     var msgGroupInvert = "Inverted; click for normal (true when all conditions are met)";
-    var msgGroupIdChange = "Click to change group ID";
+    var msgGroupIdChange = "Click to change group name";
 
     /* Return footer */
     function footer() {
         var html = '';
         html += '<div class="clearfix">';
         html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
-        html += '<div id="tbcopyright">Reactor ver 2.3hotfix-19062 &copy; 2018,2019 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
+        html += '<div id="tbcopyright">Reactor ver ' + pluginVersion + ' &copy; 2018,2019 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
             ' All Rights Reserved. Please check out the <a href="https://github.com/toggledbits/Reactor/wiki" target="_blank">online documentation</a>' +
-            ' and <a href="http://forum.micasaverde.com/index.php/board,93.0.html" target="_blank">forum board</a> for support.</div>';
+            ' and <a href="https://community.getvera.com/c/plugins-amp-plugin-development/reactor" target="_blank">forum board</a> for support.</div>';
         try {
             html += '<div id="browserident">' + navigator.userAgent + '</div>';
         } catch( e ) {}
@@ -82,11 +88,11 @@ var ReactorSensor = (function(api, $) {
 
     /* Create an ID that's functionally unique for our purposes. */
     function getUID( prefix ) {
-        /* Not good, but enough. */
-        var newx = Date.now();
+        /* Not good, but good enough. */
+        var newx = Date.now() - 1529298000000;
         if ( newx == lastx ) ++newx;
         lastx = newx;
-        return ( prefix === undefined ? "" : prefix ) + newx.toString(16);
+        return ( prefix === undefined ? "" : prefix ) + newx.toString(36);
     }
 
     function isEmpty( s ) {
@@ -136,6 +142,7 @@ var ReactorSensor = (function(api, $) {
 
     /* Load configuration data. */
     function loadConfigData( myid ) {
+        var upgraded = false;
         var s = api.getDeviceState( myid, serviceId, "cdata" ) || "";
         var cdata;
         if ( ! isEmpty( s ) ) {
@@ -143,18 +150,34 @@ var ReactorSensor = (function(api, $) {
                 cdata = JSON.parse( s );
             } catch (e) {
                 console.log("Unable to parse cdata: " + String(e));
+                throw e;
             }
         }
         if ( cdata === undefined || typeof cdata !== "object" ||
                 cdata.conditions === undefined || typeof cdata.conditions !== "object" ) {
-            cdata = { version: CDATA_VERSION, variables: {}, conditions: [
-                { groupid: getUID('grp'), groupconditions: [
-                    { id: getUID('cond'), type: "comment", comment: "Enter your AND conditions here" }
-                    ]
-                }
-            ]};
+            console.log("Initializing new config for " + String(myid));
+            cdata = {
+                version: CDATA_VERSION,
+                variables: {},
+                conditions: [
+                    {
+                        groupid: getUID('grp'), groupconditions: [
+                            { id: getUID('cond'), type: "comment", comment: "Enter your AND conditions here" }
+                        ]
+                    }
+                ]
+            };
+            upgraded = true;
         }
-        var upgraded = false;
+
+        /* Special version check */
+        if ( ( cdata.version || 0 ) > CDATA_VERSION ) {
+            console.log("The configuration for this ReactorSensor is an unsupported format/version (" +
+                String( cdata.version ) + "). Upgrade Reactor or restore an older config from backup.");
+            throw "Incompatible configuration format/version";
+        }
+
+        /* Check for upgrade tasks from prior versions */
         if ( undefined === cdata.variables ) {
             /* Fixup v2 */
             cdata.variables = {};
@@ -179,6 +202,7 @@ var ReactorSensor = (function(api, $) {
         cdata.device = myid;
         if ( upgraded ) {
             /* Write updated config. We don't care if it fails, as nothing we can't redo would be lost. */
+            console.log('Re-writing upgraded config data');
             api.setDeviceStateVariablePersistent( myid, serviceId, "cdata", JSON.stringify( cdata ) );
         }
 
@@ -189,16 +213,29 @@ var ReactorSensor = (function(api, $) {
     }
 
     /* Initialize the module */
-    function initModule() {
-        var myid = api.getCpanelDeviceId();
-        console.log("initModule() for device " + myid);
-        var devices = api.cloneObject( api.getListOfDevices() );
+    function initModule( myid ) {
+        myid = myid || api.getCpanelDeviceId();
+
+        /* Check agreement of plugin core and UI */
+        var s = api.getDeviceState( myid, "urn:toggledbits-com:serviceId:ReactorSensor", "_UIV" ) || "0";
+        console.log("initModule() for device " + myid + " requires UI version " + UI_VERSION + ", seeing " + s);
+        if ( String(UI_VERSION) != s ) {
+            api.setCpanelContent( '<div class="reactorwarning" style="border: 4px solid red; padding: 8px;">' +
+                " ERROR! The Reactor plugin core version and UI version do not agree." +
+                " This may cause errors or corrupt your ReactorSensor configuration." +
+                " Please hard-reload your browser and try again " +
+                ' (<a href="https://duckduckgo.com/?q=hard+reload+browser" target="_blank">how?</a>).' +
+                " If you have installed hotfix patches, you may not have successfully installed all required files." +
+                " Expected " + String(UI_VERSION) + " got " + String(s) +
+                ".</div>" );
+            return false;
+        }
 
         /* Load ACE. Since the jury is still out with LuaView on this, default is no
            ACE for now. As of 2019-01-06, one user has reported that ACE does not function
            on Chrome Mac (unknown version, but does function with Safari and Firefox on Mac).
            That's just one browser, but still... */
-        var s = getParentState( "UseACE" ) || "";
+        s = getParentState( "UseACE" ) || "";
         if ( "1" === s && ! window.ace ) {
             s = getParentState( "ACEURL" ) || "https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.2/ace.js";
             jQuery( "head" ).append( '<script src="' + s + '"></script>' );
@@ -216,6 +253,7 @@ var ReactorSensor = (function(api, $) {
         loadConfigData( myid );
 
         /* Make our own list of devices, sorted by room, and alpha within room. */
+        var devices = api.cloneObject( api.getListOfDevices() );
         var rooms = [];
         var noroom = { "id": 0, "name": "No Room", "devices": [] };
         rooms[noroom.id] = noroom;
@@ -282,6 +320,8 @@ var ReactorSensor = (function(api, $) {
             console.log("Error applying usergeofences to userIx: " + String(e));
             console.log( e.stack );
         }
+
+        return true;
     }
 
     /**
@@ -322,9 +362,9 @@ var ReactorSensor = (function(api, $) {
                 return tstr;
             }
             return tstr + " on day " + d + " of each month";
-        }
-        m = parseInt( m );
-        return monthName[m] + ' ' + d + ( isEmpty( y ) ? '' : ' ' + y ) + ' ' + tstr;
+         }
+         m = parseInt( m );
+         return monthName[m] + ' ' + d + ( isEmpty( y ) ? '' : ' ' + y ) + ' ' + tstr;
     }
 
     /**
@@ -477,6 +517,13 @@ var ReactorSensor = (function(api, $) {
  *
  ** **************************************************************************/
 
+    function conditionValueText( v ) {
+        if ( "number" === typeof(v) ) return v;
+        v = String(v);
+        if ( v.match( varRefPattern ) ) return v;
+        return JSON.stringify( v );
+    }
+
     function makeConditionDescription( cond ) {
         if ( cond === undefined ) {
             return "(undefined)";
@@ -497,13 +544,13 @@ var ReactorSensor = (function(api, $) {
                         if ( "change" == t.op ) {
                             k = ( cond.value || "" ).split( /,/ );
                             if ( k.length > 0 && k[0] !== "" ) {
-                                str += " from " + k[0];
+                                str += " from " + conditionValueText( k[0] );
                             }
                             if ( k.length > 1 && k[1] !== "" ) {
-                                str += " to " + k[1];
+                                str += " to " + conditionValueText( k[1] );
                             }
                         } else {
-                            str += ' ' + ( t.numeric ? cond.value : JSON.stringify( cond.value ) );
+                            str += ' ' + conditionValueText( cond.value );
                         }
                     }
                 }
@@ -627,7 +674,11 @@ var ReactorSensor = (function(api, $) {
                 if ( ! isEmpty( cond.basetime ) ) {
                     t = cond.basetime.split(/,/);
                     str += " (relative to ";
-                    str += t[0] + ":" + t[1];
+                    if ( t.length == 2 ) {
+                        str += t[0] + ":" + t[1];
+                    } else {
+                        str += String( cond.basetime );
+                    }
                     str += ")";
                 }
                 break;
@@ -744,7 +795,7 @@ var ReactorSensor = (function(api, $) {
                 grpel.removeClass( 'groupdisabled' );
             }
             grpel.append('<div class="row"><div id="grptitle" class="grouptitle col-xs-12" /></div>');
-            var title = 'Group: ' + grp.groupid + ( grp.invert ? " (inverted)" : "" ) +
+            var title = 'Group: ' + (grp.name || grp.groupid) + ( grp.invert ? " (inverted)" : "" ) +
                 ( grp.disabled ? " (disabled)" : "" );
             jQuery( 'div#grptitle', grpel ).text( title );
             stel.append( grpel );
@@ -888,7 +939,9 @@ var ReactorSensor = (function(api, $) {
             handleSaveClick( undefined );
         }
 
-        initModule();
+        if ( ! initModule() ) {
+            return;
+        }
 
         /* Our styles. */
         var html = "<style>";
@@ -1087,17 +1140,22 @@ var ReactorSensor = (function(api, $) {
                 break;
 
             case 'service':
-                /* Below removes nocase, but we put it back if needed */
-                removeConditionProperties( cond, "device,devicename,service,variable,operator,value" );
+                removeConditionProperties( cond, "device,devicename,service,variable,operator,value,nocase" );
                 cond.device = parseInt( jQuery("div.params select.devicemenu", row).val() );
                 cond.service = jQuery("div.params select.varmenu", row).val() || "";
                 cond.variable = cond.service.replace( /^[^\/]+\//, "" );
                 cond.service = cond.service.replace( /\/.*$/, "" );
                 cond.operator = jQuery("div.params select.opmenu", row).val() || "=";
                 if ( cond.operator.match( noCaseOptPattern ) ) {
-                    if ( ! jQuery( 'input#nocase', row ).prop( 'checked' ) ) {
-                        cond.nocase = 0;
+                    /* Case-insensitive (nocase==1) is the default */
+                    n = ( jQuery( 'input#nocase', row ).prop( 'checked' ) || false ) ? 1 : 0;
+                    if ( n !== cond.nocase ) {
+                        cond.nocase = ( 0 === n ) ? 0 : undefined;
+                        configModified = true;
                     }
+                } else if ( undefined !== cond.nocase ) {
+                    delete cond.nocase;
+                    configModified = true;
                 }
                 var op = serviceOpsIndex[cond.operator || ""];
                 jQuery( "input#value", row ).css( "visibility", ( undefined !== op && 0 === op.args ) ? "hidden" : "visible" );
@@ -1113,7 +1171,7 @@ var ReactorSensor = (function(api, $) {
                     cond.value = jQuery("input#value", row).val() || "";
                 }
                 /* For numeric op, check that value is parseable as a number (unless var ref) */
-                if ( op && op.numeric && ! cond.value.match( /\{[^}]+\}/ ) ) {
+                if ( op && op.numeric && ! cond.value.match( varRefPattern ) ) {
                     var n = parseFloat( cond.value );
                     if ( isNaN( n ) ) {
                         jQuery( 'input#value', row ).addClass( 'tberror' );
@@ -1258,26 +1316,47 @@ var ReactorSensor = (function(api, $) {
 
             case 'interval':
                 removeConditionProperties( cond, "days,hours,mins,basetime" );
-                var v = getOptionalInteger( jQuery('div.params #days', row).val(), 0 );
-                if ( isNaN(v) || v < 0 ) {
-                    jQuery( 'div.params #days', row ).addClass( 'tberror' );
-                } else {
+                var nmin = 0;
+                var v = jQuery('div.params #days', row).val();
+                if ( v.match( varRefPattern ) ) {
                     cond.days = v;
-                }
-                v = getOptionalInteger( jQuery('div.params #hours', row).val(), 0 );
-                if ( isNaN(v) || v < 0 ) {
-                    jQuery( 'div.params #hours', row ).addClass( 'tberror' );
+                    nmin = 1440;
                 } else {
+                    v = getOptionalInteger( v, 0 );
+                    if ( isNaN(v) || v < 0 ) {
+                        jQuery( 'div.params #days', row ).addClass( 'tberror' );
+                    } else {
+                        cond.days = v;
+                        nmin = nmin + 1440 * v;
+                    }
+                }
+                jQuery('div.params #hours', row).val();
+                if ( v.match( varRefPattern ) ) {
                     cond.hours = v;
-                }
-                v = getOptionalInteger( jQuery('div.params #mins', row).val(), 0 );
-                if ( isNaN(v) || v < 0 ) {
-                    jQuery( 'div.params #mins', row ).addClass( 'tberror' );
+                    nmin = 60;
                 } else {
-                    cond.mins = v;
+                    v = getOptionalInteger( v, 0 );
+                    if ( isNaN(v) || v < 0 ) {
+                        jQuery( 'div.params #hours', row ).addClass( 'tberror' );
+                    } else {
+                        cond.hours = v;
+                        nmin = nmin + 60 * v;
+                    }
                 }
-                var t = cond.days * 1440 + cond.hours * 60 + cond.mins;
-                if ( 0 == t ) {
+                v = jQuery('div.params #mins', row).val();
+                if ( v.match( varRefPattern ) ) {
+                    cond.mins = v;
+                    nmin = 1;
+                } else {
+                    v = getOptionalInteger( v, 0 );
+                    if ( isNaN(v) || v < 0 ) {
+                        jQuery( 'div.params #mins', row ).addClass( 'tberror' );
+                    } else {
+                        cond.mins = v;
+                        nmin = nmin + v;
+                    }
+                }
+                if ( nmin <= 0 ) {
                     jQuery( 'div.params select', row ).addClass( 'tberror' );
                 }
                 var rh = jQuery( 'div.params select#relhour' ).val() || "00";
@@ -1389,7 +1468,7 @@ var ReactorSensor = (function(api, $) {
                 jQuery( 'fieldset#housemodeselects', row ).hide();
             }
         } else if ( "service" === cond.type ) {
-            var inp = jQuery( 'input#value', row ) || "=";
+            var inp = jQuery( 'input#value', row );
             if ( val == "change" ) {
                 if ( inp.length > 0 ) {
                     // Change single input field to double fields.
@@ -1592,7 +1671,7 @@ var ReactorSensor = (function(api, $) {
         for ( var ic=0; ic<(grp.groupconditions || []).length; ic++) {
             var gc = grp.groupconditions[ic];
             /* Must be service, not this condition, and not the predecessor to this condition (recursive) */
-            if ( cond.id !== gc.id && ( gc.after === undefined || gc.after !== cond.id ) ) {
+            if ( cond.id !== gc.id && "comment" !== gc.type && ( gc.after === undefined || gc.after !== cond.id ) ) {
                 var opt = jQuery('<option/>').val( gc.id );
                 var t = makeConditionDescription( gc );
                 if ( t.length > 40 ) {
@@ -1608,7 +1687,7 @@ var ReactorSensor = (function(api, $) {
         jQuery('select#pred', container).val( cond.after );
         jQuery('input#predtime', container).val( cond.aftertime || 0 );
         /* Duration */
-        container.append('<div id="duropt" class="form-inline"><label>Condition is sustained for&nbsp;<select id="durop" class="form-control form-control-sm"><option value="ge">at least</option><option value="lt">less than</option></select>&nbsp;<input type="text" id="duration" class="form-control form-control-sm narrow" autocomplete="off"> seconds</label></div>');
+        container.append('<div id="duropt" class="form-inline"><label>Condition is sustained for&nbsp;</label><select id="durop" class="form-control form-control-sm"><option value="ge">at least</option><option value="lt">less than</option></select><input type="text" id="duration" class="form-control form-control-sm narrow" autocomplete="off"><label>&nbsp;seconds</label></div>');
         /* Repeat */
         container.append('<div id="repopt" class="form-inline"><label>Condition repeats <input type="text" id="rcount" class="form-control form-control-sm narrow" autocomplete="off"> times within <input type="text" id="rspan" class="form-control form-control-sm narrow" autocomplete="off"> seconds</label></div>');
         container.append('<div id="latchopt" class="form-inline"><label class="checkbox-inline"><input type="checkbox" id="latchcond" class="form-check">&nbsp;Latch (once met, condition remains true until group resets)<label></div>');
@@ -1717,7 +1796,7 @@ var ReactorSensor = (function(api, $) {
                 }
                 container.append( makeVariableMenu( cond.device, cond.service, cond.variable ) );
                 container.append( makeServiceOpMenu( cond.operator || "=" ) );
-                container.append('<input type="text" id="value" class="form-control form-control-sm" autocomplete="off">');
+                container.append('<input type="text" id="value" class="form-control form-control-sm" autocomplete="off" list="reactorvarlist">');
                 container.append(' ');
                 container.append('<fieldset id="nocaseopt"><label class="checkbox-inline" for="nocase"><input id="nocase" type="checkbox" class="form-check">Ignore&nbsp;case</label></fieldset>');
                 container.append(' ');
@@ -1858,7 +1937,7 @@ var ReactorSensor = (function(api, $) {
                 for ( k=1; k<=12; k++ ) {
                     months.append('<option value="' + k + '">' + monthName[k] + ' (' + k + ')</option>');
                 }
-                var days = jQuery('<select class="daymenu form-control form-control-sm"><option value="">(any)</option></select>');
+                var days = jQuery('<select class="daymenu form-control form-control-sm"><option value="">(any day)</option></select>');
                 for ( k=1; k<=31; k++ ) {
                     days.append('<option value="' + k + '">' + k + '</option>');
                 }
@@ -2059,42 +2138,45 @@ var ReactorSensor = (function(api, $) {
 
     function handleTitleChange( ev ) {
         var input = jQuery( ev.currentTarget );
-        var newid = (input.val() || "").trim();
+        var newname = (input.val() || "").trim();
         var span = input.closest( 'span' );
+        var myid = api.getCpanelDeviceId();
         var grpid = span.closest( 'div.conditiongroup' ).attr( 'id' );
+        var grp = iData[myid].ixGroup[grpid];
+
         input.removeClass( 'tberror' );
-        if ( newid == grpid ) {
+
+        if ( newname == grp.name ) {
             /* No change */
-            span.empty().text( 'Group: ' + grpid ).on( 'click.reactor', handleTitleClick )
+            span.empty().text( 'Group: ' + grp.name ).on( 'click.reactor', handleTitleClick )
                 .addClass( 'titletext' ).attr( 'title', msgGroupIdChange );
             return;
         }
+
         /* Group name check */
-        if ( ! newid.match( /^[a-z][a-z0-9_]+$/i ) ) {
+        if ( newname.length < 1 ) {
             input.addClass( 'tberror' );
             input.focus();
             return;
-
         }
-        /* Don't allow duplicate group Id */
-        var myid = api.getCpanelDeviceId();
+
+        /* Don't allow duplicate name */
         for ( var v in iData[myid].ixGroup ) {
             if ( iData[myid].ixGroup.hasOwnProperty( v ) ) {
-                if ( v != grpid && v == newid ) {
+                if ( v != grpid && iData[myid].ixGroup[v].name == newname ) {
                     input.addClass( 'tberror' );
                     input.focus();
                     return;
                 }
             }
         }
+
         /* Update config */
-        iData[myid].ixGroup[newid] = iData[myid].ixGroup[grpid];
-        iData[myid].ixGroup[newid].groupid = newid;
-        delete iData[myid].ixGroup[grpid];
+        grp.name = newname;
         configModified = true;
+
         /* Remove input field and replace text */
-        span.closest( 'div.conditiongroup' ).attr( 'id', newid );
-        span.empty().text( 'Group: ' + newid ).on( 'click.reactor', handleTitleClick )
+        span.empty().text( 'Group: ' + newname ).on( 'click.reactor', handleTitleClick )
             .addClass( 'titletext' ).attr( 'title', msgGroupIdChange );
         updateSaveControls();
     }
@@ -2103,7 +2185,7 @@ var ReactorSensor = (function(api, $) {
         var span = jQuery( ev.currentTarget );
         span.off( 'click.reactor' ).removeClass( 'titletext' );
         var grpid = span.closest( 'div.conditiongroup' ).attr( 'id' );
-        span.empty().append( jQuery( '<input class="titleedit form-control form-control-sm" title="Enter new group ID">' ).val( grpid ) );
+        span.empty().append( jQuery( '<input class="titleedit form-control form-control-sm" title="Enter new group name">' ).val( grpid ) );
         jQuery( 'input', span ).on( 'change.reactor', handleTitleChange )
             .on( 'blur.reactor', handleTitleChange );
     }
@@ -2247,6 +2329,7 @@ var ReactorSensor = (function(api, $) {
         jQuery( 'span.titletext', condgroup ).text( "Group: " + newId ).on( 'click.reactor', handleTitleClick ).attr( 'title', msgGroupIdChange );
         jQuery("button#addgroup", condgroup).on( 'click.reactor', handleAddGroupClick );
         jQuery("button#saveconf", condgroup).on( 'click.reactor', handleSaveClick );
+        jQuery("button#revertconf", condgroup).on( 'click.reactor', handleRevertClick );
 
         /* Create a condition row for the first condition in the group */
         var condId = getUID("cond");
@@ -2270,7 +2353,7 @@ var ReactorSensor = (function(api, $) {
         var newcond = { id: condId };
         var myid = api.getCpanelDeviceId();
         iData[myid].ixCond[condId] = newcond;
-        iData[myid].ixGroup[newId] = { groupid: newId, groupconditions: [ newcond ] };
+        iData[myid].ixGroup[newId] = { groupid: newId, name: newId, groupconditions: [ newcond ] };
         iData[myid].cdata.conditions.push( iData[myid].ixGroup[newId] );
 
         configModified = true;
@@ -2427,8 +2510,8 @@ var ReactorSensor = (function(api, $) {
         var myid = api.getCpanelDeviceId();
         for (var ng=0; ng<(iData[myid].cdata.conditions || []).length; ++ng) {
             var grp = iData[myid].cdata.conditions[ng];
-            if ( grp.groupid === undefined )
-                grp.groupid = getUID("group");
+            if ( undefined === grp.groupid ) grp.groupid = getUID("grp");
+            if ( undefined === grp.name ) grp.name = grp.groupid;
             iData[myid].ixGroup[grp.groupid] = grp;
 
             /* Create div.conditiongroup and add conditions */
@@ -2451,7 +2534,7 @@ var ReactorSensor = (function(api, $) {
                 gel.removeClass('groupdisabled');
             }
 
-            jQuery( 'span.titletext', gel ).text( "Group: " + grp.groupid ).on( 'click.reactor', handleTitleClick ).attr( 'title', msgGroupIdChange );
+            jQuery( 'span.titletext', gel ).text( "Group: " + ( grp.name || grp.groupid ) ).on( 'click.reactor', handleTitleClick ).attr( 'title', msgGroupIdChange );
 
             for (var nc=0; nc<(grp.groupconditions || []).length; ++nc) {
                 var cond = grp.groupconditions[nc];
@@ -2502,7 +2585,11 @@ var ReactorSensor = (function(api, $) {
                 handleSaveClick( undefined );
             }
 
-            initModule();
+            if ( ! initModule() ) {
+                return;
+            }
+
+            var myid = api.getCpanelDeviceId();
 
             /* Load material design icons */
             jQuery("head").append('<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">');
@@ -2550,7 +2637,7 @@ var ReactorSensor = (function(api, $) {
             html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>Conditions</h3></div></div>';
             html += '<div class="row"><div class="col-xs-12 col-sm-12">Conditions within a group are "AND", and groups are "OR". That is, the sensor will trip when any group succeeds, and for a group to succeed, all conditions in the group must be met.</div></div>';
 
-            var rr = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "Retrigger" ) || "0";
+            var rr = api.getDeviceState( myid, serviceId, "Retrigger" ) || "0";
             if ( rr !== "0" ) {
                 html += '<div class="row"><div class="warning col-xs-12 col-sm-12">WARNING! Retrigger is on! You should avoid using time-related conditions in this ReactorSensor, as they may cause retriggers frequent retriggers!</div></div>';
             }
@@ -2562,6 +2649,19 @@ var ReactorSensor = (function(api, $) {
             html += footer();
 
             api.setCpanelContent(html);
+
+            /* Set up a data list with our variables */
+            var cd = iData[myid].cdata;
+            var dl = jQuery('<datalist id="reactorvarlist"></datalist>');
+            if ( cd.variables ) {
+                for ( var vname in cd.variables ) {
+                    if ( cd.variables.hasOwnProperty( vname ) ) {
+                        var opt = jQuery( '<option/>' ).val( '{'+vname+'}' ).text( '{'+vname+'}' );
+                        dl.append( opt );
+                    }
+                }
+            }
+            jQuery( 'div#tab-conds.reactortab' ).append( dl );
 
             redrawConditions();
 
@@ -2820,7 +2920,7 @@ var ReactorSensor = (function(api, $) {
 
         /* Add "Add" button */
         gel.append('<div class="row buttonrow">' +
-            '<div class="col-xs-12 col-sm-12"><button id="addvar" class="btn btn-sm btn-primary">Add Variable/Expression</button> Need help? Check out the <a href="https://github.com/toggledbits/Reactor/wiki/Expressions-&-Variables" target="_blank">documentation</a> or ask in the <a href="http://forum.micasaverde.com/index.php/board,93.0.html" target="_blank">Vera forums</a>.</div>' +
+            '<div class="col-xs-12 col-sm-12"><button id="addvar" class="btn btn-sm btn-primary">Add Variable/Expression</button> Need help? Check out the <a href="https://github.com/toggledbits/Reactor/wiki/Expressions-&-Variables" target="_blank">documentation</a> or ask in the <a href="https://community.getvera.com/c/plugins-amp-plugin-development/reactor" target="_blank">Vera forums</a>.</div>' +
             '</div>');
 
         /* Append the group */
@@ -2842,7 +2942,9 @@ var ReactorSensor = (function(api, $) {
                 handleSaveClick( undefined );
             }
 
-            initModule();
+            if ( ! initModule() ) {
+                return;
+            }
 
             /* Load material design icons */
             jQuery("head").append('<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">');
@@ -3001,7 +3103,7 @@ var ReactorSensor = (function(api, $) {
 
             case "delay":
                 var delay = jQuery( 'input#delay', row ).val() || "";
-                if ( delay.match( /\{[^}]+\}/ ) ) {
+                if ( delay.match( varRefPattern ) ) {
                     // Variable reference. ??? check it?
                 } else if ( delay.match( /^([0-9][0-9]?)(:[0-9][0-9]?){1,2}$/ ) ) {
                     // MM:SS or HH:MM:SS
@@ -3055,7 +3157,7 @@ var ReactorSensor = (function(api, $) {
                                     }
                                     /* Not optional, flag error. */
                                     field.addClass( 'tbwarn' );
-                                } else if ( v.match( /\{[^}]+\}/ ) ) {
+                                } else if ( v.match( varRefPattern ) ) {
                                     /* Variable reference, do nothing, can't check */
                                 } else {
                                     // check value type, range?
@@ -3142,7 +3244,7 @@ var ReactorSensor = (function(api, $) {
 
                 case "delay":
                     t = jQuery( 'input#delay', row ).val() || "0";
-                    if ( t.match( /^\{[^}]+\}$/ ) ) {
+                    if ( t.match( varRefPattern ) ) {
                         /* Variable reference is OK as is. */
                     } else {
                         if ( t.indexOf( ':' ) >= 0 ) {
@@ -3258,7 +3360,7 @@ var ReactorSensor = (function(api, $) {
                         delete action.encoded_lua;
                         action.lua = "";
                     } else {
-                        action.encoded_lua = true;
+                        action.encoded_lua = 1;
                         action.lua = btoa( lua );
                     }
                     break;
@@ -3276,20 +3378,23 @@ var ReactorSensor = (function(api, $) {
     }
 
     function handleActionsSaveClick( ev ) {
+        var myid = api.getCpanelDeviceId();
         var tcf = buildActionList( jQuery( 'div#tripactions') );
         var ucf = buildActionList( jQuery( 'div#untripactions') );
+        var cd = iData[myid].cdata;
         if ( tcf && ucf ) {
-            var myid = api.getCpanelDeviceId();
-            /* If either "scene" has no actions, just delete the config */
+            /* If either "scene" has no actions, just delete its config */
             if ( tcf.groups.length == 1 && tcf.groups[0].actions.length == 0 ) {
-                delete iData[myid].cdata.tripactions;
+                delete cd.tripactions;
             } else {
-                iData[myid].cdata.tripactions = tcf;
+                tcf.id = 'root.true';
+                cd.tripactions = tcf;
             }
             if ( ucf.groups.length == 1 && ucf.groups[0].actions.length == 0 ) {
-                delete iData[myid].cdata.untripactions;
+                delete cd.untripactions;
             } else {
-                iData[myid].cdata.untripactions = ucf;
+                ucf.id = 'root.false';
+                cd.untripactions = ucf;
             }
             /* Save has async action, so use callback to complete. */
             handleSaveClick( ev, function() {
@@ -4019,7 +4124,7 @@ var ReactorSensor = (function(api, $) {
                                 actionText += "{" + p.name + "=" + String(p.value) + "}, ";
                             } else {
                                 var v = (jQuery( '#' + p.name, row ).val() || "").trim();
-                                var vn = v.match( /\{([^}]+)\}/ );
+                                var vn = v.match( varRefPattern );
                                 if ( vn && vn.length == 2 ) {
                                     /* Variable reference, get current value. */
                                     v = api.getDeviceState( api.getCpanelDeviceId(), "urn:toggledbits-com:serviceId:ReactorValues", vn[1] ) || "";
@@ -4269,7 +4374,7 @@ var ReactorSensor = (function(api, $) {
                     case "runlua":
                         var lua = "";
                         if ( act.lua ) {
-                            lua = act.encoded_lua ? atob( act.lua ) : act.lua;
+                            lua = (act.encoded_lua || 0) != 0 ? atob( act.lua ) : act.lua;
                         }
                         jQuery( 'textarea.luacode', newRow ).val( lua ).trigger( 'reactorinit' );
                         break;
@@ -4390,7 +4495,9 @@ var ReactorSensor = (function(api, $) {
     }
 
     function preloadActivities() {
-        initModule();
+        if ( ! initModule() ) {
+            return;
+        }
 
         /* Load material design icons */
         jQuery("head").append('<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">');
@@ -4453,7 +4560,7 @@ var ReactorSensor = (function(api, $) {
                 "ms), timestamp=" + String(data.timestamp) + ", serial=" +
                 String(data.serial));
             if ( (data.serial || 0) < DEVINFO_MINSERIAL ) {
-                jQuery("div#loading").empty().append( '<h3>Update Required</h3>Your D_ReactorDeviceInfo.json file needs to be at least serial ' + String(DEVINFO_MINSERIAL) + '. Please <a href="/port_3480/data_request?id=lr_Reactor&action=infoupdate" target="_blank">click here to update the file</a>, then go back to the Status tab and then come back here.<p><em>PRIVACY NOTICE:</em> Clicking this link will send the firmware version information and plugin version to the server. This information is used to select the correct file for your configuration, and is not used for tracking, authentication, or access control.</p>' );
+                jQuery("div#loading").empty().append( '<h3>Update Required</h3>Your device information database file needs to be at least serial ' + String(DEVINFO_MINSERIAL) + ' to run with this version of Reactor. Please go to the Tools tab to update it, then come back here.' );
                 return;
             }
 
@@ -4828,7 +4935,9 @@ var ReactorSensor = (function(api, $) {
             handleSaveClick( undefined );
         }
 
-        initModule();
+        if ( ! initModule() ) {
+            return;
+        }
 
         var html = "";
 
@@ -4863,21 +4972,6 @@ var ReactorSensor = (function(api, $) {
 
         html += '</div>'; /* .reactortab */
 
-        try {
-            html += '<div id="sundata">';
-            html += "Today's sun timing is: ";
-            var sd = getParentState( "sundata" ) || "";
-            var sundata = JSON.parse( sd );
-            html += " sunrise/sunset=" + shortLuaTime( sundata.sunrise ) + "/" + shortLuaTime( sundata.sunset );
-            html += ", civil dawn/dusk=" + shortLuaTime( sundata.civdawn ) + "/" + shortLuaTime( sundata.civdusk );
-            html += ", nautical dawn/dusk=" + shortLuaTime( sundata.nautdawn ) + "/" + shortLuaTime( sundata.nautdusk );
-            html += ", astronomical dawn/dusk=" + shortLuaTime( sundata.astrodawn ) + "/" + shortLuaTime( sundata.astrodusk );
-            html += '.';
-            html += '</div>';
-        } catch (exc) {
-            html += "<div>Can't display sun data: " + exc.toString() + "</div>";
-        }
-
         html += '<div><h3>Update Device Information Database</h3>The device information database contains information to help smooth out the user interface for device actions. The "Activities" tab will notify you when an update is available. You may update by clicking the button below; this process does not require a Luup restart or browser refresh. The updates are shared by all ReactorSensors, so updating any one of them updates all of them. This process sends information about the versions of your Vera firmware, this plugin, and the current database, but no personally-identifying information. This information is used to select the correct database for your configuration; it is not used for tracking you. <span id="di-ver-info"/><p><button id="updateinfo" class="btn btn-sm btn-success">Update Device Info</button> <span id="status"/></p>';
 
         /* This feature doesn't work on openLuup -- old form of lu_device request isn't implemented */
@@ -4886,7 +4980,7 @@ var ReactorSensor = (function(api, $) {
         }
 
         html += '<div id="troubleshooting"><h3>Troubleshooting &amp; Support</h3>If you are having trouble working out your condition logic, or you think you have found a bug, here are some steps and tools you can use:';
-        html += '<ul><li>Check the documentation in the <a href="https://github.com/toggledbits/Reactor/wiki" target="_blank">Reactor Wiki</a>.</li><li>The <a href="http://forum.micasaverde.com/index.php/board,93.0.html" target="_blank">Reactor Board</a> in the Vera Community Forums is a great way to get support for questions, how-to\'s, etc.</li><li>Generate and examine a <a href="' +
+        html += '<ul><li>Check the documentation in the <a href="https://github.com/toggledbits/Reactor/wiki" target="_blank">Reactor Wiki</a>.</li><li>The <a href="http://community.getvera.com/c/plugins-amp-plugin-development/reactor" target="_blank">Reactor Board</a> in the Vera Community Forums is a great way to get support for questions, how-to\'s, etc.</li><li>Generate and examine a <a href="' +
             api.getDataRequestURL() + '?id=lr_Reactor&action=summary&device=' + api.getCpanelDeviceId() + '" target="_blank">Logic&nbsp;Summary</a> report. This text-based report shows your ReactorSensor\'s current state, and its event list, which may tell you a lot about what led up to that state.</li>' +
             '<li>If the logic summary is not helping you, please post it in its entirety, together with a description of what you are trying to accomplish and/or the problem you are having, to a new thread on the Reactor Board (linked above). <strong>Please do not post screenshots</strong> unless you are reporting a UI/appearance bug. Generally speaking, the logic summary is far more useful (and easier to make and post, by design).</li>';
         if ( ! isOpenLuup ) {
@@ -4996,7 +5090,6 @@ var ReactorSensor = (function(api, $) {
 
     myModule = {
         uuid: uuid,
-        initModule: initModule,
         onBeforeCpanelClose: onBeforeCpanelClose,
         onUIDeviceStatusChanged: onUIDeviceStatusChanged,
         doTools: doTools,
