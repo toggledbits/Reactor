@@ -15,7 +15,7 @@ var ReactorSensor = (function(api, $) {
     /* unique identifier for this plugin... */
     var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-    var pluginVersion = '2.4develop-19084';
+    var pluginVersion = '2.4develop-19090';
 
     var DEVINFO_MINSERIAL = 71.222;
 
@@ -1140,17 +1140,22 @@ var ReactorSensor = (function(api, $) {
                 break;
 
             case 'service':
-                /* Below removes nocase, but we put it back if needed */
-                removeConditionProperties( cond, "device,devicename,service,variable,operator,value" );
+                removeConditionProperties( cond, "device,devicename,service,variable,operator,value,nocase" );
                 cond.device = parseInt( jQuery("div.params select.devicemenu", row).val() );
                 cond.service = jQuery("div.params select.varmenu", row).val() || "";
                 cond.variable = cond.service.replace( /^[^\/]+\//, "" );
                 cond.service = cond.service.replace( /\/.*$/, "" );
                 cond.operator = jQuery("div.params select.opmenu", row).val() || "=";
                 if ( cond.operator.match( noCaseOptPattern ) ) {
-                    if ( ! jQuery( 'input#nocase', row ).prop( 'checked' ) ) {
-                        cond.nocase = 0;
+                    /* Case-insensitive (nocase==1) is the default */
+                    n = ( jQuery( 'input#nocase', $row ).prop( 'checked' ) || false ) ? 1 : 0;
+                    if ( n !== cond.nocase ) {
+                        cond.nocase = ( 0 === n ) ? 0 : undefined;
+                        configModified = true;
                     }
+                } else if ( undefined !== cond.nocase ) {
+                    delete cond.nocase;
+                    configModified = true;
                 }
                 var op = serviceOpsIndex[cond.operator || ""];
                 jQuery( "input#value", row ).css( "visibility", ( undefined !== op && 0 === op.args ) ? "hidden" : "visible" );
