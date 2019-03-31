@@ -2,13 +2,24 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
+## Version 2.4 (released)
+
+* Change: Embedded URLs to Vera community forums updated to new Discourse-based community.
+* Fix: fix an issue with Safari 12 user not being able to edit "sustained for" time on service conditions.
+* Enhancement: The response time for house mode changes has been dramatically improved (without increased polling).
+* Enhancement: Reactor now uses a weak table to cache compiled Lua. This allows the system to purge the compiled fragments if the memory is needed elsewhere. This can be disabled by setting SuppressWeakLuaFunc to 1 in the Reactor master device (+reload).
+* Enhancement: The restore facility can now restore a configuration to a selected ReactorSensor, rather than only to an RS with the same name; this makes it possible to copy Reactor configuration between devices. Incorporates hotfix-19044-01.
+* Fix hotfix-19044-01: Restore of configuration not being written to device correctly, so restore appears to succeed, but device is unchanged.
+* Fix hotfix-19040-01: Fix missing pre-init of context variable that causes later spurious error (reported on openLuup).
+* Change: Remove deprecated execLua context values "reactor_device" and "reactor_ext_arg"
+
 ## Version 2.3 (released)
 
-* Fix hotfix-19032-02: a problem where the delay type is not restoring to the UI properly when editing existing action (reported by Vpow).
-* Fix hotfix-19032-01: an initial "inline" delay can lose it's time reference and go into a loop, never executing the actions (only when the delay starts the activity; also reported by Vpow).
-* Fix hotfix-19029-03: Revert eventList2 back to prior order until we can properly sort out how to handle making the scene trigger list more user-friendly without disrupting existing scene triggers (which I did; reported by dJOS).
-* Fix hotfix-19029-02: if the usergeofences array contained a reference to a user not in the users array of user_data, the UI would crash attempting to load (reported by Fanan).
-* Fix hotfix-19029-01: fix to geofence condition so that first-time users don't have sensor crash before master device has properly populated the initial data (reported by connormacleod).
+* Fix (hotfix19032-02): a problem where the delay type is not restoring to the UI properly when editing existing action (reported by Vpow).
+* Fix (hotfix19032-01): an initial "inline" delay can lose it's time reference and go into a loop, never executing the actions (only when the delay starts the activity; also reported by Vpow).
+* Fix (hotfix19029-03): Revert eventList2 back to prior order until we can properly sort out how to handle making the scene trigger list more user-friendly without disrupting existing scene triggers (which I did; reported by dJOS).
+* Fix (hotfix19029-02): if the usergeofences array contained a reference to a user not in the users array of user_data, the UI would crash attempting to load (reported by Fanan).
+* Fix (hotfix19029-01): fix to geofence condition so that first-time users don't have sensor crash before master device has properly populated the initial data (reported by connormacleod).
 
 ## Version 2.2 (released)
 

@@ -1,5 +1,5 @@
 //# sourceURL=J_Reactor_ALTUI.js
-/** 
+/**
  * J_Reactor_ALTUI.js
  * Special presentation for ALTUI for Reactor
  *
@@ -16,14 +16,14 @@ var Reactor_ALTUI = ( function( window, undefined ) {
         var style = "";
         return style;
     }
-    
+
     function _draw( device ) {
             var html ="";
             var message = MultiBox.getStatus( device, "urn:toggledbits-com:serviceId:Reactor", "Message");
             html += '<div>' + message + '</div>';
             return html;
     }
-    
+
     return {
         /* true exports */
         deviceDraw: _draw,
