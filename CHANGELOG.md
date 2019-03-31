@@ -2,15 +2,15 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
-## Version 3.0dev-19087
+## Version 3.0dev-19090
 
-* Enhancement: New "Delay reset" option allows false state of condition to be delay by the specified number of seconds (this can be used to debounce device states, or as an "off" delay for motion sensing, for example) [issue #16];
-* Beta19087: Fix for #23, getstate() insert tool was not coming up when called;
-* Beta19087: Ongoing #22, occasional blank action menu in Activities when using remote access to UI; this version improves messaging and logging in an attempt to gather more data;
-* Beta19083: Fix for #20, status tab not updating completely/timely;
-* Beta19083: Fix for #19, scheduling problem causing inconsistent execution of activities in certain group configurations;* Fix: Apply timezone fix from LuaXP distribution (applies to parsing dates/times with embedded TZ spec only).
+* Enhancement: New "Delay reset" option allows false state of condition to be delayed by the specified number of seconds (this can be used to debounce device states, or as an "off" delay for motion sensing, for example) [issue #16];
+* Beta19087: getstate() insert tool was not coming up when called [issue #23];
+* Beta19087: Ongoing--occasional blank action menu in Activities when using remote access to UI; this version improves messaging and logging in an attempt to gather more data [issue #22];
+* Beta19083: Status tab not updating completely/timely [issue #20];
+* Beta19083: Scheduling problem causing inconsistent execution of activities in certain group configurations;* Fix: Apply timezone fix from LuaXP distribution (applies to parsing dates/times with embedded TZ spec only) [issue #19].
 * Fix: Apply timezone fix from LuaXP distribution (applies to parsing dates/times with embedded TZ spec only).
-* Enhancement: Activities are now collapsable, and since the number of activities is equal to the number of groups plus two, it's possible to hide unused groups as well (this is a persistent state/choice that operates plugin-wide);
+* Enhancement: Activities are now collapsable, and since the number of activities is equal to the number of groups plus two, it's possible to hide unused groups as well (this is a persistent state/choice that operates plugin-wide) [issue#24];
 * Enhancement: New "Group State" condition allows the user to condition upon the state of another group in the same or another ReactorSensor.
 * Enhancement: Reporting of errors (such as reference to a device or scene that no longer exists) in conditions and activities is improved through the use of the (notification-capable) `Trouble` state variable. Related diagnostic information is written to the Logic Summary events list. A new icon with a yellow warning triangle superimposed calls attention to ReactorSensors reporting trouble.
 * Enhancement: The new expression function `trouble( msg [, title] )` has been added to allow expressions to signal trouble for any purpose. The *msg* argument is written to the Logic Summary event list, along with the optional *title*. The default title is simply "trouble()".

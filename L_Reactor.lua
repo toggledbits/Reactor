@@ -11,12 +11,12 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.0dev-19087"
+local _PLUGIN_VERSION = "3.0dev-19090"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
-local _CONFIGVERSION = 00208    -- aka 19077
+local _CONFIGVERSION = 301
 local _CDATAVERSION = 19082     -- must coincide with JS
-local _UIVERSION = 19087        -- must coincide with JS
+local _UIVERSION = 19090        -- must coincide with JS
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -593,13 +593,7 @@ local function sensor_runOnce( tdev )
     end
 
     -- Consider per-version changes.
-    if s < 00105 then
-        -- Limited scope change. After 1.2 (config 00105), no more changes.
-        luup.attr_set('category_num', 4, tdev)
-        luup.attr_set('subcategory_num', 0, tdev)
-    end
-
-    if s < 00107 then
+    if s < 00206 then
         initVar( "ContinuousTimer", 0, tdev, RSSID ) -- 106
         initVar( "Runtime", 0, tdev, RSSID )
         initVar( "TripCount", 0, tdev, RSSID )
@@ -607,28 +601,15 @@ local function sensor_runOnce( tdev )
         initVar( "MaxChangeRate", "", tdev, RSSID )
         initVar( "AutoUntrip", 0, tdev, SENSOR_SID )
         initVar( "UseReactorScenes", 1, tdev, RSSID ) -- 107
-    end
-
-    if s < 00108 then
-        -- Add marktime for Runtime and TripCount, for date those vars where introduced.
         initVar( "RuntimeSince", 1533528000, tdev, RSSID ) -- 2018-08-16.00:00:00-0400
-    end
-
-    if s < 00109 then
-        luup.variable_set( RSSID, "sundata", nil, tdev ) -- moved to master
-    end
-
-    if s < 00201 then
+        deleteVar( RSSID, "sundata", tdev ) -- moved to master
         initVar( "ValueChangeHoldTime", 2, tdev, RSSID )
-    end
-
-    if s < 00206 then
         local currState = getVarNumeric( "Tripped", 0, tdev, SENSOR_SID )
         initVar( "Target", currState, tdev, SWITCH_SID )
         initVar( "Status", currState, tdev, SWITCH_SID )
     end
 
-    if s < 00208 then
+    if s < 301 then
         initVar( "Trouble", "0", tdev, RSSID )
         initVar( "FailOnTrouble", "0", tdev, RSSID )
     end
@@ -648,17 +629,17 @@ local function plugin_runOnce( pdev )
         return
     elseif s == 0 then
         L("First run, setting up new plugin instance...")
-        initVar( "NumChildren", 0, pdev, MYSID )
-        initVar( "NumRunning", 0, pdev, MYSID )
         initVar( "Message", "", pdev, MYSID )
-        initVar( "HouseMode", luup.attr_get( "Mode", 0 ) or "1", pdev, MYSID )
-        initVar( "LastDST", "0", pdev, MYSID )
-        initVar( "IsHome", "", pdev, MYSID )
         initVar( "DebugMode", 0, pdev, MYSID )
         initVar( "MaxEvents", "", pdev, MYSID )
         initVar( "StateCacheExpiry", 600, pdev, MYSID )
         initVar( "UseACE", "", pdev, MYSID )
         initVar( "ACEURL", "", pdev, MYSID )
+        initVar( "NumChildren", 0, pdev, MYSID )
+        initVar( "NumRunning", 0, pdev, MYSID )
+        initVar( "HouseMode", luup.attr_get( "Mode", 0 ) or "1", pdev, MYSID )
+        initVar( "LastDST", "0", pdev, MYSID )
+        initVar( "IsHome", "", pdev, MYSID )
 
         luup.attr_set('category_num', 1, pdev)
 
@@ -667,39 +648,14 @@ local function plugin_runOnce( pdev )
     end
 
     -- Consider per-version changes.
-    if s < 00102 then
+    if s < 00206 then
         initVar( "DebugMode", 0, pdev, MYSID )
-    end
-
-    if s < 00105 then
-        luup.attr_set('category_num', 1, pdev)
-        luup.attr_set('subcategory_num', "", pdev)
-    end
-
-    if s < 00109 then
         deleteVar( RSSID, "runscene", pdev ) -- correct SID/device mismatch
-    end
-
-    if s < 00200 then
         initVar( "StateCacheExpiry", 600, pdev, MYSID )
-    end
-
-    if s < 00202 then
         initVar( "MaxEvents", "", pdev, MYSID )
-    end
-
-    if s < 00204 then
         initVar( "UseACE", "", pdev, MYSID )
         initVar( "ACEURL", "", pdev, MYSID )
-    end
-
-    if s < 00205 then
-        initVar( "IsHome", "", pdev, MYSID )
-    end
-
-    if s < 00204 then
-        initVar( "UseACE", "", pdev, MYSID )
-        initVar( "ACEURL", "", pdev, MYSID )
+        initVar( "IsHome", "", pdev, MYSID ) -- 00205
     end
 
     -- Update version last.
@@ -1374,8 +1330,8 @@ local function execSceneGroups( tdev, taskid, scd )
         end
 
         -- Finished this group. Save position.
-        sceneState[taskid].lastgroup = nextGroup
-        sceneState[taskid].lastgrouptime = os.time()
+        sst.lastgroup = nextGroup
+        sst.lastgrouptime = os.time()
         luup.variable_set( MYSID, "runscene", json.encode(sceneState), pluginDevice )
         nextGroup = nextGroup + 1 -- ...and we're moving on...
     end
@@ -3953,7 +3909,7 @@ function tick(p)
         D("tick() finished, next eligible task at %1", os.date("%x %X", nextTick))
         now = os.time() -- Get the actual time now; above tasks can take a while.
         local delay = nextTick - now
-        if delay < 1 then delay = 1 end
+        if delay < 0 then delay = 0 end
         tickTasks._plugin.when = now + delay
         D("tick() scheduling next tick(%3) for %1 (%2)", delay, tickTasks._plugin.when, p)
         luup.call_delay( "reactorTick", delay, p )
