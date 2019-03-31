@@ -1148,7 +1148,7 @@ var ReactorSensor = (function(api, $) {
                 cond.operator = jQuery("div.params select.opmenu", row).val() || "=";
                 if ( cond.operator.match( noCaseOptPattern ) ) {
                     /* Case-insensitive (nocase==1) is the default */
-                    n = ( jQuery( 'input#nocase', $row ).prop( 'checked' ) || false ) ? 1 : 0;
+                    n = ( jQuery( 'input#nocase', row ).prop( 'checked' ) || false ) ? 1 : 0;
                     if ( n !== cond.nocase ) {
                         cond.nocase = ( 0 === n ) ? 0 : undefined;
                         configModified = true;
