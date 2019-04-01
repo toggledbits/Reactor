@@ -147,6 +147,31 @@ var ReactorSensor = (function(api, $) {
         return id.replace( /([^A-Z0-9_])/ig, "\\$1" );
     }
 
+    /* Select current value in menu; if not present, select first item. */
+    function menuSelectDefaultFirst( $mm, val ) {
+        var $opt = jQuery( 'option[value=' + quot( val || "" ) + ']', $mm );
+        if ( 0 === $opt.length ) {
+            $opt = jQuery( 'option:first', $mm );
+        }
+        val = $opt.val(); /* actual value now */
+        $mm.val( val );
+        return val;
+    }
+
+    /** Select current value in menu; insert if not present. The menu txt is
+     * optional.
+     */
+    function menuSelectDefaultInsert( $mm, val, txt ) {
+        var $opt = jQuery( 'option[value=' + quot( val ) + ']', $mm );
+        if ( 0 === $opt.length ) {
+            $opt = jQuery( '<option/>' ).val( val ).text( txt || ( val + '? (missing)' ) );
+            $mm.append( $opt );
+        }
+        val = $opt.val(); /* actual value now */
+        $mm.val( val );
+        return val;
+    }
+
     /* Return value or default if undefined */
     function coalesce( v, d ) {
         return ( undefined === v ) ? d : v;
@@ -1453,7 +1478,7 @@ var ReactorSensor = (function(api, $) {
         function updateControls() {
             /* Disable all "Add Condition" buttons if any condition type menu
                has no selection. */
-            var nset = jQuery('select.condtype option:selected[value=""]').length > 0;
+            var nset = jQuery('select#condtype option:selected[value=""]').length > 0;
 
             /* ... or if any group has no conditions */
             nset = nset || jQuery( '.cond-list:empty' ).length > 0;
@@ -1471,14 +1496,14 @@ var ReactorSensor = (function(api, $) {
         function updateConditionRow( $row, target ) {
             var condId = $row.attr("id");
             var cond = getConditionIndex()[ condId ];
-            var typ = jQuery("select.condtype", $row).val() || "";
+            var typ = jQuery("select#condtype", $row).val() || "";
             cond.type = typ;
             jQuery('.tberror', $row).removeClass('tberror');
             $row.removeClass('tberror');
             var val, res, n;
             switch (typ) {
                 case "":
-                    jQuery( 'select.condtype', $row ).addClass( 'tberror' );
+                    jQuery( 'select#condtype', $row ).addClass( 'tberror' );
                     break;
 
                 case 'group':
@@ -1984,8 +2009,8 @@ var ReactorSensor = (function(api, $) {
                 if ( val == "change" ) {
                     jQuery( 'fieldset#housemodechecks', $row ).hide();
                     jQuery( 'fieldset#housemodeselects', $row ).show();
-                    jQuery( 'select#frommode', $row ).val( vv.length > 0 && "" !== vv[0] ? vv[0] : "" );
-                    jQuery( 'select#tomode', $row   ).val( vv.length > 1 && "" !== vv[1] ? vv[1] : "" );
+                    menuSelectDefaultInsert( jQuery( 'select#frommode', $row ), vv.length > 0 ? vv[0] : "" );
+                    menuSelectDefaultInsert( jQuery( 'select#tomode', $row   ), vv.length > 1 ? vv[1] : "" );
                 } else {
                     jQuery( 'fieldset#housemodechecks', $row ).show();
                     jQuery( 'fieldset#housemodeselects', $row ).hide();
@@ -2220,11 +2245,11 @@ var ReactorSensor = (function(api, $) {
             var row = el.closest( 'div.cond-container' );
             var val = el.val() || "is";
             if ( "at" === val || "notat" === val ) {
-                jQuery( 'select#userid,select#location', row ).show();
-                jQuery( 'label,input#opts', row ).hide();
+                jQuery( 'fieldset#geolong', row ).show();
+                jQuery( 'fieldset#geoquick', row ).hide();
             } else {
-                jQuery( 'select#userid,select#location', row ).hide();
-                jQuery( 'label,input#opts', row ).show();
+                jQuery( 'fieldset#geolong', row ).hide();
+                jQuery( 'fieldset#geoquick', row ).show();
             }
             handleConditionRowChange( ev );
         }
@@ -2236,7 +2261,7 @@ var ReactorSensor = (function(api, $) {
          * empty).
          */
         function setConditionForType( cond, row ) {
-            var op, k, v, mm, dobj;
+            var op, k, v, mm, fs, el, dobj;
             if ( undefined === row ) {
                 row = jQuery( 'div.cond-container#' + idSelector( cond.id ) );
             }
@@ -2246,7 +2271,7 @@ var ReactorSensor = (function(api, $) {
                     break;
 
                 case 'comment':
-                    container.append('<input type="text" class="form-control form-control-sm" autocomplete="off" style="width: 100%">');
+                    container.append('<input id="commenttext" type="text" class="form-control form-control-sm" autocomplete="off">');
                     jQuery('input', container).on( 'change.reactor', handleConditionRowChange ).val( cond.comment || "" );
                     break;
 
@@ -2296,8 +2321,8 @@ var ReactorSensor = (function(api, $) {
                     mm.append( jQuery( '<option/>' ).val( "istrue" ).text( "is TRUE" ) );
                     mm.append( jQuery( '<option/>' ).val( "isfalse" ).text( "is FALSE" ) );
                     mm.append( jQuery( '<option/>' ).val( "change" ).text( "changes" ) );
-                    mm.val( cond.operator || "istrue" );
                     container.append( mm );
+                    menuSelectDefaultFirst( mm, cond.operator );
                     container.append('<div id="currval"/>');
 
                     setUpConditionOpFields( container, cond );
@@ -2333,7 +2358,6 @@ var ReactorSensor = (function(api, $) {
                     mm = jQuery('<select class="opmenu form-control form-control-sm"></select>');
                     mm.append( '<option value="is">is any of</option>' );
                     mm.append( '<option value="change">changes from</option>' );
-                    mm.val( cond.operator || "is" );
                     mm.on( 'change.reactor', handleConditionOperatorChange );
                     container.append( mm );
                     container.append( " " );
@@ -2367,19 +2391,22 @@ var ReactorSensor = (function(api, $) {
                 case 'weekday':
                     container.append(
                         '<select class="wdcond form-control form-control-sm"><option value="">Every</option><option value="1">First</option><option value="2">2nd</option><option value="3">3rd</option><option value="4">4th</option><option value="5">5th</option><option value="last">Last</option></select> ' +
+                        '<fieldset id="wdopts">' +
                         '<label class="checkbox-inline"><input type="checkbox" id="opts" value="1">Sun</label>' +
                         '<label class="checkbox-inline"><input type="checkbox" id="opts" value="2">Mon</label>' +
                         '<label class="checkbox-inline"><input type="checkbox" id="opts" value="3">Tue</label>' +
                         '<label class="checkbox-inline"><input type="checkbox" id="opts" value="4">Wed</label>' +
                         '<label class="checkbox-inline"><input type="checkbox" id="opts" value="5">Thu</label>' +
                         '<label class="checkbox-inline"><input type="checkbox" id="opts" value="6">Fri</label>' +
-                        '<label class="checkbox-inline"><input type="checkbox" id="opts" value="7">Sat</label>'
+                        '<label class="checkbox-inline"><input type="checkbox" id="opts" value="7">Sat</label>' +
+                        '</fieldset>'
                     );
-                    jQuery("input", container).on( 'change.reactor', handleConditionRowChange );
-                    jQuery("select.wdcond", container).on( 'change.reactor', handleConditionRowChange ).val( cond.operator || "" );
+                    menuSelectDefaultFirst( jQuery( 'select.wdcond', container ), cond.operator );
                     (cond.value || "").split(',').forEach( function( val ) {
                         jQuery('input#opts[value="' + val + '"]', container).prop('checked', true);
                     });
+                    jQuery("input", container).on( 'change.reactor', handleConditionRowChange );
+                    jQuery("select.wdcond", container).on( 'change.reactor', handleConditionRowChange );
                     break;
 
                 case 'sun':
@@ -2405,8 +2432,8 @@ var ReactorSensor = (function(api, $) {
                     jQuery('select#sunend', container).replaceWith( mm.clone().attr( 'id', 'sunend' ) );
                     jQuery('select#sunstart', container).replaceWith( mm.attr( 'id', 'sunstart' ) );
                     /* Restore. Condition first... */
-                    op = cond.operator || "after";
-                    jQuery("select.opmenu", container).on( 'change.reactor', handleConditionRowChange ).val( op );
+                    op = menuSelectDefaultFirst( mm, cond.operator );
+                    jQuery("select.opmenu", container).on( 'change.reactor', handleConditionRowChange );
                     if ( "bet" === op || "nob" === op ) {
                         jQuery("fieldset#end", container).show();
                     } else {
@@ -2471,8 +2498,7 @@ var ReactorSensor = (function(api, $) {
                         jQuery(obj).val( jQuery("option:first", obj ).val() );
                     });
                     /* Restore values. */
-                    op = cond.operator || "bet";
-                    jQuery("select.opmenu", container).val( op );
+                    op = menuSelectDefaultFirst( jQuery( "select.opmenu", container ), cond.operator );
                     if ( "bet" === op || "nob" === "op" ) {
                         jQuery("fieldset#end", container).show();
                     } else {
@@ -2499,21 +2525,24 @@ var ReactorSensor = (function(api, $) {
                     break;
 
                 case 'interval':
-                    var el = jQuery( '<label for="days">every </label>' );
+                    fs = jQuery( '<fieldset />' );
+                    el = jQuery( '<label for="days">every </label>' );
                     el.append( '<input id="days" title="Enter an integer >= 0" value="0" class="tiny text-center form-control form-control-sm">' );
                     el.append( ' days ' );
-                    container.append( el );
-                    container.append( " " );
+                    fs.append( el );
+                    fs.append( " " );
                     el = jQuery( '<label for="hours"> </label>' );
                     el.append( '<input id="hours" title="Enter an integer >= 0" class="tiny text-center form-control form-control-sm">' );
                     el.append( ' hours ' );
-                    container.append( el );
-                    container.append( " " );
+                    fs.append( el );
+                    fs.append( " " );
                     el = jQuery( '<label for="mins"> </label> ');
                     el.append( '<input id="mins" title="Enter an integer >= 0" value="0" class="tiny text-center form-control form-control-sm">' );
                     el.append( ' minutes ');
-                    container.append( el );
+                    fs.append( el );
+                    container.append( fs );
                     container.append( " " );
+                    fs = jQuery( '<fieldset />' );
                     el = jQuery( '<label/>' ).text( " relative to ");
                     mm = jQuery('<select id="relhour" class="form-control form-control-sm"/>');
                     for ( k=0; k<24; k++ ) {
@@ -2528,17 +2557,16 @@ var ReactorSensor = (function(api, $) {
                         mm.append( jQuery('<option/>').val( v ).text( v ) );
                     }
                     el.append(mm);
-                    container.append(el);
-                    container.append( " " );
+                    fs.append(el);
+                    container.append( fs );
                     jQuery( "#days", container ).val( cond.days || 0 );
                     jQuery( "#hours", container ).val( cond.hours===undefined ? 1 : cond.hours );
                     jQuery( "#mins", container ).val( cond.mins || 0 );
                     if ( ! isEmpty( cond.basetime ) ) {
                         mm = cond.basetime.split(/,/);
-                        jQuery( '#relhour', container ).val( mm[0] || '00' );
-                        jQuery( '#relmin', container ).val( mm[1] || '00' );
+                        menuSelectDefaultInsert( jQuery( '#relhour', container ), mm[0] || '00' );
+                        menuSelectDefaultInsert( jQuery( '#relmin', container ), mm[1] || '00' );
                     }
-
                     jQuery("select,input", container).on( 'change.reactor', handleConditionRowChange );
                     break;
 
@@ -2547,33 +2575,37 @@ var ReactorSensor = (function(api, $) {
                         '<select class="geofencecond form-control form-control-sm"><option value="is">Any selected user is home</option><option value="is not">Any selected user is NOT home</option><option value="at">User in geofence</option><option value="notat">User not in geofence</option></select>');
                     mm = jQuery( '<select id="userid" class="form-control form-control-sm"/>' );
                     mm.append( jQuery( '<option/>' ).val("").text('--choose user--') );
+                    fs = jQuery( '<fieldset id="geoquick" />' );
                     for ( k in userIx ) {
                         if ( userIx.hasOwnProperty( k ) ) {
                             el = jQuery( '<label class="checkbox-inline"/>' ).text( ( userIx[k] || {} ).name || k );
                             el.append( jQuery( '<input type="checkbox" id="opts" value="' + k + '">' ) );
-                            container.append( el );
+                            fs.append( el );
                             mm.append( jQuery( '<option/>' ).val( k ).text( ( userIx[k] || {} ).name || k ) );
                         }
                     }
-                    container.append( mm );
-                    container.append( '<select id="location" class="form-control form-control-sm"/>' );
+                    container.append( fs );
+                    fs = jQuery( '<fieldset id="geolong" />' );
+                    fs.append( mm );
+                    fs.append( '<select id="location" class="form-control form-control-sm"/>' );
+                    container.append( fs );
                     jQuery("input#opts", container).on( 'change.reactor', handleConditionRowChange );
                     jQuery("select.geofencecond", container)
-                        .on( 'change.reactor', handleGeofenceOperatorChange )
-                        .val( cond.operator || "is" );
+                        .on( 'change.reactor', handleGeofenceOperatorChange );
+                    op = menuSelectDefaultFirst( jQuery( "select.geofencecond", container ), cond.operator );
                     jQuery("select#userid", container).on( 'change.reactor', handleGeofenceUserChange );
                     jQuery("select#location", container).on( 'change.reactor', handleConditionRowChange );
-                    if ( cond.operator == "at" || cond.operator == "notat" ) {
-                        jQuery( 'label,input#opts', container ).hide();
-                        jQuery( 'select#userid,select#location', container ).show();
+                    if ( op === "at" || op === "notat" ) {
+                        jQuery( 'fieldset#geoquick', container ).hide();
+                        jQuery( 'fieldset#geolong', container ).show();
                         mm = ( cond.value || "" ).split(',');
                         if ( mm.length > 0 ) {
-                            jQuery( 'select#userid', container ).val( mm[0] );
+                            menuSelectDefaultInsert( jQuery( 'select#userid', container ), mm[0] );
                             updateGeofenceLocations( container, mm[1] );
                         }
                     } else {
-                        jQuery( 'label,input#opts', container ).show();
-                        jQuery( 'select#userid,select#location', container ).hide();
+                        jQuery( 'fieldset#geoquick', container ).show();
+                        jQuery( 'fieldset#geolong', container ).hide();
                         (cond.value || "").split(',').forEach( function( val ) {
                             jQuery('input#opts[value="' + val + '"]', container).prop('checked', true);
                         });
@@ -2640,7 +2672,7 @@ var ReactorSensor = (function(api, $) {
 
             /* Insert new condition in UI */
             var condel = getConditionTemplate( cond.id );
-            jQuery( 'select.condtype', condel ).val( cond.type );
+            jQuery( 'select#condtype', condel ).val( cond.type );
             setConditionForType( cond, condel );
             jQuery( 'div.cond-list:first', $parentGroup ).append( condel );
 
@@ -2931,8 +2963,8 @@ var ReactorSensor = (function(api, $) {
       <i id="delcond" class="material-icons md-btn" title="Delete condition">clear</i> \
   </div> \
   <div class="cond-body form-inline"> \
-    <div id="cond-type"> \
-      <select class="condtype form-control form-control-sm"><option value="">--choose--</option></select> \
+    <div class="cond-type"> \
+      <select id="condtype" class="form-control form-control-sm"><option value="">--choose--</option></select> \
     </div> \
     <div class="params" /> \
   </div> \
@@ -2940,12 +2972,12 @@ var ReactorSensor = (function(api, $) {
 
             [ "comment", "service", "grpstate", "housemode", "sun", "weekday", "trange", "interval", "ishome", "reload" ].forEach( function( k ) {
                 if ( ! ( isOpenLuup && k == "ishome" ) ) {
-                    jQuery( "select.condtype", el ).append( jQuery( "<option/>" ).val( k ).text( condTypeName[k] ) );
+                    jQuery( "select#condtype", el ).append( jQuery( "<option/>" ).val( k ).text( condTypeName[k] ) );
                 }
             });
 
             el.attr( 'id', id );
-            jQuery('select.condtype', el).on( 'change.reactor', handleTypeChange );
+            jQuery('select#condtype', el).on( 'change.reactor', handleTypeChange );
             jQuery('i#delcond', el).on( 'click.reactor', handleConditionDelete );
             jQuery("i#condmore", el).on( 'click.reactor', handleExpandOptionsClick );
             return el;
@@ -3013,6 +3045,14 @@ var ReactorSensor = (function(api, $) {
                 items: '> *:not([id="root"])',
                 // containment: 'div.cond-list.tb-sortable',
                 connectWith: 'div.cond-list.tb-sortable',
+                /* https://stackoverflow.com/questions/15724617/jquery-dragmove-but-leave-the-original-if-ctrl-key-is-pressed
+                start: function( ev, ui ) {
+                    if ( ev.ctrlKey ) {
+                        $clone = ui.item.clone().insertBefore( ui.item );
+                        $clone.css({position:"static"});
+                    }
+                },
+                */
                 receive: handleNodeReceive, /* between cond-lists */
                 update: handleNodeUpdate    /* within one cond-list */
             });
@@ -3047,14 +3087,14 @@ var ReactorSensor = (function(api, $) {
                     var row = getConditionTemplate( cond.id );
                     container.append( row );
 
-                    var sel = jQuery('select.condtype', row);
+                    var sel = jQuery('select#condtype', row);
                     if ( jQuery('option[value="' + cond.type + '"]', sel).length === 0 ) {
                         /* Condition type not on menu, probably a deprecated form. Insert it. */
                         sel.append('<option value="' + cond.type + '">' +
                             (condTypeName[cond.type] === undefined ? cond.type + ' (deprecated)' : condTypeName[cond.type] ) +
                             '</option>');
                     }
-                    jQuery('select.condtype', row).val( cond.type );
+                    jQuery('select#condtype', row).val( cond.type );
                     setConditionForType( cond, row );
                 } else {
                     /* Group! */
@@ -3143,7 +3183,8 @@ var ReactorSensor = (function(api, $) {
             html += 'div#tab-conds.reactortab div.cond-container.tbmodified:not(.tberror) { }';
             html += 'div#tab-conds.reactortab div.cond-container.tberror { border-left: 4px solid red; }';
             html += 'div#tab-conds.reactortab div.condopts { padding-left: 32px; }';
-            html += 'div#tab-conds.reactortab div.params { display: inline-block; }';
+            html += 'div#tab-conds.reactortab div.cond-type { display: inline-block; }';
+            html += 'div#tab-conds.reactortab div.params { display: inline-block; clear: right; }';
             html += 'div#tab-conds.reactortab div.params > fieldset { display: inline-block; border: none; margin: 0 4px; padding: 0 0; }';
 
             html += "div#tab-conds.reactortab .tb-about { margin-top: 24px; }";
