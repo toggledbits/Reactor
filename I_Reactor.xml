@@ -196,7 +196,7 @@
             <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
             <name>UpdateGeofences</name>
             <job>
-                return Reactor.actionUpdateGeofences( lul_device )
+                return Reactor.actionUpdateGeofences( lul_device, lul_settings.event )
             </job>
         </action>
         <action>
