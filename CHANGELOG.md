@@ -2,6 +2,10 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
+## Version 2.5 (development)
+
+* Fix: an issue allowing multiple system watches for a single variable; benign, but not perfectly efficient, and causes repetitious (and therefore confusing) event log messages [issue #26].
+
 ## Version 2.4 (released)
 
 * Change: Embedded URLs to Vera community forums updated to new Discourse-based community.

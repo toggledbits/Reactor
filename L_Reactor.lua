@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "2.4"
+local _PLUGIN_VERSION = "2.5develop-19091"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION = 00206
@@ -351,17 +351,21 @@ function sun( lon, lat, elev, t )
         JE(Jt), 24*w0(rlat,elev,decl)/pi
 end
 
--- Add, if not already set, a watch on a device and service
+-- Add, if not already set, a watch on a device and service.
 local function addServiceWatch( dev, svc, var, target )
     -- Don't watch our own variables--we update them in sequence anyway
     if dev == target and svc == VARSID then return end
     target = tostring(target)
-    local watchkey = string.format("%d:%s/%s", dev or 0, svc or "X", var or "X")
-    if watchData[watchkey] == nil or watchData[watchkey][target] == nil then
-        D("addServiceWatch() sensor %1 adding watch for %2", target, watchkey)
+    local watchkey = string.format("%d/%s/%s", dev or 0, svc or "X", var or "X")
+    if watchData[watchkey] == nil then
+        D("addServiceWatch() adding system watch for %1", watchkey)
         luup.variable_watch( "reactorWatch", svc or "X", var or "X", dev or 0 )
         watchData[watchkey] = watchData[watchkey] or {}
+    end
+    if watchData[watchkey][target] == nil then
+        D("addServiceWatch() subscribing %1 to %2", target, watchkey)
         watchData[watchkey][target] = true
+    -- else D("addServiceWatch() %1 is already subscribed to %2", target, watchkey)
     end
 end
 
@@ -3334,7 +3338,7 @@ function watch( dev, sid, var, oldVal, newVal )
         setVar( MYSID, "HouseMode", mode, pluginDevice )
         setHMTModeSetting( dev )
     else
-        local key = string.format("%d:%s/%s", dev, sid, var)
+        local key = string.format("%d/%s/%s", dev, sid, var)
         if watchData[key] then
             for t in pairs(watchData[key]) do
                 local tdev = tonumber(t, 10)
