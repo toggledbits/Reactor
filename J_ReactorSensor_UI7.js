@@ -6,11 +6,6 @@
  * Copyright 2018,2019 Patrick H. Rigney, All Rights Reserved.
  * This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
  *
- * TODO:
- *       * Standardize classes among tabs
- *       * Test messing things up... what does Reactor do with incomplete
- *         conditions, etc. Do we need to flag error in cdata on each cond?
- *
  */
 /* globals api,jQuery,$,unescape,MultiBox,ace */
 /* jshint multistr: true */
@@ -22,7 +17,7 @@ var ReactorSensor = (function(api, $) {
     /* unique identifier for this plugin... */
     var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-    var pluginVersion = '3.0dev-19090';
+    var pluginVersion = '3.0dev-19091';
 
     var DEVINFO_MINSERIAL = 71.222;
 
@@ -47,7 +42,7 @@ var ReactorSensor = (function(api, $) {
     var lastx = 0;
     var condTypeName = {
         "comment": "Comment",
-        "service": "Service/Variable",
+        "service": "Device State",
         "housemode": "House Mode",
         "weekday": "Weekday",
         "sun": "Sunrise/Sunset",
@@ -101,6 +96,29 @@ var ReactorSensor = (function(api, $) {
     var msgOptionsHide = "Hide condition options";
 
     function TBD( ev ) { alert( String(ev) ); } /* receiver for handlers yet to be written ??? */
+
+    /* Insert the header items */
+    function header() {
+        var $head = jQuery( 'head' );
+        /* Load material design icons */
+        $head.append('<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">');
+        $head.append( '\
+<style>\
+    div.reactortab input.narrow { max-width: 6em; } \
+    div.reactortab input.tiny { max-width: 4em; text-align: center; } \
+    div.reactortab label { font-weight: normal; } \
+    div.reactortab .tb-about { margin-top: 24px; } \
+    div.reactortab .tberror { border: 1px solid red; } \
+    div.reactortab .tbwarn { border: 1px solid yellow; background-color: yellow; } \
+    div.reactortab i.md-btn:disabled { color: #ccc; cursor: not-allowed; } \
+    div.reactortab i.md-btn[disabled] { color: #ccc; cursor: not-allowed; } \
+    div.reactortab i.md-btn { font-size: 16pt; cursor: pointer; position: relative; top: 6px; color: #333; background-color: #fff; padding: 2px; border-radius: 4px; box-shadow: #ccc 2px 2px; } \
+    div.reactortab .md12 { font-size: 12pt; } \
+    div.reactortab .md14 { font-size: 14pt; } \
+    div#tbcopyright { display: block; margin: 12px 0px; } \
+    div#tbbegging { display: block; color: #ff6600; margin-top: 12px; } \
+</style>');
+    }
 
     /* Return footer */
     function footer() {
@@ -3151,8 +3169,7 @@ var ReactorSensor = (function(api, $) {
                 return;
             }
 
-            /* Load material design icons */
-            jQuery("head").append('<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">');
+            header();
 
             /* Our styles. */
             var html = "<style>";
@@ -3183,29 +3200,16 @@ var ReactorSensor = (function(api, $) {
             html += 'div#tab-conds.reactortab div.cond-container.tbmodified:not(.tberror) { }';
             html += 'div#tab-conds.reactortab div.cond-container.tberror { border-left: 4px solid red; }';
             html += 'div#tab-conds.reactortab div.condopts { padding-left: 32px; }';
-            html += 'div#tab-conds.reactortab div.cond-type { display: inline-block; }';
+            html += 'div#tab-conds.reactortab div.cond-type { display: inline-block; vertical-align: top; }';
             html += 'div#tab-conds.reactortab div.params { display: inline-block; clear: right; }';
             html += 'div#tab-conds.reactortab div.params > fieldset { display: inline-block; border: none; margin: 0 4px; padding: 0 0; }';
 
-            html += "div#tab-conds.reactortab .tb-about { margin-top: 24px; }";
-            html += 'div#tab-conds.reactortab .tberror { border: 1px solid red; }';
-            html += 'div#tab-conds.reactortab .tbwarn { border: 1px solid yellow; background-color: yellow; }';
-            html += 'div#tab-conds.reactortab label { font-weight: normal; }';
             html += 'div#tab-conds.reactortab div#currval { font-family: "Courier New", Courier, monospace; font-size: 0.9em; margin: 8px 0px; display: block; }';
             html += 'div#tab-conds.reactortab div.warning { color: red; }';
-            html += 'div#tab-conds.reactortab i.md-btn:disabled { color: #999999; cursor: not-allowed; }';
-            html += 'div#tab-conds.reactortab i.md-btn[disabled] { color: #999999; cursor: not-allowed; }';
             html += 'div#tab-conds.reactortab i.md-btn.attn { background-color: #ffff80; }';
-            html += 'div#tab-conds.reactortab i.md-btn { font-size: 16pt; cursor: pointer; position: relative; top: 6px; color: #333; background-color: #fff; padding: 2px; border-radius: 4px; box-shadow: #cccccc 2px 2px; }';
             html += 'div#tab-conds.reactortab i.md-btn.draghandle { cursor: grab; }';
-            html += 'div#tab-conds.reactortab .md12 { font-size: 12pt; }';
-            html += 'div#tab-conds.reactortab .md14 { font-size: 14pt; }';
             html += 'div#tab-conds.reactortab fieldset.condfields { display: inline-block; }';
-            html += 'div#tab-conds.reactortab input.narrow { max-width: 8em; }';
-            html += 'div#tab-conds.reactortab input.tiny { max-width: 4em; text-align: center; }';
             html += 'div#tab-conds.reactortab input.titleedit { font-size: 12px; height: 24px; }';
-            html += 'div#tbcopyright { display: block; margin: 12px 0px; }';
-            html += 'div#tbbegging { display: block; color: #ff6600; margin-top: 12px; }';
             html += "</style>";
             jQuery("head").append( html );
 
@@ -3576,23 +3580,14 @@ var ReactorSensor = (function(api, $) {
                 return;
             }
 
-            /* Load material design icons */
-            jQuery("head").append('<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">');
+            header();
 
             /* Our styles. */
             var html = "<style>";
-            html += "div#tab-vars.reactortab .tb-about { margin-top: 24px; }";
             html += "div#tab-vars.reactortab .color-green { color: #006040; }";
-            html += 'div#tab-vars.reactortab .tberror { border: 1px solid red; }';
-            html += 'div#tab-vars.reactortab .tbwarn { border: 1px solid yellow; background-color: yellow; }';
-            html += 'div#tab-vars.reactortab i.md-btn:disabled { color: #999999; cursor: not-allowed; }';
-            html += 'div#tab-vars.reactortab i.md-btn[disabled] { color: #999999; cursor: not-allowed; }';
-            html += 'div#tab-vars.reactortab i.md-btn { font-size: 16pt; cursor: pointer; position: relative; top: 6px; color: #333; background-color: #fff; padding: 2px; border-radius: 4px; box-shadow: #cccccc 2px 2px; }';
             html += 'div#tab-vars.reactortab i.md-btn.draghandle { cursor: grab; }';
-            html += 'div#tab-vars.reactortab input.tbinvert { min-width: 16px; min-height: 16px; }';
             html += 'div#tab-vars.reactortab div.tblisttitle { background-color: #444444; color: #fff; padding: 8px; min-height: 42px; }';
             html += 'div#tab-vars.reactortab div.tblisttitle span.titletext { font-size: 16px; font-weight: bold; margin-right: 4em; }';
-            html += 'div#tab-vars.reactortab input.narrow { max-width: 6em; }';
             html += 'div#tab-vars.reactortab div.vargroup { border-radius: 8px; border: 2px solid #444444; margin-bottom: 8px; }';
             html += 'div#tab-vars.reactortab div.vargroup .row { margin-right: 0px; margin-left: 0px; }';
             html += 'div#tab-vars.reactortab div.vargroup div.var:nth-child(odd) { background-color: #efefef; }';
@@ -3604,8 +3599,6 @@ var ReactorSensor = (function(api, $) {
             html += 'div#tab-vars.reactortab div#varname:after { content: " ="; }';
             html += 'div#tab-vars.reactortab .tb-placeholder { min-height: 8px; background-color: #f0f0f0; }';
             html += 'div#tab-vars.reactortab div#currval { font-family: "Courier New", Courier, monospace; font-size: 0.9em; }';
-            html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
-            html += 'div#tbbegging { display: block; color: #ff6600; margin-top: 12px; }';
             html += "</style>";
             jQuery("head").append( html );
 
@@ -5269,23 +5262,14 @@ var ReactorSensor = (function(api, $) {
             return;
         }
 
-        /* Load material design icons */
-        jQuery("head").append('<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">');
+        header();
 
         /* Our styles. */
         var html = "<style>";
-        html += "div#tab-actions datalist { display: none; }";
+        html += "div#tab-actions.reactortab datalist { display: none; }";
         html += "div#tab-actions.reactortab div#di-ver-check p { margin: 8px 8px 8px 8px; padding: 8px 8px 8px 8px; border: 2px solid yellow; }";
-        html += "div#tab-actions.reactortab .tb-about { margin-top: 24px; }";
         html += "div#tab-actions.reactortab .color-green { color: #428BCA; }";
-        html += 'div#tab-actions.reactortab .tberror { border: 1px solid red; }';
-        html += 'div#tab-actions.reactortab .tbwarn { border: 2px solid yellow; }';
         html += 'div#tab-actions.reactortab .tberrmsg { padding: 8px 8px 8px 8px; color: red; }';
-        html += 'div#tab-actions.reactortab i.md-btn:disabled { color: #cccccc; cursor: not-allowed; }';
-        html += 'div#tab-actions.reactortab i.md-btn[disabled] { color: #cccccc; cursor: not-allowed; }';
-        html += 'div#tab-actions.reactortab i.md-btn { font-size: 16pt; cursor: pointer; position: relative; top: 6px; color: #333; background-color: #fff; padding: 2px; border-radius: 4px; box-shadow: #cccccc 2px 2px; }';
-        html += 'div#tab-actions.reactortab input.tbinvert { min-width: 16px; min-height: 16px; }';
-        html += 'div#tab-actions.reactortab input.narrow { max-width: 8em; }';
         html += 'div#tab-actions.reactortab div.actionlist { border-radius: 8px; border: 2px solid #428BCA; margin-bottom: 16px; }';
         html += 'div#tab-actions.reactortab div.actionlist .row { margin-right: 0px; margin-left: 0px; }';
         html += 'div#tab-actions.reactortab div.tblisttitle { background-color: #428BCA; color: #fff; padding: 4px 8px; min-height: 45px; }';
@@ -5301,8 +5285,6 @@ var ReactorSensor = (function(api, $) {
         html += 'div#tab-actions.reactortab textarea.luacode { font-family: monospace; resize: vertical; width: 100% !important; }';
         html += 'div#tab-actions.reactortab div.editor { width: 100%; min-height: 240px; }';
         html += 'div#tab-actions.reactortab div.tbhint { font-size: 90%; font-weight: normal; }';
-        html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
-        html += 'div#tbbegging { display: block; color: #ff6600; margin-top: 12px; }';
         html += 'div#tab-actions.reactortab div.warning { color: red; }';
         html += 'div#tab-actions.reactortab option.optheading { font-weight: bold; }';
         html += 'div#tab-actions.reactortab option.nodata { font-style: italic; }';
@@ -5702,14 +5684,7 @@ var ReactorSensor = (function(api, $) {
             return;
         }
 
-        var html = "";
-
-        html = '<style>';
-        html += 'div#reactortools.reactortab input.narrow { max-width: 8em; }';
-        html += 'div#tbcopyright { display: block; margin: 12px 0 12px 0; }';
-        html += 'div#tbbegging { display: block; color: #ff6600; margin-top: 12px; }';
-        html += '</style>';
-        jQuery('head').append( html );
+        header();
 
         html = '<div id="reactortools" class="reactortab">';
         html += '<h3>Test Tools</h3>';

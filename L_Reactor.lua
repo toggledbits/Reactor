@@ -3958,7 +3958,7 @@ function watch( dev, sid, var, oldVal, newVal )
     else
         local key = string.format("%d/%s/%s", dev, sid, var)
         if watchData[key] ~= nil then
-            for t in pairs(watchData[key] or {}) do
+            for t in pairs( watchData[key] ) do
                 local tdev = tonumber(t)
                 if tdev ~= nil then
                     D("watch() dispatching to %1 (%2)", tdev, luup.devices[tdev].description)
