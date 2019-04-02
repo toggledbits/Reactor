@@ -8,6 +8,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 2.4 (released)
 
+* Change: Ajax request timeouts increased to allow more headroom when the user is on a remote connection to the Vera being configured.
 * Change: Embedded URLs to Vera community forums updated to new Discourse-based community.
 * Fix: fix an issue with Safari 12 user not being able to edit "sustained for" time on service conditions.
 * Enhancement: The response time for house mode changes has been dramatically improved (without increased polling).
