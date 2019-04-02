@@ -584,7 +584,8 @@ var ReactorSensor = (function(api, $) {
                 Value: "",
                 output_format: "json"
             },
-            dataType: "json"
+            dataType: "json",
+            timeout: 5000
         }).fail( function( jqXHR, textStatus, errorThrown ) {
             console.log( "deleteStateVariable: failed, maybe try again later" );
         }).always( function() {
@@ -1518,7 +1519,7 @@ var ReactorSensor = (function(api, $) {
             cond.type = typ;
             jQuery('.tberror', $row).removeClass('tberror');
             $row.removeClass('tberror');
-            var val, res, n;
+            var val, res;
             switch (typ) {
                 case "":
                     jQuery( 'select#condtype', $row ).addClass( 'tberror' );
@@ -1545,9 +1546,9 @@ var ReactorSensor = (function(api, $) {
                     cond.operator = jQuery("div.params select.opmenu", $row).val() || "=";
                     if ( cond.operator.match( noCaseOptPattern ) ) {
                         /* Case-insensitive (nocase==1) is the default */
-                        n = ( jQuery( 'input#nocase', $row ).prop( 'checked' ) || false ) ? 1 : 0;
-                        if ( n !== cond.nocase ) {
-                            cond.nocase = ( 0 === n ) ? 0 : undefined;
+                        val = ( jQuery( 'input#nocase', $row ).prop( 'checked' ) || false ) ? 1 : 0;
+                        if ( val !== cond.nocase ) {
+                            cond.nocase = ( 0 === val ) ? 0 : undefined;
                             configModified = true;
                         }
                     } else if ( undefined !== cond.nocase ) {
@@ -1568,8 +1569,8 @@ var ReactorSensor = (function(api, $) {
                     }
                     /* For numeric op, check that value is parseable as a number (unless var ref) */
                     if ( op && op.numeric && ! cond.value.match( varRefPattern ) ) {
-                        n = parseFloat( cond.value );
-                        if ( isNaN( n ) ) {
+                        val = parseFloat( cond.value );
+                        if ( isNaN( val ) ) {
                             jQuery( 'input#value', $row ).addClass( 'tberror' );
                         }
                     }
@@ -1840,13 +1841,13 @@ var ReactorSensor = (function(api, $) {
                         configModified = true;
                     }
                 } else {
-                    n = getInteger( $rc.val() );
-                    if ( isNaN( n ) || n < 2 ) {
+                    val = getInteger( $rc.val() );
+                    if ( isNaN( val ) || val < 2 ) {
                         $rc.addClass( 'tberror' );
-                    } else if ( n > 1 ) {
+                    } else if ( val > 1 ) {
                         $rc.removeClass( 'tberror' );
-                        if ( n != cond.options.repeatcount ) {
-                            cond.options.repeatcount = n;
+                        if ( val != cond.options.repeatcount ) {
+                            cond.options.repeatcount = val;
                             delete cond.options.duration;
                             delete cond.options.duration_op;
                             configModified = true;
@@ -3306,7 +3307,7 @@ var ReactorSensor = (function(api, $) {
                 expr: jQuery( 'textarea.expr', row ).val() || "?"
             },
             dataType: "json",
-            timeout: 2000
+            timeout: 5000
         }).done( function( data, statusText, jqXHR ) {
             var msg;
             if ( data.err ) {
@@ -3971,7 +3972,7 @@ var ReactorSensor = (function(api, $) {
                             flush: firstScene ? 0 : 1
                         },
                         dataType: "json",
-                        timeout: 2000
+                        timeout: 5000
                     }).done( function( data, statusText, jqXHR ) {
                     }).fail( function( jqXHR ) {
                     });
@@ -4463,7 +4464,7 @@ var ReactorSensor = (function(api, $) {
                 output_format: "json"
             },
             dataType: "json",
-            timeout: 10000
+            timeout: 15000
         }).done( function( data, statusText, jqXHR ) {
             actionMenu.empty();
             var hasAction = false;
@@ -5234,7 +5235,8 @@ var ReactorSensor = (function(api, $) {
                     },
                     dataType: "jsonp",
                     jsonp: "callback",
-                    crossDomain: true
+                    crossDomain: true,
+                    timeout: 10000
                 }).done( function( respData, statusText, jqXHR ) {
                     console.log("Response from server is " + JSON.stringify(respData));
                     if ( undefined !== respData.serial && respData.serial > deviceInfo.serial ) {
@@ -5370,7 +5372,8 @@ var ReactorSensor = (function(api, $) {
             url: url,
             data: {},
             cache: false,
-            dataType: 'text'
+            dataType: 'text',
+            timeout: 15000
         }).done( function( data, statusText, jqXHR ) {
             var keypat = new RegExp( "Reactor\\(debug\\): startSensor\\(" + api.getCpanelDeviceId() + "," );
             var pos = data.search( keypat );
@@ -5443,7 +5446,7 @@ var ReactorSensor = (function(api, $) {
         var jqXHR = jQuery.ajax({
             url: scpdurl,
             dataType: "xml",
-            timeout: 5000
+            timeout: 15000
         });
 
         jqXHR.done( function( serviceData, statusText ) {
@@ -5597,7 +5600,8 @@ var ReactorSensor = (function(api, $) {
                                 action: "submitdevice",
                                 data: jd
                             },
-                            dataType: 'json'
+                            dataType: 'json',
+                            timeout: 15000
                         }).promise();
                     });
 
@@ -5649,7 +5653,8 @@ var ReactorSensor = (function(api, $) {
             },
             dataType: "jsonp",
             jsonp: "callback",
-            crossDomain: true
+            crossDomain: true,
+            timeout: 10000
         }).done( function( respData, statusText, jqXHR ) {
             // console.log("Response from server is " + JSON.stringify(respData));
             if ( undefined !== respData.serial ) {
@@ -5796,7 +5801,8 @@ var ReactorSensor = (function(api, $) {
                     action: "infoupdate",
                     infov: deviceInfo.serial || 0
                 },
-                dataType: 'json'
+                dataType: 'json',
+                timeout: 30000
             }).done( function( respData, respText, jqXHR ) {
                 msg.text( "Update successful! The changes take effect immediately; no restart necessary." );
                 // don't call updateToolsVersionDisplay() again because we'd need to reload devinfo to
