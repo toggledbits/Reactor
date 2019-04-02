@@ -4443,13 +4443,13 @@ var ReactorSensor = (function(api, $) {
         return false;
     }
 
-    function changeActionDevice( row, newVal, fnext, fargs ) {
+    function changeActionDevice( row, newVal, fnext, fargs, retries ) {
         var ct = jQuery( 'div.actiondata', row );
         var actionMenu = jQuery( 'select#actionmenu', ct );
 
         // Clear the action menu and remove all arguments.
         actionMenu.empty().prop( 'disabled', true )
-            .append( jQuery( '<option/>' ).val("").text( '[please wait...loading]' ) );
+            .append( jQuery( '<option/>' ).val("").text( '(loading...)' ) );
         jQuery('label,.argument', ct).remove();
         if ( newVal == "" ) { return; }
 
@@ -4562,16 +4562,23 @@ var ReactorSensor = (function(api, $) {
             }
         }).fail( function( jqXHR, textStatus, errorThrown ) {
             /* Bummer. And deviceinfo as a fallback isn't really appropriate here (only lists exceptions) */
-            alert("Can't load service data for this device. Luup may be reloading. If you are on a remote connection, there may be an issue between you and the remote server, or the remote server and your Vera. Try again in a moment.");
             console.log("changeActionDevice: failed to load service data: " + textStatus + "; " + String(errorThrown));
             console.log(jqXHR.responseText);
-
-            actionMenu.empty().append( '<option value="">[ERROR]</option>' );
-            actionMenu.prop( 'disabled', false );
-            actionMenu.val("");
-            if ( undefined !== fnext ) {
-                fnext.apply( null, fargs );
+            retries = ( undefined === retries ? 0 : retries ) + 1
+            if ( retries > 10 ) {
+                alert("Unable to load service data for this device. If you are on a remote connection, the connection to your Vera may have been lost.");
+                actionMenu.empty().append( '<option value="">[ERROR--failed to get actions from Vera]</option>' );
+                actionMenu.prop( 'disabled', false );
+                actionMenu.val("");
+                if ( undefined !== fnext ) {
+                    fnext.apply( null, fargs );
+                }
+                return;
             }
+            /* Set up a retry */
+            setTimeout( function() { 
+                return changeActionDevice( row, newVal, fnext, fargs, retries );
+            }, 3000 )
         });
     }
 
