@@ -2,8 +2,12 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
-## Version 3.0beta-19090
+## Version 3.0beta-19093
 
+* Beta19093: Fix #28: condition config corrupted by some drag/drop operations.
+* Beta19093: Fix #27: cross-Reactor group status not updating correctly.
+* Enhancement: Loading of action data from Vera now retries automatically--improves remote user experience.
+* Fix: an issue allowing multiple system watches for a single variable; benign, but not perfectly efficient, and causes repetitious (and therefore confusing) event log messages [issue #26].
 * Enhancement: New "Delay reset" option allows false state of condition to be delayed by the specified number of seconds (this can be used to debounce device states, or as an "off" delay for motion sensing, for example) [issue #16];
 * Beta19090: Continuing fit and finish work on condition editor; still work to be done, but this release contains most;
 * Beta19087: getstate() insert tool was not coming up when called [issue #23];
@@ -25,8 +29,13 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 * Enhancement: Users may now create Activities for each condition group, not just the over trip/untrip of the sensor.
 * Enhancement: It is now possible to copy the contents of one activity to another.
 
-## Version 2.4 (development)
+## Version 2.5 (development)
 
+* Fix: an issue allowing multiple system watches for a single variable; benign, but not perfectly efficient, and causes repetitious (and therefore confusing) event log messages [issue #26].
+
+## Version 2.4 (released)
+
+* Change: Embedded URLs to Vera community forums updated to new Discourse-based community.
 * Fix: fix an issue with Safari 12 user not being able to edit "sustained for" time on service conditions.
 * Enhancement: The response time for house mode changes has been dramatically improved (without increased polling).
 * Enhancement: Reactor now uses a weak table to cache compiled Lua. This allows the system to purge the compiled fragments if the memory is needed elsewhere. This can be disabled by setting SuppressWeakLuaFunc to 1 in the Reactor master device (+reload).

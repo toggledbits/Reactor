@@ -6,11 +6,6 @@
  * Copyright 2018,2019 Patrick H. Rigney, All Rights Reserved.
  * This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
  *
- * TODO:
- *       * Standardize classes among tabs
- *       * Test messing things up... what does Reactor do with incomplete
- *         conditions, etc. Do we need to flag error in cdata on each cond?
- *
  */
 /* globals api,jQuery,$,unescape,MultiBox,ace */
 /* jshint multistr: true */
@@ -22,11 +17,11 @@ var ReactorSensor = (function(api, $) {
     /* unique identifier for this plugin... */
     var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-    var pluginVersion = '3.0beta-19090';
+    var pluginVersion = '3.0beta-19093';
 
     var DEVINFO_MINSERIAL = 71.222;
 
-    var UI_VERSION = 19090;     /* must coincide with Lua core */
+    var UI_VERSION = 19093;     /* must coincide with Lua core */
 
     var CDATA_VERSION = 19082;  /* must coincide with Lua core */
 
@@ -47,7 +42,7 @@ var ReactorSensor = (function(api, $) {
     var lastx = 0;
     var condTypeName = {
         "comment": "Comment",
-        "service": "Service/Variable",
+        "service": "Device State",
         "housemode": "House Mode",
         "weekday": "Weekday",
         "sun": "Sunrise/Sunset",
@@ -102,6 +97,29 @@ var ReactorSensor = (function(api, $) {
 
     function TBD( ev ) { alert( String(ev) ); } /* receiver for handlers yet to be written ??? */
 
+    /* Insert the header items */
+    function header() {
+        var $head = jQuery( 'head' );
+        /* Load material design icons */
+        $head.append('<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">');
+        $head.append( '\
+<style>\
+    div.reactortab input.narrow { max-width: 6em; } \
+    div.reactortab input.tiny { max-width: 4em; text-align: center; } \
+    div.reactortab label { font-weight: normal; } \
+    div.reactortab .tb-about { margin-top: 24px; } \
+    div.reactortab .tberror { border: 1px solid red; } \
+    div.reactortab .tbwarn { border: 1px solid yellow; background-color: yellow; } \
+    div.reactortab i.md-btn:disabled { color: #ccc; cursor: not-allowed; } \
+    div.reactortab i.md-btn[disabled] { color: #ccc; cursor: not-allowed; } \
+    div.reactortab i.md-btn { font-size: 16pt; cursor: pointer; position: relative; top: 6px; color: #333; background-color: #fff; padding: 2px; border-radius: 4px; box-shadow: #ccc 2px 2px; } \
+    div.reactortab .md12 { font-size: 12pt; } \
+    div.reactortab .md14 { font-size: 14pt; } \
+    div#tbcopyright { display: block; margin: 12px 0px; } \
+    div#tbbegging { display: block; color: #ff6600; margin-top: 12px; } \
+</style>');
+    }
+
     /* Return footer */
     function footer() {
         var html = '';
@@ -145,6 +163,31 @@ var ReactorSensor = (function(api, $) {
 
     function idSelector( id ) {
         return id.replace( /([^A-Z0-9_])/ig, "\\$1" );
+    }
+
+    /* Select current value in menu; if not present, select first item. */
+    function menuSelectDefaultFirst( $mm, val ) {
+        var $opt = jQuery( 'option[value=' + quot( val || "" ) + ']', $mm );
+        if ( 0 === $opt.length ) {
+            $opt = jQuery( 'option:first', $mm );
+        }
+        val = $opt.val(); /* actual value now */
+        $mm.val( val );
+        return val;
+    }
+
+    /** Select current value in menu; insert if not present. The menu txt is
+     * optional.
+     */
+    function menuSelectDefaultInsert( $mm, val, txt ) {
+        var $opt = jQuery( 'option[value=' + quot( val ) + ']', $mm );
+        if ( 0 === $opt.length ) {
+            $opt = jQuery( '<option/>' ).val( val ).text( txt || ( val + '? (missing)' ) );
+            $mm.append( $opt );
+        }
+        val = $opt.val(); /* actual value now */
+        $mm.val( val );
+        return val;
     }
 
     /* Return value or default if undefined */
@@ -399,6 +442,12 @@ var ReactorSensor = (function(api, $) {
             return false;
         }
 
+        try {
+            console.log("initModule() using jQuery " + String(jQuery.fn.jquery) + "; jQuery-UI " + String(jQuery.ui.version));
+        } catch( e ) {
+            console.log("initModule() error reading jQuery/UI versions: " + String(e));
+        }
+
         /* Load ACE. Since the jury is still out with LuaView on this, default is no
            ACE for now. As of 2019-01-06, one user has reported that ACE does not function
            on Chrome Mac (unknown version, but does function with Safari and Firefox on Mac).
@@ -541,7 +590,8 @@ var ReactorSensor = (function(api, $) {
                 Value: "",
                 output_format: "json"
             },
-            dataType: "json"
+            dataType: "json",
+            timeout: 5000
         }).fail( function( jqXHR, textStatus, errorThrown ) {
             console.log( "deleteStateVariable: failed, maybe try again later" );
         }).always( function() {
@@ -606,6 +656,8 @@ var ReactorSensor = (function(api, $) {
                     configModified = false;
                     updateSaveControls();
                     clearUnusedStateVariables( myid, cdata );
+var ctx = jQuery( ev.currentTarget ).closest('div.reactortab').attr('id');
+if ( ctx === "tab-conds" ) CondBuilder.redraw( myid );
                 },
                 'onFailure' : function() {
                     alert('There was a problem saving the configuration. Vera/Luup may have been restarting. Please try hitting the "Save" button again.');
@@ -1276,9 +1328,10 @@ var ReactorSensor = (function(api, $) {
                 var id = jQuery( row ).attr( 'id' );
                 var obj = ixCond[ id ];
                 if ( obj ) {
+                    // console.log("reindexConditions(" + grp.id + ") " + id + " is now " + ix);
                     grp.conditions[ix] = obj;
-                    obj.__index = ix;
-                    ix++;
+                    obj.__index = ix++;
+                    obj.__depth = grp.__depth + 1;
                 } else {
                     /* Not found. Remove from UI */
                     jQuery( row ).remove();
@@ -1453,7 +1506,7 @@ var ReactorSensor = (function(api, $) {
         function updateControls() {
             /* Disable all "Add Condition" buttons if any condition type menu
                has no selection. */
-            var nset = jQuery('select.condtype option:selected[value=""]').length > 0;
+            var nset = jQuery('select#condtype option:selected[value=""]').length > 0;
 
             /* ... or if any group has no conditions */
             nset = nset || jQuery( '.cond-list:empty' ).length > 0;
@@ -1471,14 +1524,14 @@ var ReactorSensor = (function(api, $) {
         function updateConditionRow( $row, target ) {
             var condId = $row.attr("id");
             var cond = getConditionIndex()[ condId ];
-            var typ = jQuery("select.condtype", $row).val() || "";
+            var typ = jQuery("select#condtype", $row).val() || "";
             cond.type = typ;
             jQuery('.tberror', $row).removeClass('tberror');
             $row.removeClass('tberror');
-            var val, res, n;
+            var val, res;
             switch (typ) {
                 case "":
-                    jQuery( 'select.condtype', $row ).addClass( 'tberror' );
+                    jQuery( 'select#condtype', $row ).addClass( 'tberror' );
                     break;
 
                 case 'group':
@@ -1502,9 +1555,9 @@ var ReactorSensor = (function(api, $) {
                     cond.operator = jQuery("div.params select.opmenu", $row).val() || "=";
                     if ( cond.operator.match( noCaseOptPattern ) ) {
                         /* Case-insensitive (nocase==1) is the default */
-                        n = ( jQuery( 'input#nocase', $row ).prop( 'checked' ) || false ) ? 1 : 0;
-                        if ( n !== cond.nocase ) {
-                            cond.nocase = ( 0 === n ) ? 0 : undefined;
+                        val = ( jQuery( 'input#nocase', $row ).prop( 'checked' ) || false ) ? 1 : 0;
+                        if ( val !== cond.nocase ) {
+                            cond.nocase = ( 0 === val ) ? 0 : undefined;
                             configModified = true;
                         }
                     } else if ( undefined !== cond.nocase ) {
@@ -1525,8 +1578,8 @@ var ReactorSensor = (function(api, $) {
                     }
                     /* For numeric op, check that value is parseable as a number (unless var ref) */
                     if ( op && op.numeric && ! cond.value.match( varRefPattern ) ) {
-                        n = parseFloat( cond.value );
-                        if ( isNaN( n ) ) {
+                        val = parseFloat( cond.value );
+                        if ( isNaN( val ) ) {
                             jQuery( 'input#value', $row ).addClass( 'tberror' );
                         }
                     }
@@ -1797,13 +1850,13 @@ var ReactorSensor = (function(api, $) {
                         configModified = true;
                     }
                 } else {
-                    n = getInteger( $rc.val() );
-                    if ( isNaN( n ) || n < 2 ) {
+                    val = getInteger( $rc.val() );
+                    if ( isNaN( val ) || val < 2 ) {
                         $rc.addClass( 'tberror' );
-                    } else if ( n > 1 ) {
+                    } else if ( val > 1 ) {
                         $rc.removeClass( 'tberror' );
-                        if ( n != cond.options.repeatcount ) {
-                            cond.options.repeatcount = n;
+                        if ( val != cond.options.repeatcount ) {
+                            cond.options.repeatcount = val;
                             delete cond.options.duration;
                             delete cond.options.duration_op;
                             configModified = true;
@@ -1984,8 +2037,8 @@ var ReactorSensor = (function(api, $) {
                 if ( val == "change" ) {
                     jQuery( 'fieldset#housemodechecks', $row ).hide();
                     jQuery( 'fieldset#housemodeselects', $row ).show();
-                    jQuery( 'select#frommode', $row ).val( vv.length > 0 && "" !== vv[0] ? vv[0] : "" );
-                    jQuery( 'select#tomode', $row   ).val( vv.length > 1 && "" !== vv[1] ? vv[1] : "" );
+                    menuSelectDefaultInsert( jQuery( 'select#frommode', $row ), vv.length > 0 ? vv[0] : "" );
+                    menuSelectDefaultInsert( jQuery( 'select#tomode', $row   ), vv.length > 1 ? vv[1] : "" );
                 } else {
                     jQuery( 'fieldset#housemodechecks', $row ).show();
                     jQuery( 'fieldset#housemodeselects', $row ).hide();
@@ -2220,11 +2273,11 @@ var ReactorSensor = (function(api, $) {
             var row = el.closest( 'div.cond-container' );
             var val = el.val() || "is";
             if ( "at" === val || "notat" === val ) {
-                jQuery( 'select#userid,select#location', row ).show();
-                jQuery( 'label,input#opts', row ).hide();
+                jQuery( 'fieldset#geolong', row ).show();
+                jQuery( 'fieldset#geoquick', row ).hide();
             } else {
-                jQuery( 'select#userid,select#location', row ).hide();
-                jQuery( 'label,input#opts', row ).show();
+                jQuery( 'fieldset#geolong', row ).hide();
+                jQuery( 'fieldset#geoquick', row ).show();
             }
             handleConditionRowChange( ev );
         }
@@ -2236,7 +2289,7 @@ var ReactorSensor = (function(api, $) {
          * empty).
          */
         function setConditionForType( cond, row ) {
-            var op, k, v, mm, dobj;
+            var op, k, v, mm, fs, el, dobj;
             if ( undefined === row ) {
                 row = jQuery( 'div.cond-container#' + idSelector( cond.id ) );
             }
@@ -2246,7 +2299,7 @@ var ReactorSensor = (function(api, $) {
                     break;
 
                 case 'comment':
-                    container.append('<input type="text" class="form-control form-control-sm" autocomplete="off" style="width: 100%">');
+                    container.append('<input id="commenttext" type="text" class="form-control form-control-sm" autocomplete="off">');
                     jQuery('input', container).on( 'change.reactor', handleConditionRowChange ).val( cond.comment || "" );
                     break;
 
@@ -2296,8 +2349,8 @@ var ReactorSensor = (function(api, $) {
                     mm.append( jQuery( '<option/>' ).val( "istrue" ).text( "is TRUE" ) );
                     mm.append( jQuery( '<option/>' ).val( "isfalse" ).text( "is FALSE" ) );
                     mm.append( jQuery( '<option/>' ).val( "change" ).text( "changes" ) );
-                    mm.val( cond.operator || "istrue" );
                     container.append( mm );
+                    menuSelectDefaultFirst( mm, cond.operator );
                     container.append('<div id="currval"/>');
 
                     setUpConditionOpFields( container, cond );
@@ -2333,7 +2386,6 @@ var ReactorSensor = (function(api, $) {
                     mm = jQuery('<select class="opmenu form-control form-control-sm"></select>');
                     mm.append( '<option value="is">is any of</option>' );
                     mm.append( '<option value="change">changes from</option>' );
-                    mm.val( cond.operator || "is" );
                     mm.on( 'change.reactor', handleConditionOperatorChange );
                     container.append( mm );
                     container.append( " " );
@@ -2367,19 +2419,22 @@ var ReactorSensor = (function(api, $) {
                 case 'weekday':
                     container.append(
                         '<select class="wdcond form-control form-control-sm"><option value="">Every</option><option value="1">First</option><option value="2">2nd</option><option value="3">3rd</option><option value="4">4th</option><option value="5">5th</option><option value="last">Last</option></select> ' +
+                        '<fieldset id="wdopts">' +
                         '<label class="checkbox-inline"><input type="checkbox" id="opts" value="1">Sun</label>' +
                         '<label class="checkbox-inline"><input type="checkbox" id="opts" value="2">Mon</label>' +
                         '<label class="checkbox-inline"><input type="checkbox" id="opts" value="3">Tue</label>' +
                         '<label class="checkbox-inline"><input type="checkbox" id="opts" value="4">Wed</label>' +
                         '<label class="checkbox-inline"><input type="checkbox" id="opts" value="5">Thu</label>' +
                         '<label class="checkbox-inline"><input type="checkbox" id="opts" value="6">Fri</label>' +
-                        '<label class="checkbox-inline"><input type="checkbox" id="opts" value="7">Sat</label>'
+                        '<label class="checkbox-inline"><input type="checkbox" id="opts" value="7">Sat</label>' +
+                        '</fieldset>'
                     );
-                    jQuery("input", container).on( 'change.reactor', handleConditionRowChange );
-                    jQuery("select.wdcond", container).on( 'change.reactor', handleConditionRowChange ).val( cond.operator || "" );
+                    menuSelectDefaultFirst( jQuery( 'select.wdcond', container ), cond.operator );
                     (cond.value || "").split(',').forEach( function( val ) {
                         jQuery('input#opts[value="' + val + '"]', container).prop('checked', true);
                     });
+                    jQuery("input", container).on( 'change.reactor', handleConditionRowChange );
+                    jQuery("select.wdcond", container).on( 'change.reactor', handleConditionRowChange );
                     break;
 
                 case 'sun':
@@ -2405,8 +2460,8 @@ var ReactorSensor = (function(api, $) {
                     jQuery('select#sunend', container).replaceWith( mm.clone().attr( 'id', 'sunend' ) );
                     jQuery('select#sunstart', container).replaceWith( mm.attr( 'id', 'sunstart' ) );
                     /* Restore. Condition first... */
-                    op = cond.operator || "after";
-                    jQuery("select.opmenu", container).on( 'change.reactor', handleConditionRowChange ).val( op );
+                    op = menuSelectDefaultFirst( mm, cond.operator );
+                    jQuery("select.opmenu", container).on( 'change.reactor', handleConditionRowChange );
                     if ( "bet" === op || "nob" === op ) {
                         jQuery("fieldset#end", container).show();
                     } else {
@@ -2471,8 +2526,7 @@ var ReactorSensor = (function(api, $) {
                         jQuery(obj).val( jQuery("option:first", obj ).val() );
                     });
                     /* Restore values. */
-                    op = cond.operator || "bet";
-                    jQuery("select.opmenu", container).val( op );
+                    op = menuSelectDefaultFirst( jQuery( "select.opmenu", container ), cond.operator );
                     if ( "bet" === op || "nob" === "op" ) {
                         jQuery("fieldset#end", container).show();
                     } else {
@@ -2499,21 +2553,24 @@ var ReactorSensor = (function(api, $) {
                     break;
 
                 case 'interval':
-                    var el = jQuery( '<label for="days">every </label>' );
+                    fs = jQuery( '<fieldset />' );
+                    el = jQuery( '<label for="days">every </label>' );
                     el.append( '<input id="days" title="Enter an integer >= 0" value="0" class="tiny text-center form-control form-control-sm">' );
                     el.append( ' days ' );
-                    container.append( el );
-                    container.append( " " );
+                    fs.append( el );
+                    fs.append( " " );
                     el = jQuery( '<label for="hours"> </label>' );
                     el.append( '<input id="hours" title="Enter an integer >= 0" class="tiny text-center form-control form-control-sm">' );
                     el.append( ' hours ' );
-                    container.append( el );
-                    container.append( " " );
+                    fs.append( el );
+                    fs.append( " " );
                     el = jQuery( '<label for="mins"> </label> ');
                     el.append( '<input id="mins" title="Enter an integer >= 0" value="0" class="tiny text-center form-control form-control-sm">' );
                     el.append( ' minutes ');
-                    container.append( el );
+                    fs.append( el );
+                    container.append( fs );
                     container.append( " " );
+                    fs = jQuery( '<fieldset />' );
                     el = jQuery( '<label/>' ).text( " relative to ");
                     mm = jQuery('<select id="relhour" class="form-control form-control-sm"/>');
                     for ( k=0; k<24; k++ ) {
@@ -2528,17 +2585,16 @@ var ReactorSensor = (function(api, $) {
                         mm.append( jQuery('<option/>').val( v ).text( v ) );
                     }
                     el.append(mm);
-                    container.append(el);
-                    container.append( " " );
+                    fs.append(el);
+                    container.append( fs );
                     jQuery( "#days", container ).val( cond.days || 0 );
                     jQuery( "#hours", container ).val( cond.hours===undefined ? 1 : cond.hours );
                     jQuery( "#mins", container ).val( cond.mins || 0 );
                     if ( ! isEmpty( cond.basetime ) ) {
                         mm = cond.basetime.split(/,/);
-                        jQuery( '#relhour', container ).val( mm[0] || '00' );
-                        jQuery( '#relmin', container ).val( mm[1] || '00' );
+                        menuSelectDefaultInsert( jQuery( '#relhour', container ), mm[0] || '00' );
+                        menuSelectDefaultInsert( jQuery( '#relmin', container ), mm[1] || '00' );
                     }
-
                     jQuery("select,input", container).on( 'change.reactor', handleConditionRowChange );
                     break;
 
@@ -2547,33 +2603,37 @@ var ReactorSensor = (function(api, $) {
                         '<select class="geofencecond form-control form-control-sm"><option value="is">Any selected user is home</option><option value="is not">Any selected user is NOT home</option><option value="at">User in geofence</option><option value="notat">User not in geofence</option></select>');
                     mm = jQuery( '<select id="userid" class="form-control form-control-sm"/>' );
                     mm.append( jQuery( '<option/>' ).val("").text('--choose user--') );
+                    fs = jQuery( '<fieldset id="geoquick" />' );
                     for ( k in userIx ) {
                         if ( userIx.hasOwnProperty( k ) ) {
                             el = jQuery( '<label class="checkbox-inline"/>' ).text( ( userIx[k] || {} ).name || k );
                             el.append( jQuery( '<input type="checkbox" id="opts" value="' + k + '">' ) );
-                            container.append( el );
+                            fs.append( el );
                             mm.append( jQuery( '<option/>' ).val( k ).text( ( userIx[k] || {} ).name || k ) );
                         }
                     }
-                    container.append( mm );
-                    container.append( '<select id="location" class="form-control form-control-sm"/>' );
+                    container.append( fs );
+                    fs = jQuery( '<fieldset id="geolong" />' );
+                    fs.append( mm );
+                    fs.append( '<select id="location" class="form-control form-control-sm"/>' );
+                    container.append( fs );
                     jQuery("input#opts", container).on( 'change.reactor', handleConditionRowChange );
                     jQuery("select.geofencecond", container)
-                        .on( 'change.reactor', handleGeofenceOperatorChange )
-                        .val( cond.operator || "is" );
+                        .on( 'change.reactor', handleGeofenceOperatorChange );
+                    op = menuSelectDefaultFirst( jQuery( "select.geofencecond", container ), cond.operator );
                     jQuery("select#userid", container).on( 'change.reactor', handleGeofenceUserChange );
                     jQuery("select#location", container).on( 'change.reactor', handleConditionRowChange );
-                    if ( cond.operator == "at" || cond.operator == "notat" ) {
-                        jQuery( 'label,input#opts', container ).hide();
-                        jQuery( 'select#userid,select#location', container ).show();
+                    if ( op === "at" || op === "notat" ) {
+                        jQuery( 'fieldset#geoquick', container ).hide();
+                        jQuery( 'fieldset#geolong', container ).show();
                         mm = ( cond.value || "" ).split(',');
                         if ( mm.length > 0 ) {
-                            jQuery( 'select#userid', container ).val( mm[0] );
+                            menuSelectDefaultInsert( jQuery( 'select#userid', container ), mm[0] );
                             updateGeofenceLocations( container, mm[1] );
                         }
                     } else {
-                        jQuery( 'label,input#opts', container ).show();
-                        jQuery( 'select#userid,select#location', container ).hide();
+                        jQuery( 'fieldset#geoquick', container ).show();
+                        jQuery( 'fieldset#geolong', container ).hide();
                         (cond.value || "").split(',').forEach( function( val ) {
                             jQuery('input#opts[value="' + val + '"]', container).prop('checked', true);
                         });
@@ -2640,7 +2700,7 @@ var ReactorSensor = (function(api, $) {
 
             /* Insert new condition in UI */
             var condel = getConditionTemplate( cond.id );
-            jQuery( 'select.condtype', condel ).val( cond.type );
+            jQuery( 'select#condtype', condel ).val( cond.type );
             setConditionForType( cond, condel );
             jQuery( 'div.cond-list:first', $parentGroup ).append( condel );
 
@@ -2666,7 +2726,7 @@ var ReactorSensor = (function(api, $) {
             input.removeClass( 'tberror' );
             if ( newname !== grp.name ) {
                 /* Group name check */
-                if ( newname.length < 2 ) {
+                if ( newname.length < 1 ) {
                     ev.preventDefault();
                     input.addClass( 'tberror' );
                     input.focus();
@@ -2799,13 +2859,14 @@ var ReactorSensor = (function(api, $) {
             var okDelete = false;
             var ixCond = getConditionIndex();
             for ( var ci in ixCond ) {
-                if ( ixCond.hasOwnProperty(ci) && ixCond[ci].after == condId ) {
+                if ( ixCond.hasOwnProperty(ci) && ixCond[ci].options.after == condId ) {
                     if ( !okDelete ) {
                         if ( ! ( okDelete = confirm('This condition is used in sequence options in another condition. Click OK to delete it and disconnect the sequence, or Cancel to leave everything unchanged.') ) ) {
                             return;
                         }
                     }
-                    delete ixCond[ci].after;
+                    delete ixCond[ci].options.after;
+                    delete ixCond[ci].options.aftertime;
                 }
             }
 
@@ -2814,7 +2875,7 @@ var ReactorSensor = (function(api, $) {
             grp.conditions.splice( ixCond[ condId ].__index, 1 );
             delete ixCond[ condId ];
 
-            /* Remove the condition row from display */
+            /* Remove the condition row from display, reindex parent. */
             row.remove();
             reindexConditions( grp );
 
@@ -2835,6 +2896,7 @@ var ReactorSensor = (function(api, $) {
             /* Now, disconnect the data object from its current parent */
             var obj = ixCond[ $el.attr( 'id' ) ];
             obj.__parent.conditions.splice( obj.__index, 1 );
+            reindexConditions( obj.__parent );
 
             /* Attach it to new parent. */
             var prid = $target.closest( 'div.cond-group-container' ).attr( 'id' );
@@ -2931,8 +2993,8 @@ var ReactorSensor = (function(api, $) {
       <i id="delcond" class="material-icons md-btn" title="Delete condition">clear</i> \
   </div> \
   <div class="cond-body form-inline"> \
-    <div id="cond-type"> \
-      <select class="condtype form-control form-control-sm"><option value="">--choose--</option></select> \
+    <div class="cond-type"> \
+      <select id="condtype" class="form-control form-control-sm"><option value="">--choose--</option></select> \
     </div> \
     <div class="params" /> \
   </div> \
@@ -2940,12 +3002,12 @@ var ReactorSensor = (function(api, $) {
 
             [ "comment", "service", "grpstate", "housemode", "sun", "weekday", "trange", "interval", "ishome", "reload" ].forEach( function( k ) {
                 if ( ! ( isOpenLuup && k == "ishome" ) ) {
-                    jQuery( "select.condtype", el ).append( jQuery( "<option/>" ).val( k ).text( condTypeName[k] ) );
+                    jQuery( "select#condtype", el ).append( jQuery( "<option/>" ).val( k ).text( condTypeName[k] ) );
                 }
             });
 
             el.attr( 'id', id );
-            jQuery('select.condtype', el).on( 'change.reactor', handleTypeChange );
+            jQuery('select#condtype', el).on( 'change.reactor', handleTypeChange );
             jQuery('i#delcond', el).on( 'click.reactor', handleConditionDelete );
             jQuery("i#condmore", el).on( 'click.reactor', handleExpandOptionsClick );
             return el;
@@ -3013,6 +3075,14 @@ var ReactorSensor = (function(api, $) {
                 items: '> *:not([id="root"])',
                 // containment: 'div.cond-list.tb-sortable',
                 connectWith: 'div.cond-list.tb-sortable',
+                /* https://stackoverflow.com/questions/15724617/jquery-dragmove-but-leave-the-original-if-ctrl-key-is-pressed
+                start: function( ev, ui ) {
+                    if ( ev.ctrlKey ) {
+                        $clone = ui.item.clone().insertBefore( ui.item );
+                        $clone.css({position:"static"});
+                    }
+                },
+                */
                 receive: handleNodeReceive, /* between cond-lists */
                 update: handleNodeUpdate    /* within one cond-list */
             });
@@ -3047,14 +3117,14 @@ var ReactorSensor = (function(api, $) {
                     var row = getConditionTemplate( cond.id );
                     container.append( row );
 
-                    var sel = jQuery('select.condtype', row);
+                    var sel = jQuery('select#condtype', row);
                     if ( jQuery('option[value="' + cond.type + '"]', sel).length === 0 ) {
                         /* Condition type not on menu, probably a deprecated form. Insert it. */
                         sel.append('<option value="' + cond.type + '">' +
                             (condTypeName[cond.type] === undefined ? cond.type + ' (deprecated)' : condTypeName[cond.type] ) +
                             '</option>');
                     }
-                    jQuery('select.condtype', row).val( cond.type );
+                    jQuery('select#condtype', row).val( cond.type );
                     setConditionForType( cond, row );
                 } else {
                     /* Group! */
@@ -3111,8 +3181,7 @@ var ReactorSensor = (function(api, $) {
                 return;
             }
 
-            /* Load material design icons */
-            jQuery("head").append('<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">');
+            header();
 
             /* Our styles. */
             var html = "<style>";
@@ -3143,28 +3212,16 @@ var ReactorSensor = (function(api, $) {
             html += 'div#tab-conds.reactortab div.cond-container.tbmodified:not(.tberror) { }';
             html += 'div#tab-conds.reactortab div.cond-container.tberror { border-left: 4px solid red; }';
             html += 'div#tab-conds.reactortab div.condopts { padding-left: 32px; }';
-            html += 'div#tab-conds.reactortab div.params { display: inline-block; }';
+            html += 'div#tab-conds.reactortab div.cond-type { display: inline-block; vertical-align: top; }';
+            html += 'div#tab-conds.reactortab div.params { display: inline-block; clear: right; }';
             html += 'div#tab-conds.reactortab div.params > fieldset { display: inline-block; border: none; margin: 0 4px; padding: 0 0; }';
 
-            html += "div#tab-conds.reactortab .tb-about { margin-top: 24px; }";
-            html += 'div#tab-conds.reactortab .tberror { border: 1px solid red; }';
-            html += 'div#tab-conds.reactortab .tbwarn { border: 1px solid yellow; background-color: yellow; }';
-            html += 'div#tab-conds.reactortab label { font-weight: normal; }';
             html += 'div#tab-conds.reactortab div#currval { font-family: "Courier New", Courier, monospace; font-size: 0.9em; margin: 8px 0px; display: block; }';
             html += 'div#tab-conds.reactortab div.warning { color: red; }';
-            html += 'div#tab-conds.reactortab i.md-btn:disabled { color: #999999; cursor: not-allowed; }';
-            html += 'div#tab-conds.reactortab i.md-btn[disabled] { color: #999999; cursor: not-allowed; }';
             html += 'div#tab-conds.reactortab i.md-btn.attn { background-color: #ffff80; }';
-            html += 'div#tab-conds.reactortab i.md-btn { font-size: 16pt; cursor: pointer; position: relative; top: 6px; color: #333; background-color: #fff; padding: 2px; border-radius: 4px; box-shadow: #cccccc 2px 2px; }';
             html += 'div#tab-conds.reactortab i.md-btn.draghandle { cursor: grab; }';
-            html += 'div#tab-conds.reactortab .md12 { font-size: 12pt; }';
-            html += 'div#tab-conds.reactortab .md14 { font-size: 14pt; }';
             html += 'div#tab-conds.reactortab fieldset.condfields { display: inline-block; }';
-            html += 'div#tab-conds.reactortab input.narrow { max-width: 8em; }';
-            html += 'div#tab-conds.reactortab input.tiny { max-width: 4em; text-align: center; }';
             html += 'div#tab-conds.reactortab input.titleedit { font-size: 12px; height: 24px; }';
-            html += 'div#tbcopyright { display: block; margin: 12px 0px; }';
-            html += 'div#tbbegging { display: block; color: #ff6600; margin-top: 12px; }';
             html += "</style>";
             jQuery("head").append( html );
 
@@ -3261,7 +3318,7 @@ var ReactorSensor = (function(api, $) {
                 expr: jQuery( 'textarea.expr', row ).val() || "?"
             },
             dataType: "json",
-            timeout: 2000
+            timeout: 5000
         }).done( function( data, statusText, jqXHR ) {
             var msg;
             if ( data.err ) {
@@ -3535,23 +3592,14 @@ var ReactorSensor = (function(api, $) {
                 return;
             }
 
-            /* Load material design icons */
-            jQuery("head").append('<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">');
+            header();
 
             /* Our styles. */
             var html = "<style>";
-            html += "div#tab-vars.reactortab .tb-about { margin-top: 24px; }";
             html += "div#tab-vars.reactortab .color-green { color: #006040; }";
-            html += 'div#tab-vars.reactortab .tberror { border: 1px solid red; }';
-            html += 'div#tab-vars.reactortab .tbwarn { border: 1px solid yellow; background-color: yellow; }';
-            html += 'div#tab-vars.reactortab i.md-btn:disabled { color: #999999; cursor: not-allowed; }';
-            html += 'div#tab-vars.reactortab i.md-btn[disabled] { color: #999999; cursor: not-allowed; }';
-            html += 'div#tab-vars.reactortab i.md-btn { font-size: 16pt; cursor: pointer; position: relative; top: 6px; color: #333; background-color: #fff; padding: 2px; border-radius: 4px; box-shadow: #cccccc 2px 2px; }';
             html += 'div#tab-vars.reactortab i.md-btn.draghandle { cursor: grab; }';
-            html += 'div#tab-vars.reactortab input.tbinvert { min-width: 16px; min-height: 16px; }';
             html += 'div#tab-vars.reactortab div.tblisttitle { background-color: #444444; color: #fff; padding: 8px; min-height: 42px; }';
             html += 'div#tab-vars.reactortab div.tblisttitle span.titletext { font-size: 16px; font-weight: bold; margin-right: 4em; }';
-            html += 'div#tab-vars.reactortab input.narrow { max-width: 6em; }';
             html += 'div#tab-vars.reactortab div.vargroup { border-radius: 8px; border: 2px solid #444444; margin-bottom: 8px; }';
             html += 'div#tab-vars.reactortab div.vargroup .row { margin-right: 0px; margin-left: 0px; }';
             html += 'div#tab-vars.reactortab div.vargroup div.var:nth-child(odd) { background-color: #efefef; }';
@@ -3563,8 +3611,6 @@ var ReactorSensor = (function(api, $) {
             html += 'div#tab-vars.reactortab div#varname:after { content: " ="; }';
             html += 'div#tab-vars.reactortab .tb-placeholder { min-height: 8px; background-color: #f0f0f0; }';
             html += 'div#tab-vars.reactortab div#currval { font-family: "Courier New", Courier, monospace; font-size: 0.9em; }';
-            html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
-            html += 'div#tbbegging { display: block; color: #ff6600; margin-top: 12px; }';
             html += "</style>";
             jQuery("head").append( html );
 
@@ -3937,7 +3983,7 @@ var ReactorSensor = (function(api, $) {
                             flush: firstScene ? 0 : 1
                         },
                         dataType: "json",
-                        timeout: 2000
+                        timeout: 5000
                     }).done( function( data, statusText, jqXHR ) {
                     }).fail( function( jqXHR ) {
                     });
@@ -4408,13 +4454,13 @@ var ReactorSensor = (function(api, $) {
         return false;
     }
 
-    function changeActionDevice( row, newVal, fnext, fargs ) {
+    function changeActionDevice( row, newVal, fnext, fargs, retries ) {
         var ct = jQuery( 'div.actiondata', row );
         var actionMenu = jQuery( 'select#actionmenu', ct );
 
         // Clear the action menu and remove all arguments.
         actionMenu.empty().prop( 'disabled', true )
-            .append( jQuery( '<option/>' ).val("").text( '[please wait...loading]' ) );
+            .append( jQuery( '<option/>' ).val("").text( '(loading...)' ) );
         jQuery('label,.argument', ct).remove();
         if ( newVal == "" ) { return; }
 
@@ -4429,7 +4475,7 @@ var ReactorSensor = (function(api, $) {
                 output_format: "json"
             },
             dataType: "json",
-            timeout: 10000
+            timeout: 15000
         }).done( function( data, statusText, jqXHR ) {
             actionMenu.empty();
             var hasAction = false;
@@ -4527,16 +4573,23 @@ var ReactorSensor = (function(api, $) {
             }
         }).fail( function( jqXHR, textStatus, errorThrown ) {
             /* Bummer. And deviceinfo as a fallback isn't really appropriate here (only lists exceptions) */
-            alert("Can't load service data for this device. Luup may be reloading. If you are on a remote connection, there may be an issue between you and the remote server, or the remote server and your Vera. Try again in a moment.");
             console.log("changeActionDevice: failed to load service data: " + textStatus + "; " + String(errorThrown));
             console.log(jqXHR.responseText);
-
-            actionMenu.empty().append( '<option value="">[ERROR]</option>' );
-            actionMenu.prop( 'disabled', false );
-            actionMenu.val("");
-            if ( undefined !== fnext ) {
-                fnext.apply( null, fargs );
+            retries = ( undefined === retries ? 0 : retries ) + 1;
+            if ( retries > 10 ) {
+                alert("Unable to load service data for this device. If you are on a remote connection, the connection to your Vera may have been lost.");
+                actionMenu.empty().append( '<option value="">[ERROR--failed to get actions from Vera]</option>' );
+                actionMenu.prop( 'disabled', false );
+                actionMenu.val("");
+                if ( undefined !== fnext ) {
+                    fnext.apply( null, fargs );
+                }
+                return;
             }
+            /* Set up a retry */
+            setTimeout( function() {
+                return changeActionDevice( row, newVal, fnext, fargs, retries );
+            }, 3000 );
         });
     }
 
@@ -5200,7 +5253,8 @@ var ReactorSensor = (function(api, $) {
                     },
                     dataType: "jsonp",
                     jsonp: "callback",
-                    crossDomain: true
+                    crossDomain: true,
+                    timeout: 10000
                 }).done( function( respData, statusText, jqXHR ) {
                     console.log("Response from server is " + JSON.stringify(respData));
                     if ( undefined !== respData.serial && respData.serial > deviceInfo.serial ) {
@@ -5228,23 +5282,14 @@ var ReactorSensor = (function(api, $) {
             return;
         }
 
-        /* Load material design icons */
-        jQuery("head").append('<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">');
+        header();
 
         /* Our styles. */
         var html = "<style>";
-        html += "div#tab-actions datalist { display: none; }";
+        html += "div#tab-actions.reactortab datalist { display: none; }";
         html += "div#tab-actions.reactortab div#di-ver-check p { margin: 8px 8px 8px 8px; padding: 8px 8px 8px 8px; border: 2px solid yellow; }";
-        html += "div#tab-actions.reactortab .tb-about { margin-top: 24px; }";
         html += "div#tab-actions.reactortab .color-green { color: #428BCA; }";
-        html += 'div#tab-actions.reactortab .tberror { border: 1px solid red; }';
-        html += 'div#tab-actions.reactortab .tbwarn { border: 2px solid yellow; }';
         html += 'div#tab-actions.reactortab .tberrmsg { padding: 8px 8px 8px 8px; color: red; }';
-        html += 'div#tab-actions.reactortab i.md-btn:disabled { color: #cccccc; cursor: not-allowed; }';
-        html += 'div#tab-actions.reactortab i.md-btn[disabled] { color: #cccccc; cursor: not-allowed; }';
-        html += 'div#tab-actions.reactortab i.md-btn { font-size: 16pt; cursor: pointer; position: relative; top: 6px; color: #333; background-color: #fff; padding: 2px; border-radius: 4px; box-shadow: #cccccc 2px 2px; }';
-        html += 'div#tab-actions.reactortab input.tbinvert { min-width: 16px; min-height: 16px; }';
-        html += 'div#tab-actions.reactortab input.narrow { max-width: 8em; }';
         html += 'div#tab-actions.reactortab div.actionlist { border-radius: 8px; border: 2px solid #428BCA; margin-bottom: 16px; }';
         html += 'div#tab-actions.reactortab div.actionlist .row { margin-right: 0px; margin-left: 0px; }';
         html += 'div#tab-actions.reactortab div.tblisttitle { background-color: #428BCA; color: #fff; padding: 4px 8px; min-height: 45px; }';
@@ -5260,8 +5305,6 @@ var ReactorSensor = (function(api, $) {
         html += 'div#tab-actions.reactortab textarea.luacode { font-family: monospace; resize: vertical; width: 100% !important; }';
         html += 'div#tab-actions.reactortab div.editor { width: 100%; min-height: 240px; }';
         html += 'div#tab-actions.reactortab div.tbhint { font-size: 90%; font-weight: normal; }';
-        html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
-        html += 'div#tbbegging { display: block; color: #ff6600; margin-top: 12px; }';
         html += 'div#tab-actions.reactortab div.warning { color: red; }';
         html += 'div#tab-actions.reactortab option.optheading { font-weight: bold; }';
         html += 'div#tab-actions.reactortab option.nodata { font-style: italic; }';
@@ -5347,7 +5390,8 @@ var ReactorSensor = (function(api, $) {
             url: url,
             data: {},
             cache: false,
-            dataType: 'text'
+            dataType: 'text',
+            timeout: 15000
         }).done( function( data, statusText, jqXHR ) {
             var keypat = new RegExp( "Reactor\\(debug\\): startSensor\\(" + api.getCpanelDeviceId() + "," );
             var pos = data.search( keypat );
@@ -5420,7 +5464,7 @@ var ReactorSensor = (function(api, $) {
         var jqXHR = jQuery.ajax({
             url: scpdurl,
             dataType: "xml",
-            timeout: 5000
+            timeout: 15000
         });
 
         jqXHR.done( function( serviceData, statusText ) {
@@ -5574,7 +5618,8 @@ var ReactorSensor = (function(api, $) {
                                 action: "submitdevice",
                                 data: jd
                             },
-                            dataType: 'json'
+                            dataType: 'json',
+                            timeout: 15000
                         }).promise();
                     });
 
@@ -5626,7 +5671,8 @@ var ReactorSensor = (function(api, $) {
             },
             dataType: "jsonp",
             jsonp: "callback",
-            crossDomain: true
+            crossDomain: true,
+            timeout: 10000
         }).done( function( respData, statusText, jqXHR ) {
             // console.log("Response from server is " + JSON.stringify(respData));
             if ( undefined !== respData.serial ) {
@@ -5661,14 +5707,7 @@ var ReactorSensor = (function(api, $) {
             return;
         }
 
-        var html = "";
-
-        html = '<style>';
-        html += 'div#reactortools.reactortab input.narrow { max-width: 8em; }';
-        html += 'div#tbcopyright { display: block; margin: 12px 0 12px 0; }';
-        html += 'div#tbbegging { display: block; color: #ff6600; margin-top: 12px; }';
-        html += '</style>';
-        jQuery('head').append( html );
+        header();
 
         html = '<div id="reactortools" class="reactortab">';
         html += '<h3>Test Tools</h3>';
@@ -5780,7 +5819,8 @@ var ReactorSensor = (function(api, $) {
                     action: "infoupdate",
                     infov: deviceInfo.serial || 0
                 },
-                dataType: 'json'
+                dataType: 'json',
+                timeout: 30000
             }).done( function( respData, respText, jqXHR ) {
                 msg.text( "Update successful! The changes take effect immediately; no restart necessary." );
                 // don't call updateToolsVersionDisplay() again because we'd need to reload devinfo to

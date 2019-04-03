@@ -11,12 +11,12 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.0beta-19090"
+local _PLUGIN_VERSION = "3.0beta-19093"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION = 301
 local _CDATAVERSION = 19082     -- must coincide with JS
-local _UIVERSION = 19090        -- must coincide with JS
+local _UIVERSION = 19093        -- must coincide with JS
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -42,12 +42,13 @@ local sceneState = {}
 local hasBattery = true
 local usesHouseMode = false
 local geofenceMode = 0
+local geofenceEvent = 0
 local maxEvents = 50
 local luaEnv -- global state for all runLua actions
 
 local sceneSerial = 0
 local runStamp = 0
-local pluginDevice = 0
+local pluginDevice = false
 local isALTUI = false
 local isOpenLuup = false
 
@@ -390,17 +391,21 @@ function sun( lon, lat, elev, t )
         JE(Jt), 24*w0(rlat,elev,decl)/pi
 end
 
--- Add, if not already set, a watch on a device and service
+-- Add, if not already set, a watch on a device and service.
 local function addServiceWatch( dev, svc, var, target )
     -- Don't watch our own variables--we update them in sequence anyway
     if dev == target and svc == VARSID then return end
     target = tostring(target)
-    local watchkey = string.format("%d:%s/%s", dev or 0, svc or "X", var or "X")
-    if watchData[watchkey] == nil or watchData[watchkey][target] == nil then
-        D("addServiceWatch() sensor %1 adding watch for %2", target, watchkey)
+    local watchkey = string.format("%d/%s/%s", dev or 0, svc or "X", var or "X")
+    if watchData[watchkey] == nil then
+        D("addServiceWatch() adding system watch for %1", watchkey)
         luup.variable_watch( "reactorWatch", svc or "X", var or "X", dev or 0 )
         watchData[watchkey] = watchData[watchkey] or {}
+    end
+    if watchData[watchkey][target] == nil then
+        D("addServiceWatch() subscribing %1 to %2", target, watchkey)
         watchData[watchkey][target] = true
+    -- else D("addServiceWatch() %1 is already subscribed to %2", target, watchkey)
     end
 end
 
@@ -2214,7 +2219,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
         end
 
         local varname = string.format( "GroupStatus_%s", cond.groupid or "?" )
-        local vv = getVarNumeric( varname, 0, tdev, GRPSID ) ~= 0 -- boolean!
+        local vv = getVarNumeric( varname, 0, cond.device, GRPSID ) ~= 0 -- boolean!
 
         -- Add service watch if we don't have one.
         addServiceWatch( cond.device, GRPSID, varname, tdev )
@@ -2523,8 +2528,8 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
         D("evaluateCondition() loadtime %1 lastload %2 reloaded %3", loadtime, lastload, reloaded)
         local hold = getVarNumeric( "ReloadConditionHoldTime", 60, tdev, RSSID )
         if not reloaded then
-            -- Not reloaded. Hold on until we've satisfied hold time.
-            local later = ( cond.laststate.valuestamp or 0 ) + hold
+            -- Not reloaded. Hold on until we've satisfied hold time from last TRUE.
+            local later = ( ( cond.stateedge or {} )[1] or 0 ) + hold
             if now >= later then
                 return false,false
             end
@@ -2798,12 +2803,10 @@ local function processCondition( cond, grp, cdata, tdev )
         -- If trying to go false, make sure hold time is honored.
         D("processCondition() hold time %1, going %1 to %2", condopt.holdtime, cs.evalstate, state)
         if cs.evalstate and not state then
-            if not cs.holduntil then
-                cs.holduntil = now + condopt.holdtime
-                state = true
-                D("processCondition() reset, delay until %1", cs.holduntil)
-                scheduleDelay( tostring(tdev), condopt.holdtime )
-            elseif now < cs.holduntil then
+            -- Hold time extends from false edge, so repeated true-false-true-false extends time
+            D("processCondition() reset edge last %1", cs.stateedge[1])
+            cs.holduntil = ( cs.stateedge[0] or now ) + condopt.holdtime
+            if cs.holduntil > now then
                 D("processCondition() continue reset delay until %1", cs.holduntil)
                 state = true
                 scheduleDelay( tostring(tdev), cs.holduntil - now )
@@ -3112,7 +3115,7 @@ local function masterTick(pdev)
     D("masterTick(%1)", pdev)
     assert(pdev == pluginDevice)
     local now = os.time()
-    local nextTick = math.floor( now / 60 + 1 ) * 60
+    local nextTick = math.floor( now / 60 ) * 60 + 60
     scheduleTick( tostring(pdev), nextTick )
 
     -- Check and update house mode (by polling, always).
@@ -3149,7 +3152,8 @@ local function masterTick(pdev)
         -- Getting geofence data can be a long-running task because of handling
         -- userdata, so run as a job.
         D("masterTick() geofence mode %1, launching geofence update job", geofenceMode)
-        local rc,rs,rj,ra = luup.call_action( MYSID, "UpdateGeofences", {}, pdev ) -- luacheck: ignore 211
+        geofenceEvent = geofenceEvent + 1
+        local rc,rs,rj,ra = luup.call_action( MYSID, "UpdateGeofences", { event=geofenceEvent }, pdev ) -- luacheck: ignore 211
     end
 
     -- See if any cached state has expired
@@ -3172,7 +3176,7 @@ end
 
 -- Start an instance
 local function startSensor( tdev, pdev )
-    D("startSensor(%1,%2)", tdev, pdev)
+    D("startSensor(%1,%2)", tdev, pdev) -- DO NOT string--used for log snippet
 
     -- Device one-time initialization
     sensor_runOnce( tdev )
@@ -3312,6 +3316,9 @@ function startPlugin( pdev )
         end
     end
 --]]
+    if pluginDevice then
+        error "This device is already started/running."
+    end
 
     L("Plugin version %2, device %1 (%3)", pdev, _PLUGIN_VERSION, luup.devices[pdev].description)
 
@@ -3336,6 +3343,7 @@ function startPlugin( pdev )
     luaEnv = nil
     runStamp = 1
     geofenceMode = 0
+    geofenceEvent = 0
     usesHouseMode = false
 
     -- Save required UI version for collision detection.
@@ -3411,7 +3419,7 @@ function startPlugin( pdev )
     plugin_runOnce( pdev )
 
     -- More inits
-    maxEvents = getVarNumeric( "MaxEvents", 50, pdev, MYSID )
+    maxEvents = getVarNumeric( "MaxEvents", debugMode and 250 or 50, pdev, MYSID )
 
     -- Queue all scenes cached for refresh
     local sd = luup.variable_get( MYSID, "scenedata", pdev ) or "{}"
@@ -3472,7 +3480,7 @@ function actionMasterClear( dev )
 end
 
 -- Update geofence data. This is long-running, so runs as a job from the master tick.
-function actionUpdateGeofences( pdev )
+function actionUpdateGeofences( pdev, event )
     local now = os.time()
     -- Geofencing. If flag on, at least one sensor is using geofencing. Fetch
     -- userdata, which can be very large. Shame that it comes back as JSON-
@@ -3482,30 +3490,22 @@ function actionUpdateGeofences( pdev )
     if forcedMode ~= 0 then
         geofenceMode = forcedMode
     end
-    L("Checking geofences (%1)...", geofenceMode >= 0 and "quick" or "long")
+    L("Starting geofence %1 check job (event %2)", geofenceMode >= 0 and "quick" or "long", event)
+    if tonumber( event ) ~= geofenceEvent then
+        D("actionUpdateGeofences() got event %1 expecting %2, skipping update", event, geofenceEvent)
+        L("...overlapping geofence update requests; this request skipped.")
+        return
+    end
+    -- Get data.
     local ishome = getVarJSON( "IsHome", {}, pdev, MYSID )
     if type(ishome) ~= "table" then
         D("actionUpdateGeofences() IsHome data type invalid (%1)", type(ishome))
         L{level=2,msg="IsHome data invalid/corrupt; resetting."}
-        ishome = {}
-    end
-    -- ??? pre-release data upgrade, remove at/after 2.5
-    if not ishome.users then
-        ishome.users = {}
-        for k,v in pairs(ishome) do
-            if tonumber(k) ~= nil then -- user IDs are always numeric
-                ishome.users[tostring(k)] = v
-            end
-        end
-        -- Separate pass, because modifying subject of iterator goes poorly.
-        for k,_ in pairs(ishome.users) do
-            ishome[k] = nil
-        end
-        ishome.version = 2
+        ishome = { version=2, users={} }
     end
     if ishome.version ~= 2 then
         L({level=2,msg="resetting IsHome data, old version %1"}, ishome.version)
-        ishome = { users={} }
+        ishome = { version=2, users={} }
     end
     local rc,rs,rj,ra = luup.call_action( "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "GetUserData", { DataFormat="json" }, 0 ) -- luacheck: ignore 211
     -- D("actionUpdateGeofences() GetUserData action returned rc=%1, rs=%2, rj=%3, ra=%4", rc, rs, rj, ra)
@@ -3531,11 +3531,10 @@ function actionUpdateGeofences( pdev )
         end
         ra = nil -- luacheck: ignore 311
         if ud then
-            -- For now, we keep it simple: just a list of users (ids) that are home.
             -- ud.users is array of usergeofence, which is { id, Name, Level, IsGuest }
             -- ud.usergeofences is array of { iduser, geotags } and geotags is
             --     { PK_User (same as id), id (of geotag), accuracy, ishome, notify, radius, address, color (hex6), latitude, longitude, name (of geotag), status, and poss others? }
-            -- ud.user_settings contains the "ishome" we care about, though.
+            -- ud.users_settings contains the "ishome" we care about, though.
             local changed = false
             if geofenceMode < 0 then
                 -- Long form geofence check.
@@ -3590,7 +3589,7 @@ function actionUpdateGeofences( pdev )
                 end
             else
                 -- If not in long mode, clear minimal data, in case mode switches
-                -- back. This can happen if groups temporarily disabled, etc. Since
+                -- back. This can happen if groups temporarily disabled, etc.
                 -- This preserves timestamps and data.
                 for _,v in pairs( ishome.users or {} ) do
                     v.inlist = nil -- not relevant in short mode, safe to clear.
@@ -3637,8 +3636,7 @@ function actionUpdateGeofences( pdev )
                 setVar( MYSID, "IsHome", json.encode( ishome ), pdev )
             end
         else
-            L({level=2,msg="Failed to decode userdata for geofence check!"})
-            return 2,0
+            error "Failed to decode userdata for geofence check!"
         end
     end
     return 4,0
@@ -3956,9 +3954,9 @@ function watch( dev, sid, var, oldVal, newVal )
         setVar( MYSID, "HouseMode", mode, pluginDevice )
         setHMTModeSetting( dev )
     else
-        local key = string.format("%d:%s/%s", dev, sid, var)
-        if watchData[key] then
-            for t in pairs(watchData[key]) do
+        local key = string.format("%d/%s/%s", dev, sid, var)
+        if watchData[key] ~= nil then
+            for t in pairs( watchData[key] ) do
                 local tdev = tonumber(t)
                 if tdev ~= nil then
                     D("watch() dispatching to %1 (%2)", tdev, luup.devices[tdev].description)
@@ -4292,7 +4290,8 @@ function request( lul_request, lul_parameters, lul_outputformat )
             debugMode = not debugMode
         end
         D("debug set %1 by request", debugMode)
-        return "Debug is now " .. ( debugMode and "on" or "off" ), "text/plain"
+        if debugMode then maxEvents = math.max( 250, maxEvents ) end
+        return "Debug is now " .. ( debugMode and "on" or "off" ) .. ", maxEvents=" .. maxEvents, "text/plain"
 
     elseif action == "preloadscene" then
         -- Preload scene used by a ReactorSensor. Call by UI during edit.
