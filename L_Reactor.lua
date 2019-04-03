@@ -2219,7 +2219,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
         end
 
         local varname = string.format( "GroupStatus_%s", cond.groupid or "?" )
-        local vv = getVarNumeric( varname, 0, tdev, GRPSID ) ~= 0 -- boolean!
+        local vv = getVarNumeric( varname, 0, cond.device, GRPSID ) ~= 0 -- boolean!
 
         -- Add service watch if we don't have one.
         addServiceWatch( cond.device, GRPSID, varname, tdev )
@@ -2528,8 +2528,8 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
         D("evaluateCondition() loadtime %1 lastload %2 reloaded %3", loadtime, lastload, reloaded)
         local hold = getVarNumeric( "ReloadConditionHoldTime", 60, tdev, RSSID )
         if not reloaded then
-            -- Not reloaded. Hold on until we've satisfied hold time.
-            local later = ( cond.laststate.valuestamp or 0 ) + hold
+            -- Not reloaded. Hold on until we've satisfied hold time from last TRUE.
+            local later = ( ( cond.stateedge or {} )[1] or 0 ) + hold
             if now >= later then
                 return false,false
             end
@@ -3178,7 +3178,7 @@ end
 
 -- Start an instance
 local function startSensor( tdev, pdev )
-    D("startSensor(%1,%2)", tdev, pdev)
+    D("startSensor(%1,%2)", tdev, pdev) -- DO NOT string--used for log snippet
 
     -- Device one-time initialization
     sensor_runOnce( tdev )
