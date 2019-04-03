@@ -2803,12 +2803,10 @@ local function processCondition( cond, grp, cdata, tdev )
         -- If trying to go false, make sure hold time is honored.
         D("processCondition() hold time %1, going %1 to %2", condopt.holdtime, cs.evalstate, state)
         if cs.evalstate and not state then
-            if not cs.holduntil then
-                cs.holduntil = now + condopt.holdtime
-                state = true
-                D("processCondition() reset, delay until %1", cs.holduntil)
-                scheduleDelay( tostring(tdev), condopt.holdtime )
-            elseif now < cs.holduntil then
+            -- Hold time extends from false edge, so repeated true-false-true-false extends time
+            D("processCondition() reset edge last %1", cs.stateedge[1])
+            cs.holduntil = ( cs.stateedge[0] or now ) + condopt.holdtime
+            if cs.holduntil > now then
                 D("processCondition() continue reset delay until %1", cs.holduntil)
                 state = true
                 scheduleDelay( tostring(tdev), cs.holduntil - now )
