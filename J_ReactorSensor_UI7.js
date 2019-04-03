@@ -17,11 +17,11 @@ var ReactorSensor = (function(api, $) {
     /* unique identifier for this plugin... */
     var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-    var pluginVersion = '3.0dev-19091';
+    var pluginVersion = '3.0dev-19093';
 
     var DEVINFO_MINSERIAL = 71.222;
 
-    var UI_VERSION = 19090;     /* must coincide with Lua core */
+    var UI_VERSION = 19093;     /* must coincide with Lua core */
 
     var CDATA_VERSION = 19082;  /* must coincide with Lua core */
 
@@ -442,6 +442,12 @@ var ReactorSensor = (function(api, $) {
             return false;
         }
 
+        try {
+            console.log("initModule() using jQuery " + String(jQuery.fn.jquery) + "; jQuery-UI " + String(jQuery.ui.version));
+        } catch( e ) {
+            console.log("initModule() error reading jQuery/UI versions: " + String(e));
+        }
+
         /* Load ACE. Since the jury is still out with LuaView on this, default is no
            ACE for now. As of 2019-01-06, one user has reported that ACE does not function
            on Chrome Mac (unknown version, but does function with Safari and Firefox on Mac).
@@ -650,6 +656,8 @@ var ReactorSensor = (function(api, $) {
                     configModified = false;
                     updateSaveControls();
                     clearUnusedStateVariables( myid, cdata );
+var ctx = jQuery( ev.currentTarget ).closest('div.reactortab').attr('id');
+if ( ctx === "tab-conds" ) CondBuilder.redraw( myid );
                 },
                 'onFailure' : function() {
                     alert('There was a problem saving the configuration. Vera/Luup may have been restarting. Please try hitting the "Save" button again.');
@@ -1320,9 +1328,10 @@ var ReactorSensor = (function(api, $) {
                 var id = jQuery( row ).attr( 'id' );
                 var obj = ixCond[ id ];
                 if ( obj ) {
+                    // console.log("reindexConditions(" + grp.id + ") " + id + " is now " + ix);
                     grp.conditions[ix] = obj;
-                    obj.__index = ix;
-                    ix++;
+                    obj.__index = ix++;
+                    obj.__depth = grp.__depth + 1;
                 } else {
                     /* Not found. Remove from UI */
                     jQuery( row ).remove();
@@ -2717,7 +2726,7 @@ var ReactorSensor = (function(api, $) {
             input.removeClass( 'tberror' );
             if ( newname !== grp.name ) {
                 /* Group name check */
-                if ( newname.length < 2 ) {
+                if ( newname.length < 1 ) {
                     ev.preventDefault();
                     input.addClass( 'tberror' );
                     input.focus();
@@ -2850,13 +2859,14 @@ var ReactorSensor = (function(api, $) {
             var okDelete = false;
             var ixCond = getConditionIndex();
             for ( var ci in ixCond ) {
-                if ( ixCond.hasOwnProperty(ci) && ixCond[ci].after == condId ) {
+                if ( ixCond.hasOwnProperty(ci) && ixCond[ci].options.after == condId ) {
                     if ( !okDelete ) {
                         if ( ! ( okDelete = confirm('This condition is used in sequence options in another condition. Click OK to delete it and disconnect the sequence, or Cancel to leave everything unchanged.') ) ) {
                             return;
                         }
                     }
-                    delete ixCond[ci].after;
+                    delete ixCond[ci].options.after;
+                    delete ixCond[ci].options.aftertime;
                 }
             }
 
@@ -2865,7 +2875,7 @@ var ReactorSensor = (function(api, $) {
             grp.conditions.splice( ixCond[ condId ].__index, 1 );
             delete ixCond[ condId ];
 
-            /* Remove the condition row from display */
+            /* Remove the condition row from display, reindex parent. */
             row.remove();
             reindexConditions( grp );
 
@@ -2886,6 +2896,7 @@ var ReactorSensor = (function(api, $) {
             /* Now, disconnect the data object from its current parent */
             var obj = ixCond[ $el.attr( 'id' ) ];
             obj.__parent.conditions.splice( obj.__index, 1 );
+            reindexConditions( obj.__parent );
 
             /* Attach it to new parent. */
             var prid = $target.closest( 'div.cond-group-container' ).attr( 'id' );
@@ -4564,7 +4575,7 @@ var ReactorSensor = (function(api, $) {
             /* Bummer. And deviceinfo as a fallback isn't really appropriate here (only lists exceptions) */
             console.log("changeActionDevice: failed to load service data: " + textStatus + "; " + String(errorThrown));
             console.log(jqXHR.responseText);
-            retries = ( undefined === retries ? 0 : retries ) + 1
+            retries = ( undefined === retries ? 0 : retries ) + 1;
             if ( retries > 10 ) {
                 alert("Unable to load service data for this device. If you are on a remote connection, the connection to your Vera may have been lost.");
                 actionMenu.empty().append( '<option value="">[ERROR--failed to get actions from Vera]</option>' );
@@ -4576,9 +4587,9 @@ var ReactorSensor = (function(api, $) {
                 return;
             }
             /* Set up a retry */
-            setTimeout( function() { 
+            setTimeout( function() {
                 return changeActionDevice( row, newVal, fnext, fargs, retries );
-            }, 3000 )
+            }, 3000 );
         });
     }
 
