@@ -1952,10 +1952,15 @@ if ( ctx === "tab-conds" ) CondBuilder.redraw( myid );
                     /* Changed. Don't store false, just remove key */
                     if ( 0 !== latchval ) {
                         cond.options.latch = latchval;
+                        if ( "and" !== ( cond.__parent.operator || "and" ) ) {
+                            jQuery('input#latchcond', $row).addClass( 'tberror' );
+                        } else {
+                            configModified = true;
+                        }
                     } else {
                         delete cond.options.latch;
+                        configModified = true;
                     }
-                    configModified = true;
                 }
 
                 /* Remove key if no subkeys */
