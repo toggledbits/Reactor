@@ -465,7 +465,8 @@ var ReactorSensor = (function(api, $) {
                         serviceId: deleted[vn].service,
                         Variable: vn,
                         Value: ""
-                    }
+                    },
+                    timeout: 5000
                 }).done( function( data, statusText, jqXHR ) {
                     /* nothing */
                 });
@@ -1148,9 +1149,9 @@ var ReactorSensor = (function(api, $) {
                 cond.operator = jQuery("div.params select.opmenu", row).val() || "=";
                 if ( cond.operator.match( noCaseOptPattern ) ) {
                     /* Case-insensitive (nocase==1) is the default */
-                    n = ( jQuery( 'input#nocase', row ).prop( 'checked' ) || false ) ? 1 : 0;
-                    if ( n !== cond.nocase ) {
-                        cond.nocase = ( 0 === n ) ? 0 : undefined;
+                    val = ( jQuery( 'input#nocase', row ).prop( 'checked' ) || false ) ? 1 : 0;
+                    if ( val !== cond.nocase ) {
+                        cond.nocase = ( 0 === val ) ? 0 : undefined;
                         configModified = true;
                     }
                 } else if ( undefined !== cond.nocase ) {
@@ -1317,7 +1318,7 @@ var ReactorSensor = (function(api, $) {
             case 'interval':
                 removeConditionProperties( cond, "days,hours,mins,basetime" );
                 var nmin = 0;
-                var v = jQuery('div.params #days', row).val();
+                var v = jQuery('div.params #days', row).val() || "0";
                 if ( v.match( varRefPattern ) ) {
                     cond.days = v;
                     nmin = 1440;
@@ -1330,7 +1331,7 @@ var ReactorSensor = (function(api, $) {
                         nmin = nmin + 1440 * v;
                     }
                 }
-                jQuery('div.params #hours', row).val();
+                v = jQuery('div.params #hours', row).val() || "0";
                 if ( v.match( varRefPattern ) ) {
                     cond.hours = v;
                     nmin = 60;
@@ -1343,7 +1344,7 @@ var ReactorSensor = (function(api, $) {
                         nmin = nmin + 60 * v;
                     }
                 }
-                v = jQuery('div.params #mins', row).val();
+                v = jQuery('div.params #mins', row).val() || "0";
                 if ( v.match( varRefPattern ) ) {
                     cond.mins = v;
                     nmin = 1;
@@ -2727,7 +2728,7 @@ var ReactorSensor = (function(api, $) {
                 expr: jQuery( 'textarea.expr', row ).val() || "?"
             },
             dataType: "json",
-            timeout: 2000
+            timeout: 5000
         }).done( function( data, statusText, jqXHR ) {
             var msg;
             if ( data.err ) {
@@ -3342,7 +3343,7 @@ var ReactorSensor = (function(api, $) {
                             flush: firstScene ? 0 : 1
                         },
                         dataType: "json",
-                        timeout: 2000
+                        timeout: 5000
                     }).done( function( data, statusText, jqXHR ) {
                     }).fail( function( jqXHR ) {
                     });
@@ -3836,7 +3837,7 @@ var ReactorSensor = (function(api, $) {
                 output_format: "json"
             },
             dataType: "json",
-            timeout: 5000
+            timeout: 10000
         }).done( function( data, statusText, jqXHR ) {
             var hasAction = false;
             var i, j, key;
@@ -4473,7 +4474,8 @@ var ReactorSensor = (function(api, $) {
                     },
                     dataType: "jsonp",
                     jsonp: "callback",
-                    crossDomain: true
+                    crossDomain: true,
+                    timeout: 10000
                 }).done( function( respData, statusText, jqXHR ) {
                     console.log("Response from server is " + JSON.stringify(respData));
                     if ( undefined !== respData.serial && respData.serial > deviceInfo.serial ) {
@@ -4625,7 +4627,8 @@ var ReactorSensor = (function(api, $) {
             url: url,
             data: {},
             cache: false,
-            dataType: 'text'
+            dataType: 'text',
+            timeout: 15000
         }).done( function( data, statusText, jqXHR ) {
             var keypat = new RegExp( "Reactor\\(debug\\): startSensor\\(" + api.getCpanelDeviceId() + "," );
             var pos = data.search( keypat );
@@ -4698,7 +4701,7 @@ var ReactorSensor = (function(api, $) {
         var jqXHR = jQuery.ajax({
             url: scpdurl,
             dataType: "xml",
-            timeout: 5000
+            timeout: 15000
         });
 
         jqXHR.done( function( serviceData, statusText ) {
@@ -4852,7 +4855,8 @@ var ReactorSensor = (function(api, $) {
                                 action: "submitdevice",
                                 data: jd
                             },
-                            dataType: 'json'
+                            dataType: 'json',
+                            timeout: 15000
                         }).promise();
                     });
 
@@ -4904,7 +4908,8 @@ var ReactorSensor = (function(api, $) {
             },
             dataType: "jsonp",
             jsonp: "callback",
-            crossDomain: true
+            crossDomain: true,
+            timeout: 10000
         }).done( function( respData, statusText, jqXHR ) {
             // console.log("Response from server is " + JSON.stringify(respData));
             if ( undefined !== respData.serial ) {
@@ -5060,7 +5065,8 @@ var ReactorSensor = (function(api, $) {
                     action: "infoupdate",
                     infov: deviceInfo.serial || 0
                 },
-                dataType: 'json'
+                dataType: 'json',
+                timeout: 30000
             }).done( function( respData, respText, jqXHR ) {
                 msg.text( "Update successful! The changes take effect immediately; no restart necessary." );
                 // don't call updateToolsVersionDisplay() again because we'd need to reload devinfo to
