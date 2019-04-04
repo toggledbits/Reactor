@@ -2,8 +2,9 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
-## Version 2.5 (stable 19091)
+## Version 2.5 (stable 19094)
 
+* Hotfix-19094-01: Fix validation crash in interval condition parameter check, loses hour and minute data on edit.
 * Fix: an issue allowing multiple system watches for a single variable; benign, but not perfectly efficient, and causes repetitious (and therefore confusing) event log messages [issue #26].
 
 ## Version 2.4 (released)
