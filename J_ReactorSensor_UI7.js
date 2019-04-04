@@ -1731,7 +1731,7 @@ if ( ctx === "tab-conds" ) CondBuilder.redraw( myid );
                 case 'interval':
                     removeConditionProperties( cond, "days,hours,mins,basetime,options" );
                     var nmin = 0;
-                    var v = jQuery('div.params #days', $row).val();
+                    var v = jQuery('div.params #days', $row).val() || "0";
                     if ( v.match( varRefPattern ) ) {
                         cond.days = v;
                         nmin = 1440;
@@ -1744,7 +1744,7 @@ if ( ctx === "tab-conds" ) CondBuilder.redraw( myid );
                             nmin = nmin + 1440 * v;
                         }
                     }
-                    v = jQuery('div.params #hours', $row).val();
+                    v = jQuery('div.params #hours', $row).val() || "0";
                     if ( v.match( varRefPattern ) ) {
                         cond.hours = v;
                         nmin = 60;
@@ -1757,7 +1757,7 @@ if ( ctx === "tab-conds" ) CondBuilder.redraw( myid );
                             nmin = nmin + 60 * v;
                         }
                     }
-                    v = jQuery('div.params #mins', $row).val();
+                    v = jQuery('div.params #mins', $row).val() || "0";
                     if ( v.match( varRefPattern ) ) {
                         cond.mins = v;
                         nmin = 1;
