@@ -1318,7 +1318,7 @@ var ReactorSensor = (function(api, $) {
             case 'interval':
                 removeConditionProperties( cond, "days,hours,mins,basetime" );
                 var nmin = 0;
-                var v = jQuery('div.params #days', row).val();
+                var v = jQuery('div.params #days', row).val() || "0";
                 if ( v.match( varRefPattern ) ) {
                     cond.days = v;
                     nmin = 1440;
@@ -1331,7 +1331,7 @@ var ReactorSensor = (function(api, $) {
                         nmin = nmin + 1440 * v;
                     }
                 }
-                jQuery('div.params #hours', row).val();
+                v = jQuery('div.params #hours', row).val() || "0";
                 if ( v.match( varRefPattern ) ) {
                     cond.hours = v;
                     nmin = 60;
@@ -1344,7 +1344,7 @@ var ReactorSensor = (function(api, $) {
                         nmin = nmin + 60 * v;
                     }
                 }
-                v = jQuery('div.params #mins', row).val();
+                v = jQuery('div.params #mins', row).val() || "0";
                 if ( v.match( varRefPattern ) ) {
                     cond.mins = v;
                     nmin = 1;
