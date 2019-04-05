@@ -4304,7 +4304,8 @@ function request( lul_request, lul_parameters, lul_outputformat )
         return json.encode( { status=status,message=msg } ), "application/json"
 
     elseif action == "summary" then
-        local r = "```" .. EOL
+        local r = "If you are pasting this report into the Vera forums, please include ALL lines below--do not edit/omit/redact!" ..
+            EOL .. ```" .. EOL
         r = r .. string.rep("*", 51) .. " REACTOR LOGIC SUMMARY REPORT " .. string.rep("*", 51) .. EOL
         r = r .. "   Version: " .. tostring(_PLUGIN_VERSION) ..
             " config " .. tostring(_CONFIGVERSION) ..

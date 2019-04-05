@@ -21,9 +21,9 @@ var ReactorSensor = (function(api, $) {
 
     var DEVINFO_MINSERIAL = 71.222;
 
-    var UI_VERSION = 19093;     /* must coincide with Lua core */
+    var _UIVERSION = 19093;     /* must coincide with Lua core */
 
-    var CDATA_VERSION = 19082;  /* must coincide with Lua core */
+    var _CDATAVERSION = 19082;  /* must coincide with Lua core */
 
     var myModule = {};
 
@@ -267,7 +267,7 @@ var ReactorSensor = (function(api, $) {
                 cdata.conditions === undefined || typeof cdata.conditions !== "object" ) {
             console.log("Initializing new config for " + String(myid));
             cdata = {
-                version: CDATA_VERSION,
+                version: _CDATAVERSION,
                 variables: {},
                 conditions: {
                     root: {
@@ -284,7 +284,7 @@ var ReactorSensor = (function(api, $) {
         }
 
         /* Special version check */
-        if ( ( cdata.version || 0 ) > CDATA_VERSION ) {
+        if ( ( cdata.version || 0 ) > _CDATAVERSION ) {
             console.log("The configuration for this ReactorSensor is an unsupported format/version (" +
                 String( cdata.version ) + "). Upgrade Reactor or restore an older config from backup.");
             throw "Incompatible configuration format/version";
@@ -361,8 +361,8 @@ var ReactorSensor = (function(api, $) {
         }
 
         /* Keep version on config as highest that has edited it. */
-        if ( ( cdata.version || 0 ) < CDATA_VERSION ) {
-            cdata.version = CDATA_VERSION;
+        if ( ( cdata.version || 0 ) < _CDATAVERSION ) {
+            cdata.version = _CDATAVERSION;
         }
         cdata.device = myid;
         if ( upgraded ) {
@@ -429,15 +429,15 @@ var ReactorSensor = (function(api, $) {
 
         /* Check agreement of plugin core and UI */
         var s = api.getDeviceState( myid, "urn:toggledbits-com:serviceId:ReactorSensor", "_UIV" ) || "0";
-        console.log("initModule() for device " + myid + " requires UI version " + UI_VERSION + ", seeing " + s);
-        if ( String(UI_VERSION) != s ) {
+        console.log("initModule() for device " + myid + " requires UI version " + _UIVERSION + ", seeing " + s);
+        if ( String(_UIVERSION) != s ) {
             api.setCpanelContent( '<div class="reactorwarning" style="border: 4px solid red; padding: 8px;">' +
                 " ERROR! The Reactor plugin core version and UI version do not agree." +
                 " This may cause errors or corrupt your ReactorSensor configuration." +
                 " Please hard-reload your browser and try again " +
                 ' (<a href="https://duckduckgo.com/?q=hard+reload+browser" target="_blank">how?</a>).' +
                 " If you have installed hotfix patches, you may not have successfully installed all required files." +
-                " Expected " + String(UI_VERSION) + " got " + String(s) +
+                " Expected " + String(_UIVERSION) + " got " + String(s) +
                 ".</div>" );
             return false;
         }
