@@ -2,7 +2,7 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
-## Version 3.0dev-19093
+## Version 3.0dev-19095
 
 * Beta19093: Fix #28: condition config corrupted by some drag/drop operations.
 * Beta19093: Fix #27: cross-Reactor group status not updating correctly.
