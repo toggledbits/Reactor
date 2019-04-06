@@ -2965,6 +2965,10 @@ function actionUpdateGeofences( pdev )
         end
         ra = nil -- luacheck: ignore 311
         if ud then
+            -- Save the source data so we have it to look at in Logic Summary.
+            local dd = { mode=geofenceMode, ['updated']=now, ['users_settings']=ud.users_settings,
+                ['users']=ud.users, ['usergeofences']=ud.usergeofences }
+            setVar( MYSID, 'raw_udgeo', json.encode( dd ), pluginDevice )
             -- For now, we keep it simple: just a list of users (ids) that are home.
             -- ud.users is array of usergeofence, which is { id, Name, Level, IsGuest }
             -- ud.usergeofences is array of { iduser, geotags } and geotags is
@@ -3577,6 +3581,8 @@ local function showGeofenceData( r )
                 EOL
         end
     end
+    local c = luup.variable_get( MYSID, "raw_udgeo", pluginDevice ) or ""
+    r = r .. "            Raw: " .. c .. EOL
     return r
 end
 
@@ -3604,7 +3610,8 @@ function request( lul_request, lul_parameters, lul_outputformat )
         return json.encode( { status=status,message=msg } ), "application/json"
 
     elseif action == "summary" then
-        local r = "```" .. EOL
+         local r = "If you are pasting this report into the Vera forums, please include ALL lines below--please do not edit/omit/redact!" ..
+            EOL .. "```" .. EOL
         r = r .. string.rep("*", 51) .. " REACTOR LOGIC SUMMARY REPORT " .. string.rep("*", 51) .. EOL
         r = r .. "   Version: " .. tostring(_PLUGIN_VERSION) .. " config " .. tostring(_CONFIGVERSION) .. " pluginDevice " .. pluginDevice .. EOL
         r = r .. "    System:"
