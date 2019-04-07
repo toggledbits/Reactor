@@ -2,8 +2,14 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
+## Version 2.5 (released)
+
+* Hotfix-19094-01: Fix validation crash in interval condition parameter check, loses hour and minute data on edit.
+* Fix: an issue allowing multiple system watches for a single variable; benign, but not perfectly efficient, and causes repetitious (and therefore confusing) event log messages [issue #26].
+
 ## Version 2.4 (released)
 
+* Change: Ajax request timeouts increased to allow more headroom when the user is on a remote connection to the Vera being configured.
 * Change: Embedded URLs to Vera community forums updated to new Discourse-based community.
 * Fix: fix an issue with Safari 12 user not being able to edit "sustained for" time on service conditions.
 * Enhancement: The response time for house mode changes has been dramatically improved (without increased polling).
