@@ -4163,7 +4163,7 @@ local function getLuupSceneSummary( scd )
 				ac.service, ac.action )
 			local pp = {}
 			for iz,p in ipairs( ac.arguments or {} ) do
-				table.insert( pp, "%s=%q", p.name or tostring(iz), tostring(p.value) )
+				table.insert( pp, string.format( "%s=%q", p.name or tostring(iz), tostring(p.value) ) )
 			end
 			r = r .. table.concat( pp, "," ) .. EOL
 		end
