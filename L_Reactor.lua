@@ -4157,15 +4157,16 @@ local function getLuupSceneSummary( scd )
 		end
 		r = r .. EOL
 		for _,ac in ipairs( gr.actions or {} ) do
-			r = r .. string.format( " action dev #%d (%s) action %s/%s ",
+			r = r .. string.format( "        Device %s (%s) %s/%s ",
 				ac.device,
-				(luup.devices[ac.device] or {}).description or "?missing?",
+				(luup.devices[tonumber(ac.device or -1) or -1] or {}).description or "?missing?",
 				ac.service, ac.action )
 			local pp = {}
 			for iz,p in ipairs( ac.arguments or {} ) do
 				table.insert( pp, string.format( "%s=%q", p.name or tostring(iz), tostring(p.value) ) )
 			end
-			r = r .. table.concat( pp, "," ) .. EOL
+			if #pp then
+				r = r .. "( " .. table.concat( pp, ", " ) .. " )" .. EOL
 		end
 	end
 	return r
@@ -4310,7 +4311,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		return json.encode( { status=status,message=msg } ), "application/json"
 
 	elseif action == "summary" then
-		local r = "If you are pasting this report into the Vera forums, please include ALL lines below--do not edit/omit/redact!" ..
+		local r = "When pasting this report into the Vera forums, please include ALL lines below this one--do not edit/omit/redact!" ..
 			EOL .. "```" .. EOL
 		r = r .. string.rep("*", 51) .. " REACTOR LOGIC SUMMARY REPORT " .. string.rep("*", 51) .. EOL
 		r = r .. "   Version: " .. tostring(_PLUGIN_VERSION) ..
