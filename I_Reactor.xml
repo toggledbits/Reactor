@@ -1,229 +1,229 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- I_Reactor.xml -->
 <implementation>
-    <functions>
-        -- --------------------------------------------------------------------
-        -- Reactor
-        -- Copyright 2018 Patrick H. Rigney, All Rights Reserved.
-        -- https://www.toggledbits.com/reactor
-        -- --------------------------------------------------------------------
-        function startupReactor(devNum)
-            luup.log("Reactor STARTUP!")
-            Reactor = require("L_Reactor")
-            reactorTick = Reactor.tick
-            reactorWatch = Reactor.watch
-            reactorRequestHandler = Reactor.request
-            luup.register_handler("reactorRequestHandler", "Reactor")
-            return Reactor.startPlugin(devNum)
-        end
-    </functions>
-    <startup>startupReactor</startup>
-    <actionList>
-        <action>
-            <serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
-            <name>SetEnabled</name>
-            <run>
-                Reactor.actionSetEnabled( lul_settings.newEnabledValue, lul_device )
-                return true
-            </run>
-        </action>
-        <action>
-            <serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
-            <name>Reset</name>
-            <run>
-                Reactor.actionReset( lul_device )
-                return true
-            </run>
-        </action>
-        <action>
-            <serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
-            <name>Trip</name>
-            <run>
-                Reactor.actionTrip( lul_device )
-                return true
-            </run>
-        </action>
-        <action>
-            <serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
-            <name>Restart</name>
-            <job>
-                Reactor.actionRestart( lul_device )
-                return 4,0
-            </job>
-        </action>
-        <action>
-            <serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
-            <name>ResetRuntime</name>
-            <run>
-                luup.variable_set( "urn:toggledbits-com:serviceId:ReactorSensor", "TripCount", "0", lul_device )
-                luup.variable_set( "urn:toggledbits-com:serviceId:ReactorSensor", "Runtime", "0", lul_device )
-                luup.variable_set( "urn:toggledbits-com:serviceId:ReactorSensor", "RuntimeSince", os.time(), lul_device )
-                return true
-            </run>
-        </action>
-        <action>
-            <serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
-            <name>ClearLatched</name>
-            <run>
-                Reactor.actionClearLatched( lul_device )
-                return true
-            </run>
-        </action>
+	<functions>
+		-- --------------------------------------------------------------------
+		-- Reactor
+		-- Copyright 2018,2019 Patrick H. Rigney, All Rights Reserved.
+		-- https://www.toggledbits.com/reactor
+		-- --------------------------------------------------------------------
+		function startupReactor(devNum)
+			luup.log("Reactor STARTUP!")
+			Reactor = require("L_Reactor")
+			reactorTick = Reactor.tick
+			reactorWatch = Reactor.watch
+			reactorRequestHandler = Reactor.request
+			luup.register_handler("reactorRequestHandler", "Reactor")
+			return Reactor.startPlugin(devNum)
+		end
+	</functions>
+	<startup>startupReactor</startup>
+	<actionList>
+		<action>
+			<serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
+			<name>SetEnabled</name>
+			<run>
+				Reactor.actionSetEnabled( lul_settings.newEnabledValue, lul_device )
+				return true
+			</run>
+		</action>
+		<action>
+			<serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
+			<name>Reset</name>
+			<run>
+				Reactor.actionReset( lul_device )
+				return true
+			</run>
+		</action>
+		<action>
+			<serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
+			<name>Trip</name>
+			<run>
+				Reactor.actionTrip( lul_device )
+				return true
+			</run>
+		</action>
+		<action>
+			<serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
+			<name>Restart</name>
+			<job>
+				Reactor.actionRestart( lul_device )
+				return 4,0
+			</job>
+		</action>
+		<action>
+			<serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
+			<name>ResetRuntime</name>
+			<run>
+				luup.variable_set( "urn:toggledbits-com:serviceId:ReactorSensor", "TripCount", "0", lul_device )
+				luup.variable_set( "urn:toggledbits-com:serviceId:ReactorSensor", "Runtime", "0", lul_device )
+				luup.variable_set( "urn:toggledbits-com:serviceId:ReactorSensor", "RuntimeSince", os.time(), lul_device )
+				return true
+			</run>
+		</action>
+		<action>
+			<serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
+			<name>ClearLatched</name>
+			<run>
+				Reactor.actionClearLatched( lul_device )
+				return true
+			</run>
+		</action>
 
-        <action>
-            <serviceId>urn:micasaverde-com:serviceId:SecuritySensor1</serviceId>
-            <name>SetArmed</name>
-            <run>
-                Reactor.actionSetArmed( lul_settings.newArmedValue, lul_device )
-                return true
-            </run>
-        </action>
-        <action>
-            <serviceId>urn:upnp-org:serviceId:SwitchPower1</serviceId>
-            <name>SetTarget</name>
-            <run>
-                if tostring(lul_settings.newTargetValue) ~= "0" then
-                    Reactor.actionTrip( lul_device )
-                else
-                    Reactor.actionReset( lul_device )
-                end
-                return true
-            </run>
-        </action>
-        <action>
-            <serviceId>urn:micasaverde-com:serviceId:HaDevice1</serviceId>
-            <name>ToggleState</name>
-            <run>
-                local t = luup.variable_get( "urn:micasaverde-com:serviceId:SecuritySensor1", "Tripped", lul_device ) or "0"
-                if t == "0" then
-                    Reactor.actionTrip( lul_device )
-                else
-                    Reactor.actionReset( lul_device )
-                end
-                return true
-            </run>
-        </action>
-        <action>
-            <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
-            <name>AddSensor</name>
-            <job>
-                Reactor.actionAddSensor( lul_device )
-                return 4,0
-            </job>
-        </action>
-        <action>
-            <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
-            <name>RunScene</name>
-            <job>
-                -- Run scene in Reactor master device context.
-                -- See https://www.toggledbits.com/reactor for explanation of Options
-                local opt = lul_settings.Options or {}
-                opt.contextDevice = opt.contextDevice or lul_device
-                Reactor.actionRunScene( lul_settings.SceneNum, opt, lul_device )
-                return 4,0
-            </job>
-        </action>
-        <action>
-            <serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
-            <name>RunScene</name>
-            <job>
-                -- Run scene in ReactorSensor context.
-                -- See https://www.toggledbits.com/reactor for explanation of Options
-                -- The ReactorSensor version of RunScene forces the context device to be the
-                -- ReactorSensor on which the call was made.
-                local opt = lul_settings.Options or {}
-                opt.contextDevice = opt.contextDevice or lul_device
-                Reactor.actionRunScene( lul_settings.SceneNum, opt, lul_device )
-                return 4,0
-            </job>
-        </action>
-        <action>
-            <serviceId>urn:micasaverde-com:serviceId:HomeAutomationGateway1</serviceId>
-            <name>RunScene</name>
-            <job>
-                -- Run scene in "global" context.
-                -- See https://www.toggledbits.com/reactor for explanation of Options
-                -- This is a convenience/shortcut version of RunScene that allows
-                -- users to use ReactorScenes with only a change to the device number in
-                -- their action calls.
-                local opt = lul_settings.Options or {}
-                opt.contextDevice = opt.contextDevice or 0
-                Reactor.actionRunScene( lul_settings.SceneNum, opt, lul_device )
-                return 4,0
-            </job>
-        </action>
-        <action>
-            <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
-            <name>StopScene</name>
-            <run>
-                -- Stop scene running in Reactor master device context.
-                -- contextDevice is normally the device that originally called for the scene run
-                -- in the Options table. If SceneNum is nil or 0, all scenes for the context device
-                -- will be stopped.
-                Reactor.actionStopScene( lul_settings.contextDevice or lul_device, lul_settings.SceneNum, lul_device )
-            </run>
-        </action>
-        <action>
-            <serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
-            <name>StopScene</name>
-            <run>
-                -- Stop scene running in ReactorSensor context.
-                -- contextDevice is normally the device that originally called for the scene run
-                -- in the Options table. If SceneNum is nil or 0, all scenes for the context device
-                -- will be stopped.
-                Reactor.actionStopScene( lul_settings.contextDevice or lul_device, lul_settings.SceneNum, lul_device )
-                return true
-            </run>
-        </action>
-        <action>
-            <serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
-            <name>SetVariable</name>
-            <run>
-                -- Set a variable value (overwrite/create).
-                Reactor.actionSetVariable( lul_settings, lul_device )
-                return true
-            </run>
-        </action>
-        <action>
-            <serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
-            <name>SetGroupEnabled</name>
-            <job>
-                -- Set group enabled state.
-                return Reactor.actionSetGroupEnabled( lul_settings.GroupId, lul_settings.newEnabledValue, lul_device )
-            </job>
-        </action>
-        <action>
-            <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
-            <name>UpdateGeofences</name>
-            <job>
-                return Reactor.actionUpdateGeofences( lul_device, lul_settings.event )
-            </job>
-        </action>
-        <action>
-            <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
-            <name>MasterClear</name>
-            <job>
-                Reactor.actionMasterClear( lul_device )
-                return 4,0
-            </job>
-        </action>
-        <action>
-            <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
-            <name>GetPluginVersion</name>
-            <run>
-                local vs, vn = Reactor.getPluginVersion()
-                luup.variable_set("urn:toggledbits-com:serviceId:Reactor", "TempStorage", vs, lul_device)
-                return true
-            </run>
-        </action>
-        <action>
-            <serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
-            <name>SetDebug</name>
-            <run>
-                local newDebugValue = tonumber(lul_settings.debug or "0") or 0
-                Reactor.actionSetDebug( debug ~= 0, lul_device )
-                return true
-            </run>
-        </action>
-    </actionList>
+		<action>
+			<serviceId>urn:micasaverde-com:serviceId:SecuritySensor1</serviceId>
+			<name>SetArmed</name>
+			<run>
+				Reactor.actionSetArmed( lul_settings.newArmedValue, lul_device )
+				return true
+			</run>
+		</action>
+		<action>
+			<serviceId>urn:upnp-org:serviceId:SwitchPower1</serviceId>
+			<name>SetTarget</name>
+			<run>
+				if tostring(lul_settings.newTargetValue) ~= "0" then
+					Reactor.actionTrip( lul_device )
+				else
+					Reactor.actionReset( lul_device )
+				end
+				return true
+			</run>
+		</action>
+		<action>
+			<serviceId>urn:micasaverde-com:serviceId:HaDevice1</serviceId>
+			<name>ToggleState</name>
+			<run>
+				local t = luup.variable_get( "urn:micasaverde-com:serviceId:SecuritySensor1", "Tripped", lul_device ) or "0"
+				if t == "0" then
+					Reactor.actionTrip( lul_device )
+				else
+					Reactor.actionReset( lul_device )
+				end
+				return true
+			</run>
+		</action>
+		<action>
+			<serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
+			<name>AddSensor</name>
+			<job>
+				Reactor.actionAddSensor( lul_device )
+				return 4,0
+			</job>
+		</action>
+		<action>
+			<serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
+			<name>RunScene</name>
+			<job>
+				-- Run scene in Reactor master device context.
+				-- See https://www.toggledbits.com/reactor for explanation of Options
+				local opt = lul_settings.Options or {}
+				opt.contextDevice = opt.contextDevice or lul_device
+				Reactor.actionRunScene( lul_settings.SceneNum, opt, lul_device )
+				return 4,0
+			</job>
+		</action>
+		<action>
+			<serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
+			<name>RunScene</name>
+			<job>
+				-- Run scene in ReactorSensor context.
+				-- See https://www.toggledbits.com/reactor for explanation of Options
+				-- The ReactorSensor version of RunScene forces the context device to be the
+				-- ReactorSensor on which the call was made.
+				local opt = lul_settings.Options or {}
+				opt.contextDevice = opt.contextDevice or lul_device
+				Reactor.actionRunScene( lul_settings.SceneNum, opt, lul_device )
+				return 4,0
+			</job>
+		</action>
+		<action>
+			<serviceId>urn:micasaverde-com:serviceId:HomeAutomationGateway1</serviceId>
+			<name>RunScene</name>
+			<job>
+				-- Run scene in "global" context.
+				-- See https://www.toggledbits.com/reactor for explanation of Options
+				-- This is a convenience/shortcut version of RunScene that allows
+				-- users to use ReactorScenes with only a change to the device number in
+				-- their action calls.
+				local opt = lul_settings.Options or {}
+				opt.contextDevice = opt.contextDevice or 0
+				Reactor.actionRunScene( lul_settings.SceneNum, opt, lul_device )
+				return 4,0
+			</job>
+		</action>
+		<action>
+			<serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
+			<name>StopScene</name>
+			<run>
+				-- Stop scene running in Reactor master device context.
+				-- contextDevice is normally the device that originally called for the scene run
+				-- in the Options table. If SceneNum is nil or 0, all scenes for the context device
+				-- will be stopped.
+				Reactor.actionStopScene( lul_settings.contextDevice or lul_device, lul_settings.SceneNum, lul_device )
+			</run>
+		</action>
+		<action>
+			<serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
+			<name>StopScene</name>
+			<run>
+				-- Stop scene running in ReactorSensor context.
+				-- contextDevice is normally the device that originally called for the scene run
+				-- in the Options table. If SceneNum is nil or 0, all scenes for the context device
+				-- will be stopped.
+				Reactor.actionStopScene( lul_settings.contextDevice or lul_device, lul_settings.SceneNum, lul_device )
+				return true
+			</run>
+		</action>
+		<action>
+			<serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
+			<name>SetVariable</name>
+			<run>
+				-- Set a variable value (overwrite/create).
+				Reactor.actionSetVariable( lul_settings, lul_device )
+				return true
+			</run>
+		</action>
+		<action>
+			<serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
+			<name>SetGroupEnabled</name>
+			<job>
+				-- Set group enabled state.
+				return Reactor.actionSetGroupEnabled( lul_settings.GroupId, lul_settings.newEnabledValue, lul_device )
+			</job>
+		</action>
+		<action>
+			<serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
+			<name>UpdateGeofences</name>
+			<job>
+				return Reactor.actionUpdateGeofences( lul_device, lul_settings.event )
+			</job>
+		</action>
+		<action>
+			<serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
+			<name>MasterClear</name>
+			<job>
+				Reactor.actionMasterClear( lul_device )
+				return 4,0
+			</job>
+		</action>
+		<action>
+			<serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
+			<name>GetPluginVersion</name>
+			<run>
+				local vs, vn = Reactor.getPluginVersion()
+				luup.variable_set("urn:toggledbits-com:serviceId:Reactor", "TempStorage", vs, lul_device)
+				return true
+			</run>
+		</action>
+		<action>
+			<serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
+			<name>SetDebug</name>
+			<run>
+				local newDebugValue = tonumber(lul_settings.debug or "0") or 0
+				Reactor.actionSetDebug( debug ~= 0, lul_device )
+				return true
+			</run>
+		</action>
+	</actionList>
 </implementation>

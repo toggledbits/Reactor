@@ -2,7 +2,7 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
-## Version 3.0beta-19093
+## Version 3.0beta-19097
 
 * Beta19093: Fix #28: condition config corrupted by some drag/drop operations.
 * Beta19093: Fix #27: cross-Reactor group status not updating correctly.
@@ -31,6 +31,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 2.5 (development)
 
+* Hotfix-19094-01: Fix validation crash in interval condition parameter check, loses hour and minute data on edit.
 * Fix: an issue allowing multiple system watches for a single variable; benign, but not perfectly efficient, and causes repetitious (and therefore confusing) event log messages [issue #26].
 
 ## Version 2.4 (released)
