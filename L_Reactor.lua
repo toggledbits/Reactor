@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.0dev-19095"
+local _PLUGIN_VERSION = "3.0beta-19097"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION = 301
@@ -4163,7 +4163,7 @@ local function getLuupSceneSummary( scd )
 				ac.service, ac.action )
 			local pp = {}
 			for iz,p in ipairs( ac.arguments or {} ) do
-				table.insert( pp, "%s=%q", p.name or tostring(iz), tostring(p.value) )
+				table.insert( pp, string.format( "%s=%q", p.name or tostring(iz), tostring(p.value) ) )
 			end
 			r = r .. table.concat( pp, "," ) .. EOL
 		end

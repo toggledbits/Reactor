@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.0dev-19095';
+	var pluginVersion = '3.0beta-19097';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -2864,7 +2864,7 @@ if ( ctx === "tab-conds" ) CondBuilder.redraw( myid );
 			var okDelete = false;
 			var ixCond = getConditionIndex();
 			for ( var ci in ixCond ) {
-				if ( ixCond.hasOwnProperty(ci) && ixCond[ci].options.after == condId ) {
+				if ( ixCond.hasOwnProperty(ci) && ( ixCond[ci].options || {} ).after == condId ) {
 					if ( !okDelete ) {
 						if ( ! ( okDelete = confirm('This condition is used in sequence options in another condition. Click OK to delete it and disconnect the sequence, or Cancel to leave everything unchanged.') ) ) {
 							return;

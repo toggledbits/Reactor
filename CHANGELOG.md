@@ -2,13 +2,14 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
-## Version 3.0dev-19095
+## Version 3.0beta-19097
 
 * Beta19093: Fix #28: condition config corrupted by some drag/drop operations.
 * Beta19093: Fix #27: cross-Reactor group status not updating correctly.
 * Enhancement: Loading of action data from Vera now retries automatically--improves remote user experience.
 * Fix: an issue allowing multiple system watches for a single variable; benign, but not perfectly efficient, and causes repetitious (and therefore confusing) event log messages [issue #26].
 * Enhancement: New "Delay reset" option allows false state of condition to be delayed by the specified number of seconds (this can be used to debounce device states, or as an "off" delay for motion sensing, for example) [issue #16];
+* Beta19090: Continuing fit and finish work on condition editor; still work to be done, but this release contains most;
 * Beta19087: getstate() insert tool was not coming up when called [issue #23];
 * Beta19087: Ongoing--occasional blank action menu in Activities when using remote access to UI; this version improves messaging and logging in an attempt to gather more data [issue #22];
 * Beta19083: Status tab not updating completely/timely [issue #20];
@@ -30,6 +31,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 2.5 (development)
 
+* Hotfix-19094-01: Fix validation crash in interval condition parameter check, loses hour and minute data on edit.
 * Fix: an issue allowing multiple system watches for a single variable; benign, but not perfectly efficient, and causes repetitious (and therefore confusing) event log messages [issue #26].
 
 ## Version 2.4 (released)
