@@ -2104,7 +2104,8 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		if luup.devices[cond.device or -1] == nil then
 			L({level=2,msg="%1 (%2) condition %3 refers to device %4 (%5), does not exist, skipped"},
 				luup.devices[tdev].description, tdev, cond.id, cond.device, cond.devicename or "unknown")
-			addEvent{ dev=tdev, event="condition", condition=cond.id, ['error']='Missing device #'..tostring(cond.device or "nil") }
+			addEvent{ dev=tdev, event="condition", condition=cond.id, device=cond.device,
+				devicename=cond.devicename, ['error']='Device not available' }
 			sst.trouble = true -- flag trouble
 			return nil,nil
 		end
@@ -2213,13 +2214,26 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		if luup.devices[cond.device or -1] == nil then
 			L({level=2,msg="%1 (%2) condition %3 refers to device %4 (%5), does not exist, skipped"},
 				luup.devices[tdev].description, tdev, cond.id, cond.device, cond.devicename or "unknown")
-			addEvent{ dev=tdev, event="condition", condition=cond.id, ['error']='Missing device #'..tostring(cond.device or "nil") }
+			addEvent{ dev=tdev, event="condition", condition=cond.id, device=cond.device,
+				devicename=cond.devicename, ['error']='Device not available' }
 			sst.trouble = true -- flag trouble
 			return nil,nil
 		end
 
 		local varname = string.format( "GroupStatus_%s", cond.groupid or "?" )
-		local vv = getVarNumeric( varname, 0, cond.device, GRPSID ) ~= 0 -- boolean!
+		local vv = getVarNumeric( varname, -1, cond.device, GRPSID )
+		-- Boolean should come back 0 or 1; if -1, group does not exist or is not ready/available
+		if vv < 0 then
+			L({level=2,msg="%1 (%2) condition %3 refers to device %4 (%5) group %6 (%7), not available, skipped"},
+				luup.devices[tdev].description, tdev, cond.id, cond.device, cond.devicename or "unknown",
+				cond.groupid, cond.groupname)
+			addEvent{ dev=tdev, event="condition", condition=cond.id, 
+				device=cond.device, groupid=cond.groupid, groupname=cond.groupname,
+				['error']='Group/state not available' }
+			sst.trouble = true -- flag trouble
+			return nil,nil
+		end
+		vv = vv ~= 0 -- boolean!
 
 		-- Add service watch if we don't have one.
 		addServiceWatch( cond.device, GRPSID, varname, tdev )
@@ -2311,7 +2325,8 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 				if nth == nil then
 					L({level=2,msg="Invalid op %1 in weekday condition %2 for %3 (%4)"},
 						op, cond.id, (luup.devices[tdev] or {}).description, tdev)
-					addEvent{ dev=tdev, event="condition", condition=cond.id, ['error']="Unrecognized operator "..tostring(op or "nil") }
+					addEvent{ dev=tdev, event="condition", condition=cond.id, 
+						operator=op, ['error']="Unrecognized operator" }
 					sst.trouble = true
 					return val,nil
 				end
@@ -2340,7 +2355,8 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		if ( sundata.stamp or 0 ) ~= stamp or sst.timetest then
 			if getVarNumeric( "UseLuupSunrise", 0, pluginDevice, MYSID ) ~= 0 then
 				L({level=2,msg="Reactor is configured to use Luup's sunrise/sunset calculations; twilight times cannot be correctly evaluated and will evaluate as dawn=sunrise, dusk=sunset"})
-				addEvent{ dev=tdev, event="condition", condition=cond.id, ['warning']="Configured to use Luup sunrise/sunset; twilight not available" }
+				addEvent{ dev=tdev, event="condition", condition=cond.id, 
+					['warning']="Configured to use Luup sunrise/sunset; twilight not available" }
 				sst.trouble = true
 				sundata = { sunrise=luup.sunrise(), sunset=luup.sunset() }
 			else
@@ -2509,7 +2525,8 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 			else
 				L({level=1,msg="Unrecognized condition %1 in time spec for cond %2 of %3 (%4)"},
 					cp, cond.id, tdev, luup.devices[tdev].description)
-				addEvent{ dev=tdev, event="condition", condition=cond.id, ['error']="Unrecognized operator "..tostring(cp or "nil") }
+				addEvent{ dev=tdev, event="condition", condition=cond.id, 
+					operator=cp, ['error']="Unrecognized operator" }
 				sst.trouble = true
 				return now,nil
 			end
@@ -2657,7 +2674,8 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 	else
 		L({level=2,msg="Sensor %1 (%2) unknown condition type %3 for cond %4 in group %5; fails."},
 			tdev, luup.devices[tdev].description, cond.type, cond.id, grp.id)
-		addEvent{ dev=tdev, event="condition", condition=cond.id, ['error']="Unrecognized condition type "..tostring(cond.type or "nil") }
+		addEvent{ dev=tdev, event="condition", condition=cond.id, 
+			['type']=cond.type, ['error']="Unrecognized condition type" }
 		sst.trouble = true
 		return nil,nil
 	end
@@ -2721,6 +2739,8 @@ local function processCondition( cond, grp, cdata, tdev )
 		if predCond == nil then
 			L({level=1,msg="%1 (#%2) group %3 condition %4 uses sequence, but predecessor condition %5 not found (deleted?)"},
 				luup.devices[tdev].description, tdev, grp.id, cond.id, condopt.after)
+			addEvent{ dev=tdev, event="condition", condition=cond.id,
+				predecessor=condopt.after, ['error']="Predecessor condition not found" }
 			sst.trouble = true
 			return newvalue,nil
 		else
@@ -2728,7 +2748,7 @@ local function processCondition( cond, grp, cdata, tdev )
 			D("evaluateCondition() testing predecessor %1 state %2", predCond, predState)
 			if predState == nil then
 				L({level=2,msg="Condition %1 can't meet sequence requirement, condition %2 missing!"}, cond.id, condopt.after)
-				addEvent{ dev=tdev, event="condition", condition=cond.id, ['error']="Predecessor condition could not be found" }
+				addEvent{ dev=tdev, event="condition", condition=cond.id, ['error']="Predecessor condition state not be found" }
 				sst.trouble = true
 				return newvalue,nil
 			else
@@ -4370,6 +4390,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 				local condState = loadCleanState( n )
 				local status = ( ( getVarNumeric( "Armed", 0, n, SENSOR_SID ) ~= 0 ) and " armed" or "" )
 				status = status .. ( ( getVarNumeric("Tripped", 0, n, SENSOR_SID ) ~= 0 ) and " tripped" or "" )
+				status = status .. ( ( getVarNumeric("Trouble", 0, n, RSSID ) ~= 0 ) and " TROUBLE" or "" )
 				r = r .. string.rep( "=", 132 ) .. EOL
 				r = r .. string.format("%s (#%d)%s", tostring(d.description), n, status) .. EOL
 				local cdata,err = getVarJSON( "cdata", {}, n, RSSID )
