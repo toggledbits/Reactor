@@ -2387,10 +2387,11 @@ if ( ctx === "tab-conds" ) CondBuilder.redraw( myid );
 					break;
 
 				case 'housemode':
-					if ( ( cond.operator || "" ) == "" ) { cond.operator = "is"; }
+					if ( isEmpty( cond.operator ) ) { cond.operator = "is"; }
 					mm = jQuery('<select class="opmenu form-control form-control-sm"></select>');
 					mm.append( '<option value="is">is any of</option>' );
 					mm.append( '<option value="change">changes from</option>' );
+					menuSelectDefaultFirst( mm, cond.operator );
 					mm.on( 'change.reactor', handleConditionOperatorChange );
 					container.append( mm );
 					container.append( " " );
@@ -2465,7 +2466,7 @@ if ( ctx === "tab-conds" ) CondBuilder.redraw( myid );
 					jQuery('select#sunend', container).replaceWith( mm.clone().attr( 'id', 'sunend' ) );
 					jQuery('select#sunstart', container).replaceWith( mm.attr( 'id', 'sunstart' ) );
 					/* Restore. Condition first... */
-					op = menuSelectDefaultFirst( mm, cond.operator );
+					op = menuSelectDefaultFirst( jQuery("select.opmenu", container), cond.operator );
 					jQuery("select.opmenu", container).on( 'change.reactor', handleConditionRowChange );
 					if ( "bet" === op || "nob" === op ) {
 						jQuery("fieldset#end", container).show();
