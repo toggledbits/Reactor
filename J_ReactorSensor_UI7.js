@@ -756,7 +756,8 @@ if ( ctx === "tab-conds" ) CondBuilder.redraw( myid );
 			case 'grpstate':
 				t = getDeviceFriendlyName( cond.device );
 				str += t ? t : '#' + cond.device + ' ' + ( cond.devicename === undefined ? "name unknown" : cond.devicename ) + ' (missing)';
-				str += ' ' + ( cond.groupname || cond.groupid || "?" );
+				t = ( getConditionIndex( cond.device ) || {} )[ cond.groupid ];
+				str += ' ' + ( t.name || cond.groupid || "?" );
 				t = serviceOpsIndex[cond.operator || ""];
 				if ( t ) {
 					str += ' ' + ( t.desc || t.op );
@@ -1464,7 +1465,6 @@ if ( ctx === "tab-conds" ) CondBuilder.redraw( myid );
 						}
 						/* Don't scan siblings or anything below. */
 						if ( cond.device == myid && grp.id == pg.id ) return;
-						if ( grp.id == pg.id ) return;
 						for ( var ix=0; ix<(grp.conditions || []).length; ix++ ) {
 							if ( "group" === ( grp.conditions[ix].type || "group" ) ) {
 								appendgrp( grp.conditions[ix], sel, pg );
