@@ -4167,6 +4167,7 @@ local function getLuupSceneSummary( scd )
 			end
 			if #pp then
 				r = r .. "( " .. table.concat( pp, ", " ) .. " )" .. EOL
+			end
 		end
 	end
 	return r
