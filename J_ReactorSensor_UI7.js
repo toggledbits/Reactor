@@ -28,7 +28,7 @@ var ReactorSensor = (function(api, $) {
 	var myModule = {};
 
 	var serviceId = "urn:toggledbits-com:serviceId:ReactorSensor";
-	// var deviceType = "urn:schemas-toggledbits-com:device:ReactorSensor:1";
+	var deviceType = "urn:schemas-toggledbits-com:device:ReactorSensor:1";
 
 	var iData = [];
 	var roomsByName = [];
@@ -243,7 +243,11 @@ var ReactorSensor = (function(api, $) {
 	/* Load configuration data. */
 	function loadConfigData( myid ) {
 		var upgraded = false;
-		var s = api.getDeviceState( myid, serviceId, "cdata" ) || "";
+		var me = api.getDeviceObject( myid );
+		if ( ! ( me && deviceType === me.device_type ) ) {
+			throw "Device " + String(myid) + " not found or incorrect type";
+		}
+		var s = api.getDeviceState( myid, serviceId, "cdata" ) || {};
 		var cdata;
 		if ( ! isEmpty( s ) ) {
 			try {
@@ -756,13 +760,17 @@ if ( ctx === "tab-conds" ) CondBuilder.redraw( myid );
 			case 'grpstate':
 				t = getDeviceFriendlyName( cond.device );
 				str += t ? t : '#' + cond.device + ' ' + ( cond.devicename === undefined ? "name unknown" : cond.devicename ) + ' (missing)';
-				t = ( getConditionIndex( cond.device ) || {} )[ cond.groupid ];
-				str += ' ' + ( t.name || cond.groupid || "?" );
+				try {
+					t = ( getConditionIndex( cond.device ) || {} )[ cond.groupid ];
+					str += ' ' + ( t ? ( t.name || cond.groupid || "?" ) : ( ( cond.groupid || "?" ) + " (MISSING!)" ) );
+				} catch( e ) {
+					str += ' ' + ( cond.groupid || "?" ) + ' (' + String(e) + ')';
+				}
 				t = serviceOpsIndex[cond.operator || ""];
 				if ( t ) {
 					str += ' ' + ( t.desc || t.op );
 				} else {
-					str += ' ' + cond.operator + '?';
+					str += ' ' + String(cond.operator) + '?';
 				}
 				break;
 
