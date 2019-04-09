@@ -17,11 +17,11 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.0beta-19098';
+	var pluginVersion = '3.0beta-19099';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
-	var _UIVERSION = 19098;     /* must coincide with Lua core */
+	var _UIVERSION = 19099;     /* must coincide with Lua core */
 
 	var _CDATAVERSION = 19082;  /* must coincide with Lua core */
 
@@ -107,6 +107,7 @@ var ReactorSensor = (function(api, $) {
 	div.reactortab input.narrow { max-width: 6em; } \
 	div.reactortab input.tiny { max-width: 4em; text-align: center; } \
 	div.reactortab label { font-weight: normal; } \
+	div.reactortab option.optheading { font-weight: bold; } \
 	div.reactortab .tb-about { margin-top: 24px; } \
 	div.reactortab .tberror { border: 1px solid red; } \
 	div.reactortab .tbwarn { border: 1px solid yellow; background-color: yellow; } \
@@ -5323,7 +5324,6 @@ if ( ctx === "tab-conds" ) CondBuilder.redraw( myid );
 		html += 'div#tab-actions.reactortab div.editor { width: 100%; min-height: 240px; }';
 		html += 'div#tab-actions.reactortab div.tbhint { font-size: 90%; font-weight: normal; }';
 		html += 'div#tab-actions.reactortab div.warning { color: red; }';
-		html += 'div#tab-actions.reactortab option.optheading { font-weight: bold; }';
 		html += 'div#tab-actions.reactortab option.nodata { font-style: italic; }';
 		html += 'div#tab-actions.reactortab option.nodata:after { content: "[1] see footer"; }';
 		html += 'div#tab-actions.reactortab .tbslider { display: inline-block; width: 200px; height: 1em; border-radius: 8px; }';
