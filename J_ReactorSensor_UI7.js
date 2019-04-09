@@ -2343,6 +2343,8 @@ if ( ctx === "tab-conds" ) CondBuilder.redraw( myid );
 					break;
 
 				case 'grpstate':
+					/* Default device to current RS */
+					cond.device = coalesce( cond.device, api.getCpanelDeviceId() );
 					/* Make a device menu that shows ReactorSensors only. */
 					container.append( makeDeviceMenu( cond.device, cond.devicename || "?", function( dev ) {
 						return "urn:schemas-toggledbits-com:device:ReactorSensor:1" === dev.device_type;
@@ -2691,6 +2693,7 @@ if ( ctx === "tab-conds" ) CondBuilder.redraw( myid );
 
 			if ( newType !== ixCond[condId].type ) {
 				/* Change type */
+				removeConditionProperties( ixCond[condId], "type" );
 				ixCond[condId].type = newType;
 				ixCond[condId].options = {}; /* must clear on type change */
 				setConditionForType( ixCond[condId], $row );
