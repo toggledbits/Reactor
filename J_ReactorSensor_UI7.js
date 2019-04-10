@@ -107,7 +107,6 @@ var ReactorSensor = (function(api, $) {
 	div.reactortab input.narrow { max-width: 6em; } \
 	div.reactortab input.tiny { max-width: 4em; text-align: center; } \
 	div.reactortab label { font-weight: normal; } \
-	div.reactortab option.optheading { font-weight: bold; } \
 	div.reactortab .tb-about { margin-top: 24px; } \
 	div.reactortab .tberror { border: 1px solid red; } \
 	div.reactortab .tbwarn { border: 1px solid yellow; background-color: yellow; } \
@@ -949,25 +948,21 @@ if ( ctx === "tab-conds" ) CondBuilder.redraw( myid );
 		val = val || "";
 		var el = jQuery('<select class="devicemenu form-control form-control-sm"></select>');
 		roomsByName.forEach( function( roomObj ) {
-			var first = true; /* per-room first */
+			var haveItem = false;
+			var xg = jQuery( '<optgroup />' ).attr( 'label', roomObj.name );
 			for ( var j=0; j<roomObj.devices.length; j++ ) {
 				var devid = roomObj.devices[j];
 				if ( filter && !filter( api.getDeviceObject( devid ) || {} ) ) {
 					continue;
 				}
-				if ( first ) {
-					el.append( jQuery( '<option class="optheading" disabled/>' ).val("").text( "--" + roomObj.name + "--" ) );
-					first = false;
-				}
+				haveItem = true;
 				var fn = getDeviceFriendlyName( devid );
-				if ( !fn ) console.log( "makeDeviceMenu() friendly name for (" + typeof(devid) + ")" + String(devid) + "=" + String(fn));
-				el.append( jQuery( '<option/>' ).val( devid ).text( fn ? fn : '#' + String(devid) + '?' ) );
+				xg.append( jQuery( '<option/>' ).val( devid ).text( fn ? fn : '#' + String(devid) + '?' ) );
+			}
+			if ( haveItem ) {
+				el.append( xg );
 			}
 		});
-
-		if ( false && jQuery( 'option[value="0"]', el).length == 0 ) {
-			el.prepend( jQuery( '<option/>' ).val( "0" ).text( "Gateway/Controller" ) );
-		}
 
 		el.prepend( jQuery( '<option/>' ).val( "" ).text( "--choose device--" ) );
 
@@ -3709,29 +3704,24 @@ if ( ctx === "tab-conds" ) CondBuilder.redraw( myid );
 				return ra.toLowerCase() < rb.toLowerCase() ? -1 : 1;
 			});
 			var lastRoom = -1;
-			var el;
+			var xg = false;
 			for ( i=0; i<scenes.length; i++ ) {
 				if ( scenes[i].notification_only || scenes[i].hidden ) {
 					continue;
 				}
-				var r = scenes[i].room;
+				var r = scenes[i].room || 0;
 				if ( r != lastRoom ) {
-					if ( undefined !== r && undefined !== rid[r] ) {
-						menu.append('<option value="" class="optheading" disabled>' + "--" + String(rid[r].name) + "--</option>");
-						lastRoom = scenes[i].room;
-					} else {
-						console.log( "*** Scene " + String(scenes[i].id) + ": room " + String(scenes[i].room) + " assigned, but non-existent. Scene data follows:" );
-						for ( var k in scenes[i] ) {
-							if ( scenes[i].hasOwnProperty( k ) ) {
-								console.log( "    " + String(k) + " (" + typeof(scenes[i][k]) + ")=" + scenes[i][k] );
-							}
-						}
+					if ( xg && jQuery( 'option:first', xg ).length > 0 ) {
+						menu.append( xg );
 					}
+					xg = jQuery( '<optgroup />' )
+						.attr( 'label', ( rid[r] || {} ).name || ( "Room " + String(r) ) );
 				}
-				el = jQuery( '<option/>' );
-				el.val( scenes[i].id );
-				el.text( String(scenes[i].name) + ' (#' + String(scenes[i].id) + ')' );
-				menu.append( el );
+				xg.append( jQuery( '<option/>' ).val( scenes[i].id )
+					.text( String(scenes[i].name) + ' (#' + String(scenes[i].id) + ')' ) );
+			}
+			if ( xg && jQuery( 'option:first', xg ).length > 0 ) {
+				menu.append( xg );
 			}
 		} else {
 			/* Simple alpha list */
@@ -4112,17 +4102,17 @@ if ( ctx === "tab-conds" ) CondBuilder.redraw( myid );
 
 	function appendVariables( menu ) {
 		var cd = getConfiguration();
-		var first = true;
+		var hasOne = false;
+		var xg = jQuery( '<optgroup label="Variables" />' );
 		for ( var vname in ( cd.variables || {} ) ) {
 			if ( cd.variables.hasOwnProperty( vname ) ) {
-				if ( first ) {
-					menu.append( '<option class="menuspacer" disabled/>' ).append( '<option id="variables" class="optheading" disabled>--Variables--</option>' );
-					first = false;
-				}
-				menu.append(
-					jQuery( '<option/>' ).val( '{' + vname + '}' ).text( '{' + vname + '}' )
-				);
+				hasOne = true;
+				xg.append( jQuery( '<option/>' ).val( '{' + vname + '}' )
+					.text( '{' + vname + '}' ) );
 			}
+		}
+		if ( hasOne ) {
+			menu.append( xg );
 		}
 	}
 
@@ -4541,17 +4531,14 @@ if ( ctx === "tab-conds" ) CondBuilder.redraw( myid );
 					hasAction = true;
 				}
 				if ( jQuery("option", section).length > 0 ) {
-					opt = jQuery("<option/>").val("").text( "---Service " + service.serviceId.replace(/^([^:]+:)+/, "") + "---" );
-					opt.prop( 'disabled', true );
-					opt.addClass("optheading");
-					section.prepend( opt );
-					actionMenu.append( section.children() );
+					opt = jQuery( '<optgroup />' ).attr( 'label', service.serviceId.replace(/^([^:]+:)+/, "") );
+					opt.append( section.children() );
+					actionMenu.append( opt );
 				}
 			}
 			var over = getDeviceOverride( newVal );
 			if ( over ) {
-				var known = jQuery("<select/>");
-				known.append( "<option class='optheading' value='' disabled><b>---Common Actions---</b></option>" );
+				var known = jQuery( '<optgroup />' ).attr( 'label', 'Common Actions' );
 				for ( j=0; j<over.length; j++ ) {
 					var devact = over[j];
 					var fake = false;
@@ -4579,8 +4566,7 @@ if ( ctx === "tab-conds" ) CondBuilder.redraw( myid );
 					}
 					actions[key].deviceOverride[newVal] = act;
 				}
-				known.append("<option disabled/>");
-				actionMenu.prepend( known.children() );
+				actionMenu.prepend( known );
 			}
 			var lopt = jQuery( '<option selected/>' ).val( "" ).text( hasAction ? "--choose action--" : "(invalid device--no actions)" );
 			actionMenu.prepend( lopt );
