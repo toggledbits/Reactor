@@ -5,6 +5,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 ## Version 3.0beta-19099
 
 * Beta19099: Ensure default device for new GroupStatus condition is current RS.
+* Beta19099: Don't select default (action) parameter value if defined, as this makes (Chrome) datalists appear as if they have no options (they have them, but you have to clear the default to a blank field and then they'll show--fugly).
 * Beta19098: Make sure status display shows current name of target group in Group State conditions (was showing stored name, but if name changes, that change was not displayed until updated by editing config).
 * Beta19093: Fix #28: condition config corrupted by some drag/drop operations.
 * Beta19093: Fix #27: cross-Reactor group status not updating correctly.
