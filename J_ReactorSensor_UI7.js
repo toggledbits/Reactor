@@ -4159,12 +4159,12 @@ if ( ctx === "tab-conds" ) CondBuilder.redraw( myid );
 									for ( z in parm.values[j] ) {
 										if ( parm.values[j].hasOwnProperty( z ) ) {
 											opt.val( String(z) );
-											opt.text( String( parm.values[j][z] ) );
+											opt.text( String( parm.values[j][z] ) + ( parm.default && z == parm.default ? " *" : "" ) );
 										}
 									}
 								} else {
 									opt.val( String( parm.values[j] ) );
-									opt.text( String( parm.values[j] ) );
+									opt.text( String( parm.values[j] ) + ( parm.default && parm.values[j] == parm.default ? " *" : "" ) );
 								}
 								inp.append( opt );
 							}
@@ -4174,9 +4174,6 @@ if ( ctx === "tab-conds" ) CondBuilder.redraw( myid );
 						}
 						/* Now pass on the input field */
 						inp = jQuery( '<input class="argument form-control form-control-sm" list="' + dlid + '">' );
-						if ( undefined !== parm.default ) {
-							inp.val( parm.default );
-						}
 					} else {
 						/* Standard select menu */
 						inp = jQuery( '<select class="argument form-control form-control-sm"/>' );
