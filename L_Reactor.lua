@@ -433,6 +433,7 @@ end
 
 -- Enabled?
 local function isEnabled( dev )
+	if getVarNumeric( "Enabled", 1, pluginDevice, MYSID ) == 0 then return false end
 	return getVarNumeric( "Enabled", 1, dev, RSSID ) ~= 0
 end
 
@@ -634,6 +635,7 @@ local function plugin_runOnce( pdev )
 		return
 	elseif s == 0 then
 		L("First run, setting up new plugin instance...")
+		initVar( "Enabled", 1, pdev, MYSID )
 		initVar( "Message", "", pdev, MYSID )
 		initVar( "DebugMode", 0, pdev, MYSID )
 		initVar( "MaxEvents", "", pdev, MYSID )
@@ -661,6 +663,10 @@ local function plugin_runOnce( pdev )
 		initVar( "UseACE", "", pdev, MYSID )
 		initVar( "ACEURL", "", pdev, MYSID )
 		initVar( "IsHome", "", pdev, MYSID ) -- 00205
+	end
+	
+	if s < 00301 then
+		initVar( "Enabled", 1, pdev, MYSID )
 	end
 
 	-- Update version last.
@@ -3341,6 +3347,15 @@ function startPlugin( pdev )
 	end
 
 	L("Plugin version %2, device %1 (%3)", pdev, _PLUGIN_VERSION, luup.devices[pdev].description)
+	if getVarNumeric( "Enabled", 1, pdev, MYSID ) == 0 then
+		luup.variable_set( MYSID, "Message", "PLUGIN DISABLED", pdev )
+		for k,v in childDevices( pdev ) do
+			if v.device_type == RSTYPE then
+				luup.variable_set( RSSID, "Message", "PLUGIN DISABLED", k )
+			end
+		end
+		return false
+	end
 
 	luup.variable_set( MYSID, "Message", "Initializing...", pdev )
 	luup.variable_set( MYSID, "NumRunning", "0", pdev )
