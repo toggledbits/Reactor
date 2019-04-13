@@ -2136,6 +2136,10 @@ if ( ctx === "tab-conds" ) CondBuilder.redraw( myid );
 			var newMenu = makeVariableMenu( cond.device, cond.service, cond.variable );
 			jQuery("select.varmenu", $row).replaceWith( newMenu );
 			jQuery("select.varmenu", $row).off( 'change.reactor' ).on( 'change.reactor', handleConditionVarChange );
+
+			newMenu = makeEventMenu( cond, $row );
+			jQuery( 'select#eventlist', $row ).replaceWith( newMenu );
+
 			updateCurrentServiceValue( $row );
 
 			updateConditionRow( $row ); /* pass it on */
@@ -2291,6 +2295,81 @@ if ( ctx === "tab-conds" ) CondBuilder.redraw( myid );
 			handleConditionRowChange( ev );
 		}
 
+		function firstKey( t ) {
+			for ( var d in t ) {
+				if ( t.hasOwnProperty( d ) ) return d;
+			}
+			return undefined;
+		}
+
+		/**
+		 * Make event menu from static JSON eventlist for device
+		 */
+		function makeEventMenu( cond, $row ) {
+			var dobj = api.getDeviceObject( cond.device );
+			if ( ! dobj ) return;
+			var url = api.getDataRequestURL().replace( /\/data_request.*$/, "/" );
+			jQuery.ajax({
+				url: url + dobj.device_json,
+				dataType: "json",
+				timeout: 5000
+			}).done( function( data, statusText, jqXHR ) {
+				var first = true;
+				var mm = jQuery( 'div#eventlist ul.dropdown-menu', $row ).empty();
+				if ( data && data.eventList2 ) {
+					var wrapAction = function( eventinfo, cond, $row ) {
+						return function( ev ) {
+							var el = jQuery( ev.target );
+							if ( eventinfo.serviceStateTable ) {
+								cond.service = eventinfo.serviceId;
+								cond.variable = firstKey( eventinfo.serviceStateTable );
+								cond.operator = eventinfo.serviceStateTable[cond.variable].comparisson || "=";
+								cond.value = eventinfo.serviceStateTable[cond.variable].value || "";
+							} else if ( eventinfo.argumentList ) {
+								cond.service = eventinfo.serviceId;
+								cond.variable = eventinfo.argumentList[0].name;
+								cond.operator = eventinfo.argumentList[0].comparisson || "=";
+								cond.value = eventinfo.argumentList[0].defaultValue || "";
+							}
+							var sk = cond.service + "/" + cond.variable;
+							if ( 0 === jQuery( 'select.varmenu option[value="' + idSelector( sk ) + '"]', $row ).length ) {
+								jQuery( 'select.varmenu', $row ).append( jQuery( '<option/>').val( sk ).text( sk ) );
+							}
+							jQuery( 'select.varmenu', $row ).val( sk );
+							jQuery( 'select.opmenu', $row ).val( cond.operator );
+							jQuery( 'input#value', $row ).val( cond.value );
+							configModified = true;
+							setUpConditionOpFields( $row, cond );
+							updateCurrentServiceValue( $row );
+							updateConditionRow( $row, jQuery( ev ) );
+						};
+					};
+					for ( var ix=0; ix<data.eventList2.length; ix++ ) {
+						var cx = data.eventList2[ix];
+						var txt = ((cx.label || {}).text || String(cx.id)).replace( /_DEVICE_NAME_/g, "device" );
+						var lk = jQuery( '<a href="#"></a>' ).text( txt );
+						lk.attr( 'id', cx.id );
+						lk.on( 'click.reactor', wrapAction( cx, cond, $row ) );
+						mm.append( jQuery( '<li />' ).append( lk ) );
+					}
+				}
+				if ( jQuery( 'li', mm ).length > 0 ) {
+					mm.append( jQuery( '<li class="divider" />' ) );
+					mm.append( jQuery( '<li />' )
+						.text( "In addition to the above device-defined conditions, you can select any state variable defined on the device and test it." ) );
+					jQuery( 'div#eventlist', $row ).show().prop( 'disabled', false );
+				} else {
+					jQuery( 'div#eventlist', $row ).prop( 'disabled', false ).hide();
+				}
+			}).fail( function( jqXHR ) {
+				console.log("Failed to retrieve and parse " + dobj.device_json);
+			});
+			var el = jQuery( '<div id="eventlist" class="dropdown" />' ).prop('disabled', true).hide();
+			el.append( '<button class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" title="Click for device-defined events"><i class="material-icons md14">fast_forward</i></button>' );
+			el.append( '<ul class="dropdown-menu" role="menu" />' );
+			return el;
+		}
+
 		/**
 		 * Set condition fields and data for type. This also replaces existing
 		 * data from the passed condition. The condition must have at least
@@ -2321,6 +2400,11 @@ if ( ctx === "tab-conds" ) CondBuilder.redraw( myid );
 					if ( dobj && dobj.name !== cond.devicename ) {
 						cond.devicename = dobj.name;
 						configModified = true;
+					}
+					try {
+						container.append( makeEventMenu( cond, row ) );
+					} catch( e ) {
+						console.log("Error while attempting to handle device JSON: " + String(e));
 					}
 					container.append( makeVariableMenu( cond.device, cond.service, cond.variable ) );
 					container.append( makeServiceOpMenu( cond.operator || "=" ) );
@@ -3229,6 +3313,9 @@ if ( ctx === "tab-conds" ) CondBuilder.redraw( myid );
 			html += 'div#tab-conds.reactortab div.params { display: inline-block; clear: right; }';
 			html += 'div#tab-conds.reactortab div.params > fieldset { display: inline-block; border: none; margin: 0 4px; padding: 0 0; }';
 
+			html += 'div#tab-conds.reactortab div#eventlist { display: inline-block; }';
+			html += 'div#tab-conds.reactortab div#eventlist button { padding: 6px 4px; }';
+			html += 'div#tab-conds.reactortab div#eventlist button i { font-size: 16pt; color: #666; vertical-align:middle; }';
 			html += 'div#tab-conds.reactortab div#currval { font-family: "Courier New", Courier, monospace; font-size: 0.9em; margin: 8px 0px; display: block; }';
 			html += 'div#tab-conds.reactortab div.warning { color: red; }';
 			html += 'div#tab-conds.reactortab i.md-btn.attn { background-color: #ffff80; }';

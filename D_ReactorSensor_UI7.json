@@ -543,7 +543,7 @@
 			"id": 9,
 			"label": {
 				"lang_tag": "tb_reactor_trouble",
-				"text": "ReactorSensor signals configuration trouble"
+				"text": "Signals trouble"
 			},
 			"serviceId": "urn:toggledbits-com:serviceId:ReactorSensor",
 			"serviceStateTable": {
