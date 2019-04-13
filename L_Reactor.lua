@@ -11,12 +11,12 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.0beta-19099"
+local _PLUGIN_VERSION = "3.0beta-19102"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION = 301
 local _CDATAVERSION = 19082	-- must coincide with JS
-local _UIVERSION = 19099	-- must coincide with JS
+local _UIVERSION = 19102	-- must coincide with JS
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
