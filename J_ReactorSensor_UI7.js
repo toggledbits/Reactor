@@ -2365,7 +2365,7 @@ if ( ctx === "tab-conds" ) CondBuilder.redraw( myid );
 				console.log("Failed to retrieve and parse " + dobj.device_json);
 			});
 			var el = jQuery( '<div id="eventlist" class="dropdown" />' ).prop('disabled', true).hide();
-			el.append( '<button class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" title="Click for device-defined events"><i class="material-icons md14">fast_forward</i></button>' );
+			el.append( '<button class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" title="Click for device-defined events"><i class="material-icons md14">chevron_right</i></button>' );
 			el.append( '<ul class="dropdown-menu" role="menu" />' );
 			return el;
 		}
