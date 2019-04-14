@@ -2,8 +2,9 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
-## Version 3.0beta-19102
+## Version 3.0beta-19104
 
+* Beta19104: On revert or any forced reload of config, make sure condition index is cleared so it gets rebuilt.
 * Enhancement: The device-defined conditions normally seen in the Vera scene editor are now offered as shortcuts for creating conditions;
 * Beta19099: Ensure default device for new GroupStatus condition is current RS.
 * Beta19099: Don't select default (action) parameter value if defined, as this makes (Chrome) datalists appear as if they have no options (they have them, but you have to clear the default to a blank field and then they'll show--fugly).

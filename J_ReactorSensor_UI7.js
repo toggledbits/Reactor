@@ -17,11 +17,11 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.0beta-19102';
+	var pluginVersion = '3.0beta-19104';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
-	var _UIVERSION = 19102;     /* must coincide with Lua core */
+	var _UIVERSION = 19104;     /* must coincide with Lua core */
 
 	var _CDATAVERSION = 19082;  /* must coincide with Lua core */
 
@@ -380,6 +380,7 @@ var ReactorSensor = (function(api, $) {
 		/* Store config on instance data */
 		var d = getInstanceData( myid );
 		d.cdata = cdata;
+		delete d.ixCond; /* Remove until needed/rebuilt */
 
 		configModified = false;
 		return cdata;
