@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.0beta-19104';
+	var pluginVersion = '3.0beta-19105';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -661,8 +661,6 @@ var ReactorSensor = (function(api, $) {
 					configModified = false;
 					updateSaveControls();
 					clearUnusedStateVariables( myid, cdata );
-var ctx = jQuery( ev.currentTarget ).closest('div.reactortab').attr('id');
-if ( ctx === "tab-conds" ) CondBuilder.redraw( myid );
 				},
 				'onFailure' : function() {
 					alert('There was a problem saving the configuration. Vera/Luup may have been restarting. Please try hitting the "Save" button again.');

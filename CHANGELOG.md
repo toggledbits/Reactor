@@ -2,8 +2,9 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
-## Version 3.0beta-19104
+## Version 3.0beta-19105
 
+* Beta19105: Remove debug statements causing erroneous error message.
 * Beta19104: On revert or any forced reload of config, make sure condition index is cleared so it gets rebuilt.
 * Enhancement: The device-defined conditions normally seen in the Vera scene editor are now offered as shortcuts for creating conditions;
 * Beta19099: Ensure default device for new GroupStatus condition is current RS.
