@@ -2334,7 +2334,7 @@ var ReactorSensor = (function(api, $) {
 					};
 				};
 				var reptext = function( s ) {
-					return ( s || "?" ).replace( /_DEVICE_NAME_/g, "device" ).replace( /_ARGUMENT_VALUE_/g, "?" );
+					return ( s || "?" ).replace( /_DEVICE_NAME_/g, "device" ).replace( /_ARGUMENT_VALUE_/g, "<i>value</i>" );
 				};
 				for ( var ix=0; ix<dtmp.eventList2.length; ix++ ) {
 					var cx = dtmp.eventList2[ix];
@@ -2350,7 +2350,7 @@ var ReactorSensor = (function(api, $) {
 						li.data('value', String( cx.serviceStateTable[k].value ) );
 						item = jQuery( '<a href="#"></a>' );
 						txt = reptext( (cx.label || {}).text || String(cx.id) );
-						item.text( txt );
+						item.html( txt );
 						li.append( item );
 						mm.append( li );
 						item.on( 'click.reactor', wrapAction( cx, cond, $row ) );
@@ -2369,7 +2369,7 @@ var ReactorSensor = (function(api, $) {
 									li.data( 'value', String( av[k] || "" ) );
 									item = jQuery( '<a href="#"></a>' );
 									item.attr( 'id', arg.id );
-									item.text( reptext( av.HumanFriendlyText.text || "(invalid device_json description)" ) );
+									item.html( reptext( av.HumanFriendlyText.text || "(invalid device_json description)" ) );
 									li.append( item );
 									mm.append( li );
 									item.on( 'click.reactor', wrapAction( cx, cond, $row ) );
@@ -2383,7 +2383,7 @@ var ReactorSensor = (function(api, $) {
 								li.data( 'value', String( arg.defaultValue || "" ) );
 								item = jQuery( '<a href="#"></a>' );
 								item.attr( 'id', arg.id );
-								item.text( reptext( arg.HumanFriendlyText.text || "(invalid device_json description)" ) );
+								item.html( reptext( arg.HumanFriendlyText.text || "(invalid device_json description)" ) );
 								li.append( item );
 								mm.append( li );
 								item.on( 'click.reactor', wrapAction( cx, cond, $row ) );
