@@ -2315,8 +2315,8 @@ var ReactorSensor = (function(api, $) {
 					return function( ev ) {
 						var el = jQuery( ev.target );
 						var li = el.closest( 'li' );
-						cond.service = li.data( 'service' );
-						cond.variable = li.data( 'variable' );
+						cond.service = li.data( 'service' ) || "?";
+						cond.variable = li.data( 'variable' ) || "?";
 						cond.operator = li.data( 'operator' ) || "=";
 						cond.value = li.data( 'value' ) || "";
 						delete cond.nocase;
