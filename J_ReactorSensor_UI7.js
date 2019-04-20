@@ -33,6 +33,7 @@ var ReactorSensor = (function(api, $) {
 	var iData = [];
 	var roomsByName = [];
 	var actions = {};
+	var deviceActionData = {};
 	var deviceInfo = {};
 	var userIx = {};
 	var configModified = false;
@@ -4547,6 +4548,99 @@ var ReactorSensor = (function(api, $) {
 		return false;
 	}
 
+	/**
+	 * Load the action menu for a device with the device data.
+	 */
+	function loadActionMenu( dev, actionMenu, row, data ) {
+		actionMenu.empty();
+		var hasAction = false;
+		var i, j, key;
+		for ( i=0; i<(data.serviceList || []).length; i++ ) {
+			var section = jQuery( "<select/>" );
+			var service = data.serviceList[i];
+			var opt;
+			for ( j=0; j<(service.actionList || []).length; j++ ) {
+				var nodata = false;
+				var actname = service.actionList[j].name;
+				var ai;
+				if ( deviceInfo.services[service.serviceId] && (deviceInfo.services[service.serviceId].actions || {})[actname] ) {
+					/* Have extended data */
+					ai = deviceInfo.services[service.serviceId].actions[actname];
+				} else {
+					/* No extended data; copy what we got from lu_actions */
+					nodata = true;
+					ai = { service: service.serviceId, action: actname, parameters: service.actionList[j].arguments };
+					for ( var ip=0; ip < (service.actionList[j].arguments || []).length; ++ip ) {
+						var p = service.actionList[j].arguments[ip];
+						p.type = p.dataType || "string";
+						if ( ! p.defaultValue ) {
+							p.optional = 1;
+						} else {
+							p.default = p.defaultValue;
+						}
+					}
+				}
+				key = service.serviceId + "/" + actname;
+				if ( actions[key] === undefined ) {
+					// Save action data as we use it.
+					ai.deviceOverride = {};
+					ai.service = service.serviceId;
+					actions[key] = ai;
+				}
+				if ( ai.hidden ) {
+					continue;
+				}
+
+				opt = jQuery( '<option/>' ).val( key ).text( actname + ( nodata ? "??(E)" : "") );
+				if ( nodata ) opt.addClass( "nodata" );
+				section.append( opt.clone() );
+
+				hasAction = true;
+			}
+			if ( jQuery("option", section).length > 0 ) {
+				opt = jQuery( '<optgroup />' ).attr( 'label', service.serviceId.replace(/^([^:]+:)+/, "") );
+				opt.append( section.children() );
+				actionMenu.append( opt );
+			}
+		}
+		var over = getDeviceOverride( dev );
+		if ( over ) {
+			var known = jQuery( '<optgroup />' ).attr( 'label', 'Common Actions' );
+			for ( j=0; j<over.length; j++ ) {
+				var devact = over[j];
+				var fake = false;
+				if ( undefined === deviceInfo.services[devact.service] || undefined == deviceInfo.services[devact.service].actions[devact.action] ) {
+					/* Service/action in device exception not "real". Fake it real good. */
+					deviceInfo.services[devact.service] = deviceInfo.services[devact.service] || { actions: {} };
+					deviceInfo.services[devact.service].actions[devact.action] = { name: devact.action, deviceOverride: {} };
+					fake = true;
+				}
+				/* There's a well-known service/action, so copy it, and apply overrides */
+				var act = deepcopy( deviceInfo.services[devact.service].actions[devact.action] );
+				for ( var k in devact ) {
+					if ( devact.hasOwnProperty(k) ) {
+						act[k] = devact[k];
+					}
+				}
+				if ( act.hidden ) continue;
+				key = act.service + "/" + act.action;
+				known.append( jQuery('<option/>').val( key ).text( ( act.description || act.action ) +
+					( fake ? "??(O)" : "" ) ) );
+				hasAction = true;
+				if ( undefined === actions[key] ) {
+					actions[key] = deviceInfo.services[devact.service].actions[devact.action];
+					actions[key].deviceOverride = {};
+				}
+				actions[key].deviceOverride[dev] = act;
+			}
+			actionMenu.prepend( known );
+		}
+		var lopt = jQuery( '<option selected/>' ).val( "" ).text( hasAction ? "--choose action--" : "(invalid device--no actions)" );
+		actionMenu.prepend( lopt );
+		actionMenu.prop( 'disabled', false );
+		jQuery( 'option:first', actionMenu ).prop( 'selected' );
+	}
+
 	function changeActionDevice( row, newVal, fnext, fargs, retries ) {
 		var ct = jQuery( 'div.actiondata', row );
 		var actionMenu = jQuery( 'select#actionmenu', ct );
@@ -4556,6 +4650,15 @@ var ReactorSensor = (function(api, $) {
 			.append( jQuery( '<option/>' ).val("").text( '(loading...)' ) );
 		jQuery('label,.argument', ct).remove();
 		if ( newVal == "" ) { return; }
+
+		/* If actions cached, use... */
+		if ( undefined !== deviceActionData[newVal] ) {
+			loadActionMenu( newVal, actionMenu, row, deviceActionData[newVal] );
+			if ( undefined !== fnext ) {
+				fnext.apply( null, fargs );
+			}
+			return;
+		}
 
 		/* Use actions/lu_actions to get list of services/actions for this device. We could
 		   also use lu_device and fetch/parse /luvd/S_...xml to get even more data,
@@ -4570,93 +4673,8 @@ var ReactorSensor = (function(api, $) {
 			dataType: "json",
 			timeout: 15000
 		}).done( function( data, statusText, jqXHR ) {
-			actionMenu.empty();
-			var hasAction = false;
-			var i, j, key;
-			for ( i=0; i<(data.serviceList || []).length; i++ ) {
-				var section = jQuery( "<select/>" );
-				var service = data.serviceList[i];
-				var opt;
-				for ( j=0; j<(service.actionList || []).length; j++ ) {
-					var nodata = false;
-					var actname = service.actionList[j].name;
-					var ai;
-					if ( deviceInfo.services[service.serviceId] && (deviceInfo.services[service.serviceId].actions || {})[actname] ) {
-						/* Have extended data */
-						ai = deviceInfo.services[service.serviceId].actions[actname];
-					} else {
-						/* No extended data; copy what we got from lu_actions */
-						nodata = true;
-						ai = { service: service.serviceId, action: actname, parameters: service.actionList[j].arguments };
-						for ( var ip=0; ip < (service.actionList[j].arguments || []).length; ++ip ) {
-							var p = service.actionList[j].arguments[ip];
-							p.type = p.dataType || "string";
-							if ( ! p.defaultValue ) {
-								p.optional = 1;
-							} else {
-								p.default = p.defaultValue;
-							}
-						}
-					}
-					key = service.serviceId + "/" + actname;
-					if ( actions[key] === undefined ) {
-						// Save action data as we use it.
-						ai.deviceOverride = {};
-						ai.service = service.serviceId;
-						actions[key] = ai;
-					}
-					if ( ai.hidden ) {
-						continue;
-					}
-
-					opt = jQuery( '<option/>' ).val( key ).text( actname + ( nodata ? "??(E)" : "") );
-					if ( nodata ) opt.addClass( "nodata" );
-					section.append( opt.clone() );
-
-					hasAction = true;
-				}
-				if ( jQuery("option", section).length > 0 ) {
-					opt = jQuery( '<optgroup />' ).attr( 'label', service.serviceId.replace(/^([^:]+:)+/, "") );
-					opt.append( section.children() );
-					actionMenu.append( opt );
-				}
-			}
-			var over = getDeviceOverride( newVal );
-			if ( over ) {
-				var known = jQuery( '<optgroup />' ).attr( 'label', 'Common Actions' );
-				for ( j=0; j<over.length; j++ ) {
-					var devact = over[j];
-					var fake = false;
-					if ( undefined === deviceInfo.services[devact.service] || undefined == deviceInfo.services[devact.service].actions[devact.action] ) {
-						/* Service/action in device exception not "real". Fake it real good. */
-						deviceInfo.services[devact.service] = deviceInfo.services[devact.service] || { actions: {} };
-						deviceInfo.services[devact.service].actions[devact.action] = { name: devact.action, deviceOverride: {} };
-						fake = true;
-					}
-					/* There's a well-known service/action, so copy it, and apply overrides */
-					var act = deepcopy( deviceInfo.services[devact.service].actions[devact.action] );
-					for ( var k in devact ) {
-						if ( devact.hasOwnProperty(k) ) {
-							act[k] = devact[k];
-						}
-					}
-					if ( act.hidden ) continue;
-					key = act.service + "/" + act.action;
-					known.append( jQuery('<option/>').val( key ).text( ( act.description || act.action ) +
-						( fake ? "??(O)" : "" ) ) );
-					hasAction = true;
-					if ( undefined === actions[key] ) {
-						actions[key] = deviceInfo.services[devact.service].actions[devact.action];
-						actions[key].deviceOverride = {};
-					}
-					actions[key].deviceOverride[newVal] = act;
-				}
-				actionMenu.prepend( known );
-			}
-			var lopt = jQuery( '<option selected/>' ).val( "" ).text( hasAction ? "--choose action--" : "(invalid device--no actions)" );
-			actionMenu.prepend( lopt );
-			actionMenu.prop( 'disabled', false );
-			jQuery( 'option:first', actionMenu ).prop( 'selected' );
+			deviceActionData[newVal] = data;
+			loadActionMenu( newVal, actionMenu, row, data );
 			if ( undefined !== fnext ) {
 				fnext.apply( null, fargs );
 			}
