@@ -46,7 +46,6 @@ local geofenceEvent = 0
 local maxEvents = 50
 local luaEnv -- global state for all runLua actions
 
-local sceneSerial = 0
 local runStamp = 0
 local pluginDevice = false
 local isALTUI = false
@@ -1361,8 +1360,7 @@ local function execScene( scd, tdev, options )
 
 	-- Check if scene running. If so, stop it.
 	local ctx = tonumber( options.contextDevice ) or 0
-	sceneSerial = sceneSerial + 1
-	local taskid = string.format("ctx%s.sc%s.%x", tostring(ctx), tostring(scd.id), sceneSerial)
+	local taskid = string.format("ctx%s.sc%s", tostring(ctx), tostring(scd.id))
 	if options.stopPriorScenes then
 		stopScene( ctx, nil, tdev )
 	end
@@ -3276,7 +3274,7 @@ local function startSensors( pdev )
 				L({level=1,msg="%1 (#%2) failed to start: %3"}, luup.devices[k].description, k, err)
 				addEvent{ dev=k, event="error", message="Startup failed", reason=err }
 				setMessage( "Failed (see log)", k )
-				luup.set_failure( 1, k ) -- error on timer device
+				luup.set_failure( 1, k ) -- error on child device
 			else
 				luup.set_failure( 0, k )
 				started = started + 1
@@ -3751,6 +3749,7 @@ function actionRestart( dev )
 	assert( luup.devices[dev] ~= nil and luup.devices[dev].device_type == RSTYPE )
 	L("Restarting %2 (#%1)", dev, luup.devices[dev].description)
 	addEvent{ dev=dev, event="action", action="Restart" }
+	stopScene( dev, nil, dev ) -- stop all scenes in device context
 	local success, err = pcall( startSensor, dev, luup.devices[dev].device_num_parent )
 	if not success then
 		L({level=2,msg="Failed to start %1 (%2): %3"}, dev, luup.devices[dev].description, err)
