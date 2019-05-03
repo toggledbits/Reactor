@@ -1325,23 +1325,12 @@ var ReactorSensor = (function(api, $) {
 		 * Renumber group conditions.
 		 */
 		function reindexConditions( grp ) {
-			var $el = jQuery( 'div#' + idSelector( grp.id ) + '.cond-group-container' ).children( 'div.cond-group-body' ).children( 'div.cond-list' );
-			var ixCond = getConditionIndex();
-			var ix = 0;
-			grp.conditions.splice( 0, grp.conditions.length ); /* empty in place */
-			$el.children().each( function( n, row ) {
-				var id = jQuery( row ).attr( 'id' );
-				var obj = ixCond[ id ];
-				if ( obj ) {
-					// console.log("reindexConditions(" + grp.id + ") " + id + " is now " + ix);
-					grp.conditions[ix] = obj;
-					obj.__index = ix++;
-					obj.__depth = grp.__depth + 1;
-				} else {
-					/* Not found. Remove from UI */
-					jQuery( row ).remove();
-				}
-			});
+			var d = (grp.__depth || 0) + 1;
+			for ( var ix=0; ix<(grp.conditions || []).length; ix++ ) {
+				grp.conditions[ix].__index = ix;
+				grp.conditions[ix].__parent = grp;
+				grp.conditions[ix].__depth = d;
+			}
 		}
 
 		/**
@@ -2883,6 +2872,40 @@ var ReactorSensor = (function(api, $) {
 				jQuery( 'span#titlemessage:first', $p ).text( "" );
 			}
 		}
+		
+		/** 
+		 * Delete condition. If it's a group, delete it and all children
+		 * recursively.
+		 */
+		function deleteCondition( condId, ixCond, pgrp, reindex ) {
+			var ix;
+			var cond = ixCond[condId];
+			if ( undefined === cond ) return;
+			pgrp = pgrp || cond.__parent;
+			if ( undefined === reindex ) reindex = true;
+			if ( "group" === ( cond.type || "group" ) ) {
+				for ( ix=0; ix<(cond.conditions || []).length; ix++ ) {
+					deleteCondition( cond.conditions[ix].id, ixCond, cond, false );
+				}
+				delete cond.conditions;
+			}
+			
+			/* Remove references to this cond in sequences */
+			for ( var ci in ixCond ) {
+				if ( ixCond.hasOwnProperty( ci ) && (ixCond[ci].options || {}).after === condId ) {
+					delete ixCond[ci].options.after;
+					delete ixCond[ci].options.aftertime;
+					configModified = true;
+				}
+			}
+
+			delete ixCond[condId];
+
+			if ( reindex ) {
+				pgrp.conditions.splice( cond.__index, 1 );
+				reindexConditions( pgrp );
+			}
+		}
 
 		/**
 		 * Handle delete group button click
@@ -2894,23 +2917,18 @@ var ReactorSensor = (function(api, $) {
 			var $grpEl = $el.closest( 'div.cond-group-container' );
 			var grpId = $grpEl.attr( 'id' );
 
-			var grp = getConditionIndex()[ grpId ];
+			var ixCond = getConditionIndex();
+			var grp = ixCond[ grpId ];
 			/* Confirm deletion only if group is not empty */
 			if ( ( grp.conditions || [] ).length > 0 && ! confirm( 'This group has conditions and/or sub-groups, which will all be deleted as well. Really delete this group?' ) ) {
 				return;
 			}
-
-			var gparent = grp.__parent;
-			if ( gparent ) {
-				var ix = grp.__index;
-				gparent.conditions.splice( ix, 1 );
-				$grpEl.remove();
-				reindexConditions( gparent );
-
-				configModified = true;
-				updateControls();
-				return;
-			}
+			
+			$grpEl.remove();
+			deleteCondition( grpId, ixCond, grp.__parent, true );
+			configModified = true;
+			$el.closest( 'div.cond-group-container' ).addClass( 'tbmodified' ); // ??? NO! Parent group!
+			updateControls();
 		}
 
 		/**
@@ -2969,14 +2987,10 @@ var ReactorSensor = (function(api, $) {
 				}
 			}
 
-			/* Remove condition from parent. */
-			var grp = ixCond[ grpId ];
-			grp.conditions.splice( ixCond[ condId ].__index, 1 );
-			delete ixCond[ condId ];
+			deleteCondition( condId, ixCond, ixCond[condId].__parent, true );
 
 			/* Remove the condition row from display, reindex parent. */
 			row.remove();
-			reindexConditions( grp );
 
 			el.closest( 'div.cond-group-container' ).addClass( 'tbmodified' );
 			configModified = true;
