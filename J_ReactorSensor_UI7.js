@@ -4650,13 +4650,14 @@ var ReactorSensor = (function(api, $) {
 				actionMenu.append( opt );
 			}
 		}
-		var over = getDeviceOverride( dev );
-		if ( false && over ) {
-			var known = jQuery( '<optgroup />' ).attr( 'label', 'Common Actions' );
-			for ( j=0; j<over.length; j++ ) {
-				var thisover = over[j];
-				key = thisover.service + "/" + thisover.action;
-				if ( undefined === actions[key] || undefined === ( actions[key].deviceOverride||{} )[dev] ) {
+
+		try {
+			var over = getDeviceOverride( dev );
+			if ( false && over ) { // ???
+				var known = jQuery( '<optgroup />' ).attr( 'label', 'Common Actions' );
+				for ( j=0; j<over.length; j++ ) {
+					var thisover = over[j];
+					key = thisover.service + "/" + thisover.action;
 					var fake = false;
 					if ( undefined === deviceInfo.services[thisover.service] || undefined === ( deviceInfo.services[thisover.service].actions || {} )[thisover.action] ) {
 						/* Service/action in device exception not "real". Fake it real good. */
@@ -4664,34 +4665,45 @@ var ReactorSensor = (function(api, $) {
 						deviceInfo.services[thisover.service].actions[thisover.action] = { name: thisover.action, deviceOverride: {} };
 						fake = true;
 					}
-					var actinfo = deviceInfo.services[thisover.service].actions[thisover.action];
 					/* There's a well-known service/action, so copy it, and apply overrides */
 					// var act = deepcopy( deviceInfo.services[thisover.service].actions[thisover.action] );
-					var act = { service: thisover.service, name: thisover.action };
-					for ( var k in actinfo ) {
-						if ( actinfo.hasOwnProperty(k) ) {
-							act[k] = actinfo[k];
+					var act;
+					if ( undefined === actions[key] || undefined === ( actions[key].deviceOverride||{} )[dev] ) {
+						/* Store new action override */
+						var actinfo = deviceInfo.services[thisover.service].actions[thisover.action];
+						act = { service: thisover.service, name: thisover.action };
+						for ( var k in actinfo ) {
+							if ( actinfo.hasOwnProperty(k) ) {
+								act[k] = actinfo[k];
+							}
 						}
-					}
-					/* Apply overrides */
-					for ( k in thisover ) {
-						if ( thisover.hasOwnProperty(k) ) {
-							act[k] = thisover[k];
+						/* Apply overrides */
+						for ( k in thisover ) {
+							if ( thisover.hasOwnProperty(k) ) {
+								act[k] = thisover[k];
+							}
 						}
+						if ( undefined === actions[key] ) {
+							actions[key] = actinfo;
+							actions[key].deviceOverride = {};
+						}
+						actions[key].deviceOverride[dev] = act;
+					} else {
+						/* Override already processed; re-use */
+						act = actions[key].deviceOverride[dev];
 					}
 					if ( act.hidden ) continue;
-					known.append( jQuery('<option/>').val( key ).text( ( act.description || act.action ) +
-						( fake ? "??(O)" : "" ) ) );
+					known.append( jQuery('<option/>').val( key ).text( ( act.description || act.name ) +
+						( fake ? " (O)" : "" ) ) );
 					hasAction = true;
-					if ( undefined === actions[key] ) {
-						actions[key] = actinfo;
-						actions[key].deviceOverride = {};
-					}
-					actions[key].deviceOverride[dev] = act;
 				}
+				actionMenu.prepend( known );
 			}
-			actionMenu.prepend( known );
+		} catch(e) {
+			console.log(String(e));
+			alert(String(e));
 		}
+
 		var lopt = jQuery( '<option selected/>' ).val( "" ).text( hasAction ? "--choose action--" : "(invalid device--no actions)" );
 		actionMenu.prepend( lopt );
 		actionMenu.prop( 'disabled', false );
