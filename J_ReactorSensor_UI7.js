@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.0beta-19123';
+	var pluginVersion = '3.0beta-19124';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -463,6 +463,7 @@ var ReactorSensor = (function(api, $) {
 		}
 
 		actions = {};
+		deviceActionData = {};
 
 		/* Instance data */
 		iData[myid] = {};
@@ -4650,34 +4651,44 @@ var ReactorSensor = (function(api, $) {
 			}
 		}
 		var over = getDeviceOverride( dev );
-		if ( over ) {
+		if ( false && over ) {
 			var known = jQuery( '<optgroup />' ).attr( 'label', 'Common Actions' );
 			for ( j=0; j<over.length; j++ ) {
-				var devact = over[j];
-				var fake = false;
-				if ( undefined === deviceInfo.services[devact.service] || undefined == deviceInfo.services[devact.service].actions[devact.action] ) {
-					/* Service/action in device exception not "real". Fake it real good. */
-					deviceInfo.services[devact.service] = deviceInfo.services[devact.service] || { actions: {} };
-					deviceInfo.services[devact.service].actions[devact.action] = { name: devact.action, deviceOverride: {} };
-					fake = true;
-				}
-				/* There's a well-known service/action, so copy it, and apply overrides */
-				var act = deepcopy( deviceInfo.services[devact.service].actions[devact.action] );
-				for ( var k in devact ) {
-					if ( devact.hasOwnProperty(k) ) {
-						act[k] = devact[k];
+				var thisover = over[j];
+				key = thisover.service + "/" + thisover.action;
+				if ( undefined === actions[key] || undefined === ( actions[key].deviceOverride||{} )[dev] ) {
+					var fake = false;
+					if ( undefined === deviceInfo.services[thisover.service] || undefined === ( deviceInfo.services[thisover.service].actions || {} )[thisover.action] ) {
+						/* Service/action in device exception not "real". Fake it real good. */
+						deviceInfo.services[thisover.service] = deviceInfo.services[thisover.service] || { actions: {} };
+						deviceInfo.services[thisover.service].actions[thisover.action] = { name: thisover.action, deviceOverride: {} };
+						fake = true;
 					}
+					var actinfo = deviceInfo.services[thisover.service].actions[thisover.action];
+					/* There's a well-known service/action, so copy it, and apply overrides */
+					// var act = deepcopy( deviceInfo.services[thisover.service].actions[thisover.action] );
+					var act = { service: thisover.service, name: thisover.action };
+					for ( var k in actinfo ) {
+						if ( actinfo.hasOwnProperty(k) ) {
+							act[k] = actinfo[k];
+						}
+					}
+					/* Apply overrides */
+					for ( k in thisover ) {
+						if ( thisover.hasOwnProperty(k) ) {
+							act[k] = thisover[k];
+						}
+					}
+					if ( act.hidden ) continue;
+					known.append( jQuery('<option/>').val( key ).text( ( act.description || act.action ) +
+						( fake ? "??(O)" : "" ) ) );
+					hasAction = true;
+					if ( undefined === actions[key] ) {
+						actions[key] = actinfo;
+						actions[key].deviceOverride = {};
+					}
+					actions[key].deviceOverride[dev] = act;
 				}
-				if ( act.hidden ) continue;
-				key = act.service + "/" + act.action;
-				known.append( jQuery('<option/>').val( key ).text( ( act.description || act.action ) +
-					( fake ? "??(O)" : "" ) ) );
-				hasAction = true;
-				if ( undefined === actions[key] ) {
-					actions[key] = deviceInfo.services[devact.service].actions[devact.action];
-					actions[key].deviceOverride = {};
-				}
-				actions[key].deviceOverride[dev] = act;
 			}
 			actionMenu.prepend( known );
 		}
@@ -4705,8 +4716,10 @@ var ReactorSensor = (function(api, $) {
 		 * same device can use the same data without an additional request (and
 		 * will block until the original request/Promise is fulfilled).
 		 */
-		if ( undefined === deviceActionData[newVal] ) {
-			deviceActionData[newVal] = Promise.resolve( jQuery.ajax(
+		var devobj = api.getDeviceObject( parseInt( newVal ) );
+		if ( !devobj ) return;
+		if ( undefined === deviceActionData[devobj.device_type] ) {
+			deviceActionData[devobj.device_type] = Promise.resolve( jQuery.ajax(
 				{
 					url: api.getDataRequestURL(),
 					data: {
@@ -4719,7 +4732,7 @@ var ReactorSensor = (function(api, $) {
 				}
 			) );
 		}
-		deviceActionData[newVal].then( function( data, statusText, jqXHR ) {
+		deviceActionData[devobj.device_type].then( function( data, statusText, jqXHR ) {
 			/* Success */
 			loadActionMenu( newVal, actionMenu, row, data );
 			if ( undefined !== fnext ) {
@@ -4741,7 +4754,7 @@ var ReactorSensor = (function(api, $) {
 				return;
 			}
 			/* Set up a retry */
-			setTimeout( function() {
+			window.setTimeout( function() {
 				return changeActionDevice( row, newVal, fnext, fargs, retries );
 			}, 3000 );
 		});
@@ -5040,7 +5053,7 @@ var ReactorSensor = (function(api, $) {
 									var key = action.service + "/" + action.action;
 									if ( 0 == jQuery( 'select#actionmenu option[value="' + key + '"]', row ).length ) {
 										var opt = jQuery( '<option/>' ).val( key ).text( key );
-										jQuery( 'select#actionmenu', row ).prepend( opt );
+										jQuery( 'select#actionmenu', row ).prepend( opt ).prop( 'disabled', false );
 									}
 									jQuery( 'select#actionmenu', row ).val( key );
 									changeActionAction( row, key );
@@ -5348,7 +5361,7 @@ var ReactorSensor = (function(api, $) {
 				}
 			}
 		};
-		orderly( ( cd.conditions || {} ).root || [ { id: "root" } ] );
+		orderly( ( cd.conditions || {} ).root || [ { id: "root", conditions: [] } ] );
 
 		if ( "" !== showWhich ) {
 			container.append( jQuery( '<div>' )
