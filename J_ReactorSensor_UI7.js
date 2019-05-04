@@ -4591,6 +4591,7 @@ var ReactorSensor = (function(api, $) {
 				}
 			}
 			/* None of the match specs matched */
+			return base.actions || false;
 		}
 		return false;
 	}
