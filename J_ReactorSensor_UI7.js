@@ -96,8 +96,6 @@ var ReactorSensor = (function(api, $) {
 	var msgOptionsShow = "Show condition options";
 	var msgOptionsHide = "Hide condition options";
 
-	function TBD( ev ) { alert( String(ev) ); } /* receiver for handlers yet to be written ??? */
-
 	/* Insert the header items */
 	function header() {
 		var $head = jQuery( 'head' );
