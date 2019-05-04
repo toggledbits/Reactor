@@ -17,11 +17,11 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.0beta-19114';
+	var pluginVersion = '3.0beta-19123';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
-	var _UIVERSION = 19104;     /* must coincide with Lua core */
+	var _UIVERSION = 19123;     /* must coincide with Lua core */
 
 	var _CDATAVERSION = 19082;  /* must coincide with Lua core */
 
@@ -2903,8 +2903,8 @@ var ReactorSensor = (function(api, $) {
 				jQuery( 'span#titlemessage:first', $p ).text( "" );
 			}
 		}
-		
-		/** 
+
+		/**
 		 * Delete condition. If it's a group, delete it and all children
 		 * recursively.
 		 */
@@ -2914,28 +2914,31 @@ var ReactorSensor = (function(api, $) {
 			if ( undefined === cond ) return;
 			pgrp = pgrp || cond.__parent;
 			if ( undefined === reindex ) reindex = true;
+
+			/* Remove references to this cond in sequences */
+			for ( var ci in ixCond ) {
+				if ( ixCond.hasOwnProperty( ci ) && (ixCond[ci].options || {}).after === condId ) {
+					delete ixCond[ci].options.after;
+					delete ixCond[ci].options.aftertime;
+				}
+			}
+
+			/* If this condition is a group, delete all subconditions */
 			if ( "group" === ( cond.type || "group" ) ) {
 				for ( ix=0; ix<(cond.conditions || []).length; ix++ ) {
 					deleteCondition( cond.conditions[ix].id, ixCond, cond, false );
 				}
 				delete cond.conditions;
 			}
-			
-			/* Remove references to this cond in sequences */
-			for ( var ci in ixCond ) {
-				if ( ixCond.hasOwnProperty( ci ) && (ixCond[ci].options || {}).after === condId ) {
-					delete ixCond[ci].options.after;
-					delete ixCond[ci].options.aftertime;
-					configModified = true;
-				}
-			}
 
+			/* Remove from index, and parent group with reindex */
 			delete ixCond[condId];
-
 			if ( reindex ) {
 				pgrp.conditions.splice( cond.__index, 1 );
 				reindexConditions( pgrp );
 			}
+
+			configModified = true;
 		}
 
 		/**
@@ -2954,7 +2957,7 @@ var ReactorSensor = (function(api, $) {
 			if ( ( grp.conditions || [] ).length > 0 && ! confirm( 'This group has conditions and/or sub-groups, which will all be deleted as well. Really delete this group?' ) ) {
 				return;
 			}
-			
+
 			$grpEl.remove();
 			deleteCondition( grpId, ixCond, grp.__parent, true );
 			configModified = true;
@@ -4696,35 +4699,36 @@ var ReactorSensor = (function(api, $) {
 		jQuery('label,.argument', ct).remove();
 		if ( newVal == "" ) { return; }
 
-		/* If actions cached, use... */
-		if ( undefined !== deviceActionData[newVal] ) {
-			loadActionMenu( newVal, actionMenu, row, deviceActionData[newVal] );
-			if ( undefined !== fnext ) {
-				fnext.apply( null, fargs );
-			}
-			return;
+		/**
+		 * Use actions/lu_actions to get list of services/actions for this
+		 * device. We could also use lu_device and fetch/parse /luvd/S_...xml
+		 * to get even more data, but let's see how this goes for now.
+		 * Wrap the request in a Promise, so that subsequent requests for the
+		 * same device can use the same data without an additional request (and
+		 * will block until the original request/Promise is fulfilled).
+		 */
+		if ( undefined === deviceActionData[newVal] ) {
+			deviceActionData[newVal] = Promise.resolve( jQuery.ajax(
+				{
+					url: api.getDataRequestURL(),
+					data: {
+						id: "actions",
+						DeviceNum: newVal,
+						output_format: "json"
+					},
+					dataType: "json",
+					timeout: 15000
+				}
+			) );
 		}
-
-		/* Use actions/lu_actions to get list of services/actions for this device. We could
-		   also use lu_device and fetch/parse /luvd/S_...xml to get even more data,
-		   but let's see how this goes for now. */
-		jQuery.ajax({
-			url: api.getDataRequestURL(),
-			data: {
-				id: "actions",
-				DeviceNum: newVal,
-				output_format: "json"
-			},
-			dataType: "json",
-			timeout: 15000
-		}).done( function( data, statusText, jqXHR ) {
-			deviceActionData[newVal] = data;
+		deviceActionData[newVal].then( function( data, statusText, jqXHR ) {
+			/* Success */
 			loadActionMenu( newVal, actionMenu, row, data );
 			if ( undefined !== fnext ) {
 				fnext.apply( null, fargs );
 			}
-		}).fail( function( jqXHR, textStatus, errorThrown ) {
-			/* Bummer. And deviceinfo as a fallback isn't really appropriate here (only lists exceptions) */
+		}, function( jqXHR, textStatus, errorThrown ) {
+			/* Failed. And deviceinfo as a fallback isn't really appropriate here (only lists exceptions) */
 			console.log("changeActionDevice: failed to load service data: " + textStatus + "; " + String(errorThrown));
 			console.log(jqXHR.responseText);
 			retries = ( undefined === retries ? 0 : retries ) + 1;
