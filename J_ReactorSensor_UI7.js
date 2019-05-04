@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.0beta-19124A';
+	var pluginVersion = '3.0beta-19124B';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -4309,7 +4309,7 @@ var ReactorSensor = (function(api, $) {
 							jQuery( 'div#tab-actions.reactortab' ).append( inp );
 						}
 						/* Now pass on the input field */
-						inp = jQuery( '<input class="argument form-control form-control-sm" list="' + dlid + '">' );
+						inp = jQuery( '<input class="argument form-control form-control-sm" placeholder="Click for predefined values" list="' + dlid + '">' );
 					} else {
 						/* Standard select menu */
 						inp = jQuery( '<select class="argument form-control form-control-sm"/>' );
@@ -4436,15 +4436,6 @@ var ReactorSensor = (function(api, $) {
 		changeActionRow( row );
 	}
 
-	function deepcopy(obj) {
-		if ( null == obj || typeof(obj) != "object" ) return obj;
-		var ret = obj.constructor();
-		for (var k in obj) {
-			if (obj.hasOwnProperty(k)) ret[k]=deepcopy(obj[k]);
-		}
-		return ret;
-	}
-
 	/* Perform numeric comparison for device override */
 	function doNumericComparison( str1, op, str2 ) {
 		var v1 = parseInt( str1 );
@@ -4464,52 +4455,49 @@ var ReactorSensor = (function(api, $) {
 	/* Find an override for a device. */
 	function getDeviceOverride( devnum ) {
 		var devobj = api.getDeviceObject( devnum );
-		if ( devobj ) {
-			var mytype = devobj.device_type || "?";
-			var base = deviceInfo.devices[mytype] || deviceInfo.devices[ 'type:' + mytype ];
-			if ( undefined !== base ) {
-				if ( Array.isArray( base ) ) {
-					/* Early syntax without match conditions. Just return array */
-					return base;
-				}
-				/* Attempt to find a match condition */
-				for ( var im=0; im<(base.match || []).length; im++ ) {
-					/* Conditions separated by ";", all must be met. for match to succeed */
-					var cond = (base.match[im].condition || "").split( /;/ );
-					var match = true;
-					for ( var ic=0; ic<cond.length; ++ic ) {
-						/* Each condition uses simple RPN script */
-						var pt = cond[ic].split( /,/ );
-						var stack = []; /* Start off */
-						var refdev = devnum;
-						var v;
-						while ( pt.length > 0 ) {
-							var seg = decodeURIComponent( pt.shift() || "" ).trim();
+		if ( ! devobj ) return false;
+		var mytype = devobj.device_type || "?";
+		var base = deviceInfo.devices[mytype] || deviceInfo.devices[ 'type:' + mytype ];
+		if ( undefined !== base ) {
+			if ( Array.isArray( base ) ) {
+				/* Early syntax without match conditions. Just return array */
+				return base;
+			}
+			/* Attempt to find a match condition */
+			for ( var im=0; im<(base.match || []).length; im++ ) {
+				/* Conditions separated by ";", all must be met. for match to succeed */
+				var cond = (base.match[im].condition || "").split( /;/ );
+				var match = true;
+				for ( var ic=0; ic<cond.length; ++ic ) {
+					/* Each condition uses simple RPN script */
+					var pt = cond[ic].split( /,/ );
+					var stack = []; /* Start off */
+					var refdev = devnum;
+					var v, op1, op2;
+					while ( pt.length > 0 ) {
+						var seg = decodeURIComponent( pt.shift() || "" ).trim();
+						try {
 							if ( "openluup" === seg ) {
 								/* Fail immediately if not running on openLuup */
 								if ( ! isOpenLuup ) {
-									stack.push( false );
+									match = false;
 									break;
 								}
 							} else if ( "vera" === seg ) {
 								/* Fail immediately if not running on genuine Vera */
 								if ( isOpenLuup ) {
-									stack.push( false );
+									match = false;
 									break;
 								}
 							} else if ( "parent" === seg ) {
 								/* Does not change stack, but switches reference device to parent */
-								if ( 0 !== devobj.id_parent ) {
-									refdev = devobj.id_parent;
-									devobj = api.getDeviceObject( refdev );
-									if ( !devobj ) { /* no device, immediate failure */
-										match = false;
-										break;
-									}
+								var refobj = api.getDeviceObject( refdev );
+								if ( 0 != refobj.id_parent ) {
+									refdev = refobj.id_parent;
 								}
 							} else if ( "var" === seg ) {
-								var vname = stack.pop() || "";
-								var vserv = stack.pop() || "";
+								var vname = stack.pop() || "?";
+								var vserv = stack.pop() || "?";
 								v = api.getDeviceStateVariable( refdev, vserv, vname ) || null;
 								stack.push( v );
 							} else if ( "attr" === seg ) {
@@ -4517,21 +4505,20 @@ var ReactorSensor = (function(api, $) {
 								v = api.getDeviceAttribute( refdev, aname ) || null;
 								stack.push( v );
 							} else if ( "and" === seg ) {
-								var op2 = stack.pop() || false;
-								var op1 = stack.pop() || false;
+								op2 = stack.pop() || false;
+								op1 = stack.pop() || false;
 								stack.push( op1 && op2 );
 							} else if ( "or" === seg ) {
-								var op2 = stack.pop() || false;
-								var op1 = stack.pop() || false;
+								op2 = stack.pop() || false;
+								op1 = stack.pop() || false;
 								stack.push( op1 || op2 );
 							} else if ( "not" === seg ) {
 								v = stack.pop();
 								if ( typeof(v) == "boolean" ) {
 									stack.push( !v );
 								} else {
-									console.log("getDeviceOverride: not operand invalid type: (" + typeof(v) +
-										")" + String(v));
-									stack.push( false );
+									throw "invalid operand type for not: ("+ 
+										typeof(v) + ")" + String(v);
 								}
 							} else if ( "isnull" === seg ) {
 								v = stack.pop() || null;
@@ -4540,24 +4527,30 @@ var ReactorSensor = (function(api, $) {
 								v = stack.pop() || null; /* sloppy peek??? */
 								stack.push( v );
 								stack.push( v );
-							} else if ( seg.match( /^(<|<=|>|>=|=|==|!=|~=)$/ ) ) {
-								/* Binary op, takes two values */
-								var op = seg;
-								var oper2 = stack.pop();
-								var oper1 = stack.pop();
-								var res;
-								if ( op == "==" || op == "=" ) {
-									res = oper1 == oper2;
-								} else if ( op == "!=" || op == "~=" ) {
-									res = oper1 != oper2;
+							} else if ( "lower" == seg ) {
+								if ( stack.length > 0 ) {
+									v = String( stack.pop() );
+									stack.push( v.toLowerCase() );
 								} else {
-									res = doNumericComparison( oper1, op, oper2 );
+									throw "stack empty (lower)";
+								}
+							} else if ( seg.match( /^(<|<=|>|>=|=|==|!=|~=|<>)$/ ) ) {
+								/* Binary op, takes two values */
+								op2 = stack.pop() || null;
+								op1 = stack.pop() || null;
+								var res;
+								if ( seg == "==" || seg == "=" ) {
+									res = op1 == op2;
+								} else if ( seg == "!=" || seg == "~=" || seg == "<>" ) {
+									res = op1 != op2;
+								} else {
+									res = doNumericComparison( op1, seg, op2 );
 								}
 								stack.push( res );
 							} else if ( seg.match( /^\// ) ) {
 								/* Regular expression match */
 								var re = new RegExp( seg );
-								v = stack.pop();
+								v = stack.pop() || "";
 								stack.push( v.match( re ) );
 							} else if ( seg.match( /^["']/ ) ) {
 								v = seg.substring( 1, seg.length-1 );
@@ -4565,32 +4558,39 @@ var ReactorSensor = (function(api, $) {
 							} else if ( ! isNaN( seg ) ) {
 								stack.push( parseInt( seg ) );
 							} else {
-								console.log("getDeviceOverride: unrecognized op in " + cond[ic] + ": '" + seg + "'");
+								throw "unrecognized device match expression " + String(seg);
 							}
-						}
-						/* Done. Test succeeds iff stack has true */
-						if ( stack.length != 1 ) {
-							console.log("getDeviceOverride: eval of " + cond[ic] + " for " + devobj.device_type +
-								" end of conditions stack len expected 1 got " + stack.length );
-						}
-						var result = stack.pop() || null;
-						console.log("getDeviceOverride: eval of " + cond[ic] + " yields (" +
-							typeof(result) + ")" + String(result));
-						if ( ! ( typeof(result)==="boolean" && result ) ) {
+						} catch(e) {
+							console.log("getDeviceOverride: error parsing match " + String(seg) +
+								" for " + cond[ic] + " on " + mytype + ": " + String(e));
 							match = false;
-							break; /* stop testing conds */
-						}
-						if ( match ) {
-							console.log("getDeviceOverride: match condition " + cond[ic] +
-								" succeeded for " + devnum + " (" + devobj.name + ") type " +
-								devobj.device_type);
-							return base.match[im].actions || [];
+							break;
 						}
 					}
+					/* Done. Test succeeds iff stack has (boolean)true */
+					if ( 1 !== stack.length ) {
+						console.log("getDeviceOverride: eval of " + cond[ic] + " for " + devobj.device_type +
+							" end of conditions stack len expected 1 got " + stack.length );
+					}
+					var result = stack.pop() || null;
+					console.log("getDeviceOverride: eval of " + cond[ic] + 
+						" yields (" + typeof(result) + ")" + String(result));
+					if ( result !== true ) {
+						match = false;
+						break;
+					}
+					console.log("getDeviceOverride: match condition " + cond[ic] +
+						" succeeded for " + devnum + " (" + devobj.name + ") type " +
+						devobj.device_type);
 				}
-				/* Return default actions for type */
-				return deviceInfo.devices[ 'type:' + mytype ].actions || [];
+				/* If all conditions met, return this override */
+				if ( match ) {
+					console.log("getDeviceOverride: all conditions succeeded for " +
+						devnum + " (" + devobj.name + ") type " + devobj.device_type);
+					return base.match[im].actions || [];
+				}
 			}
+			/* None of the match specs matched */
 		}
 		return false;
 	}
@@ -4653,7 +4653,7 @@ var ReactorSensor = (function(api, $) {
 
 		try {
 			var over = getDeviceOverride( dev );
-			if ( false && over ) { // ???
+			if ( over ) {
 				var known = jQuery( '<optgroup />' ).attr( 'label', 'Common Actions' );
 				for ( j=0; j<over.length; j++ ) {
 					var thisover = over[j];
@@ -4666,7 +4666,6 @@ var ReactorSensor = (function(api, $) {
 						fake = true;
 					}
 					/* There's a well-known service/action, so copy it, and apply overrides */
-					// var act = deepcopy( deviceInfo.services[thisover.service].actions[thisover.action] );
 					var act;
 					if ( undefined === actions[key] || undefined === ( actions[key].deviceOverride||{} )[dev] ) {
 						/* Store new action override */
@@ -4718,7 +4717,7 @@ var ReactorSensor = (function(api, $) {
 		actionMenu.empty().prop( 'disabled', true )
 			.append( jQuery( '<option/>' ).val("").text( '(loading...)' ) );
 		jQuery('label,.argument', ct).remove();
-		if ( newVal == "" ) { return; }
+		if ( "number" !== typeof(newVal) || newVal < 0 ) return;
 
 		/**
 		 * Use actions/lu_actions to get list of services/actions for this
@@ -4728,7 +4727,7 @@ var ReactorSensor = (function(api, $) {
 		 * same device can use the same data without an additional request (and
 		 * will block until the original request/Promise is fulfilled).
 		 */
-		var devobj = api.getDeviceObject( parseInt( newVal ) );
+		var devobj = api.getDeviceObject( newVal );
 		if ( !devobj ) return;
 		if ( undefined === deviceActionData[devobj.device_type] ) {
 			deviceActionData[devobj.device_type] = Promise.resolve( jQuery.ajax(
@@ -4775,9 +4774,11 @@ var ReactorSensor = (function(api, $) {
 	function handleActionDeviceChange( ev ) {
 		configModified = true;
 		var el = jQuery( ev.currentTarget );
-		var newVal = el.val() || "";
-		var row = el.closest( 'div.actionrow' );
-		changeActionDevice( row, newVal, changeActionRow, [ row ] );
+		var newVal = parseInt( el.val() );
+		if ( ! isNaN( newVal ) ) {
+			var row = el.closest( 'div.actionrow' );
+			changeActionDevice( row, newVal, changeActionRow, [ row ] );
+		}
 	}
 
 	/* Convert plain textarea to ACE. Keep the textarea as shadow field for content
@@ -5061,7 +5062,7 @@ var ReactorSensor = (function(api, $) {
 								}
 								jQuery( 'select.devicemenu', newRow ).val( act.device );
 								pred = newRow.addClass( "tbmodified" ).insertAfter( pred );
-								changeActionDevice( newRow, act.device || "", function( row, action ) {
+								changeActionDevice( newRow, act.device || -1, function( row, action ) {
 									var key = action.service + "/" + action.action;
 									if ( 0 == jQuery( 'select#actionmenu option[value="' + key + '"]', row ).length ) {
 										var opt = jQuery( '<option/>' ).val( key ).text( key );
@@ -5162,7 +5163,7 @@ var ReactorSensor = (function(api, $) {
 							jQuery( 'select.devicemenu', newRow ).prepend( opt ).addClass( "tberror" );
 						}
 						jQuery( 'select.devicemenu', newRow ).val( act.device );
-						changeActionDevice( newRow, act.device || "", function( row, action ) {
+						changeActionDevice( newRow, act.device || -1, function( row, action ) {
 							var key = action.service + "/" + action.action;
 							if ( 0 == jQuery( 'select#actionmenu option[value="' + key + '"]', row ).length ) {
 								var opt = jQuery( '<option/>' ).val( key ).text( key );
