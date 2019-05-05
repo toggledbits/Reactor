@@ -126,7 +126,7 @@ var ReactorSensor = (function(api, $) {
 		html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
 		html += '<div id="tbcopyright">Reactor ver ' + pluginVersion + ' &copy; 2018,2019 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
 			' All Rights Reserved. Please check out the <a href="https://github.com/toggledbits/Reactor/wiki" target="_blank">online documentation</a>' +
-			' and <a href="https://community.getvera.com/c/plugins-amp-plugin-development/reactor" target="_blank">forum board</a> for support.</div>';
+			' and <a href="https://community.getvera.com/c/plugins-amp-plugin-development/reactor" target="_blank">community forums</a> for support.</div>';
 		try {
 			html += '<div id="browserident">' + navigator.userAgent + '</div>';
 		} catch( e ) {}
@@ -3706,7 +3706,7 @@ var ReactorSensor = (function(api, $) {
 
 		/* Add "Add" button */
 		gel.append('<div class="row buttonrow">' +
-			'<div class="col-xs-12 col-sm-12"><button id="addvar" class="btn btn-sm btn-success">Add Variable/Expression</button> Need help? Check out the <a href="https://github.com/toggledbits/Reactor/wiki/Expressions-&-Variables" target="_blank">documentation</a> or ask in the <a href="http://forum.micasaverde.com/index.php/board,93.0.html" target="_blank">Vera forums</a>.</div>' +
+			'<div class="col-xs-12 col-sm-12"><button id="addvar" class="btn btn-sm btn-success">Add Variable/Expression</button> Need help? Check out the <a href="https://github.com/toggledbits/Reactor/wiki/Expressions-&-Variables" target="_blank">documentation</a> or ask in the <a href="https://community.getvera.com/c/plugins-amp-plugin-development/reactor" target="_blank">Vera community forums</a>.</div>' +
 			'</div>');
 
 		/* Append the group */
