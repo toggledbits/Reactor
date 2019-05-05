@@ -663,7 +663,7 @@ local function plugin_runOnce( pdev )
 		initVar( "ACEURL", "", pdev, MYSID )
 		initVar( "IsHome", "", pdev, MYSID ) -- 00205
 	end
-	
+
 	if s < 00301 then
 		initVar( "Enabled", 1, pdev, MYSID )
 	end
@@ -2242,7 +2242,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 			L({level=2,msg="%1 (%2) condition %3 refers to device %4 (%5) group %6 (%7), not available, skipped"},
 				luup.devices[tdev].description, tdev, cond.id, cond.device, cond.devicename or "unknown",
 				cond.groupid, cond.groupname)
-			addEvent{ dev=tdev, event="condition", condition=cond.id, 
+			addEvent{ dev=tdev, event="condition", condition=cond.id,
 				device=cond.device, groupid=cond.groupid, groupname=cond.groupname,
 				['error']='Group/state not available' }
 			sst.trouble = true -- flag trouble
@@ -2340,7 +2340,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 				if nth == nil then
 					L({level=2,msg="Invalid op %1 in weekday condition %2 for %3 (%4)"},
 						op, cond.id, (luup.devices[tdev] or {}).description, tdev)
-					addEvent{ dev=tdev, event="condition", condition=cond.id, 
+					addEvent{ dev=tdev, event="condition", condition=cond.id,
 						operator=op, ['error']="Unrecognized operator" }
 					sst.trouble = true
 					return val,nil
@@ -2370,7 +2370,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		if ( sundata.stamp or 0 ) ~= stamp or sst.timetest then
 			if getVarNumeric( "UseLuupSunrise", 0, pluginDevice, MYSID ) ~= 0 then
 				L({level=2,msg="Reactor is configured to use Luup's sunrise/sunset calculations; twilight times cannot be correctly evaluated and will evaluate as dawn=sunrise, dusk=sunset"})
-				addEvent{ dev=tdev, event="condition", condition=cond.id, 
+				addEvent{ dev=tdev, event="condition", condition=cond.id,
 					['warning']="Configured to use Luup sunrise/sunset; twilight not available" }
 				sst.trouble = true
 				sundata = { sunrise=luup.sunrise(), sunset=luup.sunset() }
@@ -2540,7 +2540,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 			else
 				L({level=1,msg="Unrecognized condition %1 in time spec for cond %2 of %3 (%4)"},
 					cp, cond.id, tdev, luup.devices[tdev].description)
-				addEvent{ dev=tdev, event="condition", condition=cond.id, 
+				addEvent{ dev=tdev, event="condition", condition=cond.id,
 					operator=cp, ['error']="Unrecognized operator" }
 				sst.trouble = true
 				return now,nil
@@ -2689,7 +2689,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 	else
 		L({level=2,msg="Sensor %1 (%2) unknown condition type %3 for cond %4 in group %5; fails."},
 			tdev, luup.devices[tdev].description, cond.type, cond.id, grp.id)
-		addEvent{ dev=tdev, event="condition", condition=cond.id, 
+		addEvent{ dev=tdev, event="condition", condition=cond.id,
 			['type']=cond.type, ['error']="Unrecognized condition type" }
 		sst.trouble = true
 		return nil,nil
