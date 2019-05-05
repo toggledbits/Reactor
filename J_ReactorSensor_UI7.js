@@ -5063,7 +5063,7 @@ var ReactorSensor = (function(api, $) {
 								}
 								jQuery( 'select.devicemenu', newRow ).val( act.device );
 								pred = newRow.addClass( "tbmodified" ).insertAfter( pred );
-								changeActionDevice( newRow, act.device || -1, function( row, action ) {
+								changeActionDevice( newRow, parseInt( act.device || -1 ), function( row, action ) {
 									var key = action.service + "/" + action.action;
 									if ( 0 == jQuery( 'select#actionmenu option[value="' + key + '"]', row ).length ) {
 										var opt = jQuery( '<option/>' ).val( key ).text( key );
