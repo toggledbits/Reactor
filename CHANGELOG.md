@@ -2,26 +2,12 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
-## Version 3.0beta-19123
+## Version 3.0 (released)
 
-* Beta19123: Wrap action data requests in a Promise to avoid creating too many requests for same device in large action lists.
-* Beta19123: Make sure group delete removes predecessor/sequence restrictions.
-* Beta19105: Remove debug statements causing erroneous error message.
-* Beta19104: On revert or any forced reload of config, make sure condition index is cleared so it gets rebuilt.
 * Enhancement: The device-defined conditions normally seen in the Vera scene editor are now offered as shortcuts for creating conditions;
-* Beta19099: Ensure default device for new GroupStatus condition is current RS.
-* Beta19099: Don't select default (action) parameter value if defined, as this makes (Chrome) datalists appear as if they have no options (they have them, but you have to clear the default to a blank field and then they'll show--fugly).
-* Beta19098: Make sure status display shows current name of target group in Group State conditions (was showing stored name, but if name changes, that change was not displayed until updated by editing config).
-* Beta19093: Fix #28: condition config corrupted by some drag/drop operations.
-* Beta19093: Fix #27: cross-Reactor group status not updating correctly.
 * Enhancement: Loading of action data from Vera now retries automatically--improves remote user experience.
 * Fix: an issue allowing multiple system watches for a single variable; benign, but not perfectly efficient, and causes repetitious (and therefore confusing) event log messages [issue #26].
 * Enhancement: New "Delay reset" option allows false state of condition to be delayed by the specified number of seconds (this can be used to debounce device states, or as an "off" delay for motion sensing, for example) [issue #16];
-* Beta19090: Continuing fit and finish work on condition editor; still work to be done, but this release contains most;
-* Beta19087: getstate() insert tool was not coming up when called [issue #23];
-* Beta19087: Ongoing--occasional blank action menu in Activities when using remote access to UI; this version improves messaging and logging in an attempt to gather more data [issue #22];
-* Beta19083: Status tab not updating completely/timely [issue #20];
-* Beta19083: Scheduling problem causing inconsistent execution of activities in certain group configurations;* Fix: Apply timezone fix from LuaXP distribution (applies to parsing dates/times with embedded TZ spec only) [issue #19].
 * Fix: Apply timezone fix from LuaXP distribution (applies to parsing dates/times with embedded TZ spec only).
 * Enhancement: Activities are now collapsable, and since the number of activities is equal to the number of groups plus two, it's possible to hide unused groups as well (this is a persistent state/choice that operates plugin-wide) [issue#24];
 * Enhancement: New "Group State" condition allows the user to condition upon the state of another group in the same or another ReactorSensor.
@@ -37,7 +23,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 * Enhancement: Users may now create Activities for each condition group, not just the over trip/untrip of the sensor.
 * Enhancement: It is now possible to copy the contents of one activity to another.
 
-## Version 2.5 (development)
+## Version 2.5 (released)
 
 * Hotfix-19094-01: Fix validation crash in interval condition parameter check, loses hour and minute data on edit.
 * Fix: an issue allowing multiple system watches for a single variable; benign, but not perfectly efficient, and causes repetitious (and therefore confusing) event log messages [issue #26].
