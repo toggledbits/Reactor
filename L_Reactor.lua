@@ -1166,14 +1166,15 @@ local function execSceneGroups( tdev, taskid, scd )
 		return nil
 	end
 
-	-- Reload the scene if it wasn't passed to us (from cache)
-	if not scd then
-		D("execSceneGroups() reloading scene data for %1", sst.scene)
-		scd = getSceneData(sst.scene, tdev)
-		if scd == nil then
-			L({level=1,msg="Previously running scene %1 now not found/loaded. Aborting run."}, sst.scene)
-			return stopScene( nil, taskid, tdev )
-		end
+	-- Sanity-check owner and context.
+	if luup.devices[sst.owner] == nil then
+		L({level=2,msg="Unable to resume scene %1 because the owner device #%2 no longer exists"},
+			sst.scene, sst.owner)
+		return stopScene( nil, taskid, tdev )
+	elseif sst.context ~= 0 and luup.devices[sst.context] == nil then
+		L({level=2,msg="Unable to resume scene %1 because the context device #%2 no longer exists"},
+			sst.scene, sst.context)
+		return stopScene( nil, taskid, tdev )
 	end
 
 	-- If system is not ready, wait. We don't want to run actions until devices
@@ -1184,6 +1185,16 @@ local function execSceneGroups( tdev, taskid, scd )
 		addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, notice="Deferring scene execution; waiting for system ready." }
 		scheduleDelay( { id=sst.taskid, owner=sst.owner, func=execSceneGroups, args={ scd } }, 5 )
 		return taskid
+	end
+
+	-- Reload the scene if it wasn't passed to us (from cache)
+	if not scd then
+		D("execSceneGroups() reloading scene data for %1", sst.scene)
+		scd = getSceneData(sst.scene, tdev)
+		if scd == nil then
+			L({level=1,msg="Previously running scene %1 now not found/loaded. Aborting run."}, sst.scene)
+			return stopScene( nil, taskid, tdev )
+		end
 	end
 
 	-- Run next scene group (and keep running groups until no more or delay needed)
