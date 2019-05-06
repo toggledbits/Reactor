@@ -3,7 +3,7 @@
  * J_Reactor_UI7.js
  * Configuration interface for Reactor master device
  *
- * Copyright 2018 Patrick H. Rigney, All Rights Reserved.
+ * Copyright 2018,2019 Patrick H. Rigney, All Rights Reserved.
  * This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
  *
  */
@@ -16,9 +16,9 @@ var Reactor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '72acc6ea-f24d-11e8-bd87-74d4351650de';
 
-	var pluginVersion = '2.5';
+	var pluginVersion = '3.0';
 
-	var UI_VERSION = 19094;
+	var _UIVERSION = 19125;     /* must coincide with Lua core */
 
 	var myModule = {};
 
@@ -62,15 +62,15 @@ var Reactor = (function(api, $) {
 
 		/* Check agreement of plugin core and UI */
 		var s = api.getDeviceState( myid, serviceId, "_UIV" ) || "0";
-		console.log("initModule() for device " + myid + " requires UI version " + UI_VERSION + ", seeing " + s);
-		if ( String(UI_VERSION) != s ) {
+		console.log("initModule() for device " + myid + " requires UI version " + _UIVERSION + ", seeing " + s);
+		if ( String(_UIVERSION) != s ) {
 			api.setCpanelContent( '<div class="reactorwarning" style="border: 4px solid red; padding: 8px;">' +
 				" ERROR! The Reactor plugin core version and UI version do not agree." +
 				" This may cause errors or corrupt your ReactorSensor configuration." +
 				" Please hard-reload your browser and try again " +
 				' (<a href="https://duckduckgo.com/?q=hard+reload+browser" target="_blank">how?</a>).' +
 				" If you have installed hotfix patches, you may not have successfully installed all required files." +
-				" Expected " + String(UI_VERSION) + " got " + String(s) +
+				" Expected " + String(_UIVERSION) + " got " + String(s) +
 				".</div>" );
 			return false;
 		}
@@ -188,8 +188,15 @@ var Reactor = (function(api, $) {
 
 		/* Write new (old/restored) config */
 		/* Writing cdata restarts the sensor, so no explicit action call needed after. */
+		var cdata = backupInfo.sensors[item].config;
+		if ( undefined === cdata ) {
+			var img = jQuery( '.reactortab div#restorestatus p#' + idSelector(item) + ' > img' );
+			img.replaceWith( '<span> <b>FAILED!</b> No data.</span>' );
+			return;
+		}
+		cdata.device = dev.id; /* Make sure device agrees with config (new target?) */
 		api.setDeviceStateVariablePersistent( dev.id, "urn:toggledbits-com:serviceId:ReactorSensor",
-			"cdata", JSON.stringify( backupInfo.sensors[item].config || {} ),
+			"cdata", JSON.stringify( cdata ),
 			{
 				'onSuccess' : function() {
 					console.log('Success ' + String(item));

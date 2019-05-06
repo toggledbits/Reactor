@@ -481,6 +481,8 @@ local function xp_min( argv )
 		local bv = v
 		if type(v) == "table" then
 			bv = xp_min( v )
+		elseif type(bv) == "string" then
+			bv = tonumber( v )
 		end
 		if type(bv)=="number" and ( res == NULLATOM or bv < res ) then
 			res = bv
@@ -495,6 +497,8 @@ local function xp_max( argv )
 		local bv = v
 		if type(v) == "table" then
 			bv = xp_max( v )
+		elseif type(bv) == "string" then
+			bv = tonumber( v )
 		end
 		if type(bv)=="number" and ( res == NULLATOM or bv > res ) then
 			res = bv

@@ -9,7 +9,15 @@
 				"operator": "!=",
 				"value": "1"
 			}]
-		}, {
+		},{
+			"img": "https://www.toggledbits.com/assets/reactor/reactorsensor-trouble.png",
+			"conditions": [{
+				"service": "urn:toggledbits-com:serviceId:ReactorSensor",
+				"variable": "Trouble",
+				"operator": "!=",
+				"value": "0"
+			}]
+		},{
 			"img": "https://www.toggledbits.com/assets/reactor/reactorsensor-tripped.png",
 			"conditions": [{
 				"service": "urn:micasaverde-com:serviceId:SecuritySensor1",
@@ -377,6 +385,32 @@
 		}
 	],
 	"eventList2": [{
+			"id": 3,
+			"label": {
+				"lang_tag": "tb_reactor_tripped",
+				"text": "Trips (conditions met, whether armed or disarmed)"
+			},
+			"serviceId": "urn:micasaverde-com:serviceId:SecuritySensor1",
+			"serviceStateTable": {
+				"Tripped": {
+					"value": "1",
+					"comparisson": "="
+				}
+			}
+		},{
+			"id": 4,
+			"label": {
+				"lang_tag": "tb_reactor_untripped",
+				"text": "Un-trips (conditions not met, whether armed or disarmed)"
+			},
+			"serviceId": "urn:micasaverde-com:serviceId:SecuritySensor1",
+			"serviceStateTable": {
+				"Tripped": {
+					"value": "0",
+					"comparisson": "="
+				}
+			}
+		},{
 			"id": 1,
 			"label": {
 				"lang_tag": "tb_armed_reactor_tripped",
@@ -406,32 +440,6 @@
 					"value": "1",
 					"comparisson": "="
 				},
-				"Tripped": {
-					"value": "0",
-					"comparisson": "="
-				}
-			}
-		},{
-			"id": 3,
-			"label": {
-				"lang_tag": "tb_reactor_tripped",
-				"text": "Trips (conditions met, whether armed or disarmed)"
-			},
-			"serviceId": "urn:micasaverde-com:serviceId:SecuritySensor1",
-			"serviceStateTable": {
-				"Tripped": {
-					"value": "1",
-					"comparisson": "="
-				}
-			}
-		},{
-			"id": 4,
-			"label": {
-				"lang_tag": "tb_reactor_untripped",
-				"text": "Un-trips (conditions not met, whether armed or disarmed)"
-			},
-			"serviceId": "urn:micasaverde-com:serviceId:SecuritySensor1",
-			"serviceStateTable": {
 				"Tripped": {
 					"value": "0",
 					"comparisson": "="
@@ -528,6 +536,19 @@
 			"serviceStateTable": {
 				"Status": {
 					"value": "0",
+					"comparisson": "="
+				}
+			}
+		},{
+			"id": 9,
+			"label": {
+				"lang_tag": "tb_reactor_trouble",
+				"text": "Signals trouble"
+			},
+			"serviceId": "urn:toggledbits-com:serviceId:ReactorSensor",
+			"serviceStateTable": {
+				"Trouble": {
+					"value": "1",
 					"comparisson": "="
 				}
 			}

@@ -80,7 +80,13 @@
 		</action>
 		<action>
 			<name>UpdateGeofences</name>
-			<argumentList/>
+			<argumentList>
+				<argument>
+					<name>event</name>
+					<direction>in</direction>
+					<relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
+				</argument>
+			</argumentList>
 		</action>
 		<action>
 			<name>MasterClear</name>

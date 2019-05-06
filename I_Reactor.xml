@@ -4,7 +4,7 @@
 	<functions>
 		-- --------------------------------------------------------------------
 		-- Reactor
-		-- Copyright 2018 Patrick H. Rigney, All Rights Reserved.
+		-- Copyright 2018,2019 Patrick H. Rigney, All Rights Reserved.
 		-- https://www.toggledbits.com/reactor
 		-- --------------------------------------------------------------------
 		function startupReactor(devNum)
@@ -61,6 +61,15 @@
 				return true
 			</run>
 		</action>
+		<action>
+			<serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
+			<name>ClearLatched</name>
+			<run>
+				Reactor.actionClearLatched( lul_device )
+				return true
+			</run>
+		</action>
+
 		<action>
 			<serviceId>urn:micasaverde-com:serviceId:SecuritySensor1</serviceId>
 			<name>SetArmed</name>
@@ -163,6 +172,7 @@
 				-- in the Options table. If SceneNum is nil or 0, all scenes for the context device
 				-- will be stopped.
 				Reactor.actionStopScene( lul_settings.contextDevice or lul_device, lul_settings.SceneNum, lul_device )
+				return true
 			</run>
 		</action>
 		<action>
@@ -170,12 +180,8 @@
 			<name>SetVariable</name>
 			<run>
 				-- Set a variable value (overwrite/create).
-				if string.match( lul_settings.VariableName or "", "^[a-zA-Z][a-zA-Z0-9_]*$" ) then
-					luup.variable_set( "urn:toggledbits-com:serviceId:ReactorValues", lul_settings.VariableName, lul_settings.NewValue or "", lul_device )
-					luup.log("Reactor: variable '" .. tostring(lul_settings.VariableName) .. "' set to '" .. tostring(lul_settings.NewValue or "") .. "' by action")
-				else
-					luup.log("Reactor: action attempt to set variable '" .. tostring(lul_settings.VariableName or "") .. "' failed, invalid name", 2)
-				end
+				Reactor.actionSetVariable( lul_settings, lul_device )
+				return true
 			</run>
 		</action>
 		<action>
@@ -190,7 +196,7 @@
 			<serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
 			<name>UpdateGeofences</name>
 			<job>
-				return Reactor.actionUpdateGeofences( lul_device )
+				return Reactor.actionUpdateGeofences( lul_device, lul_settings.event )
 			</job>
 		</action>
 		<action>

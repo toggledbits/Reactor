@@ -2,6 +2,27 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
+## Version 3.0 (released)
+
+* Enhancement: The device-defined conditions normally seen in the Vera scene editor are now offered as shortcuts for creating conditions;
+* Enhancement: Loading of action data from Vera now retries automatically--improves remote user experience.
+* Fix: an issue allowing multiple system watches for a single variable; benign, but not perfectly efficient, and causes repetitious (and therefore confusing) event log messages [issue #26].
+* Enhancement: New "Delay reset" option allows false state of condition to be delayed by the specified number of seconds (this can be used to debounce device states, or as an "off" delay for motion sensing, for example) [issue #16];
+* Fix: Apply timezone fix from LuaXP distribution (applies to parsing dates/times with embedded TZ spec only).
+* Enhancement: Activities are now collapsable, and since the number of activities is equal to the number of groups plus two, it's possible to hide unused groups as well (this is a persistent state/choice that operates plugin-wide) [issue#24];
+* Enhancement: New "Group State" condition allows the user to condition upon the state of another group in the same or another ReactorSensor.
+* Enhancement: Reporting of errors (such as reference to a device or scene that no longer exists) in conditions and activities is improved through the use of the (notification-capable) `Trouble` state variable. Related diagnostic information is written to the Logic Summary events list. A new icon with a yellow warning triangle superimposed calls attention to ReactorSensors reporting trouble.
+* Enhancement: The new expression function `trouble( msg [, title] )` has been added to allow expressions to signal trouble for any purpose. The *msg* argument is written to the Logic Summary event list, along with the optional *title*. The default title is simply "trouble()".
+* Enhancement: The `finddevice()` expression function now takes an optional second boolean argument that determines if an error is thrown (and thus trouble is reported) if the referenced device is not found. If not provided or *false*, `null` is returned (the legacy behavior); if *true*, an eval error is thrown and trouble is signalled.
+* Enhancement: The `getstate()` expression function now takes an option fourth boolean argument that determines if an error is thrown (and trouble is reported) if the referenced device is not found. If not provided or *true*, an error is thrown and trouble is signalled (the legacy behavior); if *false*, `null` is returned.
+> Note: The default *legacy* behaviors (i.e. when the new optional argument is not provided) described above for `getstate()` and `finddevice()` are different; this is intentional and consistent with their operation prior to this enhancement (so the behavior of existing expressions does not change). The new argument is, however, consistent, in that when a device cannot be found and *true* has been explicitly passed, an error will be thrown and trouble signalled by both functions, or if *false* is passed, `null` will be returned by both functions.
+* Enhancement: The status display now highlights errors and changed values.
+* Enhancement: The expressions editor now shows the most recent sensor evaluation result for each expression.
+* Enhancement: **POSSIBLE BREAKING CHANGE** As of this version, the evaluation order of expressions is explicitly sequential. Previously, the order was system-determined. By going to sequential evaluation, it is possible for variable to store the previous value of another (e.g. by the expression "OldVal=Val" preceding the expression/calculation of Val). In addition, the values stored in state variables are no longer the primary values used in evaluations. Now, the actual returned values from LuaXP are stored on the ReactorSensor state and saved between sensor updates, and across restarts and reboots (that is, they are now persistent).
+* Enhancement: Condition groups are now a hierarchical construct, and group logic is user-settable (AND/OR/XOR + NOT). This adds considerable flexibility to the condition logic for users, at the expense of some complexity in the UI (implementation/operation is not significantly different).
+* Enhancement: Users may now create Activities for each condition group, not just the over trip/untrip of the sensor.
+* Enhancement: It is now possible to copy the contents of one activity to another.
+
 ## Version 2.5 (released)
 
 * Hotfix-19094-01: Fix validation crash in interval condition parameter check, loses hour and minute data on edit.
@@ -9,7 +30,6 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 2.4 (released)
 
-* Change: Ajax request timeouts increased to allow more headroom when the user is on a remote connection to the Vera being configured.
 * Change: Embedded URLs to Vera community forums updated to new Discourse-based community.
 * Fix: fix an issue with Safari 12 user not being able to edit "sustained for" time on service conditions.
 * Enhancement: The response time for house mode changes has been dramatically improved (without increased polling).
@@ -18,6 +38,14 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 * Fix hotfix-19044-01: Restore of configuration not being written to device correctly, so restore appears to succeed, but device is unchanged.
 * Fix hotfix-19040-01: Fix missing pre-init of context variable that causes later spurious error (reported on openLuup).
 * Change: Remove deprecated execLua context values "reactor_device" and "reactor_ext_arg"
+
+## Version 2.3 (released)
+
+* Fix (hotfix19032-02): a problem where the delay type is not restoring to the UI properly when editing existing action (reported by Vpow).
+* Fix (hotfix19032-01): an initial "inline" delay can lose it's time reference and go into a loop, never executing the actions (only when the delay starts the activity; also reported by Vpow).
+* Fix (hotfix19029-03): Revert eventList2 back to prior order until we can properly sort out how to handle making the scene trigger list more user-friendly without disrupting existing scene triggers (which I did; reported by dJOS).
+* Fix (hotfix19029-02): if the usergeofences array contained a reference to a user not in the users array of user_data, the UI would crash attempting to load (reported by Fanan).
+* Fix (hotfix19029-01): fix to geofence condition so that first-time users don't have sensor crash before master device has properly populated the initial data (reported by connormacleod).
 
 ## Version 2.3 (released)
 
