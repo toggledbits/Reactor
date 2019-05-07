@@ -2,6 +2,10 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
+## Version 3.0 (hotfix-19127)
+
+* hotfix-19127-01: Fix condition/group drag/drop within same parent group not sticking (inter-group is OK).
+
 ## Version 3.0 (released)
 
 * Enhancement: The device-defined conditions normally seen in the Vera scene editor are now offered as shortcuts for creating conditions;
