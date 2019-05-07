@@ -371,6 +371,9 @@ var ReactorSensor = (function(api, $) {
 		if ( upgraded ) {
 			/* Write updated config. We don't care if it fails, as nothing we can't redo would be lost. */
 			console.log('Re-writing upgraded config data');
+			cdata.timestamp = Math.floor( Date.now() / 1000 );
+			cdata.serial = ( cdata.serial || 0 ) + 1;
+			console.log("loadConfigData(): saving upgraded config serial " + String(cdata.serial) + ", timestamp " + String(cdata.timestamp));
 			api.setDeviceStateVariablePersistent( myid, serviceId, "cdata",
 				JSON.stringify( cdata, function( k, v ) { return k.match( /^__/ ) ? undefined : v; } )
 			);
@@ -391,6 +394,7 @@ var ReactorSensor = (function(api, $) {
 		if ( force || ! d.cdata ) {
 			loadConfigData( myid );
 		}
+		console.log("getConfiguration(): loaded config serial " + String(d.cdata.serial) + ", timestamp " + String(d.cdata.timestamp));
 		return d.cdata;
 	}
 
@@ -650,6 +654,9 @@ var ReactorSensor = (function(api, $) {
 
 		/* Save to persistent state */
 		cdata.timestamp = Math.floor( Date.now() / 1000 );
+		cdata.serial = ( cdata.serial || 0 ) + 1;
+		cdata.device = myid;
+		console.log("handleSaveClick(): saving config serial " + String(cdata.serial) + ", timestamp " + String(cdata.timestamp));
 		api.setDeviceStateVariablePersistent( myid, serviceId, "cdata",
 			JSON.stringify( cdata, function( k, v ) { return k.match( /^__/ ) ? undefined : v; } ),
 			{
@@ -661,6 +668,7 @@ var ReactorSensor = (function(api, $) {
 					configModified = false;
 					updateSaveControls();
 					clearUnusedStateVariables( myid, cdata );
+					console.log("handleSaveClick(): successful save of config serial " + String(cdata.serial) + ", timestamp " + String(cdata.timestamp));
 				},
 				'onFailure' : function() {
 					alert('There was a problem saving the configuration. Vera/Luup may have been restarting. Please try hitting the "Save" button again.');
@@ -1324,12 +1332,26 @@ var ReactorSensor = (function(api, $) {
 		 * Renumber group conditions.
 		 */
 		function reindexConditions( grp ) {
-			var d = (grp.__depth || 0) + 1;
-			for ( var ix=0; ix<(grp.conditions || []).length; ix++ ) {
-				grp.conditions[ix].__index = ix;
-				grp.conditions[ix].__parent = grp;
-				grp.conditions[ix].__depth = d;
-			}
+			var $el = jQuery( 'div#' + idSelector( grp.id ) + '.cond-group-container' ).children( 'div.cond-group-body' ).children( 'div.cond-list' );
+			var ixCond = getConditionIndex();
+			var ix = 0;
+			grp.conditions.splice( 0, grp.conditions.length ); /* empty in place */
+			$el.children().each( function( n, row ) {
+				var id = jQuery( row ).attr( 'id' );
+				var obj = ixCond[ id ];
+				if ( obj ) {
+					// console.log("reindexConditions(" + grp.id + ") " + id + " is now " + ix);
+					jQuery( row ).removeClass( 'level' + String( obj.__depth || 0 ) ).removeClass( 'levelmod0 levelmod1 levelmod2 levelmod3' );
+					grp.conditions[ix] = obj;
+					obj.__parent = grp;
+					obj.__index = ix++;
+					obj.__depth = grp.__depth + 1;
+					jQuery( row ).addClass( 'level' + obj.__depth ).addClass( 'levelmod' + (obj.__depth % 4) );
+				} else {
+					/* Not found. Remove from UI */
+					jQuery( row ).remove();
+				}
+			});
 		}
 
 		/**
@@ -2984,10 +3006,12 @@ var ReactorSensor = (function(api, $) {
 			grp.conditions.push( newgrp );
 			newgrp.__parent = grp;
 			newgrp.__index = grp.conditions.length - 1; /* ??? for now */
+			newgrp.__depth = ( grp.__depth || 0 ) + 1;
 			ixCond[ newId ] = newgrp;
 
 			/* Append the new condition group to the container */
 			$container.append( $condgroup );
+			$condgroup.addClass( 'level' + newgrp.__depth ).addClass( 'levelmod' + (newgrp.__depth % 4) );
 			$condgroup.addClass( 'tbmodified' );
 
 			configModified = true;
@@ -4517,7 +4541,7 @@ var ReactorSensor = (function(api, $) {
 								if ( typeof(v) == "boolean" ) {
 									stack.push( !v );
 								} else {
-									throw "invalid operand type for not: ("+ 
+									throw "invalid operand type for not: ("+
 										typeof(v) + ")" + String(v);
 								}
 							} else if ( "isnull" === seg ) {
@@ -4573,7 +4597,7 @@ var ReactorSensor = (function(api, $) {
 							" end of conditions stack len expected 1 got " + stack.length );
 					}
 					var result = stack.pop() || null;
-					console.log("getDeviceOverride: eval of " + cond[ic] + 
+					console.log("getDeviceOverride: eval of " + cond[ic] +
 						" yields (" + typeof(result) + ")" + String(result));
 					if ( result !== true ) {
 						match = false;
