@@ -2983,8 +2983,11 @@ local function processSensorUpdate( tdev, sst )
 
 		local newTrip
 		_,newTrip,hasTimer = processCondition( cdata.conditions.root, nil, cdata, tdev )
-
-		if invert then newTrip = not newTrip end
+		if newTrip == nil then 
+			newTrip = false -- null from root equiv to false here
+		elseif invert then 
+			newTrip = not newTrip 
+		end
 		D("processSensorUpdate() trip %4was %1 now %2, retrig %3", currTrip, newTrip,
 			retrig, invert and "(inverted) " or "" )
 
