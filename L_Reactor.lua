@@ -2895,6 +2895,7 @@ evaluateGroup = function( grp, parentGroup, cdata, tdev )
 	local now = sst.timebase
 	local latched = {}
 	local hasTimer = false
+	local nTrue = 0
 	for ix,cond in ipairs( grp.conditions or {} ) do
 		D("evaluateGroup() process %3 #%1/%2: %4 %5", ix, #grp.conditions, grp.id, cond.type, cond.id )
 		local _, state, condTimer = processCondition( cond, grp, cdata, tdev )
@@ -2912,14 +2913,19 @@ evaluateGroup = function( grp, parentGroup, cdata, tdev )
 			elseif passed == nil then
 				passed = state
 			elseif grp.operator == "xor" then
-				passed = state ~= passed
+				passed = passed -- irrelevant, see below
 			elseif grp.operator == "or" then
 				passed = passed or state
 			else -- default "and"
 				passed = passed and state
 			end
+			if state then nTrue = nTrue + 1 end
 		end
 		D("evaluateGroup() result %3 #%1/%2: %4 %5 = %6; passed %7", ix, #grp.conditions, grp.id, cond.type, cond.id, state or "nil", passed or "nil" )
+	end
+	-- Special handling for XOR, which in our context means "1 and only 1 true"
+	if grp.operator == "xor" and passed ~= nil then
+		passed = nTrue == 1
 	end
 
 	-- Save group state.
