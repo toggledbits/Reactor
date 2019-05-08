@@ -4,6 +4,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 3.1 (development)
 
+* Fix: When the root group is NUL, every eval looks like a change to the throttling algorithm and erroneously change-throttles the RS too soon. Logically, an RS with a NUL root group should never change-throttle, it can only update-throttle.
 * Hotfix-19127-01: Fix condition/group drag/drop within same parent group not saving (inter-group is OK).
 
 ## Version 3.0 (released)
