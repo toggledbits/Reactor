@@ -2929,7 +2929,7 @@ var ReactorSensor = (function(api, $) {
 		 * Delete condition. If it's a group, delete it and all children
 		 * recursively.
 		 */
-		function deleteCondition( condId, ixCond, pgrp, reindex ) {
+		function deleteCondition( condId, ixCond, cdata, pgrp, reindex ) {
 			var ix;
 			var cond = ixCond[condId];
 			if ( undefined === cond ) return;
@@ -2944,18 +2944,26 @@ var ReactorSensor = (function(api, $) {
 				}
 			}
 
-			/* If this condition is a group, delete all subconditions */
+			/* If this condition is a group, delete all subconditions (recursively) */
 			if ( "group" === ( cond.type || "group" ) ) {
 				for ( ix=0; ix<(cond.conditions || []).length; ix++ ) {
-					deleteCondition( cond.conditions[ix].id, ixCond, cond, false );
+					deleteCondition( cond.conditions[ix].id, ixCond, cdata, cond, false );
 				}
 				delete cond.conditions;
+
+				/* Remove related activities */
+				if ( (cond.activities || {})[condId + ".true"] ) {
+					delete cond.activities[condId + ".true"];
+				}
+				if ( (cond.activities || {})[condId + ".false"] ) {
+					delete cond.activities[condId + ".false"];
+				}
 			}
 
-			/* Remove from index, and parent group with reindex */
+			/* Remove from index, and parent group, possibly reindex */
+			pgrp.conditions.splice( cond.__index, 1 );
 			delete ixCond[condId];
 			if ( reindex ) {
-				pgrp.conditions.splice( cond.__index, 1 );
 				reindexConditions( pgrp );
 			}
 
@@ -2980,7 +2988,7 @@ var ReactorSensor = (function(api, $) {
 			}
 
 			$grpEl.remove();
-			deleteCondition( grpId, ixCond, grp.__parent, true );
+			deleteCondition( grpId, ixCond, getConfiguration(), grp.__parent, true );
 			configModified = true;
 			$el.closest( 'div.cond-group-container' ).addClass( 'tbmodified' ); // ??? NO! Parent group!
 			updateControls();
@@ -3044,7 +3052,7 @@ var ReactorSensor = (function(api, $) {
 				}
 			}
 
-			deleteCondition( condId, ixCond, ixCond[condId].__parent, true );
+			deleteCondition( condId, ixCond, getConfiguration(), ixCond[condId].__parent, true );
 
 			/* Remove the condition row from display, reindex parent. */
 			row.remove();
@@ -3621,10 +3629,11 @@ var ReactorSensor = (function(api, $) {
 		el.append( '<div class="col-xs-12 col-sm-9 col-md-8"><textarea class="expr form-control form-control-sm" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="off"/><div id="currval" /></div>' );
 		// ??? devices_other is an alternate for insert state variable
 		el.append( '<div class="col-xs-12 col-sm-3 col-md-2 text-right"><i class="material-icons md-btn draghandle" title="Change order (drag)">reorder</i><i id="tryexpr" class="material-icons md-btn" title="Try this expression">directions_run</i><i id="getstate" class="material-icons md-btn" title="Insert device state variable value">memory</i><i id="deletevar" class="material-icons md-btn" title="Delete this variable">clear</i></div>' );
-		jQuery( 'textarea.expr', el ).on( 'change.reactor', handleVariableChange );
-		jQuery( 'i#tryexpr', el ).attr('disabled', true).on('click.reactor', handleTryExprClick);
-		jQuery( 'i#getstate', el ).attr('disabled', true).on('click.reactor', handleGetStateClick);
-		jQuery( 'i#deletevar', el ).attr('disabled', true).on('click.reactor', handleDeleteVariableClick);
+		jQuery( 'textarea.expr', el ).prop( 'disabled', true ).on( 'change.reactor', handleVariableChange );
+		jQuery( 'i#tryexpr', el ).attr( 'disabled', true ).on( 'click.reactor', handleTryExprClick );
+		jQuery( 'i#getstate', el ).attr( 'disabled', true ).on( 'click.reactor', handleGetStateClick );
+		jQuery( 'i#deletevar', el ).attr( 'disabled', true ).on( 'click.reactor', handleDeleteVariableClick );
+		jQuery( 'i.draghandle', el ).attr( 'disabled', true );
 		return el;
 	}
 
@@ -3651,14 +3660,15 @@ var ReactorSensor = (function(api, $) {
 				/* Remove the name input field and swap in the name (text) */
 				f.parent().empty().text(vname);
 				/* Re-enable fields and add button */
-				jQuery( 'div.varexp textarea.expr,i.md-btn', container ).attr('disabled', false);
 				jQuery( 'button#addvar', container ).prop( 'disabled', false );
+				jQuery( 'i.md-btn', container ).attr('disabled', false);
+				jQuery( 'textarea.expr', container ).prop( 'disabled', false );
 				jQuery( 'textarea.expr', row ).focus();
 				/* Do the regular stuff */
 				handleVariableChange( null );
 			}
 		});
-		editrow.insertBefore( jQuery( '.buttonrow', container ) );
+		jQuery( 'div.varlist', container ).append( editrow );
 		jQuery( 'div#varname input', editrow ).focus();
 	}
 
@@ -3739,7 +3749,7 @@ var ReactorSensor = (function(api, $) {
 		list.sortable({
 			vertical: true,
 			containment: 'div.varlist',
-			placeholder: 'tb-placeholder',
+			helper: "clone",
 			handle: ".draghandle",
 			update: handleVariableChange
 		});
@@ -3780,9 +3790,8 @@ var ReactorSensor = (function(api, $) {
 			html += 'div#tab-vars.reactortab div.varexp.tbmodified:not(.tberror) { border-left: 4px solid green; }';
 			html += 'div#tab-vars.reactortab div.varexp.tberror { border-left: 4px solid red; }';
 			html += 'div#tab-vars.reactortab textarea.expr { font-family: monospace; resize: vertical; width: 100% !important; }';
-			html += 'div#tab-vars.reactortab div.varexp { cursor: default; }';
+			html += 'div#tab-vars.reactortab div.varexp { cursor: default; margin: 2px 0 2px 0; }';
 			html += 'div#tab-vars.reactortab div#varname:after { content: " ="; }';
-			html += 'div#tab-vars.reactortab .tb-placeholder { min-height: 8px; background-color: #f0f0f0; }';
 			html += 'div#tab-vars.reactortab div#currval { font-family: "Courier New", Courier, monospace; font-size: 0.9em; }';
 			html += "</style>";
 			jQuery("head").append( html );
