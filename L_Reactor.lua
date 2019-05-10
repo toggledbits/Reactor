@@ -1556,11 +1556,13 @@ local function variables( cdata )
 end
 
 -- Find device type name or UDN
-local function finddevice( dev )
+local function finddevice( dev, tdev )
 	local vn
 	if type(dev) == "number" then
+		if dev == -1 then return tdev end
 		return dev
 	elseif type(dev) == "string" then
+		if dev == "" then return tdev end
 		dev = string.lower( dev )
 		if devicesByName[ dev ] ~= nil then
 			return devicesByName[ dev ]
@@ -1867,7 +1869,7 @@ local function getExpressionContext( cdata, tdev )
 	ctx.__functions.finddevice = function( args )
 		local selector, trouble = unpack( args )
 		D("findDevice(%1) selector=%2", args, selector)
-		local n = finddevice( selector )
+		local n = finddevice( selector, tdev )
 		if n == nil then
 			-- default behavior for finddevice is return NULL (legacy, diff from getstate)
 			if trouble == true then luaxp.evalerror( "Device not found" ) end
@@ -1877,7 +1879,7 @@ local function getExpressionContext( cdata, tdev )
 	end
 	ctx.__functions.getstate = function( args )
 		local dev, svc, var, trouble = unpack( args )
-		local vn = finddevice( dev )
+		local vn = finddevice( dev, tdev )
 		D("getstate(%1), dev=%2, svc=%3, var=%4, vn(dev)=%5", args, dev, svc, var, vn)
 		if vn == luaxp.NULL or vn == nil or luup.devices[vn] == nil then
 			-- default behavior for getstate() is error (legacy, diff from finddevice)
@@ -1891,7 +1893,7 @@ local function getExpressionContext( cdata, tdev )
 	end
 	ctx.__functions.setstate = function( args )
 		local dev, svc, var, val = unpack( args )
-		local vn = finddevice( dev )
+		local vn = finddevice( dev, tdev )
 		D("setstate(%1), dev=%2, svc=%3, var=%4, val=%5, vn(dev)=%6", args, dev, svc, var, val, vn)
 		if vn == luaxp.NULL or vn == nil or luup.devices[vn] == nil then
 			return luaxp.evalerror( "Device not found" )
@@ -1912,7 +1914,7 @@ local function getExpressionContext( cdata, tdev )
 	end
 	ctx.__functions.getattribute = function( args )
 		local dev, attr = unpack( args )
-		local vn = finddevice( dev )
+		local vn = finddevice( dev, tdev )
 		D("getattribute(%1), dev=%2, attr=%3, vn(dev)=%4", args, dev, attr, vn)
 		if vn == luaxp.NULL or vn == nil or luup.devices[vn] == nil then
 			return luaxp.evalerror("Device not found")
