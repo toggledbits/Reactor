@@ -2,7 +2,7 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
-## Version 3.1 (development)
+## Version 3.1 (development-19130)
 
 * Fix: New Variable/Expression is created in the wrong container so it wasn't immediately sortable.
 * Enhancement: The `getstate()` expression function not accepts an empty string for the device argument, which means the current ReactorSensor (self-reference).
