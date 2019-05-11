@@ -1555,7 +1555,7 @@ local function variables( cdata )
 	end
 end
 
--- Find device type name or UDN
+-- Find device by number, name or UDN
 local function finddevice( dev, tdev )
 	local vn
 	if type(dev) == "number" then
