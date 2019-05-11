@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.1develop-19130';
+	var pluginVersion = '3.1develop-19131';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -3106,6 +3106,23 @@ var ReactorSensor = (function(api, $) {
 		}
 
 		/**
+		 * Does activity have actions?
+		 */
+		function activityHasActions( act, cdata ) {
+			var scene = (cdata.activities||{})[act];
+			/* Check, first group has actions or delay > 0 */
+			return scene && (scene.groups||[]).length > 0 && ( (scene.groups[0].actions||[]).length > 0 || (scene.groups[0].delay||0) > 0 );
+		}
+
+		/**
+		 * Does group have activities?
+		 */
+		function groupHasActivities( grp, cdata ) {
+			cdata = cdata || getConfiguration();
+			return activityHasActions( grp.id+'.true', cdata ) || activityHasActions( grp.id+'.false', cdata );
+		}
+
+		/**
 		 * Handle click on group controls (NOT/AND/OR/XOR/NUL)
 		 */
 		function handleGroupControlClick( ev ) {
@@ -3113,6 +3130,16 @@ var ReactorSensor = (function(api, $) {
 			var action = $el.attr( 'id' );
 			var grpid = $el.closest( 'div.cond-group-container' ).attr( 'id' );
 			var grp = getConditionIndex()[ grpid ];
+			var cdata = getConfiguration();
+
+			/* Special case handling for NUL--remove activities */
+			if ( "nul" === action && groupHasActivities( grp, cdata ) ) {
+				if ( ! confirm( 'This group currently has activities associated with it. Groups with the NUL operator do not run activities. OK to delete the associated activities?' ) ) {
+					return;
+				}
+				delete cdata.activities[grpid+'.true'];
+				delete cdata.activities[grpid+'.false'];
+			}
 
 			if ( $el.closest( '.btn-group' ).hasClass( 'tb-btn-radio' ) ) {
 				$el.closest( '.btn-group' ).find( '.checked' ).removeClass( 'checked' );
@@ -5375,29 +5402,34 @@ var ReactorSensor = (function(api, $) {
 			.val( showWhich );
 
 		var ul = jQuery( '<ul />' );
+		var showedAny = false;
 		var orderly = function( gr ) {
-			ul.append( jQuery( '<li />' ).attr( 'id', gr.id + ".true" ).text( ( gr.name || gr.id ) + " True" ) );
-			ul.append( jQuery( '<li />' ).attr( 'id', gr.id + ".false" ).text( ( gr.name || gr.id ) + " False" ) );
-			var scene = gr.id + '.true';
-			el = getActionListContainer();
-			el.attr( 'id', scene );
-			jQuery( 'span.titletext', el ).text( 'When ' +
-				( gr.name || gr.id ) + ' is TRUE' );
-			container.append( el );
-			loadActions( el, cd.activities[scene] || {} );
-			if ( "inuse" === showWhich && isEmptyActivity( cd.activities[scene] ) ) {
-				el.hide();
-			}
+			if ( "nul" !== gr.operator ) {
+				ul.append( jQuery( '<li />' ).attr( 'id', gr.id + ".true" ).text( ( gr.name || gr.id ) + " True" ) );
+				ul.append( jQuery( '<li />' ).attr( 'id', gr.id + ".false" ).text( ( gr.name || gr.id ) + " False" ) );
+				var scene = gr.id + '.true';
+				el = getActionListContainer();
+				el.attr( 'id', scene );
+				jQuery( 'span.titletext', el ).text( 'When ' +
+					( gr.name || gr.id ) + ' is TRUE' );
+				container.append( el );
+				loadActions( el, cd.activities[scene] || {} );
+				if ( "inuse" === showWhich && isEmptyActivity( cd.activities[scene] ) ) {
+					el.hide();
+				}
 
-			scene = gr.id + '.false';
-			el = getActionListContainer();
-			el.attr( 'id', scene );
-			jQuery( 'span.titletext', el ).text( 'When ' +
-				( gr.name || gr.id ) + ' is FALSE' );
-			container.append( el );
-			loadActions( el, cd.activities[scene] || {} );
-			if ( "inuse" === showWhich && isEmptyActivity( cd.activities[scene] ) ) {
-				el.hide();
+				scene = gr.id + '.false';
+				el = getActionListContainer();
+				el.attr( 'id', scene );
+				jQuery( 'span.titletext', el ).text( 'When ' +
+					( gr.name || gr.id ) + ' is FALSE' );
+				container.append( el );
+				loadActions( el, cd.activities[scene] || {} );
+				if ( "inuse" === showWhich && isEmptyActivity( cd.activities[scene] ) ) {
+					el.hide();
+				}
+
+				showedAny = true;
 			}
 
 			/* Handle children of this group */
@@ -5410,8 +5442,11 @@ var ReactorSensor = (function(api, $) {
 		};
 		orderly( ( cd.conditions || {} ).root || [ { id: "root", conditions: [] } ] );
 
-		if ( "" !== showWhich ) {
-			container.append( jQuery( '<div>' )
+		if ( ! showedAny ) {
+			container.append( jQuery( '<div/>' )
+				.html( '<em>There are no groups eligible for activities.</em>' ) );
+		} else if ( "" !== showWhich ) {
+			container.append( jQuery( '<div/>' )
 				.text( 'Not all possible activities are being shown. Choose "All" from the "Show Activities" menu at top to see everything.' ) );
 		}
 
