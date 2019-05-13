@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.1develop-19131';
+	var pluginVersion = '3.1develop-19133';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -4224,7 +4224,22 @@ var ReactorSensor = (function(api, $) {
 
 	function handleActionsSaveClick( ev ) {
 		var cd = getConfiguration();
+		var ixCond = getConditionIndex();
 		var errors = false;
+
+		/* Check activity/group relationships */
+		cd.activities = cd.activities || {};
+		for ( var k in cd.activities ) {
+			if ( cd.activities.hasOwnProperty( k ) ) {
+				var id = k.replace( /\.(true|false)$/, "" );
+				if ( undefined === ixCond[id] ) {
+					delete cd.activities[k];
+					configModified = true;
+				}
+			}
+		}
+
+		/* Now clean, save as displayed. */
 		jQuery( 'div.actionlist' ).each( function() {
 			var id = jQuery( this ).attr( 'id' );
 			var scene = buildActionList( jQuery( this ) );
