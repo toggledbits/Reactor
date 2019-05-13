@@ -2,8 +2,9 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
-## Version 3.0 (hotfix-19127)
+## Version 3.0 (hotfix-19133)
 
+* hotfix-19133-01: Fix: Interval condition stomping on needed value, disrupting any subsequent time-related conditions.
 * hotfix-19127-01: Fix condition/group drag/drop within same parent group not sticking (inter-group is OK).
 
 ## Version 3.0 (released)

@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.0"
+local _PLUGIN_VERSION = "3.0hotfix-19133"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION = 301
@@ -2442,7 +2442,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		tpart[7] = ( tparam[7] == "" ) and tpart[2] or tonumber( tparam[7] )
 		tpart[8] = ( tparam[8] == "" ) and tpart[3] or tonumber( tparam[8] )
 		tpart[9] = ( tparam[9] == "" ) and tpart[4] or tonumber( tparam[9] )
-		tpart[10] = ( tparam[10] == "" ) and tpart[5] or tparam[10]
+		tpart[10] = ( tparam[10] == "" ) and tpart[5] or tonumber( tparam[10] )
 		-- Sanity check year to avoid nil dates coming from os.time()
 		if tpart[1] < 1970 then tpart[1] = 1970 elseif tpart[1] > 2037 then tpart[1] = 2037 end
 		if tpart[6] < 1970 then tpart[6] = 1970 elseif tpart[6] > 2037 then tpart[6] = 2037 end
@@ -2550,7 +2550,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 
 	elseif cond.type == "comment" then
 		-- Shortcut. Comments are always null (don't contribute to logic).
-		return cond.comment,nil
+		return 0,nil
 
 	elseif cond.type == "reload" then
 		-- True when loadtime changes. Self-resetting.
@@ -2580,15 +2580,16 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		if interval < 60 then interval = 60 end -- "can never happen" (yeah, hold my beer)
 		-- Get our base time and make it a real time
 		local pt = split( ( getValue( cond.basetime, nil, tdev ) ) or "" )
+		local tpart = os.date("*t", now) -- basically a copy of ndt
 		if #pt == 2 then
-			ndt.hour = tonumber(pt[1]) or 0
-			ndt.min = tonumber(pt[2]) or 0
+			tpart.hour = tonumber(pt[1]) or 0
+			tpart.min = tonumber(pt[2]) or 0
 		else
-			ndt.hour = 0
-			ndt.min = 0
+			tpart.hour = 0
+			tpart.min = 0
 		end
-		ndt.sec = 0
-		local baseTime = os.time( ndt )
+		tpart.sec = 0
+		local baseTime = os.time( tpart )
 		D("evaluateCondition() interval %1 secs baseTime %2", interval, baseTime)
 		local cs = ( sst.condState or {} )[cond.id]
 		D("evaluateCondition() condstate %1", cs)
@@ -2919,7 +2920,7 @@ evaluateGroup = function( grp, parentGroup, cdata, tdev )
 				passed = passed and state
 			end
 		end
-		D("evaluateGroup() result %3 #%1/%2: %4 %5 = %6; passed %7", ix, #grp.conditions, grp.id, cond.type, cond.id, state or "nil", passed or "nil" )
+		D("evaluateGroup() result %3 #%1/%2: %4 %5 = %6; passed %7", ix, #grp.conditions, grp.id, cond.type, cond.id, state, passed )
 	end
 
 	-- Save group state.
@@ -4262,7 +4263,7 @@ function RG( grp, condState, level, r )
 		( grp.disabled and " DISABLED" or "" ) ..
 		' <' .. tostring(grp.id) .. '>' ..
 		EOL
-	local opch = ({ ['and']="&", ['or']="|", xor="^" })[grp.operator or "and"] or "+"
+	local opch = ({ ['and']="&", ['or']="|", xor="^", ['nul']="Z" })[grp.operator or "and"] or "+"
 	for _,cond in ipairs( grp.conditions or {} ) do
 		local condtype = cond.type or "group"
 		local condopt = cond.options or {}
