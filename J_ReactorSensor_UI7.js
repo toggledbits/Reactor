@@ -406,7 +406,7 @@ var ReactorSensor = (function(api, $) {
 			d.ixCond = {};
 			var makeix = function( grp, level ) {
 				d.ixCond[grp.id] = grp;
-				grp.__depth = level;
+				grp.__depth = level; /* assigned to groups only */
 				for ( var ix=0; ix<(grp.conditions || []).length; ix++ ) {
 					grp.conditions[ix].__parent = grp;
 					grp.conditions[ix].__index = ix;
@@ -1345,8 +1345,10 @@ var ReactorSensor = (function(api, $) {
 					grp.conditions[ix] = obj;
 					obj.__parent = grp;
 					obj.__index = ix++;
-					obj.__depth = grp.__depth + 1;
-					jQuery( row ).addClass( 'level' + obj.__depth ).addClass( 'levelmod' + (obj.__depth % 4) );
+					if ( "group" == ( obj.type || "group" ) ) {
+						obj.__depth = grp.__depth + 1;
+						jQuery( row ).addClass( 'level' + obj.__depth ).addClass( 'levelmod' + (obj.__depth % 4) );
+					}
 				} else {
 					/* Not found. Remove from UI */
 					jQuery( row ).remove();
@@ -3181,6 +3183,9 @@ var ReactorSensor = (function(api, $) {
 					/* nada */
 			}
 
+			if ( false === grp.disabled ) delete grp.disabled;
+			if ( false === grp.invert ) delete grp.invert;
+
 			$el.closest( 'div.cond-group-container' ).addClass( 'tbmodified' );
 			configModified = true;
 			updateControls();
@@ -3309,10 +3314,10 @@ var ReactorSensor = (function(api, $) {
 			jQuery( 'div.cond-group-conditions .tb-btn-radio button#' + ( grp.operator || "and" ), el ).addClass( "checked" );
 			if ( grp.invert ) {
 				jQuery( 'div.cond-group-conditions button#not', el ).addClass( "checked" );
-			}
+			} else { delete grp.invert; }
 			if ( grp.disabled ) {
 				jQuery( 'div.cond-group-conditions button#disable', el ).addClass( "checked" );
-			}
+			} else { delete grp.disabled; }
 
 			container = jQuery( 'div.cond-list', el );
 
