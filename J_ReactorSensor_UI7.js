@@ -1009,7 +1009,7 @@ var ReactorSensor = (function(api, $) {
   </div> \
 </div>' );
 
-		var title = 'Group: ' + (grp.name || grp.id ) + ( grp.invert ? " (inverted)" : "" ) +
+		var title = 'Group: ' + (grp.name || grp.id ) +
 			( grp.disabled ? " (disabled)" : "" ) + " <" + grp.id + ">";
 		jQuery( 'span#titletext', grpel ).text( title );
 		jQuery( '.condbtn', grpel ).text( (grp.invert ? "NOT " : "") + (grp.operator || "and" ).toUpperCase() );
