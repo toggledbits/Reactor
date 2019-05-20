@@ -2,6 +2,10 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
+## Version 3.1 Hotfixes
+
+* Hotfix 19140-01: Fix text area (expression) may be disabled on redraw.
+
 ## Version 3.1 (released)
 
 * Fix: Interval condition stomping on needed value, disrupting any subsequent time-related conditions.
