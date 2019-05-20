@@ -203,7 +203,7 @@ end
 -- Set variable, only if value has changed.
 local function setVar( sid, name, val, dev )
 	val = (val == nil) and "" or tostring(val)
-	local s = luup.variable_get( sid, name, dev ) or ""
+	local s = luup.variable_get( sid, name, dev )
 	if s ~= val then
 		luup.variable_set( sid, name, val, dev )
 	end
