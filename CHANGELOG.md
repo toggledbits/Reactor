@@ -2,7 +2,7 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
-## Version 3.1 (development-19133)
+## Version 3.1 (released)
 
 * Fix: Interval condition stomping on needed value, disrupting any subsequent time-related conditions.
 * Fix: New Variable/Expression is created in the wrong container so it wasn't immediately sortable.
