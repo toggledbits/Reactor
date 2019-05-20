@@ -3752,7 +3752,7 @@ var ReactorSensor = (function(api, $) {
 			var el = getVariableRow();
 			el.attr( 'id', vd.name );
 			jQuery( 'div#varname', el).text( vd.name );
-			jQuery( 'textarea.expr', el ).val( vd.expression );
+			jQuery( 'textarea.expr', el ).val( vd.expression ).prop( 'disabled', false );
 			jQuery( 'i.md-btn', el ).attr( 'disabled', false );
 			var blk = jQuery( 'div#currval', el ).empty();
 			if ( csvars[ vd.name ] && undefined !== csvars[ vd.name ].lastvalue ) {
