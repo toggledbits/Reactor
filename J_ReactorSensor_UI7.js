@@ -2190,7 +2190,7 @@ var ReactorSensor = (function(api, $) {
 				var $preds = jQuery('<select id="pred" class="form-control form-control-sm"><option value="">(any time/no sequence)</option></select>');
 				for ( var ic=0; ic<(grp.conditions || []).length; ic++) {
 					var gc = grp.conditions[ic];
-					/* Must be service, not this condition, and not the predecessor to this condition (recursive) */
+					/* Must be non-comment, not this condition, and not the predecessor to this condition (recursive) */
 					if ( cond.id !== gc.id && "comment" !== gc.type && ( gc.after === undefined || gc.after !== cond.id ) ) {
 						var $opt = jQuery( '<option/>' ).val( gc.id );
 						var t = makeConditionDescription( gc );
@@ -3752,7 +3752,7 @@ var ReactorSensor = (function(api, $) {
 			var el = getVariableRow();
 			el.attr( 'id', vd.name );
 			jQuery( 'div#varname', el).text( vd.name );
-			jQuery( 'textarea.expr', el ).val( vd.expression );
+			jQuery( 'textarea.expr', el ).val( vd.expression ).prop( 'disabled', false );
 			jQuery( 'i.md-btn', el ).attr( 'disabled', false );
 			var blk = jQuery( 'div#currval', el ).empty();
 			if ( csvars[ vd.name ] && undefined !== csvars[ vd.name ].lastvalue ) {
