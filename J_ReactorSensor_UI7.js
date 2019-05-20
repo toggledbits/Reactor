@@ -6,6 +6,11 @@
  * Copyright 2018,2019 Patrick H. Rigney, All Rights Reserved.
  * This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
  *
+ * NOTA BENE: In the current version of jQuery in use on Vera, the element.prop( 'disabled', state ) construct
+ *            does not work correctly for the <i> tagged material design buttons. The attr() method must be
+ *            used instead, which is counter to the recommended practice (jQuery docs)--irrelevant if it diesn't
+ *            work.
+ *
  */
 /* globals api,jQuery,$,unescape,MultiBox,ace */
 /* jshint multistr: true */
@@ -84,7 +89,7 @@ var ReactorSensor = (function(api, $) {
 		{ op: 'istrue', desc: 'is TRUE', args: 0 }, { op: 'isfalse', desc: 'is FALSE', args: 0 },
 		{ op: 'change', desc: 'changes', args: 2 }
 	];
-	var noCaseOptPattern = /(=|<>|contains|notcontains|starts|notstarts|ends|notends|in|notin|change)/i;
+	var noCaseOptPattern = /^(=|<>|contains|notcontains|starts|notstarts|ends|notends|in|notin|change)$/i;
 	var serviceOpsIndex = {};
 
 	var varRefPattern = /^\{[^}]+\}\s*$/;
@@ -109,11 +114,10 @@ var ReactorSensor = (function(api, $) {
 	div.reactortab .tb-about { margin-top: 24px; } \
 	div.reactortab .tberror { border: 1px solid red; } \
 	div.reactortab .tbwarn { border: 1px solid yellow; background-color: yellow; } \
-	div.reactortab i.md-btn:disabled { color: #ccc; cursor: not-allowed; } \
-	div.reactortab i.md-btn[disabled] { color: #ccc; cursor: not-allowed; } \
-	div.reactortab i.md-btn { font-size: 16pt; cursor: pointer; position: relative; top: 6px; color: #333; background-color: #fff; padding: 2px; border-radius: 4px; box-shadow: #ccc 2px 2px; } \
-	div.reactortab .md12 { font-size: 12pt; } \
-	div.reactortab .md14 { font-size: 14pt; } \
+	div.reactortab button.md-btn:disabled { color: #ccc; cursor: not-allowed; } \
+	div.reactortab button.md-btn[disabled] { color: #ccc; cursor: not-allowed; } \
+	div.reactortab button.md-btn { line-height: 1em; cursor: pointer; color: #333; background-color: #fff; padding: 1px 0px 0px 0px; border-radius: 4px; box-shadow: #ccc 2px 2px; } \
+	div.reactortab button.md-btn i { font-size: 16pt; line-height: 1em; } \
 	div#tbcopyright { display: block; margin: 12px 0px; } \
 	div#tbbegging { display: block; color: #ff6600; margin-top: 12px; } \
 </style>');
@@ -1528,8 +1532,8 @@ var ReactorSensor = (function(api, $) {
 			nset = nset || jQuery( '.cond-list:empty' ).length > 0;
 
 			/* Disable "Add" buttons while the condition is true. */
-			jQuery('i#addcond').prop( 'disabled', nset );
-			jQuery('i#addgroup').prop( 'disabled', nset );
+			jQuery('button#addcond').prop( 'disabled', nset );
+			jQuery('button#addgroup').prop( 'disabled', nset );
 
 			updateSaveControls();
 		}
@@ -1987,9 +1991,9 @@ var ReactorSensor = (function(api, $) {
 
 			/* Options open or not, make sure options expander is highlighted */
 			if ( hasAnyProperty( cond.options ) ) {
-				jQuery( 'i#condmore', $row ).addClass( 'attn' );
+				jQuery( 'button#condmore', $row ).addClass( 'attn' );
 			} else {
-				jQuery( 'i#condmore', $row ).removeClass( 'attn' );
+				jQuery( 'button#condmore', $row ).removeClass( 'attn' );
 			}
 
 			$row.has('.tberror').addClass('tberror');
@@ -2050,12 +2054,10 @@ var ReactorSensor = (function(api, $) {
 
 		/* Set up fields for condition based on current operator */
 		function setUpConditionOpFields( $row, cond ) {
-			var val = cond.operator || "";
-			var op = serviceOpsIndex[val];
 			var vv = (cond.value || "").split(/,/);
 
 			if ( "housemode" === cond.type ) {
-				if ( val == "change" ) {
+				if ( "change" == ( cond.operator || "is" ) ) {
 					jQuery( 'fieldset#housemodechecks', $row ).hide();
 					jQuery( 'fieldset#housemodeselects', $row ).show();
 					menuSelectDefaultInsert( jQuery( 'select#frommode', $row ), vv.length > 0 ? vv[0] : "" );
@@ -2063,13 +2065,15 @@ var ReactorSensor = (function(api, $) {
 				} else {
 					jQuery( 'fieldset#housemodechecks', $row ).show();
 					jQuery( 'fieldset#housemodeselects', $row ).hide();
-					vv.forEach( function( val ) {
-						jQuery('input#opts[value="' + val + '"]', $row).prop('checked', true);
+					vv.forEach( function( ov ) {
+						jQuery('input#opts[value="' + ov + '"]', $row).prop('checked', true);
 					});
 				}
 			} else if ( "service" === cond.type ) {
+				var val = cond.operator || "=";
+				var op = serviceOpsIndex[val];
 				var $inp = jQuery( 'input#value', $row );
-				if ( val == "change" ) {
+				if ( "change" === val ) {
 					if ( $inp.length > 0 ) {
 						// Change single input field to double fields.
 						$inp.show();
@@ -2104,7 +2108,7 @@ var ReactorSensor = (function(api, $) {
 				} else {
 					$opt.hide();
 				}
-			} else if ( "grpstate" == cond.type ) {
+			} else if ( "grpstate" === cond.type ) {
 				/* nada */
 			} else {
 				console.log( "Invalid row type in handleConditionOperatorChange(): " + String( cond.type ) );
@@ -2172,13 +2176,13 @@ var ReactorSensor = (function(api, $) {
 						$container.remove();
 					}
 				});
-				jQuery( 'i#condmore', $row ).text( 'expand_more' );
+				jQuery( 'button#condmore i', $row ).text( 'expand_more' );
 				$el.attr( 'title', msgOptionsShow );
 				return;
 			}
 
 			/* Doesn't exist. Create the options container and add options */
-			jQuery( 'i#condmore', $row ).text( 'expand_less' );
+			jQuery( 'button#condmore i', $row ).text( 'expand_less' );
 			$el.attr( 'title', msgOptionsHide );
 			$container = jQuery( '<div class="condopts" />' ).hide();
 
@@ -2437,6 +2441,7 @@ var ReactorSensor = (function(api, $) {
 					break;
 
 				case 'service':
+					if ( isEmpty( cond.operator ) ) cond.operator = "=";
 					container.append( makeDeviceMenu( cond.device, cond.devicename || "?" ) );
 					/* Fix-up: makeDeviceMenu will display current userdata name
 							   for device, but if that's changed from what we've stored,
@@ -2793,7 +2798,7 @@ var ReactorSensor = (function(api, $) {
 			 * options, and those that do don't have all options. Clear the UI
 			 * each time, so it's rebuilt as needed. */
 			jQuery( 'div.condopts', row ).remove();
-			var btn = jQuery( 'i#condmore', row );
+			var btn = jQuery( 'button#condmore', row );
 			if ( condOptions[ cond.type ] ) {
 				btn.prop( 'disabled', false ).show();
 				if ( hasAnyProperty( cond.options ) ) {
@@ -2912,7 +2917,8 @@ var ReactorSensor = (function(api, $) {
 			var $l = jQuery( 'div.cond-group-body:first', $p );
 			if ( "collapse" === $el.attr( 'id' ) ) {
 				$l.slideUp();
-				$el.attr( 'id', 'expand' ).text( 'expand_more' ).attr( 'title', 'Expand group' );
+				$el.attr( 'id', 'expand' ).attr( 'title', 'Expand group' );
+				jQuery( 'i', $el ).text( 'expand_more' );
 				try {
 					var n = jQuery( 'div.cond-list:first > div', $p ).length;
 					jQuery( 'span#titlemessage:first', $p ).text( " (" + n +
@@ -2922,7 +2928,8 @@ var ReactorSensor = (function(api, $) {
 				}
 			} else {
 				$l.slideDown();
-				$el.attr( 'id', 'collapse' ).text( 'expand_less' ).attr( 'title', 'Collapse group' );
+				$el.attr( 'id', 'collapse' ).attr( 'title', 'Collapse group' );
+				jQuery( 'i', $el ).text( 'expand_less' );
 				jQuery( 'span#titlemessage:first', $p ).text( "" );
 			}
 		}
@@ -3037,7 +3044,7 @@ var ReactorSensor = (function(api, $) {
 			var condId = row.attr('id');
 			var grpId = el.closest( 'div.cond-group-container' ).attr("id");
 
-			if ( el.attr( 'disabled' ) ) { return; }
+			if ( el.prop( 'disabled' ) ) { return; }
 
 			/* See if the condition is referenced in a sequence */
 			var okDelete = false;
@@ -3198,9 +3205,9 @@ var ReactorSensor = (function(api, $) {
 			var el = jQuery( '\
 <div class="cond-container"> \
   <div class="pull-right cond-actions"> \
-	  <i id="condmore" class="material-icons md-btn" title="Show condition options">expand_more</i> \
-	  <i class="material-icons md-btn draghandle" title="Move condition (drag)">reorder</i> \
-	  <i id="delcond" class="material-icons md-btn" title="Delete condition">clear</i> \
+	  <button id="condmore" class="btn md-btn" title="Show condition options"><i class="material-icons">expand_more</i></button> \
+	  <button class="btn md-btn draghandle" title="Move condition (drag)"><i class="material-icons">reorder</i></button> \
+	  <button id="delcond" class="btn md-btn" title="Delete condition"><i class="material-icons">clear</i></button> \
   </div> \
   <div class="cond-body form-inline"> \
 	<div class="cond-type"> \
@@ -3218,8 +3225,8 @@ var ReactorSensor = (function(api, $) {
 
 			el.attr( 'id', id );
 			jQuery('select#condtype', el).on( 'change.reactor', handleTypeChange );
-			jQuery('i#delcond', el).on( 'click.reactor', handleConditionDelete );
-			jQuery("i#condmore", el).on( 'click.reactor', handleExpandOptionsClick );
+			jQuery('button#delcond', el).on( 'click.reactor', handleConditionDelete );
+			jQuery("button#condmore", el).on( 'click.reactor', handleExpandOptionsClick );
 			return el;
 		}
 
@@ -3228,8 +3235,8 @@ var ReactorSensor = (function(api, $) {
 <div class="cond-group-container"> \
   <div class="cond-group-header"> \
 	<div class="pull-right"> \
-	  <i id="sortdrag" class="material-icons md-btn draghandle noroot" title="Move group (drag)">reorder</i> \
-	  <i id="delgroup" class="material-icons md-btn noroot" title="Delete group">clear</i> \
+	  <button id="sortdrag" class="btn md-btn draghandle noroot" title="Move group (drag)"><i class="material-icons">reorder</i></button> \
+	  <button id="delgroup" class="btn md-btn noroot" title="Delete group"><i class="material-icons">clear</i></button> \
 	</div> \
 	<div class="cond-group-conditions"> \
 	  <div class="btn-group cond-group-control tb-tbn-check"> \
@@ -3246,8 +3253,8 @@ var ReactorSensor = (function(api, $) {
 	  </div> \
 	  <div class="cond-group-title"> \
 		<span id="titletext" /> \
-		<i id="edittitle" class="material-icons md-btn" title="Edit group name">edit</i> \
-		<i id="collapse" class="material-icons md-btn noroot" title="Collapse group">expand_less</i> \
+		<button id="edittitle" class="btn md-btn" title="Edit group name"><i class="material-icons">edit</i></button> \
+		<button id="collapse" class="btn md-btn noroot" title="Collapse group"><i class="material-icons">expand_less</i></button> \
 		<span id="titlemessage" /> \
 	  </div> \
 	</div> \
@@ -3256,8 +3263,8 @@ var ReactorSensor = (function(api, $) {
   <div class="cond-group-body"> \
 	<div class="cond-list"></div> \
 	<div class="cond-group-actions"> \
-	  <i id="addcond" class="material-icons md-btn" title="Add condition to this group">playlist_add</i> \
-	  <i id="addgroup" class="material-icons md-btn" title="Add subgroup to this group">library_add</i> \
+	  <button id="addcond" class="btn md-btn" title="Add condition to this group"><i class="material-icons">playlist_add</i></button> \
+	  <button id="addgroup" class="btn md-btn" title="Add subgroup to this group"><i class="material-icons">library_add</i></button> \
 	</div> \
   </div> \
 </div>' );
@@ -3266,22 +3273,23 @@ var ReactorSensor = (function(api, $) {
 			jQuery( 'div.cond-group-conditions input[type="radio"]', el ).attr('name', grpid);
 			if ( 'root' === grpid ) {
 				/* Can't delete root group, but use the space for Save and Revert */
-				jQuery( 'i#delgroup', el ).replaceWith(
+				jQuery( 'button#delgroup', el ).replaceWith(
 					jQuery( '<button id="saveconf" class="btn btn-xs btn-success"> Save </button> <button id="revertconf" class="btn btn-xs btn-danger"> Revert </button>' )
 				);
 
 				/* For root group, remove all elements with class noroot */
 				jQuery( '.noroot', el ).remove();
 			}
-			jQuery( 'i#addcond', el ).on( 'click.reactor', handleAddConditionClick );
-			jQuery( 'i#addgroup', el ).on( 'click.reactor', handleAddGroupClick );
-			jQuery( 'i#delgroup', el ).on( 'click.reactor', handleDeleteGroupClick );
-			jQuery( 'span#titletext,i#edittitle', el ).on( 'click.reactor', handleTitleClick );
-			jQuery( 'i#collapse', el ).on( 'click.reactor', handleGroupExpandClick );
+			jQuery( 'button#addcond', el ).on( 'click.reactor', handleAddConditionClick );
+			jQuery( 'button#addgroup', el ).on( 'click.reactor', handleAddGroupClick );
+			jQuery( 'button#delgroup', el ).on( 'click.reactor', handleDeleteGroupClick );
+			jQuery( 'span#titletext,button#edittitle', el ).on( 'click.reactor', handleTitleClick );
+			jQuery( 'button#collapse', el ).on( 'click.reactor', handleGroupExpandClick );
 			jQuery( '.cond-group-control > button', el ).on( 'click.reactor', handleGroupControlClick );
 			jQuery( '.cond-list', el ).addClass("tb-sortable").sortable({
 				helper: 'clone',
 				handle: '.draghandle',
+				cancel: '', /* so draghandle can be button */
 				items: '> *:not([id="root"])',
 				// containment: 'div.cond-list.tb-sortable',
 				connectWith: 'div.cond-list.tb-sortable',
@@ -3431,8 +3439,8 @@ var ReactorSensor = (function(api, $) {
 			html += 'div#tab-conds.reactortab div#eventlist button i { font-size: 16pt; color: #666; vertical-align:middle; }';
 			html += 'div#tab-conds.reactortab div#currval { font-family: "Courier New", Courier, monospace; font-size: 0.9em; margin: 8px 0px; display: block; }';
 			html += 'div#tab-conds.reactortab div.warning { color: red; }';
-			html += 'div#tab-conds.reactortab i.md-btn.attn { background-color: #ffff80; }';
-			html += 'div#tab-conds.reactortab i.md-btn.draghandle { cursor: grab; }';
+			html += 'div#tab-conds.reactortab button.md-btn.attn { background-color: #ffff80; }';
+			html += 'div#tab-conds.reactortab button.md-btn.draghandle { cursor: grab; }';
 			html += 'div#tab-conds.reactortab fieldset.condfields { display: inline-block; }';
 			html += 'div#tab-conds.reactortab input.titleedit { font-size: 12px; height: 24px; }';
 			html += "</style>";
@@ -3567,7 +3575,7 @@ var ReactorSensor = (function(api, $) {
 		var row = jQuery( 'div#opt-state', container );
 		row.remove();
 		jQuery( 'button#addvar', container ).prop( 'disabled', false );
-		jQuery( 'textarea.expr,i.md-btn', container ).attr( 'disabled', false );
+		jQuery( 'textarea.expr,button.md-btn', container ).prop( 'disabled', false );
 	}
 
 	function handleGetStateClear( ev ) {
@@ -3630,8 +3638,8 @@ var ReactorSensor = (function(api, $) {
 		var container = jQuery('div#reactorvars');
 
 		jQuery( 'button#addvar', container ).prop( 'disabled', true );
-		jQuery( 'i.md-btn', container ).attr( 'disabled', true );
-		jQuery( 'textarea.expr', row ).attr( 'disabled', false );
+		jQuery( 'button.md-btn', container ).prop( 'disabled', true );
+		jQuery( 'textarea.expr', row ).prop( 'disabled', false );
 
 		var el = jQuery( '<div class="col-xs-12 col-md-9 col-md-offset-2 form-inline" />' );
 		el.append( makeDeviceMenu( "", "" ).attr( 'id', 'gsdev' ) );
@@ -3660,12 +3668,12 @@ var ReactorSensor = (function(api, $) {
 		el.append( '<div id="varname" class="col-xs-12 col-sm-12 col-md-2"></div>' );
 		el.append( '<div class="col-xs-12 col-sm-9 col-md-8"><textarea class="expr form-control form-control-sm" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="off"/><div id="currval" /></div>' );
 		// ??? devices_other is an alternate for insert state variable
-		el.append( '<div class="col-xs-12 col-sm-3 col-md-2 text-right"><i class="material-icons md-btn draghandle" title="Change order (drag)">reorder</i><i id="tryexpr" class="material-icons md-btn" title="Try this expression">directions_run</i><i id="getstate" class="material-icons md-btn" title="Insert device state variable value">memory</i><i id="deletevar" class="material-icons md-btn" title="Delete this variable">clear</i></div>' );
+		el.append( '<div class="col-xs-12 col-sm-3 col-md-2 text-right"><button class="btn md-btn draghandle" title="Change order (drag)"><i class="material-icons">reorder</i></button><button id="tryexpr" class="btn md-btn" title="Try this expression"><i class="material-icons">directions_run</i></button><button id="getstate" class="btn md-btn" title="Insert device state variable value"><i class="material-icons">memory</i></button><button id="deletevar" class="btn md-btn" title="Delete this variable"><i class="material-icons">clear</i></button></div>' );
 		jQuery( 'textarea.expr', el ).prop( 'disabled', true ).on( 'change.reactor', handleVariableChange );
-		jQuery( 'i#tryexpr', el ).attr( 'disabled', true ).on( 'click.reactor', handleTryExprClick );
-		jQuery( 'i#getstate', el ).attr( 'disabled', true ).on( 'click.reactor', handleGetStateClick );
-		jQuery( 'i#deletevar', el ).attr( 'disabled', true ).on( 'click.reactor', handleDeleteVariableClick );
-		jQuery( 'i.draghandle', el ).attr( 'disabled', true );
+		jQuery( 'button#tryexpr', el ).prop( 'disabled', true ).on( 'click.reactor', handleTryExprClick );
+		jQuery( 'button#getstate', el ).prop( 'disabled', true ).on( 'click.reactor', handleGetStateClick );
+		jQuery( 'button#deletevar', el ).prop( 'disabled', true ).on( 'click.reactor', handleDeleteVariableClick );
+		jQuery( 'button.draghandle', el ).prop( 'disabled', true );
 		return el;
 	}
 
@@ -3673,7 +3681,7 @@ var ReactorSensor = (function(api, $) {
 		var container = jQuery('div#reactorvars');
 
 		jQuery( 'button#addvar', container ).prop( 'disabled', true );
-		jQuery( 'div.varexp textarea.expr,i.md-btn', container ).attr( 'disabled', true );
+		jQuery( 'div.varexp textarea.expr,button.md-btn', container ).prop( 'disabled', true );
 
 		var editrow = getVariableRow();
 		jQuery( 'div#varname', editrow ).empty().append( '<input class="form-control form-control-sm" title="Enter a variable name and then TAB out of the field.">' );
@@ -3693,7 +3701,7 @@ var ReactorSensor = (function(api, $) {
 				f.parent().empty().text(vname);
 				/* Re-enable fields and add button */
 				jQuery( 'button#addvar', container ).prop( 'disabled', false );
-				jQuery( 'i.md-btn', container ).attr('disabled', false);
+				jQuery( 'button.md-btn', container ).prop('disabled', false);
 				jQuery( 'textarea.expr', container ).prop( 'disabled', false );
 				jQuery( 'textarea.expr', row ).focus();
 				/* Do the regular stuff */
@@ -3753,7 +3761,7 @@ var ReactorSensor = (function(api, $) {
 			el.attr( 'id', vd.name );
 			jQuery( 'div#varname', el).text( vd.name );
 			jQuery( 'textarea.expr', el ).val( vd.expression ).prop( 'disabled', false );
-			jQuery( 'i.md-btn', el ).attr( 'disabled', false );
+			jQuery( 'button.md-btn', el ).prop( 'disabled', false );
 			var blk = jQuery( 'div#currval', el ).empty();
 			if ( csvars[ vd.name ] && undefined !== csvars[ vd.name ].lastvalue ) {
 				var vs = csvars[ vd.name ];
@@ -3783,6 +3791,7 @@ var ReactorSensor = (function(api, $) {
 			containment: 'div.varlist',
 			helper: "clone",
 			handle: ".draghandle",
+			cancel: "", /* so draghandle can be button */
 			update: handleVariableChange
 		});
 
@@ -3812,7 +3821,7 @@ var ReactorSensor = (function(api, $) {
 			/* Our styles. */
 			var html = "<style>";
 			html += "div#tab-vars.reactortab .color-green { color: #006040; }";
-			html += 'div#tab-vars.reactortab i.md-btn.draghandle { cursor: grab; }';
+			html += 'div#tab-vars.reactortab button.md-btn.draghandle { cursor: grab; }';
 			html += 'div#tab-vars.reactortab div.tblisttitle { background-color: #444444; color: #fff; padding: 8px; min-height: 42px; }';
 			html += 'div#tab-vars.reactortab div.tblisttitle span.titletext { font-size: 16px; font-weight: bold; margin-right: 4em; }';
 			html += 'div#tab-vars.reactortab div.vargroup { border-radius: 8px; border: 2px solid #444444; margin-bottom: 8px; }';
@@ -4276,10 +4285,10 @@ var ReactorSensor = (function(api, $) {
 	function updateActionControls() {
 		jQuery( 'div.actionlist' ).each( function( ix ) {
 			var section = jQuery( this );
-			jQuery('div.controls i#action-up', section).attr('disabled', false);
-			jQuery('div.actionrow:first div.controls i#action-up', section).attr('disabled', true);
-			jQuery('div.controls i#action-down', section).attr('disabled', false);
-			jQuery('div.actionrow:last div.controls i#action-down', section).attr('disabled', true);
+			jQuery('div.controls button#action-up', section).prop('disabled', false);
+			jQuery('div.actionrow:first div.controls button#action-up', section).prop('disabled', true);
+			jQuery('div.controls button#action-down', section).prop('disabled', false);
+			jQuery('div.actionrow:last div.controls button#action-down', section).prop('disabled', true);
 		});
 
 		/* Save and revert buttons */
@@ -4905,7 +4914,7 @@ var ReactorSensor = (function(api, $) {
 		var ct = jQuery('div.actiondata', row);
 		var m;
 		ct.empty();
-		jQuery( 'i#action-try,i#action-import', row ).hide();
+		jQuery( 'button#action-try,button#action-import', row ).hide();
 
 		switch ( newVal ) {
 			case "comment":
@@ -4918,7 +4927,7 @@ var ReactorSensor = (function(api, $) {
 				ct.append('<select id="actionmenu" class="form-control form-control-sm"></select>');
 				jQuery( 'select.devicemenu', ct ).on( 'change.reactor', handleActionDeviceChange );
 				jQuery( 'select#actionmenu', ct ).on( 'change.reactor', handleActionActionChange );
-				jQuery( 'i#action-try', row ).show();
+				jQuery( 'button#action-try', row ).show();
 				break;
 
 			case "housemode":
@@ -4941,7 +4950,7 @@ var ReactorSensor = (function(api, $) {
 				m.prepend('<option value="" selected>--choose--</option>').val("").attr('id', 'scene');
 				m.on( 'change.reactor', handleActionValueChange );
 				ct.append( m );
-				jQuery( 'i#action-import', row ).show();
+				jQuery( 'button#action-import', row ).show();
 				break;
 
 			case "runlua":
@@ -5194,13 +5203,13 @@ var ReactorSensor = (function(api, $) {
 			'</select></div>' );
 		row.append('<div class="actiondata col-xs-12 col-sm-12 col-md-6 col-lg-8 form-inline"></div>');
 		var controls = jQuery('<div class="controls col-xs-12 col-sm-12 col-md-2 col-lg-2 text-right"></div>');
-		controls.append( '<i id="action-try" class="material-icons md-btn" title="Try this action">directions_run</i>' );
-		controls.append( '<i id="action-import" class="material-icons md-btn" title="Import scene to actions">save_alt</i>' );
-		controls.append( '<i id="action-up" class="material-icons md-btn" title="Move up">arrow_upward</i>' );
-		controls.append( '<i id="action-down" class="material-icons md-btn" title="Move down">arrow_downward</i>' );
-		controls.append( '<i id="action-delete" class="material-icons md-btn" title="Remove action">clear</i>' );
-		jQuery( 'i.md-btn', controls ).on( 'click.reactor', handleActionControlClick );
-		jQuery( 'i#action-try,i#action-import', controls ).hide();
+		controls.append( '<button id="action-try" class="btn md-btn" title="Try this action"><i class="material-icons">directions_run</i></button>' );
+		controls.append( '<button id="action-import" class="btn md-btn" title="Import scene to actions"><i class="material-icons">save_alt</i></button>' );
+		controls.append( '<button id="action-up" class="btn md-btn" title="Move up"><i class="material-icons">arrow_upward</i></button>' );
+		controls.append( '<button id="action-down" class="btn md-btn" title="Move down"><i class="material-icons">arrow_downward</i></button>' );
+		controls.append( '<button id="action-delete" class="btn md-btn" title="Remove action"><i class="material-icons">clear</i></button>' );
+		jQuery( 'button.md-btn', controls ).on( 'click.reactor', handleActionControlClick );
+		jQuery( 'button#action-try,button#action-import', controls ).hide();
 		row.append( controls );
 		jQuery( 'select#actiontype', row ).val( 'comment' ).on( 'change.reactor', handleActionChange );
 		changeActionType( row, "comment" );
@@ -5212,6 +5221,10 @@ var ReactorSensor = (function(api, $) {
 		var container = btn.closest( 'div.actionlist' );
 		var newRow = getActionRow();
 		newRow.insertBefore( jQuery( '.buttonrow', container ) );
+		container.addClass( 'tbmodified' );
+		newRow.addClass( 'tbmodified' );
+		configModified = true;
+		updateActionControls();
 	}
 
 	function loadActions( section, scene ) {
@@ -5318,7 +5331,8 @@ var ReactorSensor = (function(api, $) {
 		var $g = jQuery( 'div.activity-group', $p );
 		if ( "collapse" === $el.attr( 'id' ) ) {
 			$g.slideUp();
-			$el.attr( 'id', 'expand' ).text( 'expand_more' ).attr( 'title', 'Expand action' );
+			$el.attr( 'id', 'expand' ).attr( 'title', 'Expand action' );
+			jQuery( 'i', $el ).text( 'expand_more' );
 			try {
 				var n = jQuery( 'div.actionrow', $g ).length;
 				jQuery( 'span#titlemessage', $p ).text( " (" + n +
@@ -5328,7 +5342,8 @@ var ReactorSensor = (function(api, $) {
 			}
 		} else {
 			$g.slideDown();
-			$el.attr( 'id', 'collapse' ).text( 'expand_less' ).attr( 'title', 'Collapse action' );
+			$el.attr( 'id', 'collapse' ).attr( 'title', 'Collapse action' );
+			jQuery( 'i', $el ).text( 'expand_less' );
 			jQuery( 'span#titlemessage', $p ).text( "" );
 		}
 	}
@@ -5340,7 +5355,7 @@ var ReactorSensor = (function(api, $) {
 		row.append( '\
 <div class="tblisttitle col-xs-9 col-sm-9 col-lg-10"> \
   <span class="titletext">?title?</span> \
-  <i id="collapse" class="material-icons md-btn" title="Collapse action">expand_less</i> \
+  <button id="collapse" class="btn md-btn" title="Collapse action"><i class="material-icons">expand_less</i></button> \
   <span id="titlemessage" /> \
 </div> \
 <div class="tblisttitle col-xs-3 col-sm-3 col-lg-2 text-right"> \
@@ -5470,7 +5485,7 @@ var ReactorSensor = (function(api, $) {
 				.text( 'Not all possible activities are being shown. Choose "All" from the "Show Activities" menu at top to see everything.' ) );
 		}
 
-		jQuery("div#tab-actions.reactortab i#collapse").on( 'click.reactor', handleActivityCollapseClick );
+		jQuery("div#tab-actions.reactortab button#collapse").on( 'click.reactor', handleActivityCollapseClick );
 		jQuery("div#tab-actions.reactortab button.addaction").on( 'click.reactor', handleAddActionClick );
 		jQuery("div#tab-actions.reactortab ul#activities").empty().append( ul.children() );
 		jQuery("div#tab-actions.reactortab ul#activities li").on( 'click.reactor', handleActionCopyClick );
