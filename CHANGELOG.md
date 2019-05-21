@@ -4,6 +4,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 3.1 Hotfixes
 
+* Hotfix 19141-01: Prevent disable of add condition button, only for some browsers.
 * Hotfix 19140-01: Fix text area (expression) may be disabled on redraw.
 
 ## Version 3.1 (released)

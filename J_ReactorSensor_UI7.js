@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.1hotfix-19140';
+	var pluginVersion = '3.1hotfix-19141';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -1520,7 +1520,7 @@ var ReactorSensor = (function(api, $) {
 		 * Update controls for current conditions.
 		 */
 		function updateControls() {
-			/* Disable all "Add Condition" buttons if any condition type menu
+			/* Disable all "Add Group" buttons if any condition type menu
 			   has no selection. */
 			var nset = jQuery('select#condtype option:selected[value=""]').length > 0;
 
@@ -1528,7 +1528,6 @@ var ReactorSensor = (function(api, $) {
 			nset = nset || jQuery( '.cond-list:empty' ).length > 0;
 
 			/* Disable "Add" buttons while the condition is true. */
-			jQuery('i#addcond').prop( 'disabled', nset );
 			jQuery('i#addgroup').prop( 'disabled', nset );
 
 			updateSaveControls();
