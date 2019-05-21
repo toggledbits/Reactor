@@ -83,7 +83,7 @@
 					},
 					"Label": {
 						"lang_tag": "tb_reactor_how",
-						"text": "To create a new Reactor sensor, click the <b>Add Sensor</b> button. Luup will reload; a browser cache flush/page reload is highly recommended."
+						"text": "To create a new Reactor sensor, click the <b>Add Sensor</b> button. Luup will reload; a browser cache flush/page reload is highly recommended. To create more than one at a time, go to the Backup/Restore tab."
 					}
 				},
 				{

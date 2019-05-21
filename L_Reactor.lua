@@ -3497,8 +3497,10 @@ function startPlugin( pdev )
 end
 
 -- Add a child (used as both action and local function)
-function actionAddSensor( pdev )
+function actionAddSensor( pdev, count )
 	D("addSensor(%1)", pdev)
+	count = tonumber( count ) or 1
+	if count < 1 then count = 1 elseif count > 16 then count = 16 end
 	luup.variable_set( MYSID, "Message", "Adding sensor, please hard-refresh your browser.", pdev )
 	-- Safe child add.
 	local children = {}
@@ -3521,9 +3523,12 @@ function actionAddSensor( pdev )
 		local df = dfMap[ v.device_type ]
 		luup.chdev.append( pdev, ptr, v.id, v.description, "", df.device_file, "", "", false )
 	end
-	highd = highd + 1    D("addSensor() creating child r%1s%2", pdev, highd)
-	luup.chdev.append( pdev, ptr, string.format("r%ds%d", pdev, highd),
-		"Reactor Sensor " .. highd, "", "D_ReactorSensor.xml", "", "", false )
+	for k = 1,count do
+		highd = highd + 1
+		D("addSensor() creating child r%1s%2", pdev, highd)
+		luup.chdev.append( pdev, ptr, string.format("r%ds%d", pdev, highd),
+			"Reactor Sensor " .. highd, "", "D_ReactorSensor.xml", "", "", false )
+	end
 	luup.chdev.sync( pdev, ptr )
 	-- Should cause reload immediately.
 	return true

@@ -107,7 +107,8 @@
 			<serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
 			<name>AddSensor</name>
 			<job>
-				Reactor.actionAddSensor( lul_device )
+				local count = lul_settings.Count or "1"
+				Reactor.actionAddSensor( lul_device, count )
 				return 4,0
 			</job>
 		</action>

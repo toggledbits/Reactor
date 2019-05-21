@@ -51,11 +51,20 @@
 			<name>A_ARG_TYPE_boolean</name>
 			<dataType>boolean</dataType>
 		</stateVariable>
+		<stateVariable sendEvents="no">
+			<name>A_ARG_TYPE_ui4</name>
+			<dataType>ui4</dataType>
+		</stateVariable>
 	</serviceStateTable>
 	<actionList>
 		<action>
 			<name>AddSensor</name>
 			<argumentList>
+				<argument>
+				  <name>Count</name>
+				  <direction>in</direction>
+				  <relatedStateVariable>A_ARG_TYPE_ui4</relatedStateVariable>
+				</argument>
 			</argumentList>
 		</action>
 		<action>

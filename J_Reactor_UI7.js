@@ -8,6 +8,7 @@
  *
  */
 /* globals api,jQuery,$ */
+/* jshint multistr: true */
 
 //"use strict"; // fails on UI7, works fine with ALTUI
 
@@ -47,7 +48,7 @@ var Reactor = (function(api, $) {
 		html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
 		html += '<div id="tbcopyright">Reactor ver ' + pluginVersion + ' &copy; 2018,2019 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
 			' All Rights Reserved. Please check out the <a href="https://github.com/toggledbits/Reactor/wiki" target="_blank">online documentation</a>' +
-			' and <a href="https://community.getvera.com/c/plugins-amp-plugin-development/reactor" target="_blank">forum board</a> for support. Double-ring spinner by <a href="https://loading.io/spinner/double-ring" target="_blank">loading.io</a>.</div>';
+			' and <a href="https://community.getvera.com/c/plugins-amp-plugin-development/reactor" target="_blank">Vera Community Forum</a> for support. Double-ring spinner by <a href="https://loading.io/spinner/double-ring" target="_blank">loading.io</a>.</div>';
 		html += '<div id="supportlinks">Support links: ' +
 			' <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=debug" target="_blank">Toggle&nbsp;Debug</a>' +
 			' &bull; <a href="/cgi-bin/cmh/log.sh?Device=LuaUPnP" target="_blank">Log&nbsp;File</a>' +
@@ -79,8 +80,8 @@ var Reactor = (function(api, $) {
 	}
 
 	function updateBackupInfo() {
-		jQuery( ".reactortab select option[value!='']" ).remove();
-		jQuery( ".reactortab select,button#dorestore" ).prop( 'disabled', true );
+		jQuery( ".reactortab select#restoreitem option[value!='']" ).remove();
+		jQuery( ".reactortab select#restoreitem,button#dorestore" ).prop( 'disabled', true );
 		jQuery( ".reactortab div#restorestatus" ).empty();
 
 		if ( backupInfo ) {
@@ -282,8 +283,25 @@ var Reactor = (function(api, $) {
 				alert( "The backup failed." );
 			}
 		}).fail( function( jqXHR, textStatus, errThrown ) {
-			alert( "The backup request failed. Vera may be busy/reloading. Wait a moment, then try again." );
+			alert( "The backup request failed. Luup may be busy/reloading. Wait a moment, then try again." );
 		});
+	}
+
+	function handleCreateRSClick( ev ) {
+		var val = jQuery( '.reactortab select#countrs' ).val();
+		api.performActionOnDevice( api.getCpanelDeviceId(),  "urn:toggledbits-com:serviceId:Reactor",
+			"AddSensor", 
+			{
+				actionArguments: { Count: val },
+				onSuccess: function() {
+					jQuery( '.reactortab button' ).prop( 'disabled', true );
+					alert("Creating ReactorSensors. Please hard-refresh your browser now. Luup is now reloading.");
+				},
+				onFailure: function() {
+					alert("The request failed. Luup may be busy/reloading. Wait a moment, then try again.");
+				}
+			}
+		);
 	}
 
 	function doBackupRestore() {
@@ -312,6 +330,17 @@ var Reactor = (function(api, $) {
 				'</div></div>';
 			html += '<div class="row"><div class="col-xs-12 col-sm-12"><h4>Back Up Current Configuration</h4>Press this button to back up your current Reactor configuration: <button id="dobackup" class="btn btn-sm btn-success">Back Up Now</button></div></div>';
 			html += '<div class="row"><div class="col-xs-12 col-sm-12"><h4>Restore from Backup</h4><div class="form-inline">To restore from the most recent backup (info above), select the item to restore (or ALL to restore everything), and then press the "Begin Restore" button. <b>WARNING:</b> Restoring will overwrite the configuration of any current ReactorSensor having the same name(s). If you want to restore a configuration to a different device, or if you want to restore from another backup file, please refer to the <a href="https://www.toggledbits.com/reactor" target="_blank">documentation</a>.</div><div class="form-inline"><label>Restore: <select id="restoreitem" class="form-control form-control-sm" disabled><option value="">ALL</option></select></label> <label>to device: <select id="restoretarget" class="form-control form-control-sm" disabled><option value="">with matching name</option></select> <button id="dorestore" class="btn btn-sm btn-warning">Begin Restore</button></div><div id="restorestatus"/></div></div>';
+			
+			html += '\
+<div class="row"> \
+  <div class="col-xs-12 col-sm-12"> \
+    <h4>Bulk Create New ReactorSensors</h4> \
+    <div class="form-inline">To create multiple ReactorSensors at once, select the number of sensors and click "Create ReactorSensors". This operation causes a Luup reload, and you will need to hard-refresh your browser. \
+      <label>Count: <select id="countrs" class="form-control form-control-sm"></select></label> \
+      <button id="creaters" class="btn btn-sm btn-warning">Create ReactorSensors</button> \
+    </div>\
+  </div>\
+</div>';
 
 			html += '</div>'; // .reactortab
 
@@ -321,6 +350,12 @@ var Reactor = (function(api, $) {
 
 			jQuery( '.reactortab button#dobackup' ).on( 'click.reactor', handleBackupClick );
 			jQuery( '.reactortab button#dorestore' ).on( 'click.reactor', handleRestoreClick );
+			
+			var $el = jQuery( '.reactortab select#countrs' );
+			for ( var k = 1; k <= 16; ++k ) {
+				$el.append( jQuery( '<option/>' ).val( k ).text( k ) );
+			}
+			jQuery( '.reactortab button#creaters' ).on( 'click.reactor', handleCreateRSClick );
 
 			reloadBackupInfo();
 		}
