@@ -6,11 +6,6 @@
  * Copyright 2018,2019 Patrick H. Rigney, All Rights Reserved.
  * This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
  *
- * NOTA BENE: In the current version of jQuery in use on Vera, the element.prop( 'disabled', state ) construct
- *            does not work correctly for the <i> tagged material design buttons. The attr() method must be
- *            used instead, which is counter to the recommended practice (jQuery docs)--irrelevant if it diesn't
- *            work.
- *
  */
 /* globals api,jQuery,$,unescape,MultiBox,ace */
 /* jshint multistr: true */
@@ -22,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.1';
+	var pluginVersion = '3.2develop-19140';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -423,6 +418,18 @@ var ReactorSensor = (function(api, $) {
 			makeix( cf.conditions.root || {}, 0 );
 		}
 		return d.ixCond;
+	}
+
+	/* Traverse - Depth Order */
+	function DOtraverse( node, op, args, filter ) {
+		if ( ( !filter ) || filter( node ) ) {
+			op( node, args );
+		}
+		if ( "group" === ( node.type || "group" ) ) {
+			for ( var ix=0; ix<(node.conditions||[]).length; ix++ ) {
+				DOtraverse( node.conditions[ix], op, args, filter );
+			}
+		}
 	}
 
 	/* Return true if the grp (id) is an ancestor of condition (id) */
@@ -2199,12 +2206,19 @@ var ReactorSensor = (function(api, $) {
 						var $opt = jQuery( '<option/>' ).val( gc.id );
 						var t = makeConditionDescription( gc );
 						if ( t.length > 40 ) {
+							$opt.attr( 'title', t );
 							t = t.substring(0,37) + "...";
 						}
 						$opt.text( t );
 						$preds.append( $opt );
 					}
 				}
+				/* Add groups that are not ancestor of condition */
+				DOtraverse( (getConditionIndex()).root, function( node ) {
+					$preds.append( jQuery( '<option/>' ).val( node.id ).text( node.name || node.id ) );
+				}, false, function( node ) {
+					return "group" === ( node.type || "group" ) && !isAncestor( node.id, cond.id );
+				});
 				$container.append('<div id="predopt" class="form-inline"><label>Only after&nbsp;</label></div>');
 				jQuery('div#predopt label', $container).append( $preds );
 				jQuery('div#predopt', $container).append('&nbsp;<label>within <input type="text" id="predtime" class="form-control form-control-sm narrow" autocomplete="off">&nbsp;seconds (0=no time limit)</label>');
