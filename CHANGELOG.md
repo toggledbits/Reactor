@@ -2,6 +2,14 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
+## Version 3.2 (development)
+
+* Enhancement: On the "after" sequence option menu, if the condition description is truncated to length, use a tooltip to display the full description on hover.
+* Enhancement: The "after" sequence option menu now allows non-ancestor groups of the current condition.
+* Fix: The "Ignore Case" checkbox was sometimes presented when not needed (e.g. <= and >= operators).
+* Fix: Variable with no expression isn't created as state variable until non-blank/non-null value assigned; it is now created regardless.
+* Hotfix 19140-01: Fix expression field (Expressions tab) not enabled on draw.
+
 ## Version 3.1 (released)
 
 * Fix: Interval condition stomping on needed value, disrupting any subsequent time-related conditions.
