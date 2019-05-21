@@ -82,13 +82,13 @@ var Reactor = (function(api, $) {
 	function updateBackupInfo() {
 		jQuery( ".reactortab select#restoreitem option[value!='']" ).remove();
 		jQuery( ".reactortab select#restoreitem,button#dorestore" ).prop( 'disabled', true );
-		jQuery( ".reactortab div#restorestatus" ).empty();
+		jQuery( ".reactortab div#restorestatus" ).empty().hide();
+		jQuery( '.reactortab div#renameblock' ).hide();
 
 		if ( backupInfo ) {
 			var dt = new Date( backupInfo.timestamp * 1000 ).toLocaleString();
 			var el = jQuery( ".reactortab #mostrecent" );
-			el.empty();
-			el.append( '<div class="lastbackup">Last backup date: ' + dt + '</div>' );
+			el.empty().append( '<div class="lastbackup">Last backup date: ' + dt + '</div>' );
 			var path = api.getDataRequestURL().replace( /data_request.*$/i, "" );
 			el.append( '<div>' +
 				'If you would like to keep a copy of this backup on your local storage or network, you can ' +
@@ -127,13 +127,17 @@ var Reactor = (function(api, $) {
 				var sel = jQuery( this ).val();
 				var rt = jQuery( '.reactortab select#restoretarget' );
 				if ( "" === sel ) {
+					/* Restoring ALL */
 					rt.val("");
+					jQuery( '.reactortab div#renameblock' ).hide();
+				} else {
+					jQuery( '.reactortab div#renameblock' ).show();
 				}
 				rt.prop( 'disabled', ""===sel );
 				/* ??? select matching name, disable default selection if matching device not found??? */
 			});
 		} else {
-			jQuery( ".reactortab div#mosrecent" ).empty().text("No backup information available.");
+			jQuery( ".reactortab div#mostrecent" ).empty().text("No backup information available.");
 		}
 	}
 
@@ -200,8 +204,12 @@ var Reactor = (function(api, $) {
 			"cdata", JSON.stringify( cdata ),
 			{
 				'onSuccess' : function() {
-					console.log('Success ' + String(item));
 					jQuery( '.reactortab div#restorestatus p#' + idSelector(item) + ' > img' ).replaceWith( "<span> succeeded.</span>" );
+					/* If specific restore item selected, also check rename option */
+					var $ri = jQuery( '.reactortab select#restoreitem option:selected' );
+					if ( 1 === $ri.length && "" !== $ri.val() && jQuery( '.reactortab input#renamers' ).prop( 'checked' ) ) {
+						api.setDeviceAttribute( dev.id, 'name', $ri.text(), { persistent: true } );
+					}
 				},
 				'onFailure' : function() {
 					try {
@@ -226,7 +234,7 @@ var Reactor = (function(api, $) {
 		if ( ! backupInfo ) {
 			return;
 		}
-		jQuery( '.reactortab div#restorestatus' ).empty().append( '<p>Restore started at ' +
+		jQuery( '.reactortab div#restorestatus' ).empty().show().append( '<p>Restore started at ' +
 			(new Date()).toLocaleString() + '</p>' );
 		var selected = jQuery( '.reactortab select#restoreitem' ).val();
 		for ( var item in backupInfo.sensors ) {
@@ -263,6 +271,7 @@ var Reactor = (function(api, $) {
 				}
 			}
 		}
+		jQuery( '.reactortab div#restorestatus' ).append( '<p class="attn"><b>PLEASE NOTE!</b> A hard-refresh of your browser is required <i>after the restore completes</i>, or inconsistent/outdated configuration data may be displayed.</p>' );
 
 		/* Erase global scene cache -- ??? we should do once per restore only */
 		api.setDeviceStateVariablePersistent( api.getCpanelDeviceId(), serviceId, "scenedata", "{}" );
@@ -313,6 +322,8 @@ var Reactor = (function(api, $) {
 
 			/* Our styles. */
 			var html = "<style>";
+			html += 'div#tab-backup.reactortab div#restorestatus { border: 1px solid #666; border-radius: 8px; padding: 8px 8px; background-color: #eef; }';
+			html += 'div#tab-backup.reactortab p.attn { color: #000; background-color: #ff0; }';
 			html += 'div#tab-backup.reactortab div.lastbackup { font-weight: bold; color: #008040; }';
 			html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
 			html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
@@ -329,7 +340,7 @@ var Reactor = (function(api, $) {
 				'<div id="mostrecent"/>' +
 				'</div></div>';
 			html += '<div class="row"><div class="col-xs-12 col-sm-12"><h4>Back Up Current Configuration</h4>Press this button to back up your current Reactor configuration: <button id="dobackup" class="btn btn-sm btn-success">Back Up Now</button></div></div>';
-			html += '<div class="row"><div class="col-xs-12 col-sm-12"><h4>Restore from Backup</h4><div class="form-inline">To restore from the most recent backup (info above), select the item to restore (or ALL to restore everything), and then press the "Begin Restore" button. <b>WARNING:</b> Restoring will overwrite the configuration of any current ReactorSensor having the same name(s). If you want to restore a configuration to a different device, or if you want to restore from another backup file, please refer to the <a href="https://www.toggledbits.com/reactor" target="_blank">documentation</a>.</div><div class="form-inline"><label>Restore: <select id="restoreitem" class="form-control form-control-sm" disabled><option value="">ALL</option></select></label> <label>to device: <select id="restoretarget" class="form-control form-control-sm" disabled><option value="">with matching name</option></select> <button id="dorestore" class="btn btn-sm btn-warning">Begin Restore</button></div><div id="restorestatus"/></div></div>';
+			html += '<div class="row"><div class="col-xs-12 col-sm-12"><h4>Restore from Backup</h4><div class="form-inline">To restore from the most recent backup (info above), select the item to restore (or ALL to restore everything), and then press the "Begin Restore" button. <b>WARNING:</b> Restoring will overwrite the configuration of any current ReactorSensor having the same name(s). If you want to restore a configuration to a different device, or if you want to restore from another backup file, please refer to the <a href="https://www.toggledbits.com/reactor" target="_blank">documentation</a>.</div><div class="form-inline"><label>Restore: <select id="restoreitem" class="form-control form-control-sm" disabled><option value="">ALL</option></select></label> <label>to device: <select id="restoretarget" class="form-control form-control-sm" disabled><option value="">with matching name</option></select> <button id="dorestore" class="btn btn-sm btn-warning">Begin Restore</button></div><div id="renameblock"><label><input id="renamers" type="checkbox" class="form-checkbox form-checkbox-sm"> Rename target ReactorSensor to match restored configuration</label></div><div id="restorestatus"/></div></div>';
 			
 			html += '\
 <div class="row"> \
@@ -350,7 +361,8 @@ var Reactor = (function(api, $) {
 
 			jQuery( '.reactortab button#dobackup' ).on( 'click.reactor', handleBackupClick );
 			jQuery( '.reactortab button#dorestore' ).on( 'click.reactor', handleRestoreClick );
-			
+			jQuery( '.reactortab div#renameblock' ).hide();
+
 			var $el = jQuery( '.reactortab select#countrs' );
 			for ( var k = 1; k <= 16; ++k ) {
 				$el.append( jQuery( '<option/>' ).val( k ).text( k ) );
