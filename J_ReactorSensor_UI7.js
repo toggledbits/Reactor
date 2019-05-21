@@ -1531,7 +1531,7 @@ var ReactorSensor = (function(api, $) {
 		 * Update controls for current conditions.
 		 */
 		function updateControls() {
-			/* Disable all "Add Condition" buttons if any condition type menu
+			/* Disable all "Add Group" buttons if any condition type menu
 			   has no selection. */
 			var nset = jQuery('select#condtype option:selected[value=""]').length > 0;
 
@@ -1539,7 +1539,6 @@ var ReactorSensor = (function(api, $) {
 			nset = nset || jQuery( '.cond-list:empty' ).length > 0;
 
 			/* Disable "Add" buttons while the condition is true. */
-			jQuery('button#addcond').prop( 'disabled', nset );
 			jQuery('button#addgroup').prop( 'disabled', nset );
 
 			updateSaveControls();
