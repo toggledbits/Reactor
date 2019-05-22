@@ -7,7 +7,7 @@
  * This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
  *
  */
-/* globals api,jQuery,$,unescape,MultiBox,ace */
+/* globals api,jQuery,$,unescape,MultiBox,ace,Promise */
 /* jshint multistr: true */
 
 //"use strict"; // fails on UI7, works fine with ALTUI
@@ -466,6 +466,10 @@ var ReactorSensor = (function(api, $) {
 			console.log("initModule() using jQuery " + String(jQuery.fn.jquery) + "; jQuery-UI " + String(jQuery.ui.version));
 		} catch( e ) {
 			console.log("initModule() error reading jQuery/UI versions: " + String(e));
+		}
+
+		if ( undefined === Promise ) {
+			alert( "Warning! The browser you are using does not support features required by this interface. The recommended browsers are Firefox, Chrome, Safari, and Edge. If you are using a modern version of one of these browsers and getting this message, please report to rigpapa via the Vera Community forums." );
 		}
 
 		/* Load ACE. Since the jury is still out with LuaView on this, default is no
