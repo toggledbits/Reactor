@@ -113,6 +113,7 @@ var ReactorSensor = (function(api, $) {
 	div.reactortab button.md-btn[disabled] { color: #ccc; cursor: not-allowed; } \
 	div.reactortab button.md-btn { line-height: 1em; cursor: pointer; color: #333; background-color: #fff; padding: 1px 0px 0px 0px; border-radius: 4px; box-shadow: #ccc 2px 2px; } \
 	div.reactortab button.md-btn i { font-size: 16pt; line-height: 1em; } \
+	div.reactortab optgroup { color: #333; font-weight: bold; } \
 	div#tbcopyright { display: block; margin: 12px 0px; } \
 	div#tbbegging { display: block; color: #ff6600; margin-top: 12px; } \
 </style>');
