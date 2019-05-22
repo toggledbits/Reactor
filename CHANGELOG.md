@@ -4,6 +4,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 3.2 (development)
 
+* Enhancement: Allow interval condition's base time to be true-edge time of another condition (Github issue #35).
 * Fix (attempt): Add CSS for optgroup tag in attempt to address dJOS' valid complaint of poor default browser presentation on Chrome/Mac Mini. Browser support for CSS on this element and "select" elements in general is poor currently, but we can try.
 * Enhancement: Allow user option to rename device on restore to match restored configuration (when restoring a single config to a targeted device; Github issue #33).
 * Enhancement: The Reactor master device's Backup/Restore tab now facilitates the simulantaneous creation of up to 16 ReactorSensors (Github issue #34).

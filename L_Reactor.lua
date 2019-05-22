@@ -2540,7 +2540,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 			elseif cp == "after" then
 				if tmnow < stt then return now,false end
 			else
-				L({level=1,msg="Unrecognized condition %1 in time spec for cond %2 of %3 (%4)"},
+				L({level=1,msg="Unrecognized operator %1 in time spec for cond %2 of %3 (%4)"},
 					cp, cond.id, tdev, luup.devices[tdev].description)
 				addEvent{ dev=tdev, event="condition", condition=cond.id,
 					operator=cp, ['error']="Unrecognized operator" }
@@ -2580,18 +2580,32 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		local _,ndays = getValue( cond.days, nil, tdev )
 		local interval = 60 * ((ndays or 0) * 1440 + (nhours or 0) * 60 + (nmins or 0))
 		if interval < 60 then interval = 60 end -- "can never happen" (yeah, hold my beer)
-		-- Get our base time and make it a real time
-		local pt = split( ( getValue( cond.basetime, nil, tdev ) ) or "" )
-		local tpart = os.date("*t", now) -- basically a copy of ndt
-		if #pt == 2 then
-			tpart.hour = tonumber(pt[1]) or 0
-			tpart.min = tonumber(pt[2]) or 0
+		-- Get our base time and make it a real time.
+		local baseTime
+		if "condtrue" == ( cond.relto or "" ) then
+			local cs = ( sst.condState or {} )[cond.relcond]
+			if cs == nil or (cs.evaledge or {})[1] == nil then
+				-- Trouble, missing condition or no state.
+				L({level=1,msg="Unrecognized condition or insufficient state for %1 in interval cond %2 of %3 (%4)"},
+					cond.relcond or "nil", cond.id, tdev, luup.devices[tdev].description)
+				addEvent{ dev=tdev, event="condition", condition=cond.id,
+					referencing=cond.relcond, ['error']="Relative condition missing or insufficient state" }
+				sst.trouble = true
+				return now,nil
+			end
+			baseTime = cs.evaledge[1]
 		else
+			local tpart = os.date("*t", now) -- basically a copy of ndt
 			tpart.hour = 0
 			tpart.min = 0
+			tpart.sec = 0
+			local pt = split( ( getValue( cond.basetime, nil, tdev ) ) or "" )
+			if #pt == 2 then
+				tpart.hour = tonumber(pt[1]) or 0
+				tpart.min = tonumber(pt[2]) or 0
+			end
+			baseTime = os.time( tpart )
 		end
-		tpart.sec = 0
-		local baseTime = os.time( tpart )
 		D("evaluateCondition() interval %1 secs baseTime %2", interval, baseTime)
 		local cs = ( sst.condState or {} )[cond.id]
 		D("evaluateCondition() condstate %1", cs)
@@ -2712,7 +2726,7 @@ local function processCondition( cond, grp, cdata, tdev )
 	if cs == nil then
 		-- First time this condition is being evaluated.
 		D("processCondition() new condition state for %1", cond.id)
-		cs = { id=cond.id, statestamp=0, stateedge={}, valuestamp=0 }
+		cs = { id=cond.id, statestamp=0, stateedge={}, valuestamp=0, evaledge={} }
 		sst.condState[cond.id] = cs
 	end
 	cond.laststate = cs
@@ -2874,12 +2888,15 @@ local function processCondition( cond, grp, cdata, tdev )
 	end
 
 	-- Save the final determination of state for this condition.
+	cs.evaledge = cs.evaledge or {}
 	if state ~= cs.evalstate then
 		addEvent{dev=tdev,event='evalchange',cond=cond.id,oldState=cs.evalstate,newState=state}
 		cs.evalstate = state
 		cs.evalstamp = now
+		cs.evaledge[ state and 1 or 0 ] = now
 		cs.changed = true
 	else
+		cs.evaledge[ state and 1 or 0 ] = cs.evalstamp -- force
 		cs.changed = nil
 	end
 	if ( cond.type or "group" ) == "group" then
@@ -3525,7 +3542,7 @@ function actionAddSensor( pdev, count )
 	end
 	for k = 1,count do
 		highd = highd + 1
-		D("addSensor() creating child r%1s%2", pdev, highd)
+		D("addSensor() creating child %3/%4 as r%1s%2", pdev, highd, k, count)
 		luup.chdev.append( pdev, ptr, string.format("r%ds%d", pdev, highd),
 			"Reactor Sensor " .. highd, "", "D_ReactorSensor.xml", "", "", false )
 	end

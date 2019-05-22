@@ -908,15 +908,21 @@ var ReactorSensor = (function(api, $) {
 				if ( cond.mins > 0 ) {
 					str += " " + String(cond.mins) + " minutes";
 				}
-				if ( ! isEmpty( cond.basetime ) ) {
-					t = cond.basetime.split(/,/);
+				if ( "condtrue" === ( cond.relto || "" ) ) {
 					str += " (relative to ";
-					if ( t.length == 2 ) {
-						str += t[0] + ":" + t[1];
-					} else {
-						str += String( cond.basetime );
-					}
+					str += makeConditionDescription( getConditionIndex()[ cond.relcond ] );
 					str += ")";
+				} else {
+					if ( ! isEmpty( cond.basetime ) ) {
+						t = cond.basetime.split(/,/);
+						str += " (relative to ";
+						if ( t.length == 2 ) {
+							str += t[0] + ":" + t[1];
+						} else {
+							str += String( cond.basetime );
+						}
+						str += ")";
+					}
 				}
 				break;
 
@@ -1760,7 +1766,7 @@ var ReactorSensor = (function(api, $) {
 					break;
 
 				case 'interval':
-					removeConditionProperties( cond, "days,hours,mins,basetime,options" );
+					removeConditionProperties( cond, "days,hours,mins,basetime,relto,relcond,options" );
 					var nmin = 0;
 					var v = jQuery('div.params #days', $row).val() || "0";
 					if ( v.match( varRefPattern ) ) {
@@ -1804,12 +1810,24 @@ var ReactorSensor = (function(api, $) {
 					if ( nmin <= 0 ) {
 						jQuery( 'div.params select', $row ).addClass( 'tberror' );
 					}
-					var rh = jQuery( 'div.params select#relhour' ).val() || "00";
-					var rm = jQuery( 'div.params select#relmin' ).val() || "00";
-					if ( rh == "00" && rm == "00" ) {
+					/* Interval relative to... */
+					v = jQuery( 'div.params select#relto', $row ).val() || "";
+					if ( "condtrue" === v ) {
+						cond.relcond = jQuery( 'div.params select#relcond', $row).val() || "";
+						if ( "" === cond.relcond ) {
+							jQuery( 'div.params select#relcond' ).addClass( 'tberror' );
+						}
 						delete cond.basetime;
 					} else {
-						cond.basetime = rh + "," + rm;
+						var rh = jQuery( 'div.params select#relhour', $row ).val() || "00";
+						var rm = jQuery( 'div.params select#relmin', $row ).val() || "00";
+						if ( rh == "00" && rm == "00" ) {
+							delete cond.basetime;
+						} else {
+							cond.basetime = rh + "," + rm;
+						}
+						delete cond.relcond;
+						delete cond.relto;
 					}
 					break;
 
@@ -2734,32 +2752,82 @@ var ReactorSensor = (function(api, $) {
 					fs.append( el );
 					container.append( fs );
 					container.append( " " );
-					fs = jQuery( '<fieldset />' );
+					/* Interval relative time or condition (opposing fieldsets) */
 					el = jQuery( '<label/>' ).text( " relative to ");
+					mm = jQuery( '<select id="relto" class="form-control form-control-sm"/>' );
+					mm.append( jQuery( '<option/>' ).val( "" ).text( "Time" ) );
+					mm.append( jQuery( '<option/>' ).val( "condtrue" ).text( "Condition TRUE" ) );
+					el.append( mm );
+					fs = jQuery( '<fieldset />' ).attr( 'id', 'reltimeset' );
 					mm = jQuery('<select id="relhour" class="form-control form-control-sm"/>');
 					for ( k=0; k<24; k++ ) {
 						v = ( k < 10 ? "0" : "" ) + String(k);
 						mm.append( jQuery('<option/>').val( v ).text( v ) );
 					}
-					el.append( mm );
-					el.append(" : ");
-					mm = jQuery('<select id="relmin" class="form-control form-control-sm"/>');
+					fs.append( mm );
+					fs.append(" : ");
+					mm = jQuery('<select id="relmin" class="form-control form-control-sm" />');
 					for ( k=0; k<60; k+=5 ) {
 						v = ( k < 10 ? "0" : "" ) + String(k);
 						mm.append( jQuery('<option/>').val( v ).text( v ) );
 					}
-					el.append(mm);
-					fs.append(el);
-					container.append( fs );
+					fs.append( mm );
+					el.append( fs );
+					fs = jQuery( '<fieldset />' ).attr( 'id', 'relcondset' ).hide();
+					mm = jQuery( '<select id="relcond" class="form-control form-control-sm" />' );
+					mm.append( jQuery( '<option/>' ).val( "" ).text( '--choose--' ) );
+					DOtraverse( getConditionIndex().root, function( n ) {
+						mm.append( jQuery( '<option/>' ).val( n.id ).text( makeConditionDescription( n ) ) );
+					}, false, function( n ) {
+						return n.id != cond.id;
+					});
+					fs.append( mm );
+					el.append( fs );
+					/* Fin */
+					container.append( jQuery( '<fieldset />' ).append( el ) );
 					jQuery( "#days", container ).val( cond.days || 0 );
 					jQuery( "#hours", container ).val( cond.hours===undefined ? 1 : cond.hours );
 					jQuery( "#mins", container ).val( cond.mins || 0 );
-					if ( ! isEmpty( cond.basetime ) ) {
-						mm = cond.basetime.split(/,/);
-						menuSelectDefaultInsert( jQuery( '#relhour', container ), mm[0] || '00' );
-						menuSelectDefaultInsert( jQuery( '#relmin', container ), mm[1] || '00' );
+					if ( "" === ( cond.relto || "" ) ) {
+						if ( ! isEmpty( cond.basetime ) ) {
+							mm = cond.basetime.split(/,/);
+							menuSelectDefaultInsert( jQuery( '#relhour', container ), mm[0] || '00' );
+							menuSelectDefaultInsert( jQuery( '#relmin', container ), mm[1] || '00' );
+						}
+					} else {
+						jQuery( "fieldset#relcondset", container ).show();
+						jQuery( "fieldset#reltimeset", container ).hide();
+						var t = cond.relcond || "";
+						if ( 0 === jQuery( "select#relcond option[value='" + idSelector( t ) + "']", container ).length ) {
+							jQuery( "select#relcond", container )
+								.append( jQuery( '<option/>' ).val( t ).text( t + " (missing?)" ) );
+						}
+						jQuery( "#relcond", container ).val( t );
 					}
-					jQuery("select,input", container).on( 'change.reactor', handleConditionRowChange );
+					jQuery("select,input", container).on( 'change.reactor', function( ev ) { 
+						var $el = jQuery( ev.currentTarget );
+						var $row = $el.closest( 'div.cond-container' );
+						if ( "relto" === $el.attr( 'id' ) ) {
+							var relto = $el.val() || "";
+							if ( "condtrue" === relto ) {
+								jQuery( '#reltimeset', $row ).hide();
+								jQuery( '#relcondset', $row ).show();
+								/* Rebuild the menu of conditions, in case changed */
+								var $mm = jQuery( 'select#relcond', $row );
+								jQuery( 'option[value!=""]', $mm ).remove();
+								DOtraverse( getConditionIndex().root, function( n ) {
+									$mm.append( jQuery( '<option/>' ).val( n.id ).text( makeConditionDescription( n ) ) );
+								}, false, function( n ) {
+									return n.id != cond.id;
+								});
+								$mm.val( "" );
+							} else {
+								jQuery( '#reltimeset', $row ).show();
+								jQuery( '#relcondset', $row ).hide();
+							}
+						}
+						handleConditionRowChange( ev ); /* pass on */
+					} );
 					break;
 
 				case 'ishome':
@@ -3450,7 +3518,7 @@ var ReactorSensor = (function(api, $) {
 			html += 'div#tab-conds.reactortab div.condopts { padding-left: 32px; }';
 			html += 'div#tab-conds.reactortab div.cond-type { display: inline-block; vertical-align: top; }';
 			html += 'div#tab-conds.reactortab div.params { display: inline-block; clear: right; }';
-			html += 'div#tab-conds.reactortab div.params > fieldset { display: inline-block; border: none; margin: 0 4px; padding: 0 0; }';
+			html += 'div#tab-conds.reactortab div.params fieldset { display: inline-block; border: none; margin: 0 4px; padding: 0 0; }';
 
 			html += 'div#tab-conds.reactortab div#eventlist { display: inline-block; }';
 			html += 'div#tab-conds.reactortab div#eventlist button { padding: 6px 4px; }';
