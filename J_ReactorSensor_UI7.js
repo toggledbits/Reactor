@@ -393,8 +393,10 @@ var ReactorSensor = (function(api, $) {
 		var d = getInstanceData( myid );
 		if ( force || ! d.cdata ) {
 			loadConfigData( myid );
+			console.log("getConfiguration(): loaded config serial " + String(d.cdata.serial) + ", timestamp " + String(d.cdata.timestamp));
+		} else {
+			console.log("getConfiguration(): returning cached config serial " + String(d.cdata.serial));
 		}
-		console.log("getConfiguration(): loaded config serial " + String(d.cdata.serial) + ", timestamp " + String(d.cdata.timestamp));
 		return d.cdata;
 	}
 
@@ -678,21 +680,15 @@ var ReactorSensor = (function(api, $) {
 			{
 				'onSuccess' : function() {
 					configModified = false;
-					if ( undefined !== fnext ) {
-						fnext.apply( null, fargs );
-					}
-					configModified = false;
 					updateSaveControls();
+					var t = "function" === fnext && fnext.apply( null, fargs );
 					clearUnusedStateVariables( myid, cdata );
 					console.log("handleSaveClick(): successful save of config serial " + String(cdata.serial) + ", timestamp " + String(cdata.timestamp));
 				},
 				'onFailure' : function() {
 					alert('There was a problem saving the configuration. Vera/Luup may have been restarting. Please try hitting the "Save" button again.');
-					configModified = true;
-					if ( undefined !== fnext ) {
-						fnext.apply( null, fargs );
-					}
 					updateSaveControls();
+					var t = "function" === fnext && fnext.apply( null, fargs );
 				}
 			}
 		);

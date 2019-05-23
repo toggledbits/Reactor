@@ -1733,6 +1733,7 @@ local function loadSensorConfig( tdev )
 		D("loadSensorConfig() writing updated sensor config")
 		cdata.version = _CDATAVERSION -- MUST COINCIDE WITH J_ReactorSensor_UI7.js
 		cdata.timestamp = os.time()
+		cdata.serial = 1 + ( tonumber(cdata.serial or 0) or 0 )
 		-- NOTA BENE: startup=true passed here! Don't fire watch for this rewrite.
 		luup.variable_set( RSSID, "cdata", json.encode( cdata ), tdev, false )
 	end
@@ -3882,6 +3883,8 @@ function actionSetGroupEnabled( grpid, enab, dev )
 			dev, grp.id, grp.disabled and "disabled" or "enabled")
 		addEvent{ dev=dev, event="action", action="SetGroupEnabled", group=grpid, enabled=enab and 1 or 0 }
 		-- No need to call updateSensor here, modifying cdata does it
+		cdata.timestamp = os.time()
+		cdata.serial = 1 + ( tonumber( cdata.serial or 0 ) or 0 )
 		luup.variable_set( RSSID, "cdata", json.encode( cdata ), dev )
 		return 4,0
 	end
@@ -4397,7 +4400,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		return json.encode( { status=status,message=msg } ), "application/json"
 
 	elseif action == "summary" then
-		local r = "When pasting this report into the Vera forums, please include ALL lines below this one--do not edit/omit/redact!" ..
+		local r = "INSTRUCTIONS: When pasting this report into the Vera Community forums, please include ALL lines below this one. The next and last lines will ensure proper formatting and must not be removed!" ..
 			EOL .. "```" .. EOL
 		r = r .. string.rep("*", 51) .. " REACTOR LOGIC SUMMARY REPORT " .. string.rep("*", 51) .. EOL
 		r = r .. "   Version: " .. tostring(_PLUGIN_VERSION) ..
@@ -4463,7 +4466,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 					r = r .. "**** UNPARSEABLE CONFIGURATION: " .. err .. EOL
 					cdata = {}
 				end
-				r = r .. string.format("    Version %d.%d %s", cdata.version or 0, cdata.timestamp or 0, os.date("%x %X", cdata.timestamp or 0)) .. EOL
+				r = r .. string.format("    Version %s.%s %s", cdata.version or 0, cdata.serial or 0, os.date("%x %X", cdata.timestamp or 0)) .. EOL
 				r = r .. string.format("    Message/status: %s", luup.variable_get( RSSID, "Message", n ) or "" ) .. EOL
 				local s = getVarNumeric( "TestTime", 0, n, RSSID )
 				if s ~= 0 then
