@@ -3905,9 +3905,11 @@ function actionSetVariable( opt, tdev )
 		cstate.vars[ opt.VariableName ] = vs
 	end
 	-- Value is handled as string because that's how Luup actions roll.
-	local vv = tostring( opt.NewValue or "")
-	L("actionSetVariable() %1=%2, last=%3", opt.VariableName, vv, vs)
+	local vv = tostring( opt.NewValue == nil and "" or opt.NewValue )
+	addEvent{ dev=tdev, event="action", action="SetVariable", variable=opt.VariableName, oldValue=vs.lastvalue, newValue=vv }
+	D("actionSetVariable() %1=%2, last=%3", opt.VariableName, vv, vs)
 	if tostring( vs.lastvalue ) ~= vv then
+		local oldVal = vs.lastvalue
 		vs.lastvalue = vv
 		vs.valuestamp = os.time()
 		vs.changed = 1
@@ -3923,6 +3925,9 @@ function actionSetVariable( opt, tdev )
 		-- Save updated state.
 		cstate.lastUsed = os.time()
 		luup.variable_set( RSSID, "cstate", json.encode( cstate ), tdev )
+		L("SetVariable action changes %1 from %2 to %3", opt.VariableName, oldVal, vv)
+	else
+		L("SetVariable action %1 no change, value remains %2", opt.VariableName, vs.lastvalue == nil and "" or vs.lastvalue)
 	end
 end
 
