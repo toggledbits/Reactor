@@ -1772,30 +1772,37 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
 			tdev, luup.devices[tdev].description, vname)
 		return
 	end
+
 	if luaxp == nil then
 		-- Don't load luaxp unless/until needed.
 		luaxp = require("L_LuaXP_Reactor")
 	end
-	-- if debugMode then luaxp._DEBUG = D end
-	local result, err = luaxp.evaluate( vdef.expression or "?", ctx )
-	D("evaluateVariable() %2 (%1) %3 evaluates to %4(%5)", tdev, luup.devices[tdev].description,
-		vdef.expression, result, type(result))
 
-	local errmsg
-	if err then
-		-- Error. Null context value, and build error message for multiple uses.
-		result = luaxp.NULL
-		errmsg = (err or {}).message or "Failed"
-		if (err or {}).location ~= nil then errmsg = errmsg .. " at " .. tostring(err.location) end
-		L({level=2,msg="%2 (#%1) failed evaluation of %3: %4"}, tdev, luup.devices[tdev].description,
-			vdef.expression, errmsg)
-		addEvent{ dev=tdev, event="expression", variable=vname, ['error']=errmsg }
-		getSensorState( tdev ).trouble = true
-	elseif result == nil then
-		result = luaxp.NULL -- map nil to null
+	-- If expression is not empty, evaluate it and save new value.
+	local result, err, errmsg
+	if not tostring( vdef.expression or "" ):match( "^%s*$" ) then
+		-- Evaluate expression.
+		-- if debugMode then luaxp._DEBUG = D end
+		result, err = luaxp.evaluate( vdef.expression, ctx )
+		D("evaluateVariable() %2 (%1) %3 evaluates to %4(%5)", tdev, luup.devices[tdev].description,
+			vdef.expression, result, type(result))
+		if err then
+			-- Error. Null context value, and build error message for multiple uses.
+			result = luaxp.NULL
+			errmsg = (err or {}).message or "Failed"
+			if (err or {}).location ~= nil then errmsg = errmsg .. " at " .. tostring(err.location) end
+			L({level=2,msg="%2 (#%1) failed evaluation of %3: %4"}, tdev, luup.devices[tdev].description,
+				vdef.expression, errmsg)
+			addEvent{ dev=tdev, event="expression", variable=vname, ['error']=errmsg }
+			getSensorState( tdev ).trouble = true
+		elseif result == nil then
+			result = luaxp.NULL -- map nil to null
+		end
+		ctx[vname] = result -- update context for future evals
+	else
+		result = ( ctx[vname] == nil ) and luaxp.NULL or ctx[vname] -- special form, don't change false to NULL!
+		err = nil
 	end
-
-	ctx[vname] = result -- update context for future evals
 
 	-- Store in cstate. This will make them persistent (with some help).
 	local cstate = loadCleanState( tdev )
@@ -1846,7 +1853,7 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
 		else
 			-- Null or error
 			setVar( VARSID, vname, "", tdev )
-			setVar( VARSID, vname .. "_Error", errmsg, tdev )
+			setVar( VARSID, vname .. "_Error", errmsg or "", tdev )
 		end
 	else
 		-- Delete variables
@@ -3900,6 +3907,11 @@ function actionSetVariable( opt, tdev )
 			luup.devices[tdev].description, tdev, opt.VariableName )
 		return false
 	end
+	if not tostring( cdata.variables[ opt.VariableName ].expression or ""):match( "^%s*$" ) then
+		-- Non-empty expression--can't set these variables
+		L({level=1,"Invalid attempt to set value on expression-driven variable %1 (ignored)"}, opt.VariableName)
+		return false
+	end
 	local cstate = loadCleanState( tdev )
 	cstate.vars = cstate.vars or {}
 	local vs = cstate.vars[ opt.VariableName ]
@@ -3924,6 +3936,7 @@ function actionSetVariable( opt, tdev )
 		-- Update state variable if it's exported.
 		if ( cdata.variables[ opt.VariableName ].export or 1 ) ~= 0 then
 			setVar( VARSID, opt.VariableName, vv, tdev )
+			setVar( VARSID, opt.VariableName.."_Error", "", tdev )
 		end
 		-- Save updated state.
 		cstate.lastUsed = os.time()
@@ -4082,6 +4095,7 @@ local function getDevice( dev, pdev, v )
 		, ['device_file'] = luup.attr_get( "device_file", dev )
 		, manufacturer = luup.attr_get( "manufacturer", dev ) or ""
 		, model = luup.attr_get( "model", dev ) or ""
+		, plugin = luup.attr_get( "plugin", dev )
 	}
 	local rc,t,httpStatus,uri
 	if isOpenLuup then
@@ -4136,8 +4150,9 @@ local function getReactorScene( t, s, tdev, runscenes )
 					end
 				elseif act.type == "device" then
 					local p = {}
-					for _,pp in ipairs( act.parameters or {} ) do
-						table.insert( p, pp.name .. "=" .. tostring(pp.value) )
+					for pn,pp in ipairs( act.parameters or {} ) do
+						local z = pp.value == nil and "(no value)" or string.format("%q", tostring(pp.value))
+						table.insert( p, tostring(pp.name or pn) .. "=" .. z )
 					end
 					p = table.concat( p, ", " )
 					resp = resp .. pfx .. "Device " .. (act.device or "?") .. " (" ..
