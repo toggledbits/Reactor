@@ -2,7 +2,7 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
-## Version 3.2 (development)
+## Version 3.2 (released)
 
 * Enhancement: Allow interval condition's base time to be true-edge time of another condition (Github issue #35).
 * Fix (attempt): Add CSS for optgroup tag in attempt to address dJOS' valid complaint of poor default browser presentation on Chrome/Mac Mini. Browser support for CSS on this element and "select" elements in general is poor currently, but we can try.
