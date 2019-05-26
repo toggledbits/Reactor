@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.2develop-19143"
+local _PLUGIN_VERSION = "3.2"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION = 301
@@ -1812,7 +1812,7 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
 		D("evaluateVariable() creating new state for expr/var %1", vname)
 		vs = { name=vname, lastvalue=result, valuestamp=getSensorState( tdev ).timebase, changed=1 }
 		cstate.vars[vname] = vs
-		addEvent{ dev=tdev, event="variable", variable=vname, oldval="", newval=result }
+		addEvent{ dev=tdev, event="variable", variable=vname, newval=result }
 	else
 		local changed
 		if type(vs.lastvalue) == "table" and type(result) == "table" then
@@ -2078,19 +2078,7 @@ local function updateVariables( cdata, tdev )
 	sst.ctx = ctx
 	for _,v in variables( cdata ) do
 		D("updateVariables() evaluate %1", v)
-		if ( v.expression or "" ) ~= "" then
-			evaluateVariable( v.name, ctx, cdata, tdev )
-		else
-			-- No expression. Define variable by providing a default (null) value
-			-- in cstate and make sure context and cstate agree.
-			cstate.vars = cstate.vars or {}
-			if not cstate.vars[v.name] then
-				cstate.vars[v.name] = { name=v.name, lastvalue=luaxp.NULL, valuestamp=sst.timebase }
-			end
-			cstate.vars[v.name].changed = nil
-			ctx[v.name] = cstate.vars[v.name].lastvalue or luaxp.NULL -- make sure defined in context and agrees
-			D("updateVariables() %1 no expr, last value %2", v.name, cstate.vars[v.name].lastvalue)
-		end
+		evaluateVariable( v.name, ctx, cdata, tdev )
 	end
 end
 
