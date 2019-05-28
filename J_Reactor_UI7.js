@@ -364,7 +364,7 @@ var Reactor = (function(api, $) {
 	function handleCreateRSClick( ev ) {
 		var val = jQuery( '.reactortab select#countrs' ).val();
 		api.performActionOnDevice( api.getCpanelDeviceId(),  "urn:toggledbits-com:serviceId:Reactor",
-			"AddSensor", 
+			"AddSensor",
 			{
 				actionArguments: { Count: val },
 				onSuccess: function() {
@@ -406,7 +406,7 @@ var Reactor = (function(api, $) {
 				'</div></div>';
 			html += '<div class="row"><div class="col-xs-12 col-sm-12"><h4>Back Up Current Configuration</h4>Press this button to back up your current Reactor configuration: <button id="dobackup" class="btn btn-sm btn-success">Back Up Now</button></div></div>';
 			html += '<div class="row"><div class="col-xs-12 col-sm-12"><h4>Restore from Backup</h4><div class="form-inline">To restore from the most recent backup (info above), select the item to restore (or ALL to restore everything), and then press the "Begin Restore" button. <b>WARNING:</b> Restoring will overwrite the configuration of any current ReactorSensor having the same name(s). If you want to restore a configuration to a different device, or if you want to restore from another backup file, please refer to the <a href="https://www.toggledbits.com/reactor" target="_blank">documentation</a>.</div><div class="form-inline"><label>Restore: <select id="restoreitem" class="form-control form-control-sm" disabled><option value="">ALL</option></select></label> <label>to device: <select id="restoretarget" class="form-control form-control-sm" disabled><option value="">with matching name</option></select> <button id="dorestore" class="btn btn-sm btn-warning">Begin Restore</button></div><div id="renameblock"><label><input id="renamers" type="checkbox" class="form-checkbox form-checkbox-sm"> Rename target ReactorSensor to match restored configuration</label></div><div id="restorestatus"/></div></div>';
-			
+
 			html += '\
 <div class="row"> \
   <div class="col-xs-12 col-sm-12"> \

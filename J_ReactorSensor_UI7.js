@@ -471,7 +471,7 @@ var ReactorSensor = (function(api, $) {
 			isOpenLuup = false;
 			// unused: isALTUI = undefined !== MultiBox;
 			lastx = 0;
-			
+
 			/* Try to establish date format */
 			var ud = api.getUserData();
 			dateFormat = "%F"; /* ISO8601 default */
@@ -482,7 +482,7 @@ var ReactorSensor = (function(api, $) {
 				cfd = ud.date_format;
 				if ( undefined !== cfd ) {
 					dateFormat = cfd.replace( /yy/, "%Y" ).replace( /mm/, "%m" ).replace( /dd/, "%d" ).replace( "\\", "" );
-					timeFormat = "24hr" !== ( ud.timeFormat || "24hr" ) ? "%I:%M:%S%p" : "%T";
+					timeFormat = ( "12hr" === ud.timeFormat ) ? "%I:%M:%S%p" : "%T";
 				}
 			}
 
@@ -1208,7 +1208,7 @@ var ReactorSensor = (function(api, $) {
 					el.text( '(' + String(currentValue) + ') ' +
 						( cs.laststate ? "true" : "false" ) +
 						' as of ' + shortLuaTime( cs.statestamp ) +
-						( cs.evalstate && cs.latched ? "; latched" : 
+						( cs.evalstate && cs.latched ? "; latched" :
 							( cs.laststate && cs.waituntil ? ( "; waiting for " + shortLuaTime( cs.waituntil ) ) :
 								( cs.evalstate && cs.holduntil ? ( "; reset delaying to " + shortLuaTime( cs.holduntil) ) : "" )
 							)
@@ -2857,7 +2857,7 @@ var ReactorSensor = (function(api, $) {
 							menuSelectDefaultInsert( jQuery( '#relmin', container ), mm[1] || '00' );
 						}
 					}
-					jQuery("select,input", container).on( 'change.reactor', function( ev ) { 
+					jQuery("select,input", container).on( 'change.reactor', function( ev ) {
 						var $el = jQuery( ev.currentTarget );
 						var $row = $el.closest( 'div.cond-container' );
 						if ( "relto" === $el.attr( 'id' ) ) {

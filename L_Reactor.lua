@@ -165,7 +165,7 @@ local function shallowCopy( t )
 	return r
 end
 
-local function fdate( t ) 
+local function fdate( t )
 	if not dateFormat then
 		dateFormat = luup.attr_get( "date_format", 0 ) or "yy-mm-dd"
 		dateFormat = dateFormat:gsub( "yy", "%%Y" ):gsub( "mm", "%%m" ):gsub( "dd", "%%d" );
@@ -3017,10 +3017,10 @@ local function processSensorUpdate( tdev, sst )
 
 		local newTrip
 		_,newTrip,hasTimer = processCondition( cdata.conditions.root, nil, cdata, tdev )
-		if newTrip == nil then 
+		if newTrip == nil then
 			newTrip = false -- null from root equiv to false here
-		elseif invert then 
-			newTrip = not newTrip 
+		elseif invert then
+			newTrip = not newTrip
 		end
 		D("processSensorUpdate() trip %4was %1 now %2, retrig %3", currTrip, newTrip,
 			retrig, invert and "(inverted) " or "" )
