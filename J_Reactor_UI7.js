@@ -17,7 +17,7 @@ var Reactor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '72acc6ea-f24d-11e8-bd87-74d4351650de';
 
-	var pluginVersion = '3.2';
+	var pluginVersion = '3.3develop-19148';
 
 	var _UIVERSION = 19143;     /* must coincide with Lua core */
 
@@ -27,6 +27,8 @@ var Reactor = (function(api, $) {
 	// unused: var deviceType = "urn:schemas-toggledbits-com:device:Reactor:1";
 	var rsType = "urn:schemas-toggledbits-com:device:ReactorSensor:1";
 
+	var dateFormat = "%F"; /* ISO8601 default */
+	var timeFormat = "%T";
 	// unused: var isOpenLuup = false;
 	// unused: var isALTUI = undefined !== MultiBox;
 	var backupInfo = false;
@@ -34,6 +36,55 @@ var Reactor = (function(api, $) {
 	/* Quote string */
 	function quot( s ) {
 		return JSON.stringify( String(s) );
+	}
+
+	/* zero-fill */
+	function fill( s, n, p ) {
+		if ( "string" !== typeof(s) ) {
+			s = String(s);
+		}
+		while ( s.length < n ) {
+			s = (p || "0") + s;
+		}
+		return s;
+	}
+
+	/* Format timestamp to string (models strftime) */
+	function ftime( t, fmt ) {
+		var dt = new Date();
+		dt.setTime( t );
+		var str = fmt || dateFormat;
+		str = str.replace( /%(.)/g, function( m, p ) {
+			switch( p ) {
+				case 'Y':
+					return String( dt.getFullYear() );
+				case 'm':
+					return fill( dt.getMonth()+1, 2 );
+				case 'd':
+					return fill( dt.getDate(), 2 );
+				case 'H':
+					return fill( dt.getHours(), 2 );
+				case 'I':
+					var i = dt.getHours() % 12;
+					if ( 0 === i ) i = 12;
+					return fill( i, 2 );
+				case 'p':
+					return dt.getHours() < 12 ? "AM" : "PM";
+				case 'M':
+					return fill( dt.getMinutes(), 2 );
+				case 'S':
+					return fill( dt.getSeconds(), 2 );
+				case '%':
+					return '%';
+				case 'T':
+					return ftime( t, "%H:%M:%S" );
+				case 'F':
+					return ftime( t, "%Y-%m-%d" );
+				default:
+					return m;
+			}
+		});
+		return str;
 	}
 
 	/* Return a "safe" selector for ID passed */
@@ -76,6 +127,20 @@ var Reactor = (function(api, $) {
 			return false;
 		}
 
+		/* Try to establish date format */
+		var ud = api.getUserData();
+		dateFormat = "%F"; /* ISO8601 default */
+		timeFormat = "%T";
+		var cfd = parseInt( api.getDeviceState( myid, serviceId, "ForceISODateTime" ) || "0" );
+		if ( isNaN(cfd) || 0 === cfd ) {
+			console.log("initModule() configured date format " + String(ud.date_format) + " time " + String(ud.timeFormat));
+			cfd = ud.date_format;
+			if ( undefined !== cfd ) {
+				dateFormat = cfd.replace( /yy/, "%Y" ).replace( /mm/, "%m" ).replace( /dd/, "%d" ).replace( "\\", "" );
+				timeFormat = "24hr" !== ( ud.timeFormat || "24hr" ) ? "%I:%M:%S%p" : "%T";
+			}
+		}
+
 		return true;
 	}
 
@@ -86,7 +151,7 @@ var Reactor = (function(api, $) {
 		jQuery( '.reactortab div#renameblock' ).hide();
 
 		if ( backupInfo ) {
-			var dt = new Date( backupInfo.timestamp * 1000 ).toLocaleString();
+			var dt = ftime( backupInfo.timestamp * 1000, dateFormat + " " + timeFormat );
 			var el = jQuery( ".reactortab #mostrecent" );
 			el.empty().append( '<div class="lastbackup">Last backup date: ' + dt + '</div>' );
 			var path = api.getDataRequestURL().replace( /data_request.*$/i, "" );
@@ -235,7 +300,7 @@ var Reactor = (function(api, $) {
 			return;
 		}
 		jQuery( '.reactortab div#restorestatus' ).empty().show().append( '<p>Restore started at ' +
-			(new Date()).toLocaleString() + '</p>' );
+			ftime((new Date()).getTime(), dateFormat + " " + timeFormat ) + '</p>' );
 		var selected = jQuery( '.reactortab select#restoreitem' ).val();
 		for ( var item in backupInfo.sensors ) {
 			if ( "" == selected || item == selected ) {

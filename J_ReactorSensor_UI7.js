@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.2';
+	var pluginVersion = '3.3develop-19148';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -30,12 +30,15 @@ var ReactorSensor = (function(api, $) {
 	var serviceId = "urn:toggledbits-com:serviceId:ReactorSensor";
 	var deviceType = "urn:schemas-toggledbits-com:device:ReactorSensor:1";
 
+	var moduleReady = false;
 	var iData = [];
 	var roomsByName = [];
 	var actions = {};
 	var deviceActionData = {};
 	var deviceInfo = {};
 	var userIx = {};
+	var dateFormat = "%F"; /* ISO8601 defaults */
+	var timeFormat = "%T";
 	var configModified = false;
 	var inStatusPanel = false;
 	var isOpenLuup = false;
@@ -448,26 +451,111 @@ var ReactorSensor = (function(api, $) {
 	/* Initialize the module */
 	function initModule( myid ) {
 		myid = myid || api.getCpanelDeviceId();
+		if ( !moduleReady ) {
 
-		/* Check agreement of plugin core and UI */
-		var s = api.getDeviceState( myid, "urn:toggledbits-com:serviceId:ReactorSensor", "_UIV" ) || "0";
-		console.log("initModule() for device " + myid + " requires UI version " + _UIVERSION + ", seeing " + s);
-		if ( String(_UIVERSION) != s ) {
-			api.setCpanelContent( '<div class="reactorwarning" style="border: 4px solid red; padding: 8px;">' +
-				" ERROR! The Reactor plugin core version and UI version do not agree." +
-				" This may cause errors or corrupt your ReactorSensor configuration." +
-				" Please hard-reload your browser and try again " +
-				' (<a href="https://duckduckgo.com/?q=hard+reload+browser" target="_blank">how?</a>).' +
-				" If you have installed hotfix patches, you may not have successfully installed all required files." +
-				" Expected " + String(_UIVERSION) + " got " + String(s) +
-				".</div>" );
-			return false;
-		}
+			/* Initialize module data */
+			console.log("Initializing module data for ReactorSensor_UI7");
+			try {
+				console.log("initModule() using jQuery " + String(jQuery.fn.jquery) + "; jQuery-UI " + String(jQuery.ui.version));
+			} catch( e ) {
+				console.log("initModule() error reading jQuery/UI versions: " + String(e));
+			}
 
-		try {
-			console.log("initModule() using jQuery " + String(jQuery.fn.jquery) + "; jQuery-UI " + String(jQuery.ui.version));
-		} catch( e ) {
-			console.log("initModule() error reading jQuery/UI versions: " + String(e));
+			iData = [];
+			actions = {};
+			deviceActionData = {};
+			deviceInfo = {};
+			userIx = {};
+			configModified = false;
+			inStatusPanel = false;
+			isOpenLuup = false;
+			// unused: isALTUI = undefined !== MultiBox;
+			lastx = 0;
+			
+			/* Try to establish date format */
+			var ud = api.getUserData();
+			dateFormat = "%F"; /* ISO8601 default */
+			timeFormat = "%T";
+			var cfd = parseInt( getParentState( "ForceISODateTime", myid ) || "0" );
+			if ( isNaN(cfd) || 0 === cfd ) {
+				console.log("initModule() configured date format " + String(ud.date_format) + " time " + String(ud.timeFormat));
+				cfd = ud.date_format;
+				if ( undefined !== cfd ) {
+					dateFormat = cfd.replace( /yy/, "%Y" ).replace( /mm/, "%m" ).replace( /dd/, "%d" ).replace( "\\", "" );
+					timeFormat = "24hr" !== ( ud.timeFormat || "24hr" ) ? "%I:%M:%S%p" : "%T";
+				}
+			}
+
+			/* Make our own list of devices, sorted by room, and alpha within room. */
+			var devices = api.cloneObject( api.getListOfDevices() );
+			var rooms = [];
+			var noroom = { "id": 0, "name": "No Room", "devices": [] };
+			rooms[noroom.id] = noroom;
+			var dd = devices.sort( function( a, b ) {
+				if ( a.id == myid ) return -1;
+				if ( b.id == myid ) return 1;
+				if ( a.name.toLowerCase() === b.name.toLowerCase() ) {
+					return a.id < b.id ? -1 : 1;
+				}
+				return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1;
+			});
+			for (var i=0; i<dd.length; i+=1) {
+				var devobj = dd[i];
+				/* Detect openLuup while we're at it */
+				if ( "openLuup" === devobj.device_type ) {
+					isOpenLuup = true;
+				}
+
+				var roomid = devobj.room || 0;
+				var roomObj = rooms[roomid];
+				if ( undefined === roomObj ) {
+					roomObj = api.cloneObject( api.getRoomObject(roomid) );
+					roomObj.devices = [];
+					rooms[roomid] = roomObj;
+				}
+				roomObj.devices.push( devobj.id );
+			}
+			roomsByName = rooms.sort(
+				/* Special sort for room name -- sorts "No Room" last */
+				function (a, b) {
+					if (a.id === 0) return 1;
+					if (b.id === 0) return -1;
+					if (a.name.toLowerCase() === b.name.toLowerCase()) return 0;
+					return a.name.toLowerCase() > b.name.toLowerCase() ? 1 : -1;
+				}
+			);
+
+			userIx = {};
+			for ( ix=0; ix<(ud.users || []).length; ++ix ) {
+				userIx[ud.users[ix].id] = { name: ud.users[ix].Name || ud.users[ix].id };
+			}
+			try {
+				jQuery.each( ud.usergeofences || [], function( ix, fobj ) {
+					/* Logically, there should not be a usergeofences[] entry for a user that
+					   doesn't exist in users[], but Vera says "hold my beer" apparently. */
+					if ( undefined === userIx[ fobj.iduser ] ) userIx[ fobj.iduser ] = { name: String(fobj.iduser) + '?' };
+					userIx[ fobj.iduser ].tags = {};
+					jQuery.each( fobj.geotags || [], function( iy, gobj ) {
+						userIx[ fobj.iduser ].tags[ gobj.id ] = {
+							id: gobj.id,
+							ishome: gobj.ishome,
+							name: gobj.name
+						};
+					});
+				});
+			}
+			catch (e) {
+				console.log("Error applying usergeofences to userIx: " + String(e));
+				console.log( e.stack );
+			}
+
+			serviceOpsIndex = {};
+			for ( var ix=0; ix<serviceOps.length; ix++ ) {
+				serviceOpsIndex[serviceOps[ix].op] = serviceOps[ix];
+			}
+
+			/* Don't do this again. */
+			moduleReady = true;
 		}
 
 		if ( undefined === Promise ) {
@@ -484,90 +572,67 @@ var ReactorSensor = (function(api, $) {
 			jQuery( "head" ).append( '<script src="' + s + '"></script>' );
 		}
 
-		actions = {};
-		deviceActionData = {};
-
-		/* Instance data */
-		iData[myid] = {};
+		/* Initialize for instance */
+		console.log("Initializing ReactorSensor_UI7 instance data for " + myid);
+		iData[myid] = iData[myid] || {};
+		getConfiguration( myid );
 
 		/* Force this false every time, and make the status panel change it. */
 		inStatusPanel = false;
 
-		/* Get the config and parse it */
-		getConfiguration( myid, true );
-
-		/* Make our own list of devices, sorted by room, and alpha within room. */
-		var devices = api.cloneObject( api.getListOfDevices() );
-		var rooms = [];
-		var noroom = { "id": 0, "name": "No Room", "devices": [] };
-		rooms[noroom.id] = noroom;
-		var dd = devices.sort( function( a, b ) {
-			if ( a.id == myid ) return -1;
-			if ( b.id == myid ) return 1;
-			if ( a.name.toLowerCase() === b.name.toLowerCase() ) {
-				return a.id < b.id ? -1 : 1;
-			}
-			return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1;
-		});
-		for (var i=0; i<dd.length; i+=1) {
-			var devobj = dd[i];
-			/* Detect openLuup while we're at it */
-			if ( "openLuup" === devobj.device_type ) {
-				isOpenLuup = true;
-			}
-
-			var roomid = devobj.room || 0;
-			var roomObj = rooms[roomid];
-			if ( undefined === roomObj ) {
-				roomObj = api.cloneObject( api.getRoomObject(roomid) );
-				roomObj.devices = [];
-				rooms[roomid] = roomObj;
-			}
-			roomObj.devices.push( devobj.id );
-		}
-		roomsByName = rooms.sort(
-			/* Special sort for room name -- sorts "No Room" last */
-			function (a, b) {
-				if (a.id === 0) return 1;
-				if (b.id === 0) return -1;
-				if (a.name.toLowerCase() === b.name.toLowerCase()) return 0;
-				return a.name.toLowerCase() > b.name.toLowerCase() ? 1 : -1;
-			}
-		);
-
-		serviceOpsIndex = {};
-		for ( var ix=0; ix<serviceOps.length; ix++ ) {
-			serviceOpsIndex[serviceOps[ix].op] = serviceOps[ix];
-		}
-
-		var ud = api.getUserData();
-		userIx = {};
-		for ( ix=0; ix<(ud.users || []).length; ++ix ) {
-			userIx[ud.users[ix].id] = { name: ud.users[ix].Name || ud.users[ix].id };
-		}
-		try {
-			jQuery.each( ud.usergeofences || [], function( ix, fobj ) {
-				/* Logically, there should not be a usergeofences[] entry for a user that
-				   doesn't exist in users[], but Vera says "hold my beer" apparently. */
-				if ( undefined === userIx[ fobj.iduser ] ) userIx[ fobj.iduser ] = { name: String(fobj.iduser) + '?' };
-				userIx[ fobj.iduser ].tags = {};
-				jQuery.each( fobj.geotags || [], function( iy, gobj ) {
-					userIx[ fobj.iduser ].tags[ gobj.id ] = {
-						id: gobj.id,
-						ishome: gobj.ishome,
-						name: gobj.name
-					};
-				});
-			});
-		}
-		catch (e) {
-			console.log("Error applying usergeofences to userIx: " + String(e));
-			console.log( e.stack );
-		}
-
+		/* Event handler */
 		api.registerEventHandler('on_ui_cpanel_before_close', ReactorSensor, 'onBeforeCpanelClose');
 
 		return true;
+	}
+
+	/* zero-fill */
+	function fill( s, n, p ) {
+		if ( "string" !== typeof(s) ) {
+			s = String(s);
+		}
+		while ( s.length < n ) {
+			s = (p || "0") + s;
+		}
+		return s;
+	}
+
+	/* Format timestamp to string (models strftime) */
+	function ftime( t, fmt ) {
+		var dt = new Date();
+		dt.setTime( t );
+		var str = fmt || dateFormat;
+		str = str.replace( /%(.)/g, function( m, p ) {
+			switch( p ) {
+				case 'Y':
+					return String( dt.getFullYear() );
+				case 'm':
+					return fill( dt.getMonth()+1, 2 );
+				case 'd':
+					return fill( dt.getDate(), 2 );
+				case 'H':
+					return fill( dt.getHours(), 2 );
+				case 'I':
+					var i = dt.getHours() % 12;
+					if ( 0 === i ) i = 12;
+					return fill( i, 2 );
+				case 'p':
+					return dt.getHours() < 12 ? "AM" : "PM";
+				case 'M':
+					return fill( dt.getMinutes(), 2 );
+				case 'S':
+					return fill( dt.getSeconds(), 2 );
+				case '%':
+					return '%';
+				case 'T':
+					return ftime( t, "%H:%M:%S" );
+				case 'F':
+					return ftime( t, "%Y-%m-%d" );
+				default:
+					return m;
+			}
+		});
+		return str;
 	}
 
 	function textDateTime( y, m, d, hh, mm, isEnd ) {
@@ -594,11 +659,11 @@ var ReactorSensor = (function(api, $) {
 			return "";
 		}
 		var dtms = dt * 1000;
-		var ago = Math.floor( ( Date.now() - dtms ) / 1000 );
+		var ago = Date.now() - dtms;
 		if ( ago < 86400 ) {
-			return new Date(dtms).toLocaleTimeString();
+			return ftime( dtms, timeFormat );
 		}
-		return new Date(dtms).toLocaleString();
+		return ftime( dtms, dateFormat + " " + timeFormat );
 	}
 
 	/**
@@ -681,14 +746,14 @@ var ReactorSensor = (function(api, $) {
 				'onSuccess' : function() {
 					configModified = false;
 					updateSaveControls();
-					var t = "function" === fnext && fnext.apply( null, fargs );
+					var t = "function" === typeof(fnext) && fnext.apply( null, fargs );
 					clearUnusedStateVariables( myid, cdata );
 					console.log("handleSaveClick(): successful save of config serial " + String(cdata.serial) + ", timestamp " + String(cdata.timestamp));
 				},
 				'onFailure' : function() {
 					alert('There was a problem saving the configuration. Vera/Luup may have been restarting. Please try hitting the "Save" button again.');
 					updateSaveControls();
-					var t = "function" === fnext && fnext.apply( null, fargs );
+					var t = "function" === typeof(fnext) && fnext.apply( null, fargs );
 				}
 			}
 		);
@@ -956,6 +1021,7 @@ var ReactorSensor = (function(api, $) {
 				break;
 
 			case 'reload':
+				str = "Luup reload";
 				break; /* no additional information */
 
 			default:
@@ -1142,7 +1208,11 @@ var ReactorSensor = (function(api, $) {
 					el.text( '(' + String(currentValue) + ') ' +
 						( cs.laststate ? "true" : "false" ) +
 						' as of ' + shortLuaTime( cs.statestamp ) +
-						( cs.evalstate && cs.latched ? " (latched true)" : "" )
+						( cs.evalstate && cs.latched ? "; latched" : 
+							( cs.laststate && cs.waituntil ? ( "; waiting for " + shortLuaTime( cs.waituntil ) ) :
+								( cs.evalstate && cs.holduntil ? ( "; reset delaying to " + shortLuaTime( cs.holduntil) ) : "" )
+							)
+						) /* Lisp? */
 					);
 					if ( condOptions[ cond.type || "group" ].repeat && ( condOpts.repeatcount || 0 ) > 1 ) {
 						if ( cs.repeats !== undefined && cs.repeats.length > 1 ) {
@@ -1809,6 +1879,7 @@ var ReactorSensor = (function(api, $) {
 					/* Interval relative to... */
 					v = jQuery( 'div.params select#relto', $row ).val() || "";
 					if ( "condtrue" === v ) {
+						cond.relto = v;
 						cond.relcond = jQuery( 'div.params select#relcond', $row).val() || "";
 						if ( "" === cond.relcond ) {
 							jQuery( 'div.params select#relcond' ).addClass( 'tberror' );
@@ -2784,13 +2855,9 @@ var ReactorSensor = (function(api, $) {
 					jQuery( "#days", container ).val( cond.days || 0 );
 					jQuery( "#hours", container ).val( cond.hours===undefined ? 1 : cond.hours );
 					jQuery( "#mins", container ).val( cond.mins || 0 );
-					if ( "" === ( cond.relto || "" ) ) {
-						if ( ! isEmpty( cond.basetime ) ) {
-							mm = cond.basetime.split(/,/);
-							menuSelectDefaultInsert( jQuery( '#relhour', container ), mm[0] || '00' );
-							menuSelectDefaultInsert( jQuery( '#relmin', container ), mm[1] || '00' );
-						}
-					} else {
+					jQuery( "select#relto", container ).val( cond.relto || "" );
+					if ( "condtrue" === cond.relto ) {
+						/* Relative to condition */
 						jQuery( "fieldset#relcondset", container ).show();
 						jQuery( "fieldset#reltimeset", container ).hide();
 						var t = cond.relcond || "";
@@ -2799,6 +2866,13 @@ var ReactorSensor = (function(api, $) {
 								.append( jQuery( '<option/>' ).val( t ).text( t + " (missing?)" ) );
 						}
 						jQuery( "#relcond", container ).val( t );
+					} else {
+						/* Relative to time (default) */
+						if ( ! isEmpty( cond.basetime ) ) {
+							mm = cond.basetime.split(/,/);
+							menuSelectDefaultInsert( jQuery( '#relhour', container ), mm[0] || '00' );
+							menuSelectDefaultInsert( jQuery( '#relmin', container ), mm[1] || '00' );
+						}
 					}
 					jQuery("select,input", container).on( 'change.reactor', function( ev ) { 
 						var $el = jQuery( ev.currentTarget );

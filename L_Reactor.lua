@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.2"
+local _PLUGIN_VERSION = "3.3develop-19148"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION = 301
@@ -44,6 +44,8 @@ local usesHouseMode = false
 local geofenceMode = 0
 local geofenceEvent = 0
 local maxEvents = 50
+local dateFormat = false
+local timeFormat = false
 local luaEnv -- global state for all runLua actions
 
 local runStamp = 0
@@ -161,6 +163,21 @@ local function shallowCopy( t )
 		r[k] = v
 	end
 	return r
+end
+
+local function fdate( t ) 
+	if not dateFormat then
+		dateFormat = luup.attr_get( "date_format", 0 ) or "yy-mm-dd"
+		dateFormat = dateFormat:gsub( "yy", "%%Y" ):gsub( "mm", "%%m" ):gsub( "dd", "%%d" );
+	end
+	return os.date( dateFormat, t )
+end
+
+local function ftime( t )
+	if not timeFormat then
+		timeFormat = ( "12hr" == luup.attr_get( "timeFormat", 0 ) ) and "%I:%M:%S%p" or "%H:%M:%S"
+	end
+	return os.date( timeFormat, t )
 end
 
 -- Get iterator for child devices matching passed table of attributes
@@ -760,10 +777,10 @@ local function loadCleanState( tdev )
 	end
 
 	-- Save updated state
+	cstate.lastUsed = os.time()
 	sst.condState = cstate
 	if modified then
-		D("loadCleanState() saving updated state")
-		cstate.lastUsed = os.time()
+		D("loadCleanState() saving updated cstate")
 		luup.variable_set( RSSID, "cstate", json.encode( cstate ), tdev )
 	end
 	D("loadCleanState() returning restored cstate")
@@ -2073,7 +2090,6 @@ local function updateVariables( cdata, tdev )
 	D("updateVariables(cdata,%1)", tdev)
 	-- Perform evaluations.
 	local sst = getSensorState( tdev )
-	local cstate = loadCleanState( tdev )
 	local ctx = sst.ctx or getExpressionContext( cdata, tdev )
 	sst.ctx = ctx
 	for _,v in variables( cdata ) do
@@ -2556,10 +2572,10 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		local lastload = getVarNumeric( "LastLoad", 0, tdev, RSSID )
 		local reloaded = loadtime ~= lastload
 		D("evaluateCondition() loadtime %1 lastload %2 reloaded %3", loadtime, lastload, reloaded)
-		local hold = getVarNumeric( "ReloadConditionHoldTime", 60, tdev, RSSID )
+		local hold = getVarNumeric( "ReloadConditionHoldTime", 1, tdev, RSSID )
 		if not reloaded then
 			-- Not reloaded. Hold on until we've satisfied hold time from last TRUE.
-			local later = ( ( cond.stateedge or {} )[1] or 0 ) + hold
+			local later = ( ( cond.laststate.stateedge or {} ).t or 0 ) + hold
 			if now >= later then
 				return false,false
 			end
@@ -2580,7 +2596,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		local baseTime
 		if "condtrue" == ( cond.relto or "" ) then
 			local cs = ( sst.condState or {} )[cond.relcond]
-			if cs == nil or (cs.evaledge or {})[1] == nil then
+			if cs == nil or (cs.evaledge or {}).t == nil then
 				-- Trouble, missing condition or no state.
 				L({level=1,msg="Unrecognized condition or insufficient state for %1 in interval cond %2 of %3 (%4)"},
 					cond.relcond or "nil", cond.id, tdev, luup.devices[tdev].description)
@@ -2589,7 +2605,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 				sst.trouble = true
 				return now,nil
 			end
-			baseTime = cs.evaledge[1]
+			baseTime = cs.evaledge.t
 		else
 			local tpart = os.date("*t", now) -- basically a copy of ndt
 			tpart.hour = 0
@@ -2651,8 +2667,8 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		end
 		-- Go true.
 		D("evaluateCondition() triggering interval condition %1", cond.id)
-		-- On time greater of 15 seconds or duty cycle as % of interval, but never more than interval-5 seconds.
-		scheduleDelay( { id=tdev,info="interval "..cond.id }, math.min( math.max( 15, interval * (cond.duty or 0) / 100 ), interval-5 ) )
+		-- On time of 1 second (use reset delay to extend)
+		scheduleDelay( { id=tdev,info="interval "..cond.id }, 1 )
 		return now,true
 
 	elseif cond.type == "ishome" then
@@ -2744,7 +2760,7 @@ local function processCondition( cond, grp, cdata, tdev )
 		cs.laststate = state
 		cs.statestamp = now
 		cs.stateedge = cs.stateedge or {}
-		cs.stateedge[state and 1 or 0] = now
+		cs.stateedge[state and "t" or "f"] = now
 		if state and ( condopt.repeatcount or 0 ) > 1 then
 			-- If condition now true and counting repeats, append time to list and prune
 			cs.repeats = cs.repeats or {}
@@ -2822,7 +2838,7 @@ local function processCondition( cond, grp, cdata, tdev )
 			-- lasted less than X seconds, meaning, we act when the condition goes
 			-- false, checking the "back interval".
 			if not state then
-				local age = (cs.stateedge[0] or now) - (cs.stateedge[1] or 0)
+				local age = (cs.stateedge.f or now) - (cs.stateedge.t or 0)
 				state = age < condopt.duration
 				D("processCondition() cond %1 was true for %2, limit is %3, state now %4", cond.id,
 					age, condopt.duration, state)
@@ -2838,10 +2854,12 @@ local function processCondition( cond, grp, cdata, tdev )
 				D("processCondition() cond %1 suppressed, age %2, has not yet met duration %3",
 					cond.id, age, condopt.duration)
 				state = false
+				cs.waituntil = cs.statestamp + condopt.duration
 				local rem = math.max( 1, condopt.duration - age )
 				scheduleDelay( tostring(tdev), rem )
 			else
 				D("processCondition() cond %1 age %2 (>=%3) success", cond.id, age, condopt.duration)
+				cs.waituntil = nil
 			end
 		end
 	end
@@ -2849,11 +2867,11 @@ local function processCondition( cond, grp, cdata, tdev )
 	-- Hold time (delay reset)
 	if ( condopt.holdtime or 0 ) > 0 then
 		-- If trying to go false, make sure hold time is honored.
-		D("processCondition() hold time %1, going %1 to %2", condopt.holdtime, cs.evalstate, state)
+		D("processCondition() hold time %1, going %2 to %3", condopt.holdtime, cs.evalstate, state)
 		if cs.evalstate and not state then
 			-- Hold time extends from false edge, so repeated true-false-true-false extends time
-			D("processCondition() reset edge last %1", cs.stateedge[1])
-			cs.holduntil = ( cs.stateedge[0] or now ) + condopt.holdtime
+			D("processCondition() reset edge last %1 (from %2)", cs.stateedge.f, cs.stateedge)
+			cs.holduntil = ( cs.stateedge.f or now ) + condopt.holdtime
 			if cs.holduntil > now then
 				D("processCondition() continue reset delay until %1", cs.holduntil)
 				state = true
@@ -2889,10 +2907,10 @@ local function processCondition( cond, grp, cdata, tdev )
 		addEvent{dev=tdev,event='evalchange',cond=cond.id,oldState=cs.evalstate,newState=state}
 		cs.evalstate = state
 		cs.evalstamp = now
-		cs.evaledge[ state and 1 or 0 ] = now
+		cs.evaledge[ state and "t" or "f" ] = now
 		cs.changed = true
 	else
-		cs.evaledge[ state and 1 or 0 ] = cs.evalstamp -- force
+		cs.evaledge[ state and "t" or "f" ] = cs.evalstamp -- force
 		cs.changed = nil
 	end
 	if ( cond.type or "group" ) == "group" then
@@ -3333,7 +3351,7 @@ local function startSensors( pdev )
 	if count == 0 then
 		luup.variable_set( MYSID, "Message", "Open control panel!", pdev )
 	else
-		luup.variable_set( MYSID, "Message", string.format("Started %d of %d at %s", started, count, os.date("%x %X")), pdev )
+		luup.variable_set( MYSID, "Message", string.format("Started %d of %d at %s %s", started, count, fdate(), ftime()), pdev )
 	end
 end
 
