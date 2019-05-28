@@ -1604,23 +1604,6 @@ var ReactorSensor = (function(api, $) {
 			return mm;
 		}
 
-		 /**
-		 * Update controls for current conditions.
-		 */
-		function updateControls() {
-			/* Disable all "Add Group" buttons if any condition type menu
-			   has no selection. */
-			var nset = jQuery('select#condtype option:selected[value=""]').length > 0;
-
-			/* ... or if any group has no conditions */
-			nset = nset || jQuery( '.cond-list:empty' ).length > 0;
-
-			/* Disable "Add" buttons while the condition is true. */
-			jQuery('button#addgroup').prop( 'disabled', nset );
-
-			updateSaveControls();
-		}
-
 		/**
 		 * Update row structure from current display data.
 		 */
@@ -2094,7 +2077,7 @@ var ReactorSensor = (function(api, $) {
 
 			$row.has('.tberror').addClass('tberror');
 
-			updateControls();
+			updateSaveControls();
 		}
 
 		/**
@@ -3046,7 +3029,7 @@ var ReactorSensor = (function(api, $) {
 			input.remove();
 			span.text( newname );
 			span.closest( 'div.cond-group-title' ).children().show();
-			updateControls();
+			updateSaveControls();
 		}
 
 		function handleTitleClick( ev ) {
@@ -3156,7 +3139,7 @@ var ReactorSensor = (function(api, $) {
 			deleteCondition( grpId, ixCond, getConfiguration(), grp.__parent, true );
 			configModified = true;
 			$el.closest( 'div.cond-group-container' ).addClass( 'tbmodified' ); // ??? NO! Parent group!
-			updateControls();
+			updateSaveControls();
 		}
 
 		/**
@@ -3188,7 +3171,7 @@ var ReactorSensor = (function(api, $) {
 			$condgroup.addClass( 'tbmodified' );
 
 			configModified = true;
-			updateControls();
+			updateSaveControls();
 		}
 
 		/**
@@ -3224,7 +3207,7 @@ var ReactorSensor = (function(api, $) {
 
 			el.closest( 'div.cond-group-container' ).addClass( 'tbmodified' );
 			configModified = true;
-			updateControls();
+			updateSaveControls();
 		}
 
 		/**
@@ -3251,7 +3234,7 @@ var ReactorSensor = (function(api, $) {
 
 			$el.addClass( 'tbmodified' ); /* ??? Is this really what we want to flag? */
 			configModified = true;
-			updateControls();
+			updateSaveControls();
 		}
 
 		function handleNodeUpdate( ev, ui ) {
@@ -3267,7 +3250,7 @@ var ReactorSensor = (function(api, $) {
 
 			$el.addClass( 'tbmodified' ); /* ??? Is this really what we want to flag? */
 			configModified = true;
-			updateControls();
+			updateSaveControls();
 		}
 
 		/**
@@ -3351,7 +3334,7 @@ var ReactorSensor = (function(api, $) {
 
 			$el.closest( 'div.cond-group-container' ).addClass( 'tbmodified' );
 			configModified = true;
-			updateControls();
+			updateSaveControls();
 		}
 
 		/**
@@ -3520,7 +3503,7 @@ var ReactorSensor = (function(api, $) {
 			jQuery("button#saveconf").on( 'click.reactor', handleSaveClick );
 			jQuery("button#revertconf").on( 'click.reactor', handleRevertClick );
 
-			updateControls();
+			updateSaveControls();
 
 			/* Clear unused state variables here so that we catch ReactorGroup
 			 * service, for which the function requires ixCond. */
