@@ -4502,7 +4502,7 @@ var ReactorSensor = (function(api, $) {
 			for ( var k=0; k<( action.parameters || [] ).length; ++k ) {
 				var opt, j, z;
 				var parm = action.parameters[k];
-				if ( ( parm.direction || "in" ) == "out" ) continue; /* Don't display output params */
+				if ( "out" === parm.direction ) continue; /* Don't display output params */
 				if ( parm.hidden ) continue; /* or hidden parameters */
 				if ( undefined !== parm.value ) continue; /* fixed value */
 				var inp;
@@ -4533,7 +4533,9 @@ var ReactorSensor = (function(api, $) {
 								inp.append( opt );
 							}
 							/* Add variables and append to tab (datalists are global to tab) */
-							appendVariables( inp );
+							if ( ! parm.novars ) {
+								appendVariables( inp );
+							}
 							jQuery( 'div#tab-actions.reactortab' ).append( inp );
 						}
 						/* Now pass on the input field */
@@ -4560,7 +4562,9 @@ var ReactorSensor = (function(api, $) {
 							inp.append( opt );
 						}
 						/* Add variables */
-						appendVariables( inp );
+						if ( ! parm.novars ) {
+							appendVariables( inp );
+						}
 						/* As a default, just choose the first option, unless specified */
 						if ( undefined !== parm.default ) {
 							inp.val( parm.default );
