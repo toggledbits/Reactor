@@ -16,7 +16,7 @@ local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION = 301
 local _CDATAVERSION = 19082	-- must coincide with JS
-local _UIVERSION = 19143	-- must coincide with JS
+local _UIVERSION = 19150	-- must coincide with JS
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -1291,6 +1291,7 @@ local function execSceneGroups( tdev, taskid, scd )
 					end
 				elseif action.type == "device" then
 					local devnum = tonumber( action.device )
+					if devnum == -1 then devnum = tdev end
 					if devnum == nil or luup.devices[devnum] == nil then
 						addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, warning="Action skipped, device number invalid or does not exist: " .. tostring( action.device ) }
 						L({level=1,msg="%5 (%6): invalid device (%4) in scene %1 (%2) group %3; skipping action."},
@@ -2086,13 +2087,18 @@ local function getExpressionContext( cdata, tdev )
 	return ctx
 end
 
+-- Perform evaluations of configured variables/expressions
 local function updateVariables( cdata, tdev )
 	D("updateVariables(cdata,%1)", tdev)
-	-- Perform evaluations.
-	local sst = getSensorState( tdev )
-	local ctx = sst.ctx or getExpressionContext( cdata, tdev )
-	sst.ctx = ctx
+	local first = true
+	local ctx
 	for _,v in variables( cdata ) do
+		if first then
+			local sst = getSensorState( tdev )
+			ctx = sst.ctx or getExpressionContext( cdata, tdev )
+			sst.ctx = ctx
+			first = false
+		end
 		D("updateVariables() evaluate %1", v)
 		evaluateVariable( v.name, ctx, cdata, tdev )
 	end
@@ -2130,9 +2136,11 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 
 	elseif cond.type == "service" then
 		-- Can't succeed if referenced device doesn't exist.
-		if luup.devices[cond.device or -1] == nil then
+		local devnum = tonumber( cond.device )
+		if devnum == -1 then devnum = tdev end
+		if devnum == nil or luup.devices[devnum] == nil then
 			L({level=2,msg="%1 (%2) condition %3 refers to device %4 (%5), does not exist, skipped"},
-				luup.devices[tdev].description, tdev, cond.id, cond.device, cond.devicename or "unknown")
+				luup.devices[tdev].description, tdev, cond.id, cond.device or "nil", cond.devicename or "unknown")
 			addEvent{ dev=tdev, event="condition", condition=cond.id, device=cond.device,
 				devicename=cond.devicename, ['error']='Device not available' }
 			sst.trouble = true -- flag trouble
@@ -2140,10 +2148,10 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		end
 
 		-- Add service watch if we don't have one.
-		addServiceWatch( cond.device, cond.service, cond.variable, tdev )
+		addServiceWatch( devnum, cond.service, cond.variable, tdev )
 
 		-- Get state variable value.
-		local vv = luup.variable_get( cond.service or "", cond.variable or "", cond.device or -1 ) or ""
+		local vv = luup.variable_get( cond.service or "", cond.variable or "", devnum ) or ""
 		local vn = tonumber( vv )
 
 		-- Get condition value
@@ -2240,9 +2248,11 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 
 	elseif cond.type == "grpstate" then
 		-- Can't succeed if referenced device doesn't exist.
-		if luup.devices[cond.device or -1] == nil then
+		local devnum = tonumber( cond.device )
+		if devnum == -1 then devnum = tdev end
+		if devnum == nil or luup.devices[devnum] == nil then
 			L({level=2,msg="%1 (%2) condition %3 refers to device %4 (%5), does not exist, skipped"},
-				luup.devices[tdev].description, tdev, cond.id, cond.device, cond.devicename or "unknown")
+				luup.devices[tdev].description, tdev, cond.id, cond.device or "nil", cond.devicename or "unknown")
 			addEvent{ dev=tdev, event="condition", condition=cond.id, device=cond.device,
 				devicename=cond.devicename, ['error']='Device not available' }
 			sst.trouble = true -- flag trouble
@@ -2250,7 +2260,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		end
 
 		local varname = string.format( "GroupStatus_%s", cond.groupid or "?" )
-		local vv = getVarNumeric( varname, -1, cond.device, GRPSID )
+		local vv = getVarNumeric( varname, -1, devnum, GRPSID )
 		-- Boolean should come back 0 or 1; if -1, group does not exist or is not ready/available
 		if vv < 0 then
 			L({level=2,msg="%1 (%2) condition %3 refers to device %4 (%5) group %6 (%7), not available, skipped"},
@@ -2265,7 +2275,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		vv = vv ~= 0 -- boolean!
 
 		-- Add service watch if we don't have one.
-		addServiceWatch( cond.device, GRPSID, varname, tdev )
+		addServiceWatch( devnum, GRPSID, varname, tdev )
 
 		if cond.operator == "change" then
 			D("evaluateCondition() group state change, curr=%1, prior=%2",
@@ -4165,10 +4175,11 @@ local function getReactorScene( t, s, tdev, runscenes )
 						table.insert( p, tostring(pp.name or pn) .. "=" .. z )
 					end
 					p = table.concat( p, ", " )
-					resp = resp .. pfx .. "Device " .. (act.device or "?") .. " (" ..
-						((luup.devices[act.device or 0] or {}).description or (act.deviceName or "").."?") ..
-						") action " .. (act.service or "?") .. "/" ..
-						(act.action or "?") .. "( " .. p .. " )"
+					resp = resp .. pfx .. "Device "
+					resp = resp .. ( act.device == -1 and "(self) " or
+						( ((luup.devices[act.device or -1] or {}).description or (act.deviceName or "unknown?")) ..
+						  " (" .. (act.device or "?") .. ") " ) )
+					resp = resp .. "action " .. (act.service or "?") .. "/" .. (act.action or "?") .. "( " .. p .. " )"
 					resp = resp .. EOL
 				elseif act.type == "housemode" then
 					resp = resp .. pfx .. "Change house mode to " .. tostring(act.housemode) .. EOL
@@ -4340,8 +4351,8 @@ function RG( grp, condState, level, r )
 		if condtype == "group" then
 			r = r .. RG( cond, condState, level+1 )
 		elseif condtype == "service" then
-			r = r .. string.format("%s (%d) ", ( luup.devices[cond.device]==nil ) and ( "*** missing " .. ( cond.devicename or "unknown" ) ) or
-				luup.devices[cond.device].description, cond.device )
+			r = r .. string.format("%s (%d) ", cond.device == -1 and "(self)" or ( ( luup.devices[cond.device]==nil ) and ( "*** missing " .. ( cond.devicename or "unknown" ) ) or
+				luup.devices[cond.device].description ), cond.device )
 			r = r .. string.format("%s/%s %s %s", cond.service or "?", cond.variable or "?", cond.operator or cond.condition or "?",
 				cond.value or "")
 			if cond.nocase == 0 then r = r .. " (match case)" end
@@ -4366,8 +4377,8 @@ function RG( grp, condState, level, r )
 				r = r .. "; latching"
 			end
 		elseif condtype == "grpstate" then
-			r = r .. string.format("%s (%d) ", ( luup.devices[cond.device]==nil ) and ( "*** missing " .. ( cond.devicename or "unknown" ) ) or
-				luup.devices[cond.device].description, cond.device )
+			r = r .. string.format("%s (%d) ", cond.device == -1 and "(self)" or ( ( luup.devices[cond.device]==nil ) and ( "*** missing " .. ( cond.devicename or "unknown" ) ) or
+				luup.devices[cond.device].description ), cond.device )
 			r = r .. ( cond.groupname or cond.groupid or "?" ) .. " (" .. ( cond.groupid or "?" ) .. ")"
 			r = r .. ' ' .. ( cond.operator or "op?" )
 		elseif condtype == "comment" then

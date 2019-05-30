@@ -7,7 +7,7 @@
  * This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
  *
  */
-/* globals api,jQuery,$,unescape,MultiBox,ace,Promise */
+/* globals api,jQuery,$,unescape,ace,Promise */
 /* jshint multistr: true */
 
 //"use strict"; // fails on UI7, works fine with ALTUI
@@ -21,7 +21,7 @@ var ReactorSensor = (function(api, $) {
 
 	var DEVINFO_MINSERIAL = 71.222;
 
-	var _UIVERSION = 19143;     /* must coincide with Lua core */
+	var _UIVERSION = 19150;     /* must coincide with Lua core */
 
 	var _CDATAVERSION = 19082;  /* must coincide with Lua core */
 
@@ -93,8 +93,6 @@ var ReactorSensor = (function(api, $) {
 	var varRefPattern = /^\{[^}]+\}\s*$/;
 
 	var msgUnsavedChanges = "You have unsaved changes! Press OK to save them, or Cancel to discard them.";
-	var msgGroupNormal = "Normal; click for inverted (false when all conditions are met)";
-	var msgGroupInvert = "Inverted; click for normal (true when all conditions are met)";
 	var msgGroupIdChange = "Click to change group name";
 	var msgOptionsShow = "Show condition options";
 	var msgOptionsHide = "Hide condition options";
@@ -215,6 +213,7 @@ var ReactorSensor = (function(api, $) {
 	}
 
 	function getDeviceFriendlyName( dev ) {
+		if ( -1 === dev ) return '(self)';
 		var devobj = api.getDeviceObject( dev );
 		if ( undefined === devobj || false === devobj ) {
 			console.log( "getDeviceFriendlyName() dev=(" + typeof(dev) + ")" + String(dev) + ", devobj=(" + typeof(devobj) + ")" + String(devobj) + ", returning false" );
@@ -558,6 +557,21 @@ var ReactorSensor = (function(api, $) {
 			moduleReady = true;
 		}
 
+		/* Check agreement of plugin core and UI */
+		var s = api.getDeviceState( myid, serviceId, "_UIV" ) || "0";
+		console.log("initModule() for device " + myid + " requires UI version " + _UIVERSION + ", seeing " + s);
+		if ( String(_UIVERSION) != s ) {
+			api.setCpanelContent( '<div class="reactorwarning" style="border: 4px solid red; padding: 8px;">' +
+				" ERROR! The Reactor plugin core version and UI version do not agree." +
+				" This may cause errors or corrupt your ReactorSensor configuration." +
+				" Please hard-reload your browser and try again " +
+				' (<a href="https://duckduckgo.com/?q=hard+reload+browser" target="_blank">how?</a>).' +
+				" If you have installed hotfix patches, you may not have successfully installed all required files." +
+				" Expected " + String(_UIVERSION) + " got " + String(s) +
+				".</div>" );
+			return false;
+		}
+
 		if ( undefined === Promise ) {
 			alert( "Warning! The browser you are using does not support features required by this interface. The recommended browsers are Firefox, Chrome, Safari, and Edge. If you are using a modern version of one of these browsers and getting this message, please report to rigpapa via the Vera Community forums." );
 		}
@@ -746,14 +760,14 @@ var ReactorSensor = (function(api, $) {
 				'onSuccess' : function() {
 					configModified = false;
 					updateSaveControls();
-					var t = "function" === typeof(fnext) && fnext.apply( null, fargs );
+					if ( "function" === typeof(fnext) ) fnext.apply( null, fargs );
 					clearUnusedStateVariables( myid, cdata );
 					console.log("handleSaveClick(): successful save of config serial " + String(cdata.serial) + ", timestamp " + String(cdata.timestamp));
 				},
 				'onFailure' : function() {
 					alert('There was a problem saving the configuration. Vera/Luup may have been restarting. Please try hitting the "Save" button again.');
 					updateSaveControls();
-					var t = "function" === typeof(fnext) && fnext.apply( null, fargs );
+					if ( "function" === typeof(fnext) ) fnext.apply( null, fargs );
 				}
 			}
 		);
@@ -1055,6 +1069,7 @@ var ReactorSensor = (function(api, $) {
 			}
 		});
 
+		el.prepend( jQuery( '<option/>' ).val( "-1" ).text( "(this ReactorSensor)" ) );
 		el.prepend( jQuery( '<option/>' ).val( "" ).text( "--choose device--" ) );
 
 		if ( val !== "" ) {
@@ -1471,6 +1486,7 @@ var ReactorSensor = (function(api, $) {
 		function makeVariableMenu( device, service, variable ) {
 			var el = jQuery('<select class="varmenu form-control form-control-sm"></select>');
 			var myid = api.getCpanelDeviceId();
+			if ( -1 === device ) device = myid;
 			var devobj = api.getDeviceObject( device );
 			if ( devobj ) {
 				var mm = {}, ms = [];
@@ -1550,7 +1566,8 @@ var ReactorSensor = (function(api, $) {
 			try {
 				var dc;
 				var myid = api.getCpanelDeviceId();
-				if ( cond.device == myid ) {
+				var myself = -1 === cond.device || cond.device === myid;
+				if ( myself ) {
 					/* Our own groups */
 					dc = getConfiguration( myid );
 				} else {
@@ -1561,14 +1578,14 @@ var ReactorSensor = (function(api, $) {
 				if ( dc ) {
 					var appendgrp = function ( grp, sel, pg ) {
 						/* Don't add ancestors in same RS */
-						if ( ! ( cond.device == myid && isAncestor( grp.id, cond.id, myid ) ) ) {
+						if ( ! ( myself && isAncestor( grp.id, cond.id, myid ) ) ) {
 							sel.append(
 								jQuery( '<option/>' ).val( grp.id )
 									.text( "root"===grp.id ? "Tripped/Untripped (root)" : ( grp.name || grp.id ) )
 							);
 						}
 						/* Don't scan siblings or anything below. */
-						if ( cond.device == myid && grp.id == pg.id ) return;
+						if ( myself && grp.id == pg.id ) return;
 						for ( var ix=0; ix<(grp.conditions || []).length; ix++ ) {
 							if ( "group" === ( grp.conditions[ix].type || "group" ) ) {
 								appendgrp( grp.conditions[ix], sel, pg );
@@ -2220,12 +2237,15 @@ var ReactorSensor = (function(api, $) {
 			var $row = $el.closest( 'div.cond-container' );
 			var condId = $row.attr( 'id' );
 			var cond = getConditionIndex()[condId];
-			if ( undefined !== cond.device ) {
-				cond.device = parseInt( newDev );
+
+			cond.device = parseInt( newDev );
+			if ( -1 === cond.device ) {
+				cond.devicename = "(self)";
+			} else {
 				var dobj = api.getDeviceObject( cond.device );
-				cond.devicename = dobj ? dobj.name : ( "#" + String(cond.device) + "?" );
-				configModified = true;
+				cond.devicename = ( dobj || {}).name;
 			}
+			configModified = true;
 
 			/* Make a new service/variable menu and replace it on the row. */
 			var newMenu = makeVariableMenu( cond.device, cond.service, cond.variable );
@@ -2412,7 +2432,7 @@ var ReactorSensor = (function(api, $) {
 			el.append( '<button class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" title="Click for device-defined events"><i class="material-icons">chevron_right</i></button>' );
 			var mm = jQuery( '<ul class="dropdown-menu" role="menu" />' );
 			el.append( mm );
-			var dtmp = api.getDeviceTemplate( cond.device );
+			var dtmp = api.getDeviceTemplate( -1 === cond.device ? api.getCpanelDeviceId() : cond.device );
 			if ( dtmp && dtmp.eventList2 ) {
 				var wrapAction = function( eventinfo, cond, $row ) {
 					return function( ev ) {
@@ -2528,13 +2548,19 @@ var ReactorSensor = (function(api, $) {
 
 				case 'service':
 					if ( isEmpty( cond.operator ) ) cond.operator = "=";
-					container.append( makeDeviceMenu( cond.device, cond.devicename || "?" ) );
+					container.append( makeDeviceMenu( cond.device, cond.devicename || "unknown device" ) );
 					/* Fix-up: makeDeviceMenu will display current userdata name
 							   for device, but if that's changed from what we've stored,
 							   we need to update our store. */
-					dobj = api.getDeviceObject( cond.device );
-					if ( dobj && dobj.name !== cond.devicename ) {
-						cond.devicename = dobj.name;
+					v = cond.devicename;
+					if ( -1 === cond.device ) {
+						v = "(self)";
+					} else {
+						dobj = api.getDeviceObject( cond.device );
+						v = (dobj || {}).name; /* may be undefined, that's OK */
+					}
+					if ( cond.devicename !== v ) {
+						cond.devicename = v;
 						configModified = true;
 					}
 					try {
@@ -2562,15 +2588,21 @@ var ReactorSensor = (function(api, $) {
 					/* Default device to current RS */
 					cond.device = coalesce( cond.device, api.getCpanelDeviceId() );
 					/* Make a device menu that shows ReactorSensors only. */
-					container.append( makeDeviceMenu( cond.device, cond.devicename || "?", function( dev ) {
+					container.append( makeDeviceMenu( cond.device, cond.devicename || "unknown device", function( dev ) {
 						return "urn:schemas-toggledbits-com:device:ReactorSensor:1" === dev.device_type;
 					}));
 					/* Fix-up: makeDeviceMenu will display current userdata name
 							   for device, but if that's changed from what we've stored,
 							   we need to update our store. */
-					dobj = api.getDeviceObject( cond.device );
-					if ( dobj && dobj.name !== cond.devicename ) {
-						cond.devicename = dobj.name;
+					v = cond.devicename;
+					if ( -1 === cond.device ) {
+						v = "(self)";
+					} else {
+						dobj = api.getDeviceObject( cond.device );
+						v = (dobj || {}).name; /* may be undefined, that's OK */
+					}
+					if ( cond.devicename !== v ) {
+						cond.devicename = v;
 						configModified = true;
 					}
 					/* Create group menu for selected device (if any) */
@@ -2593,14 +2625,17 @@ var ReactorSensor = (function(api, $) {
 						var $row = $el.closest( 'div.cond-container' );
 						var condId = $row.attr( 'id' );
 						var cond = getConditionIndex()[condId];
-						if ( undefined !== cond.device ) {
-							cond.device = parseInt( newDev );
+
+						cond.device = parseInt( newDev );
+						if ( -1 === cond.device ) {
+							cond.devicename = "(self)";
+						} else {
 							var dobj = api.getDeviceObject( cond.device );
-							cond.devicename = dobj ? dobj.name : ( "#" + String(cond.device) + "?" );
-							delete cond.groupname;
-							delete cond.groupid;
-							configModified = true;
+							cond.devicename = (dobj || {}).name;
 						}
+						delete cond.groupname;
+						delete cond.groupid;
+						configModified = true;
 
 						/* Make a new service/variable menu and replace it on the row. */
 						var newMenu = makeRSGroupMenu( cond );
@@ -3181,7 +3216,6 @@ var ReactorSensor = (function(api, $) {
 			var el = jQuery( ev.currentTarget );
 			var row = el.closest( 'div.cond-container' );
 			var condId = row.attr('id');
-			var grpId = el.closest( 'div.cond-group-container' ).attr("id");
 
 			if ( el.prop( 'disabled' ) ) { return; }
 
@@ -3216,7 +3250,7 @@ var ReactorSensor = (function(api, $) {
 		function handleNodeReceive( ev, ui ) {
 			var $el = jQuery( ui.item );
 			var $target = jQuery( ev.target ); /* receiving .cond-list */
-			var $from = jQuery( ui.sender );
+			// var $from = jQuery( ui.sender );
 			var ixCond = getConditionIndex();
 
 			/* Now, disconnect the data object from its current parent */
@@ -3240,7 +3274,7 @@ var ReactorSensor = (function(api, $) {
 		function handleNodeUpdate( ev, ui ) {
 			var $el = jQuery( ui.item );
 			var $target = jQuery( ev.target ); /* receiving .cond-list */
-			var $from = jQuery( ui.sender );
+			// var $from = jQuery( ui.sender );
 			var ixCond = getConditionIndex();
 
 			/* UI is handled, so just reindex parent */
@@ -3449,8 +3483,6 @@ var ReactorSensor = (function(api, $) {
 		function redrawGroup( myid, grp, container, depth ) {
 			container = container || jQuery( 'div#conditions' );
 			depth = depth || 0;
-
-			var ixCond = getConditionIndex( myid );
 
 			var el = getGroupTemplate( grp.id );
 			container.append( el );
@@ -4118,6 +4150,7 @@ var ReactorSensor = (function(api, $) {
 					jQuery( 'select.devicemenu', row ).addClass( 'tberror' );
 				} else {
 					var devnum = parseInt( dev );
+					if ( -1 === devnum ) devnum = api.getCpanelDeviceId();
 					var sact = jQuery('select#actionmenu', row).val();
 					if ( isEmpty( sact ) ) {
 						jQuery( 'select#actionmenu', row ).addClass( "tberror" );
@@ -4274,14 +4307,15 @@ var ReactorSensor = (function(api, $) {
 
 				case "device":
 					action.device = parseInt( jQuery( 'select.devicemenu', row ).val() );
-					var dobj = api.getDeviceObject( action.device );
-					action.deviceName = dobj ? dobj.name : '#' + String( action.device ) + '?';
+					var devnum = -1 === action.device ? api.getCpanelDeviceId() : action.device;
+					var dobj = api.getDeviceObject( devnum );
+					action.deviceName = (dobj || {}).name;
 					t = jQuery( 'select#actionmenu', row ).val() || "";
 					pt = t.split( /\//, 2 );
 					action.service = pt[0]; action.action = pt[1];
 					var ai = actions[ t ];
-					if ( ai && ai.deviceOverride && ai.deviceOverride[action.device] ) {
-						ai = ai.deviceOverride[action.device];
+					if ( ai && ai.deviceOverride && ai.deviceOverride[devnum] ) {
+						ai = ai.deviceOverride[devnum];
 					}
 					action.parameters = [];
 					if ( ai ) {
@@ -4832,6 +4866,7 @@ var ReactorSensor = (function(api, $) {
 	 * Load the action menu for a device with the device data.
 	 */
 	function loadActionMenu( dev, actionMenu, row, data ) {
+		if ( -1 === dev ) dev = api.getCpanelDeviceId();
 		actionMenu.empty();
 		var hasAction = false;
 		var i, j, key;
@@ -4950,7 +4985,7 @@ var ReactorSensor = (function(api, $) {
 		actionMenu.empty().prop( 'disabled', true )
 			.append( jQuery( '<option/>' ).val("").text( '(loading...)' ) );
 		jQuery('label,.argument', ct).remove();
-		if ( "number" !== typeof(newVal) || newVal < 0 ) return;
+		if ( "number" !== typeof(newVal) ) return;
 
 		/**
 		 * Use actions/lu_actions to get list of services/actions for this
@@ -4960,6 +4995,7 @@ var ReactorSensor = (function(api, $) {
 		 * same device can use the same data without an additional request (and
 		 * will block until the original request/Promise is fulfilled).
 		 */
+		if ( -1 === newVal ) newVal = api.getCpanelDeviceId();
 		var devobj = api.getDeviceObject( newVal );
 		if ( !devobj ) return;
 		if ( undefined === deviceActionData[devobj.device_type] ) {
@@ -5164,6 +5200,7 @@ var ReactorSensor = (function(api, $) {
 				var typ = jQuery( 'select#actiontype', row ).val() || "comment";
 				if ( "device" === typ ) {
 					var d = parseInt( jQuery( 'select.devicemenu', row ).val() );
+					if ( -1 === d ) d = api.getCpanelDeviceId();
 					var s = jQuery( 'select#actionmenu', row ).val() || "";
 					var pt = s.split( /\//, 2 );
 					var act = (deviceInfo.services[pt[0]] || { actions: {} }).actions[pt[1]];
@@ -5295,7 +5332,7 @@ var ReactorSensor = (function(api, $) {
 								}
 								jQuery( 'select.devicemenu', newRow ).val( act.device );
 								pred = newRow.addClass( "tbmodified" ).insertAfter( pred );
-								changeActionDevice( newRow, parseInt( act.device || -1 ), function( row, action ) {
+								changeActionDevice( newRow, parseInt( act.device ), function( row, action ) {
 									var key = action.service + "/" + action.action;
 									if ( 0 == jQuery( 'select#actionmenu option[value="' + key + '"]', row ).length ) {
 										var opt = jQuery( '<option/>' ).val( key ).text( key );
@@ -5400,7 +5437,7 @@ var ReactorSensor = (function(api, $) {
 							jQuery( 'select.devicemenu', newRow ).prepend( opt ).addClass( "tberror" );
 						}
 						jQuery( 'select.devicemenu', newRow ).val( act.device );
-						changeActionDevice( newRow, act.device || -1, function( row, action ) {
+						changeActionDevice( newRow, parseInt( act.device ), function( row, action ) {
 							var key = action.service + "/" + action.action;
 							if ( 0 == jQuery( 'select#actionmenu option[value="' + key + '"]', row ).length ) {
 								var opt = jQuery( '<option/>' ).val( key ).text( key );
@@ -5537,7 +5574,7 @@ var ReactorSensor = (function(api, $) {
 	/* Handle change of activity visibility */
 	function handleActivityVisChange( ev ) {
 		var el = jQuery( ev.currentTarget );
-		vis = el.val() || "";
+		var vis = el.val() || "";
 		setParentState( "showactivities", vis );
 		var cd = getConfiguration();
 		var ac = cd.activities || {};
@@ -5563,7 +5600,6 @@ var ReactorSensor = (function(api, $) {
 	/* Redraw the activities lists within the existing tab structure. */
 	function redrawActivities() {
 		var myid = api.getCpanelDeviceId();
-		var devobj = api.getDeviceObject( myid );
 		var cd = getConfiguration( myid );
 		var container = jQuery( 'div#activities' ).empty();
 
@@ -6135,7 +6171,7 @@ var ReactorSensor = (function(api, $) {
 
 		header();
 
-		html = '<div id="reactortools" class="reactortab">';
+		var html = '<div id="reactortools" class="reactortab">';
 		html += '<h3>Test Tools</h3>';
 
 		html += '<div class="row">';
