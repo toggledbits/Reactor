@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.3develop-19148"
+local _PLUGIN_VERSION = "3.3develop-19149"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION = 301
@@ -3029,13 +3029,15 @@ local function processSensorUpdate( tdev, sst )
 		local now = os.time()
 		if currTrip then
 			-- Update accumulated trip time
-			local delta = now - getVarNumeric( "lastacc", now, tdev, RSSID )
-			luup.variable_set( RSSID, "Runtime", getVarNumeric( "Runtime", 0, tdev, RSSID ) + delta, tdev )
+			local delta = math.max( 0, now - getVarNumeric( "lastacc", now, tdev, RSSID ) )
+			local rt = delta + getVarNumeric( "Runtime", 0, tdev, RSSID )
+			D("processSensorUpdate() currently tripped, adding %1 seconds to runtime, now total %2", delta, rt)
+			luup.variable_set( RSSID, "Runtime", rt, tdev )
 		end
 		luup.variable_set( RSSID, "lastacc", now, tdev )
 
 		-- Pass through groups again, and run activities for any changed groups,
-		-- except root, which is handle by trip() below.
+		-- except root, which is handled by trip() below.
 		D("processSensorUpdate() checking groups for state changes")
 		for grp in conditionGroups( cdata.conditions.root ) do
 			D("processSensorUpdate() checking group %1 for state change", grp.id)
@@ -3948,9 +3950,11 @@ function actionSetVariable( opt, tdev )
 		cstate.lastUsed = os.time()
 		luup.variable_set( RSSID, "cstate", json.encode( cstate ), tdev )
 		L("SetVariable action changes %1 from %2 to %3", opt.VariableName, oldVal, vv)
+
 	else
 		L("SetVariable action %1 no change, value remains %2", opt.VariableName, vs.lastvalue == nil and "" or vs.lastvalue)
 	end
+	scheduleDelay( tdev, 1 )
 end
 
 -- Plugin timer tick. Using the tickTasks table, we keep track of
