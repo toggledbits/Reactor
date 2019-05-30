@@ -55,9 +55,11 @@
 			<serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
 			<name>ResetRuntime</name>
 			<run>
+				local now = os.time()
 				luup.variable_set( "urn:toggledbits-com:serviceId:ReactorSensor", "TripCount", "0", lul_device )
 				luup.variable_set( "urn:toggledbits-com:serviceId:ReactorSensor", "Runtime", "0", lul_device )
-				luup.variable_set( "urn:toggledbits-com:serviceId:ReactorSensor", "RuntimeSince", os.time(), lul_device )
+				luup.variable_set( "urn:toggledbits-com:serviceId:ReactorSensor", "RuntimeSince", now, lul_device )
+				luup.variable_set( "urn:toggledbits-com:serviceId:ReactorSensor", "lastacc", now, lul_device )
 				return true
 			</run>
 		</action>
