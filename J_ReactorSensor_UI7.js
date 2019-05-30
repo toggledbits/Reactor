@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.3develop-19148';
+	var pluginVersion = '3.3develop-19149';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -1308,7 +1308,7 @@ var ReactorSensor = (function(api, $) {
 				}
 				var ve = vs.err || "";
 				el.append( jQuery('<div class="col-sm-6 col-md-2" />').text( vd.name ) );
-				el.append( jQuery('<div class="col-sm-12 col-md-7 tb-sm" />').text( vd.expression ) );
+				el.append( jQuery('<div class="col-sm-12 col-md-7 tb-sm" />').text( isEmpty( vd.expression || "" ) ? "(no expression)" : vd.expression ) );
 				el.append( jQuery('<div class="col-sm-6 col-md-3 tb-hardwrap" />').text( "" !== ve ? ve : vv ) );
 				if ( "" !== ve ) {
 					el.addClass( 'tb-exprerr' );
@@ -5167,7 +5167,7 @@ var ReactorSensor = (function(api, $) {
 					var s = jQuery( 'select#actionmenu', row ).val() || "";
 					var pt = s.split( /\//, 2 );
 					var act = (deviceInfo.services[pt[0]] || { actions: {} }).actions[pt[1]];
-					if ( act && act.deviceOverride[d] ) {
+					if ( act && (act.deviceOverride || {})[d] ) {
 						act = act.deviceOverride[d];
 					}
 					var param = {};
