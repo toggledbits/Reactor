@@ -3304,7 +3304,7 @@ local function startSensor( tdev, pdev )
 
 		-- Watch our own cdata; when it changes, re-evaluate.
 		-- NOTE: MUST BE *AFTER* INITIAL LOAD OF CDATA
-		luup.variable_watch( "reactorWatch", RSSID, "cdata", tdev )
+		addServiceWatch( tdev, RSSID, "cdata", tdev )
 
 		-- Start tick
 		scheduleDelay( { id=tostring(tdev), owner=tdev, func=sensorTick }, 1, { replace=true } )
