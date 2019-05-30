@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.3develop-19149"
+local _PLUGIN_VERSION = "3.3develop-19150"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION = 301
@@ -2771,11 +2771,15 @@ local function processCondition( cond, grp, cdata, tdev )
 		cs.statestamp = now
 		cs.stateedge = cs.stateedge or {}
 		cs.stateedge[state and "t" or "f"] = now
-		if state and ( condopt.repeatcount or 0 ) > 1 then
-			-- If condition now true and counting repeats, append time to list and prune
-			cs.repeats = cs.repeats or {}
-			table.insert( cs.repeats, now )
-			while #cs.repeats > condopt.repeatcount do table.remove( cs.repeats, 1 ) end
+		if ( condopt.repeatcount or 0 ) > 1 then
+			if state then
+				-- If condition now true and counting repeats, append time to list and prune
+				cs.repeats = cs.repeats or {}
+				table.insert( cs.repeats, now )
+				while #cs.repeats > condopt.repeatcount do table.remove( cs.repeats, 1 ) end
+			end
+		else
+			cs.repeats = nil
 		end
 	end
 
@@ -2857,6 +2861,7 @@ local function processCondition( cond, grp, cdata, tdev )
 				D("processCondition() cond %1 duration < %2, not ready yet", cond.id, condopt.duration)
 				state = false
 			end
+			cs.waituntil = nil
 		elseif state then
 			-- Handle "at least" duration. Eval true only when sustained for period
 			local age = now - cs.statestamp
@@ -2871,7 +2876,11 @@ local function processCondition( cond, grp, cdata, tdev )
 				D("processCondition() cond %1 age %2 (>=%3) success", cond.id, age, condopt.duration)
 				cs.waituntil = nil
 			end
+		else
+			cs.waituntil = nil
 		end
+	else
+		cs.waituntil = nil
 	end
 
 	-- Hold time (delay reset)

@@ -7,7 +7,7 @@
  * This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
  *
  */
-/* globals api,jQuery,$,unescape,ace,Promise */
+/* globals api,jQuery,$,unescape,ace,Promise,setTimeout */
 /* jshint multistr: true */
 
 //"use strict"; // fails on UI7, works fine with ALTUI
@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.3develop-19149';
+	var pluginVersion = '3.3develop-19150';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -1099,6 +1099,36 @@ var ReactorSensor = (function(api, $) {
  *
  ** **************************************************************************/
 
+	function updateTime( condid, target, prefix, countdown, limit ) {
+		var $el = jQuery( 'span#' + idSelector(condid) + ".timer" );
+		if ( 0 === $el.length ) { console.log(condid+" not found, bye!"); return; }
+		var now = Math.floor( Date.now() / 1000 + 0.5 );
+		var d;
+		if ( countdown ) {
+			/* Count down -- delta is (future) target to now */
+			d = target - now;
+			if ( d < ( limit || 0 ) ) {
+				$el.remove();
+				return;
+			}
+		} else {
+			/* Count up -- delta is now since target */
+			d = now - target;
+			if ( limit && d > limit ) {
+				$el.remove();
+				return;
+			}
+		}
+		var hh = Math.floor( d / 3600 );
+		d -= hh * 3600;
+		var mm = Math.floor( d / 60 );
+		d -= mm * 60;
+		d = (mm < 10 ? '0' : '') + String(mm) + ':' + (d < 10 ? '0' : '') + String(d);
+		if ( 0 !== hh ) d = (hh < 10 ? '0' : '') + String(hh) + ':' + d;
+		$el.text( prefix + ' ' + d );
+		setTimeout( function() { updateTime( condid, target, prefix, countdown, limit ); }, 500 );
+	}
+
 	function showGroupStatus( grp, container, cstate, parentGroup ) {
 		var grpel = jQuery( '\
 <div class="reactorgroup"> \
@@ -1222,13 +1252,7 @@ var ReactorSensor = (function(api, $) {
 					var cs = cstate[cond.id] || {};
 					el.text( '(' + String(currentValue) + ') ' +
 						( cs.laststate ? "true" : "false" ) +
-						' as of ' + shortLuaTime( cs.statestamp ) +
-						( cs.evalstate && cs.latched ? "; latched" :
-							( cs.laststate && cs.waituntil ? ( "; waiting for " + shortLuaTime( cs.waituntil ) ) :
-								( cs.evalstate && cs.holduntil ? ( "; reset delaying to " + shortLuaTime( cs.holduntil) ) : "" )
-							)
-						) /* Lisp? */
-					);
+						' as of ' + shortLuaTime( cs.statestamp ) );
 					if ( condOptions[ cond.type || "group" ].repeat && ( condOpts.repeatcount || 0 ) > 1 ) {
 						if ( cs.repeats !== undefined && cs.repeats.length > 1 ) {
 							var dtime = cs.repeats[ cs.repeats.length - 1 ] - cs.repeats[0];
@@ -1239,6 +1263,23 @@ var ReactorSensor = (function(api, $) {
 						row.addClass( "truestate" );
 					} else {
 						row.removeClass("truestate");
+					}
+					/* Generate unique IDs for timers so that redraws will have
+					   different IDs, and the old timers will self-terminate. */
+					if (cs.laststate && cs.waituntil) {
+						console.log("Add timer for " + cond.id);
+						var id = getUID();
+						el.append( jQuery('<span class="timer"/>').attr( 'id', id ) );
+						(function( c, t, l ) {
+							setTimeout( function() { updateTime( c, t, "; sustained", false, l ); }, 20 );
+						})( id, cs.statestamp, condOpts.duration );
+					} else if (cs.evalstate && cs.holduntil) {
+						console.log("Add timer for " + cond.id);
+						var id = getUID();
+						el.append( jQuery('<span class="timer"/>').attr( 'id', id ) );
+						(function( c, t, l ) {
+							setTimeout( function() { updateTime( c, t, "; reset delayed", true, l ); }, 20 );
+						})( id, cs.holduntil, 0 );
 					}
 				}
 
@@ -1394,6 +1435,7 @@ var ReactorSensor = (function(api, $) {
 		html += 'div#reactorstatus div#variables .tb-valchanged { color: #006040; font-weight: bold; }';
 		html += 'div#reactorstatus div#variables .tb-exprerr { color: red; }';
 		html += 'div#reactorstatus div#variables .tb-hardwrap { overflow-wrap: break-word; }';
+		html += 'div#reactorstatus span.timer { }';
 
 		html += '.grpcond > *::before, .grpcond > *::after { content: "";  position: absolute; left: -12px; width: 12px; border-style: solid; border-width: 0px 0px 3px 3px; }';
 		html += '.grpcond > *:first-child::before { top: -8px; height: 24px; border-color: #333; display: block; }';
