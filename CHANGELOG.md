@@ -4,6 +4,8 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 3.3 (development)
 
+* Enhancement: SetVariable now forces an additional evaluation of the RS to ensure that any conditions that reference it display correctly.
+* Fix: When using ResetRuntime, make sure reference point is moved to reset time as well (only affects measurement if RS is tripped at time ResetRuntime is called).
 * Fix: Use Vera-defined date/time format in display (reported by sm2117).
 * Fix: Timing issue on hold time across reloads due to poor round-trip through dkjson (stringifying keys in array--ouch).
 
