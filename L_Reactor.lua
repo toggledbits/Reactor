@@ -3019,7 +3019,7 @@ local function processSensorUpdate( tdev, sst )
 
 		-- Fetch the condition data.
 		local cdata = sst.configData
-		if debugMode then luup.log( json.encode( cdata ), 2 ) end
+		-- if debugMode then luup.log( json.encode( cdata ), 2 ) end
 
 		-- Mark a stable base of time
 		local tt = getVarNumeric( "TestTime", 0, tdev, RSSID )
