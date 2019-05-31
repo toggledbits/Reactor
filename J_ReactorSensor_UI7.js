@@ -90,7 +90,7 @@ var ReactorSensor = (function(api, $) {
 	var noCaseOptPattern = /^(=|<>|contains|notcontains|starts|notstarts|ends|notends|in|notin|change)$/i;
 	var serviceOpsIndex = {};
 
-	var varRefPattern = /^\{[^}]+\}\s*$/;
+	var varRefPattern = /^\{([^}]+)\}\s*$/;
 
 	var msgUnsavedChanges = "You have unsaved changes! Press OK to save them, or Cancel to discard them.";
 	var msgGroupIdChange = "Click to change group name";
