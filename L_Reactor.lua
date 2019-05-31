@@ -3936,7 +3936,7 @@ function actionSetVariable( opt, tdev )
 	end
 	if not tostring( cdata.variables[ opt.VariableName ].expression or ""):match( "^%s*$" ) then
 		-- Non-empty expression--can't set these variables
-		L({level=1,"Invalid attempt to set value on expression-driven variable %1 (ignored)"}, opt.VariableName)
+		L({level=1,msg="Invalid attempt to set value on expression-driven variable %1 (ignored)"}, opt.VariableName)
 		return false
 	end
 	local cstate = loadCleanState( tdev )
