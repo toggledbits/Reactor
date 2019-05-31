@@ -4224,10 +4224,10 @@ var ReactorSensor = (function(api, $) {
 								/* Ignore default here, it's assumed to be valid when needed */
 								/* Blank and optional OK? Move on. */
 								if ( "" === v ) {
-									if ( p.optional ) {
+									if ( p.optional || p.allowempty ) {
 										continue;
 									}
-									/* Not optional, flag error. */
+									/* Not optional/empty allowed, flag error. */
 									field.addClass( 'tbwarn' );
 								} else if ( v.match( varRefPattern ) ) {
 									/* Variable reference, do nothing, can't check */
@@ -4373,9 +4373,6 @@ var ReactorSensor = (function(api, $) {
 									if ( ai.parameters[k].optional ) {
 										continue; /* skip it, not even put on the list */
 									}
-									console.log("buildActionList: " + action.service + "/" +
-										action.action + " required parameter " +
-										ai.parameters[k].name + " has no value");
 									/* fall through and accept empty */
 								}
 								pt.value = t;
