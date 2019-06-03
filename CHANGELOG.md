@@ -4,6 +4,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 3.3 (development)
 
+* Enhancement: Most trouble messages in the event log are now prefixed with "TROUBLE" to make them easy to find (exception: throttling messages).
 * Enhancement: Condition transitions delayed by "sustained for" and "delay reset" options now show timers on the status display when timing is in effect.
 * Enhancement: Device menus now have "self" selection to refer to current ReactorSensor.
 * Enhancement: SetVariable now forces an additional evaluation of the RS to ensure that any conditions that reference it display correctly.
