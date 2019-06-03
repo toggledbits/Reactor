@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.3develop-19150';
+	var pluginVersion = '3.3develop-19154';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -1266,16 +1266,15 @@ var ReactorSensor = (function(api, $) {
 					}
 					/* Generate unique IDs for timers so that redraws will have
 					   different IDs, and the old timers will self-terminate. */
+					var id;
 					if (cs.laststate && cs.waituntil) {
-						console.log("Add timer for " + cond.id);
-						var id = getUID();
+						id = getUID();
 						el.append( jQuery('<span class="timer"/>').attr( 'id', id ) );
 						(function( c, t, l ) {
 							setTimeout( function() { updateTime( c, t, "; sustained", false, l ); }, 20 );
 						})( id, cs.statestamp, condOpts.duration );
 					} else if (cs.evalstate && cs.holduntil) {
-						console.log("Add timer for " + cond.id);
-						var id = getUID();
+						id = getUID();
 						el.append( jQuery('<span class="timer"/>').attr( 'id', id ) );
 						(function( c, t, l ) {
 							setTimeout( function() { updateTime( c, t, "; reset delayed", true, l ); }, 20 );
