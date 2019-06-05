@@ -3682,7 +3682,9 @@ function actionUpdateGeofences( pdev, event )
 								changed = true
 							end
 							-- Update remaining fields, but don't mark changed.
+							changed = changed or ( tag.name ~= g.name )
 							tag.name = g.name
+							changed = changed or ( tag.homeloc ~= g.ishome )
 							tag.homeloc = g.ishome
 							oldtags[tostring(g.id)] = nil -- remove from old
 						else
