@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.3develop-19154"
+local _PLUGIN_VERSION = "3.3develop-19156"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION = 301
@@ -4083,8 +4083,14 @@ function watch( dev, sid, var, oldVal, newVal )
 			luup.devices[dev].device_num_parent == pluginDevice and
 			sid == SENSOR_SID and var == "Armed" then
 		-- Arming state changed on HMT, update house mode.
+		D("watch() HMT device %1 arming state changed", dev)
+		if geofenceMode ~= 0 and getVarNumeric( "SuppressGeofenceHMTUpdate", 0, pluginDevice, MYSID ) == 0 then
+			D("watch() forcing geofence update job for house mode change")
+			geofenceEvent = geofenceEvent + 1
+			luup.call_action( MYSID, "UpdateGeofences", { event=geofenceEvent }, pluginDevice ) -- luacheck: ignore 211
+		end
 		local mode = luup.attr_get( "Mode", 0 ) or "1"
-		D("watch() HMT device arming state changed, updating HouseMode to %1", mode)
+		D("watch() updating HouseMode to %1", mode)
 		setVar( MYSID, "HouseMode", mode, pluginDevice )
 		setHMTModeSetting( dev )
 	else
