@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.3develop-19156"
+local _PLUGIN_VERSION = "3.3develop-19159"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION = 301
@@ -771,6 +771,8 @@ local function loadCleanState( tdev )
 		for _,k in ipairs( dels ) do
 			D("loadCleanState() deleting variable %1, not in cdata.variables", k)
 			cstate.vars[k] = nil
+			deleteVar( VARSID, k, tdev )
+			deleteVar( VARSID, k .. "_Error", tdev )
 		end
 	else
 		modified = true
@@ -970,11 +972,221 @@ local function stopScene( ctx, taskid, tdev, scene )
 	luup.variable_set( MYSID, "runscene", json.encode(sceneState), pluginDevice )
 end
 
+local function getExpressionContext( cdata, tdev )
+	local ctx = { __functions={}, __lvars={} }
+
+	-- This should be the ONLY place that LuaXP is loaded. It additionally
+	-- defines metadata that must exist in all use.
+	luaxp = luaxp or require "L_LuaXP_Reactor"
+	-- Make sure LuaXP null renders as "null" in JSON
+	local mt = getmetatable( luaxp.NULL ) or {}
+	mt.__tojson = function() return "null" end
+	mt.__tostring = function() return "(luaxp.NULL)" end
+	setmetatable( luaxp.NULL, mt )
+
+	-- Define all-caps NULL as synonym for null
+	ctx.NULL = luaxp.NULL
+	-- Create evaluation context
+	ctx.__functions.finddevice = function( args )
+		local selector, trouble = unpack( args )
+		D("findDevice(%1) selector=%2", args, selector)
+		local n = finddevice( selector, tdev )
+		if n == nil then
+			-- default behavior for finddevice is return NULL (legacy, diff from getstate)
+			if trouble == true then luaxp.evalerror( "Device not found" ) end
+			return luaxp.NULL
+		end
+		return n
+	end
+	ctx.__functions.getstate = function( args )
+		local dev, svc, var, trouble = unpack( args )
+		local vn = finddevice( dev, tdev )
+		D("getstate(%1), dev=%2, svc=%3, var=%4, vn(dev)=%5", args, dev, svc, var, vn)
+		if vn == luaxp.NULL or vn == nil or luup.devices[vn] == nil then
+			-- default behavior for getstate() is error (legacy, diff from finddevice)
+			if trouble == false then return luaxp.NULL end
+			return luaxp.evalerror( "Device not found" )
+		end
+		-- Create a watch if we don't have one.
+		addServiceWatch( vn, svc, var, tdev )
+		-- Get and return value
+		return luup.variable_get( svc, var, vn ) or luaxp.NULL
+	end
+	ctx.__functions.setstate = function( args )
+		local dev, svc, var, val = unpack( args )
+		local vn = finddevice( dev, tdev )
+		D("setstate(%1), dev=%2, svc=%3, var=%4, val=%5, vn(dev)=%6", args, dev, svc, var, val, vn)
+		if vn == luaxp.NULL or vn == nil or luup.devices[vn] == nil then
+			return luaxp.evalerror( "Device not found" )
+		end
+		if svc == nil or var == nil then return luaxp.evalerror("Invalid service or variable name") end
+		-- Set value.
+		local vv = val
+		if vv == nil or luaxp.isNull(vv) then
+			vv = ""
+		elseif type(vv) == "table" then
+			vv = table.concat( vv, "," )
+		else
+			vv = tostring(vv)
+		end
+		luup.variable_set( svc, var, vv, vn )
+		if val == nil then return luaxp.NULL end
+		return val
+	end
+	ctx.__functions.getattribute = function( args )
+		local dev, attr = unpack( args )
+		local vn = finddevice( dev, tdev )
+		D("getattribute(%1), dev=%2, attr=%3, vn(dev)=%4", args, dev, attr, vn)
+		if vn == luaxp.NULL or vn == nil or luup.devices[vn] == nil then
+			return luaxp.evalerror("Device not found")
+		end
+		if attr == nil then return luaxp.evalerror("Invalid attribute name") end
+		-- Get and return value.
+		return luup.attr_get( attr, vn ) or luaxp.NULL
+	end
+	ctx.__functions.getluup = function( args )
+		local key = unpack( args )
+		if key == nil then return luaxp.evalerror("Invalid key") end
+		if luup[key] == nil then return luaxp.NULL end
+		local t = type(luup[key])
+		if t == "string" or t == "number" or t == "table" then
+			return luup[key]
+		end
+		return luaxp.NULL
+	end
+	ctx.__functions.stringify = function( args )
+		local val = unpack( args )
+		return json.encode( val )
+	end
+	ctx.__functions.unstringify = function( args )
+		local str = unpack( args )
+		-- Decode, converting "null" to LuaXP null.
+		local val,pos,err = json.decode( str, nil, luaxp.NULL )
+		if err then
+			luaxp.evalerror("Failed to unstringify at " .. pos .. ": " .. err)
+		end
+		return val
+	end
+	-- Append an element to an array, returns the array.
+	ctx.__functions.arraypush = function( args )
+		local arr, newel, nmax = unpack( args )
+		if ( arr == nil ) or luaxp.isNull( arr ) then arr = {} end
+		if newel and not luaxp.isNull( newel ) then
+			if not nmax and #arr > ARRAYMAX then luaxp.evalerror("Unbounded array growing too large") end
+			table.insert( arr, newel )
+		end
+		if nmax then while #arr > math.max(0,(tonumber(nmax) or 0)) do table.remove( arr, 1 ) end end
+		return arr
+	end
+	-- Remove the last element in the array, returns the modified array.
+	ctx.__functions.arraypop = function( args )
+		local arr = unpack( args )
+		arr = ( arr == nil or luaxp.isNull( arr ) ) and {} or arr
+		ctx.__lvars.__element = table.remove( arr ) or luaxp.NULL
+		return arr
+	end
+	-- Push an element to position 1 in the array, returns the modified array.
+	ctx.__functions.arrayunshift = function( args )
+		local arr, newel, nmax = unpack( args )
+		arr = ( arr == nil or luaxp.isNull( arr ) ) and {} or arr
+		if newel and not luaxp.isNull( newel ) then
+			if not nmax and #arr > ARRAYMAX then luaxp.evalerror("Unbounded array growing too large") end
+			table.insert( arr, newel, 1 )
+		end
+		if nmax then while #arr > math.max(0,(tonumber(nmax) or 0)) do table.remove( arr ) end end
+		return arr
+	end
+	-- Remove the first element from an array, return the array.
+	ctx.__functions.arrayshift = function( args )
+		local arr = unpack( args )
+		arr = ( arr == nil or luaxp.isNull( arr ) ) and {} or arr
+		ctx.__lvars.__element = table.remove( arr, 1 ) or luaxp.NULL
+		return arr
+	end
+	-- sum( arg[, ...] ) returns the sum of its arguments. It any argument is
+	-- an array, the array contents are summed. Nulls do not count to the sum,
+	-- thus if no valid values are found, the result may be null. Strings are
+	-- coerced to numbers if possible.
+	ctx.__functions.sum = function( args )
+		local function tsum( v )
+			local t = luaxp.NULL
+			if luaxp.isNull( v ) then
+				-- nada
+			elseif type(v) == "table" then
+				for _,n in ipairs( v ) do
+					local d = tsum( n )
+					if not luaxp.isNull( d ) then t = ( luaxp.isNull(t) and 0 or t ) + d end
+				end
+			elseif type(v) == "string" or type(v) == "number" then
+				v = tonumber( v )
+				if v ~= nil then t = v end
+			end
+			return t
+		end
+		return tsum( args )
+	end
+	-- count( arg[, ...] ) returns the number of non-null elements in the arguments.
+	-- Handling of arguments is identical to sum(), so average/mean is easily computed
+	-- via sum( args ) / count( args ).
+	ctx.__functions.count = function( args )
+		local function tcount( v )
+			if luaxp.isNull( v ) then
+				return 0
+			elseif type( v ) == "table" then
+				local t = 0
+				for _,n in ipairs( v ) do
+					t = t + tcount( n )
+				end
+				return t
+			else
+				return 1
+			end
+		end
+		return tcount( args )
+	end
+	ctx.__functions.trouble = function( args )
+		local msg, title = unpack( args )
+		addEvent{ dev=tdev, event="evaluate", trouble=title or "trouble()", message=msg or "Trouble reported in expression" }
+		getSensorState( tdev ).trouble = true
+	end
+
+	if getVarNumeric( "UseOldVariableResolver", 0, tdev, RSSID ) ~= 0 then
+		-- This is the old (pre-2.4) resolver--recursively resolve.
+		-- Implement LuaXP extension resolver as recursive evaluation. This allows expressions
+		-- to reference other variables, makes working order of evaluation.
+		ctx.__functions.__resolve = function( name, c2x )
+			D("__resolve(%1,c2x)", name)
+			if (c2x.__resolving or {})[name] then
+				luaxp.evalerror("Circular reference detected (" .. name .. ")")
+				return luaxp.NULL
+			end
+			c2x.__resolving = c2x.__resolving or {}
+			c2x.__resolving[name] = true
+			local val = evaluateVariable( name, c2x, cdata, tdev )
+			c2x.__resolving[name] = nil
+			return val
+		end
+	end
+	-- Add previous values to Luaxp context. We use the cstate versions rather
+	-- than the state variables to preserve original data type. Every defined
+	-- variable must have an entry in ctx.
+	local cstate = loadCleanState( tdev )
+	for n in pairs( cdata.variables or {} ) do
+		if (cstate.vars or {})[n] then
+			ctx[n] = cstate.vars[n].lastvalue or luaxp.NULL
+		else
+			ctx[n] = luaxp.NULL
+		end
+		D("getExpressionContext() set starting value for %1 to %2", n, ctx[n])
+	end
+	return ctx
+end
+
 -- Get a value (works as constant or expression (including simple variable ref).
 -- Returns result as string and number
 local function getValue( val, ctx, tdev )
 	D("getValue(%1,%2,%3)", val, ctx, tdev)
-	ctx = ctx or getSensorState( tdev ).ctx
+	ctx = ctx or getSensorState( tdev ).ctx or getExpressionContext( getSensorState( tdev ).configData, tdev )
 	if type(val) == "number" then return tostring(val), val end
 	val = tostring(val) or ""
 	if #val >=2 and val:byte(1) == 34 and val:byte(-1) == 34 then
@@ -984,9 +1196,6 @@ local function getValue( val, ctx, tdev )
 	if #val >= 2 and val:byte(1) == 123 and val:byte(-1) == 125 then
 		-- Expression wrapped in {}
 		local mp = val:sub( 2, -2 )
-		if luaxp == nil then
-			luaxp = require("L_LuaXP_Reactor")
-		end
 		local result,err = luaxp.evaluate( mp, ctx )
 		if err then
 			L({level=2,msg="%1 (%2) Error evaluating %3: %4"}, luup.devices[tdev].description,
@@ -1807,11 +2016,6 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
 		return
 	end
 
-	if luaxp == nil then
-		-- Don't load luaxp unless/until needed.
-		luaxp = require("L_LuaXP_Reactor")
-	end
-
 	-- If expression is not empty, evaluate it and save new value.
 	local result, err, errmsg
 	if not tostring( vdef.expression or "" ):match( "^%s*$" ) then
@@ -1895,212 +2099,6 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
 		deleteVar( VARSID, vname .. "_Error", tdev )
 	end
 	return result, err ~= nil
-end
-
-local function getExpressionContext( cdata, tdev )
-	local ctx = { __functions={}, __lvars={} }
-	luaxp = luaxp or require "L_LuaXP_Reactor"
-	-- Make sure LuaXP null renders as "null" in JSON
-	local mt = getmetatable( luaxp.NULL ) or {}
-	mt.__tojson = function() return "null" end
-	mt.__tostring = function() return "(luaxp.NULL)" end
-	setmetatable( luaxp.NULL, mt )
-	-- Define all-caps NULL as synonym for null
-	ctx.NULL = luaxp.NULL
-	-- Create evaluation context
-	ctx.__functions.finddevice = function( args )
-		local selector, trouble = unpack( args )
-		D("findDevice(%1) selector=%2", args, selector)
-		local n = finddevice( selector, tdev )
-		if n == nil then
-			-- default behavior for finddevice is return NULL (legacy, diff from getstate)
-			if trouble == true then luaxp.evalerror( "Device not found" ) end
-			return luaxp.NULL
-		end
-		return n
-	end
-	ctx.__functions.getstate = function( args )
-		local dev, svc, var, trouble = unpack( args )
-		local vn = finddevice( dev, tdev )
-		D("getstate(%1), dev=%2, svc=%3, var=%4, vn(dev)=%5", args, dev, svc, var, vn)
-		if vn == luaxp.NULL or vn == nil or luup.devices[vn] == nil then
-			-- default behavior for getstate() is error (legacy, diff from finddevice)
-			if trouble == false then return luaxp.NULL end
-			return luaxp.evalerror( "Device not found" )
-		end
-		-- Create a watch if we don't have one.
-		addServiceWatch( vn, svc, var, tdev )
-		-- Get and return value
-		return luup.variable_get( svc, var, vn ) or luaxp.NULL
-	end
-	ctx.__functions.setstate = function( args )
-		local dev, svc, var, val = unpack( args )
-		local vn = finddevice( dev, tdev )
-		D("setstate(%1), dev=%2, svc=%3, var=%4, val=%5, vn(dev)=%6", args, dev, svc, var, val, vn)
-		if vn == luaxp.NULL or vn == nil or luup.devices[vn] == nil then
-			return luaxp.evalerror( "Device not found" )
-		end
-		if svc == nil or var == nil then return luaxp.evalerror("Invalid service or variable name") end
-		-- Set value.
-		local vv = val
-		if vv == nil or luaxp.isNull(vv) then
-			vv = ""
-		elseif type(vv) == "table" then
-			vv = table.concat( vv, "," )
-		else
-			vv = tostring(vv)
-		end
-		luup.variable_set( svc, var, vv, vn )
-		if val == nil then return luaxp.NULL end
-		return val
-	end
-	ctx.__functions.getattribute = function( args )
-		local dev, attr = unpack( args )
-		local vn = finddevice( dev, tdev )
-		D("getattribute(%1), dev=%2, attr=%3, vn(dev)=%4", args, dev, attr, vn)
-		if vn == luaxp.NULL or vn == nil or luup.devices[vn] == nil then
-			return luaxp.evalerror("Device not found")
-		end
-		if attr == nil then return luaxp.evalerror("Invalid attribute name") end
-		-- Get and return value.
-		return luup.attr_get( attr, vn ) or luaxp.NULL
-	end
-	ctx.__functions.getluup = function( args )
-		local key = unpack( args )
-		if key == nil then return luaxp.evalerror("Invalid key") end
-		if luup[key] == nil then return luaxp.NULL end
-		local t = type(luup[key])
-		if t == "string" or t == "number" or t == "table" then
-			return luup[key]
-		end
-		return luaxp.NULL
-	end
-	ctx.__functions.stringify = function( args )
-		local val = unpack( args )
-		return json.encode( val )
-	end
-	ctx.__functions.unstringify = function( args )
-		local str = unpack( args )
-		-- Decode, converting "null" to LuaXP null.
-		local val,pos,err = json.decode( str, nil, luaxp.NULL )
-		if err then
-			luaxp.evalerror("Failed to unstringify at " .. pos .. ": " .. err)
-		end
-		return val
-	end
-	-- Append an element to an array, returns the array.
-	ctx.__functions.arraypush = function( args )
-		local arr, newel, nmax = unpack( args )
-		if ( arr == nil ) or luaxp.isNull( arr ) then arr = {} end
-		if newel and not luaxp.isNull( newel ) then
-			if not nmax and #arr > ARRAYMAX then luaxp.evalerror("Unbounded array growing too large") end
-			table.insert( arr, newel )
-		end
-		if nmax then while #arr > math.max(0,(tonumber(nmax) or 0)) do table.remove( arr, 1 ) end end
-		return arr
-	end
-	-- Remove the last element in the array, returns the modified array.
-	ctx.__functions.arraypop = function( args )
-		local arr = unpack( args )
-		arr = ( arr == nil or luaxp.isNull( arr ) ) and {} or arr
-		ctx.__lvars.__element = table.remove( arr ) or luaxp.NULL
-		return arr
-	end
-	-- Push an element to position 1 in the array, returns the modified array.
-	ctx.__functions.arrayunshift = function( args )
-		local arr, newel, nmax = unpack( args )
-		arr = ( arr == nil or luaxp.isNull( arr ) ) and {} or arr
-		if newel and not luaxp.isNull( newel ) then
-			if not nmax and #arr > ARRAYMAX then luaxp.evalerror("Unbounded array growing too large") end
-			table.insert( arr, newel, 1 )
-		end
-		if nmax then while #arr > math.max(0,(tonumber(nmax) or 0)) do table.remove( arr ) end end
-		return arr
-	end
-	-- Remove the first element from an array, return the array.
-	ctx.__functions.arrayshift = function( args )
-		local arr = unpack( args )
-		arr = ( arr == nil or luaxp.isNull( arr ) ) and {} or arr
-		ctx.__lvars.__element = table.remove( arr, 1 ) or luaxp.NULL
-		return arr
-	end
-	-- sum( arg[, ...] ) returns the sum of its arguments. It any argument is
-	-- an array, the array contents are summed. Nulls do not count to the sum,
-	-- thus if no valid values are found, the result may be null. Strings are
-	-- coerced to numbers if possible.
-	ctx.__functions.sum = function( args )
-		local function tsum( v )
-			local t = luaxp.NULL
-			if luaxp.isNull( v ) then
-				-- nada
-			elseif type(v) == "table" then
-				for _,n in ipairs( v ) do
-					local d = tsum( n )
-					if not luaxp.isNull( d ) then t = ( luaxp.isNull(t) and 0 or t ) + d end
-				end
-			elseif type(v) == "string" or type(v) == "number" then
-				v = tonumber( v )
-				if v ~= nil then t = v end
-			end
-			return t
-		end
-		return tsum( args )
-	end
-	-- count( arg[, ...] ) returns the number of non-null elements in the arguments.
-	-- Handling of arguments is identical to sum(), so average/mean is easily computed
-	-- via sum( args ) / count( args ).
-	ctx.__functions.count = function( args )
-		local function tcount( v )
-			if luaxp.isNull( v ) then
-				return 0
-			elseif type( v ) == "table" then
-				local t = 0
-				for _,n in ipairs( v ) do
-					t = t + tcount( n )
-				end
-				return t
-			else
-				return 1
-			end
-		end
-		return tcount( args )
-	end
-	ctx.__functions.trouble = function( args )
-		local msg, title = unpack( args )
-		addEvent{ dev=tdev, event="evaluate", trouble=title or "trouble()", message=msg or "Trouble reported in expression" }
-		getSensorState( tdev ).trouble = true
-	end
-
-	if getVarNumeric( "UseOldVariableResolver", 0, tdev, RSSID ) ~= 0 then
-		-- This is the old (pre-2.4) resolver--recursively resolve.
-		-- Implement LuaXP extension resolver as recursive evaluation. This allows expressions
-		-- to reference other variables, makes working order of evaluation.
-		ctx.__functions.__resolve = function( name, c2x )
-			D("__resolve(%1,c2x)", name)
-			if (c2x.__resolving or {})[name] then
-				luaxp.evalerror("Circular reference detected (" .. name .. ")")
-				return luaxp.NULL
-			end
-			c2x.__resolving = c2x.__resolving or {}
-			c2x.__resolving[name] = true
-			local val = evaluateVariable( name, c2x, cdata, tdev )
-			c2x.__resolving[name] = nil
-			return val
-		end
-	end
-	-- Add previous values to Luaxp context. We use the cstate versions rather
-	-- than the state variables to preserve original data type. Every defined
-	-- variable must have an entry in ctx.
-	local cstate = loadCleanState( tdev )
-	for n in pairs( cdata.variables or {} ) do
-		if (cstate.vars or {})[n] then
-			ctx[n] = cstate.vars[n].lastvalue or luaxp.NULL
-		else
-			ctx[n] = luaxp.NULL
-		end
-		D("getExpressionContext() set starting value for %1 to %2", n, ctx[n])
-	end
-	return ctx
 end
 
 -- Perform evaluations of configured variables/expressions
@@ -4559,7 +4557,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 					elseif lv == nil then lv = "(no value)"
 					else lv = tostring( lv ) end
 					r = r .. string.format("     %3d: %-24s %s [last %s(%s)]", vv.index or 0, vv.name or "?", vv.expression or "?", lv, vt) ..
-						( (vs.export or 1) ~= 0 and " (exported)" or "" ) ..
+						( (vv.export or 1) ~= 0 and " (exported)" or "" ) ..
 						EOL
 					if vs.err then r = r .. "          *** Error: " .. tostring(vs.err) .. EOL end
 				end
@@ -4595,14 +4593,17 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		if luup.devices[deviceNum] == nil or luup.devices[deviceNum].device_type ~= RSTYPE then
 			return json.encode{ status=false, message="Invalid device number" }, "application/json"
 		end
-		local expr = lul_parameters['expr'] or "?"
+		local expr = lul_parameters['expr'] or ""
 		local sst = getSensorState( deviceNum )
 		local ctx = sst.ctx or getExpressionContext( sst.configData, deviceNum )
 		if luaxp == nil then luaxp = require("L_LuaXP_Reactor") end
 		-- if debugMode then luaxp._DEBUG = D end
+		D("request() tryexpression expr=%1", expr)
+		if expr:match( "^%s*$" ) then
+			return json.encode( { status=true, resultValue="", err={ message="no expression" }, expression=expr } ), "application/json"
+		end
 		local result, err = luaxp.evaluate( expr, ctx )
-		local ret = { status=true, resultValue=result, err=err or false, expression=expr }
-		return json.encode( ret ), "application/json"
+		return json.encode( { status=true, resultValue=result, err=err or false, expression=expr } ), "application/json"
 
 	elseif action == "testlua" then
 		local _,err = loadstring( lul_parameters.lua or "" )

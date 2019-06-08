@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.3develop-19156';
+	var pluginVersion = '3.3develop-19159';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -722,7 +722,8 @@ var ReactorSensor = (function(api, $) {
 			var vname;
 			if ( st.service === "urn:toggledbits-com:serviceId:ReactorValues" ) {
 				vname = st.variable.replace( /_Error$/, "" );
-				if ( ! ( cdata.variables || {} )[vname] ) {
+				/* If variable doesn't exist or isn't marked for export, clear state vars */
+				if ( ! ( cdata.variables || {} )[vname] || 0 === cdata.variables[vname].export ) {
 					deletes.push( { service: st.service, variable: vname } );
 					deletes.push( { service: st.service, variable: vname + "_Error" } );
 				}
@@ -3738,6 +3739,15 @@ var ReactorSensor = (function(api, $) {
 					configModified = true;
 				}
 			}
+			var exp = jQuery( 'button#export', row ).hasClass( 'attn' ) ? undefined : 0;
+			if ( cd.variables[vname].export !== exp ) {
+				if ( 0 === exp ) {
+					cd.variables[vname].export = 0;
+				} else {
+					delete cd.variables[vname].export; /* default is export */
+				}
+				configModified = true;
+			}
 		});
 
 		updateVariableControls();
@@ -3751,7 +3761,7 @@ var ReactorSensor = (function(api, $) {
 				id: "lr_Reactor",
 				action: "tryexpression",
 				device: api.getCpanelDeviceId(),
-				expr: jQuery( 'textarea.expr', row ).val() || "?"
+				expr: jQuery( 'textarea.expr', row ).val() || ""
 			},
 			dataType: "json",
 			timeout: 5000
@@ -3878,13 +3888,34 @@ var ReactorSensor = (function(api, $) {
 		jQuery( 'button#saveconf' ).prop( 'disabled', true );
 	}
 
+	function handleExportClick( ev ) {
+		var $el = jQuery( ev.currentTarget );
+		var id = $el.closest( 'div.varexp' ).attr( 'id' );
+		var cd = getConfiguration();
+		if ( $el.hasClass( 'attn' ) ) {
+			/* Turn off export */
+			$el.removeClass( 'attn' ).attr( 'title', 'Result not exported to state variable' );
+		} else {
+			$el.addClass( 'attn' ).attr( 'title', 'Result exports to state variable' );
+		}
+		/* Pass it on */
+		handleVariableChange( ev );
+	}
+
 	function getVariableRow() {
 		var el = jQuery('<div class="row varexp"></div>');
 		el.append( '<div id="varname" class="col-xs-12 col-sm-12 col-md-2"></div>' );
 		el.append( '<div class="col-xs-12 col-sm-9 col-md-8"><textarea class="expr form-control form-control-sm" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="off"/><div id="currval" /></div>' );
 		// ??? devices_other is an alternate for insert state variable
-		el.append( '<div class="col-xs-12 col-sm-3 col-md-2 text-right"><button class="btn md-btn draghandle" title="Change order (drag)"><i class="material-icons">reorder</i></button><button id="tryexpr" class="btn md-btn" title="Try this expression"><i class="material-icons">directions_run</i></button><button id="getstate" class="btn md-btn" title="Insert device state variable value"><i class="material-icons">memory</i></button><button id="deletevar" class="btn md-btn" title="Delete this variable"><i class="material-icons">clear</i></button></div>' );
+		el.append( '<div class="col-xs-12 col-sm-3 col-md-2 text-right">\
+<button class="btn md-btn draghandle" title="Change order (drag)"><i class="material-icons">reorder</i></button>\
+<button id="export" class="btn md-btn" title="Result exports to state variable"><i class="material-icons">import_export</i></button>\
+<button id="tryexpr" class="btn md-btn" title="Try this expression"><i class="material-icons">directions_run</i></button>\
+<button id="getstate" class="btn md-btn" title="Insert device state variable value"><i class="material-icons">memory</i></button>\
+<button id="deletevar" class="btn md-btn" title="Delete this variable"><i class="material-icons">clear</i></button>\
+</div>' );
 		jQuery( 'textarea.expr', el ).prop( 'disabled', true ).on( 'change.reactor', handleVariableChange );
+		jQuery( 'button#export', el ).prop( 'disabled', true ).on( 'click.reactor', handleExportClick );
 		jQuery( 'button#tryexpr', el ).prop( 'disabled', true ).on( 'click.reactor', handleTryExprClick );
 		jQuery( 'button#getstate', el ).prop( 'disabled', true ).on( 'click.reactor', handleGetStateClick );
 		jQuery( 'button#deletevar', el ).prop( 'disabled', true ).on( 'click.reactor', handleDeleteVariableClick );
@@ -3990,6 +4021,9 @@ var ReactorSensor = (function(api, $) {
 			} else {
 				blk.text( '(expression has not yet been evaluated or caused an error)' ).attr( 'title', "" );
 			}
+			if ( 0 !== vd.export ) {
+				jQuery( 'button#export', el ).addClass( 'attn' );
+			}
 			list.append( el );
 		}
 
@@ -4049,6 +4083,7 @@ var ReactorSensor = (function(api, $) {
 			html += 'div#tab-vars.reactortab div.varexp { cursor: default; margin: 2px 0 2px 0; }';
 			html += 'div#tab-vars.reactortab div#varname:after { content: " ="; }';
 			html += 'div#tab-vars.reactortab div#currval { font-family: "Courier New", Courier, monospace; font-size: 0.9em; }';
+			html += 'div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow: none; }';
 			html += "</style>";
 			jQuery("head").append( html );
 
