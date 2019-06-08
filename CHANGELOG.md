@@ -4,6 +4,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 3.3 (development)
 
+* Enhancement: Allow the getluup() expression function to return tables (such as luup.devices).
 * Fix: Faster response to name change of geofence location (geotag)--previously only updated when in/out state changed.
 * Enhancement: House mode changes will now force re-eval of geofence state as well, to speed coordinated response to conditions involving both house mode and geofences.
 * Enhancement: Most trouble messages in the event log are now prefixed with "TROUBLE" to make them easy to find (exception: throttling messages).
