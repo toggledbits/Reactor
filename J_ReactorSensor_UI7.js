@@ -1362,6 +1362,9 @@ var ReactorSensor = (function(api, $) {
 					}
 				}
 				var ve = vs.err || "";
+				if ( vv && vv.length > 256 ) {
+					vv = vv.substring( 0, 253 ) + "...";
+				}
 				el.append( jQuery('<div class="col-sm-6 col-md-2" />').text( vd.name ) );
 				el.append( jQuery('<div class="col-sm-12 col-md-7 tb-sm" />').text( isEmpty( vd.expression || "" ) ? "(no expression)" : vd.expression ) );
 				el.append( jQuery('<div class="col-sm-6 col-md-3 tb-hardwrap" />').text( "" !== ve ? ve : vv ) );
