@@ -787,6 +787,22 @@ local function loadCleanState( tdev )
 	return cstate
 end
 
+-- Return true if scene has no actions (takes sceneData table). Works on scenes
+-- and activities (former is subset of latter, similar structure).
+local function isSceneEmpty( scd )
+	D("isSceneEmpty(%1)", scd)
+	local e =  scd == nil or -- empty
+		next(scd.groups or {}) == nil or -- no groups
+		( #scd.groups == 1 and -- exactly one group and...
+			(
+				next(scd.groups[1].actions or {}) == nil or -- no actions
+				( #(scd.groups[1].actions) == 1 and scd.groups[1].actions[1].type == "comment" ) -- only action is comment
+			)
+		)
+	D("isSceneEmpty() %1", e)
+	return e
+end
+
 -- Load scene data from Luup.
 local function loadScene( sceneId, pdev )
 	D("loadScene(%1,%2)", sceneId, pdev)
@@ -940,7 +956,7 @@ local function getSceneData( sceneId, tdev )
 	return data
 end
 
--- Stop running scenes
+-- Stop running scene(s).
 local function stopScene( ctx, taskid, tdev, scene )
 	D("stopScene(%1,%2,%3,%4)", ctx or false, taskid or false, tdev or false, scene or false) -- avoid nil shortcut
 	assert(luup.devices[tdev].device_type == MYTYPE or luup.devices[tdev].device_type == RSTYPE)
@@ -1515,7 +1531,7 @@ local function trip( state, tdev )
 		end
 		-- Run the reset scene, if we have one.
 		local scd = getSceneData( 'root.false', tdev )
-		if scd then
+		if not isSceneEmpty( scd ) then
 			-- Note we only stop trip actions if there are untrip actions.
 			stopScene( tdev, nil, tdev, 'root.true' ) -- stop contra-activity
 			execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } )
@@ -1525,7 +1541,7 @@ local function trip( state, tdev )
 		luup.variable_set( RSSID, "TripCount", getVarNumeric( "TripCount", 0, tdev, RSSID ) + 1, tdev )
 		-- Run the trip scene, if we have one.
 		local scd = getSceneData( 'root.true', tdev )
-		if scd then
+		if not isSceneEmpty( scd ) then
 			-- Note we only stop untrip actions if there are trip actions.
 			stopScene( tdev, nil, tdev, 'root.false' ) -- stop contra-activity
 			execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } )
@@ -1954,7 +1970,7 @@ local function getExpressionContext( cdata, tdev )
 		if key == nil then return luaxp.evalerror("Invalid key") end
 		if luup[key] == nil then return luaxp.NULL end
 		local t = type(luup[key])
-		if t == "string" or t == "number" then
+		if t == "string" or t == "number" or t == "table" then
 			return luup[key]
 		end
 		return luaxp.NULL
@@ -3066,7 +3082,7 @@ local function processSensorUpdate( tdev, sst )
 				D("processSensorUpdate() group %1 <%2> state changed to %3, looking for activity %4",
 					grp.name or grp.id, grp.id, gs.evalstate, activity)
 				local scd = getSceneData( activity, tdev )
-				if scd then
+				if not isSceneEmpty( scd ) then
 					-- Note we only stop contra-actions if we have actions to perform.
 					D("processSensorUpdate() running %1 activities", activity)
 					local contra = grp.id .. ( gs.evalstate and ".false" or ".true" )
