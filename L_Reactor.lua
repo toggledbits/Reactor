@@ -165,6 +165,38 @@ local function shallowCopy( t )
 	return r
 end
 
+-- Find device by number, name or UDN
+local function finddevice( dev, tdev )
+	local vn
+	if type(dev) == "number" then
+		if dev == -1 then return tdev end
+		return dev
+	elseif type(dev) == "string" then
+		if dev == "" then return tdev end
+		dev = string.lower( dev )
+		if devicesByName[ dev ] ~= nil then
+			return devicesByName[ dev ]
+		end
+		if dev:sub(1,5) == "uuid:" then
+			for n,d in pairs( luup.devices ) do
+				if string.lower( d.udn ) == dev then
+					devicesByName[ dev ] = n
+					return n
+				end
+			end
+		else
+			for n,d in pairs( luup.devices ) do
+				if string.lower( d.description ) == dev then
+					devicesByName[ dev ] = n
+					return n
+				end
+			end
+		end
+		vn = tonumber( dev )
+	end
+	return vn
+end
+
 local function fdate( t )
 	if not dateFormat then
 		dateFormat = luup.attr_get( "date_format", 0 ) or "yy-mm-dd"
@@ -544,6 +576,19 @@ local function isOnList( l, e )
 	if l == nil or e == nil then return false end
 	for n,v in ipairs(l) do if v == e then return true, n end end
 	return false
+end
+
+-- We could get really fancy here and track which keys we've seen, etc., but
+-- the most common use cases will be small arrays where the overhead of preparing
+-- for that kind of efficiency exceeds the benefit it might provide.
+local function compareTables( a, b )
+	for k in pairs( b ) do
+		if b[k] ~= a[k] then return false end
+	end
+	for k in pairs( a ) do
+		if a[k] ~= b[k] then return false end
+	end
+	return true
 end
 
 -- Return the plugin version string
@@ -970,6 +1015,100 @@ local function stopScene( ctx, taskid, tdev, scene )
 		end
 	end
 	luup.variable_set( MYSID, "runscene", json.encode(sceneState), pluginDevice )
+end
+
+local function evaluateVariable( vname, ctx, cdata, tdev )
+	D("evaluateVariable(%1,cdata,%2)", vname, tdev)
+	local vdef = (cdata.variables or {})[vname]
+	if vdef == nil then
+		L({level=1,msg="%2 (%1) Invalid variable reference to %3, not configured"},
+			tdev, luup.devices[tdev].description, vname)
+		return
+	end
+
+	-- If expression is not empty, evaluate it and save new value.
+	local result, err, errmsg
+	if not tostring( vdef.expression or "" ):match( "^%s*$" ) then
+		-- Evaluate expression.
+		-- if debugMode then luaxp._DEBUG = D end
+		result, err = luaxp.evaluate( vdef.expression, ctx )
+		D("evaluateVariable() %2 (%1) %3 evaluates to %4(%5)", tdev, luup.devices[tdev].description,
+			vdef.expression, result, type(result))
+		if err then
+			-- Error. Null context value, and build error message for multiple uses.
+			result = luaxp.NULL
+			errmsg = (err or {}).message or "Failed"
+			if (err or {}).location ~= nil then errmsg = errmsg .. " at " .. tostring(err.location) end
+			L({level=2,msg="%2 (#%1) failed evaluation of %3: %4"}, tdev, luup.devices[tdev].description,
+				vdef.expression, errmsg)
+			addEvent{ dev=tdev, event="expression", variable=vname, ['error']="TROUBLE: evaluation error, "..errmsg }
+			getSensorState( tdev ).trouble = true
+		elseif result == nil then
+			result = luaxp.NULL -- map nil to null
+		end
+		ctx[vname] = result -- update context for future evals
+	else
+		result = ( ctx[vname] == nil ) and luaxp.NULL or ctx[vname] -- special form, don't change false to NULL!
+		err = nil
+	end
+
+	-- Store in cstate. This will make them persistent (with some help).
+	local cstate = loadCleanState( tdev )
+	cstate.vars = cstate.vars or {}
+	local vs = cstate.vars[vname]
+	if not vs then
+		D("evaluateVariable() creating new state for expr/var %1", vname)
+		vs = { name=vname, lastvalue=result, valuestamp=getSensorState( tdev ).timebase, changed=1 }
+		cstate.vars[vname] = vs
+		addEvent{ dev=tdev, event="variable", variable=vname, newval=result }
+	else
+		local changed
+		if type(vs.lastvalue) == "table" and type(result) == "table" then
+			changed = not compareTables( vs.lastvalue, result )
+			-- Store shallow copy, so later changes don't interfere with comparison,
+			-- as tables are stored by reference and not by value (this vs.lastvalue and result
+			-- are likely to be references to the same table).
+			ctx[vname] = shallowCopy( result )
+		else
+			changed = vs.lastvalue ~= result
+		end
+		if changed then
+			D("evaluateVariable() updating value for %1 from %2 to %3", vname, cstate.vars[vname].lastvalue, result)
+			addEvent{ dev=tdev, event="variable", variable=vname, oldval=cstate.vars[vname].lastvalue, newval=result }
+			vs.lastvalue = result
+			vs.valuestamp = getSensorState( tdev ).timebase
+			vs.changed = 1
+		else
+			vs.changed = nil
+		end
+	end
+	cstate.vars[vname].err = errmsg
+
+	-- Store on state variable if exported
+	if ( cdata.variables[vname].export or 1 ) ~= 0 then -- ??? UI for export?
+		if not ( err or luaxp.isNull(result) ) then
+			-- Canonify for storage as state variable
+			local sv
+			if type(result) == "boolean" then
+				sv = result and "1" or "0"
+			elseif type(result) == "table" then
+				sv = json.encode( result )
+			else
+				sv = tostring( result )
+			end
+			setVar( VARSID, vname, sv, tdev ) -- sets (and triggers watches) only if changed
+			setVar( VARSID, vname .. "_Error", "", tdev )
+		else
+			-- Null or error
+			setVar( VARSID, vname, "", tdev )
+			setVar( VARSID, vname .. "_Error", errmsg or "", tdev )
+		end
+	else
+		-- Delete variables
+		deleteVar( VARSID, vname, tdev )
+		deleteVar( VARSID, vname .. "_Error", tdev )
+	end
+	return result, err ~= nil
 end
 
 local function getExpressionContext( cdata, tdev )
@@ -1798,38 +1937,6 @@ local function variables( cdata )
 	end
 end
 
--- Find device by number, name or UDN
-local function finddevice( dev, tdev )
-	local vn
-	if type(dev) == "number" then
-		if dev == -1 then return tdev end
-		return dev
-	elseif type(dev) == "string" then
-		if dev == "" then return tdev end
-		dev = string.lower( dev )
-		if devicesByName[ dev ] ~= nil then
-			return devicesByName[ dev ]
-		end
-		if dev:sub(1,5) == "uuid:" then
-			for n,d in pairs( luup.devices ) do
-				if string.lower( d.udn ) == dev then
-					devicesByName[ dev ] = n
-					return n
-				end
-			end
-		else
-			for n,d in pairs( luup.devices ) do
-				if string.lower( d.description ) == dev then
-					devicesByName[ dev ] = n
-					return n
-				end
-			end
-		end
-		vn = tonumber( dev )
-	end
-	return vn
-end
-
 -- Load sensor config
 local function loadSensorConfig( tdev )
 	D("loadSensorConfig(%1)", tdev)
@@ -1992,113 +2099,6 @@ local function loadSensorConfig( tdev )
 		t = next( luaFunc )
 	end
 	return cdata
-end
-
--- We could get really fancy here and track which keys we've seen, etc., but
--- the most common use cases will be small arrays where the overhead of preparing
--- for that kind of efficiency exceeds the benefit it might provide.
-local function compareTables( a, b )
-	for k in pairs( b ) do
-		if b[k] ~= a[k] then return false end
-	end
-	for k in pairs( a ) do
-		if a[k] ~= b[k] then return false end
-	end
-	return true
-end
-
-local function evaluateVariable( vname, ctx, cdata, tdev )
-	D("evaluateVariable(%1,cdata,%2)", vname, tdev)
-	local vdef = (cdata.variables or {})[vname]
-	if vdef == nil then
-		L({level=1,msg="%2 (%1) Invalid variable reference to %3, not configured"},
-			tdev, luup.devices[tdev].description, vname)
-		return
-	end
-
-	-- If expression is not empty, evaluate it and save new value.
-	local result, err, errmsg
-	if not tostring( vdef.expression or "" ):match( "^%s*$" ) then
-		-- Evaluate expression.
-		-- if debugMode then luaxp._DEBUG = D end
-		result, err = luaxp.evaluate( vdef.expression, ctx )
-		D("evaluateVariable() %2 (%1) %3 evaluates to %4(%5)", tdev, luup.devices[tdev].description,
-			vdef.expression, result, type(result))
-		if err then
-			-- Error. Null context value, and build error message for multiple uses.
-			result = luaxp.NULL
-			errmsg = (err or {}).message or "Failed"
-			if (err or {}).location ~= nil then errmsg = errmsg .. " at " .. tostring(err.location) end
-			L({level=2,msg="%2 (#%1) failed evaluation of %3: %4"}, tdev, luup.devices[tdev].description,
-				vdef.expression, errmsg)
-			addEvent{ dev=tdev, event="expression", variable=vname, ['error']="TROUBLE: evaluation error, "..errmsg }
-			getSensorState( tdev ).trouble = true
-		elseif result == nil then
-			result = luaxp.NULL -- map nil to null
-		end
-		ctx[vname] = result -- update context for future evals
-	else
-		result = ( ctx[vname] == nil ) and luaxp.NULL or ctx[vname] -- special form, don't change false to NULL!
-		err = nil
-	end
-
-	-- Store in cstate. This will make them persistent (with some help).
-	local cstate = loadCleanState( tdev )
-	cstate.vars = cstate.vars or {}
-	local vs = cstate.vars[vname]
-	if not vs then
-		D("evaluateVariable() creating new state for expr/var %1", vname)
-		vs = { name=vname, lastvalue=result, valuestamp=getSensorState( tdev ).timebase, changed=1 }
-		cstate.vars[vname] = vs
-		addEvent{ dev=tdev, event="variable", variable=vname, newval=result }
-	else
-		local changed
-		if type(vs.lastvalue) == "table" and type(result) == "table" then
-			changed = not compareTables( vs.lastvalue, result )
-			-- Store shallow copy, so later changes don't interfere with comparison,
-			-- as tables are stored by reference and not by value (this vs.lastvalue and result
-			-- are likely to be references to the same table).
-			ctx[vname] = shallowCopy( result )
-		else
-			changed = vs.lastvalue ~= result
-		end
-		if changed then
-			D("evaluateVariable() updating value for %1 from %2 to %3", vname, cstate.vars[vname].lastvalue, result)
-			addEvent{ dev=tdev, event="variable", variable=vname, oldval=cstate.vars[vname].lastvalue, newval=result }
-			vs.lastvalue = result
-			vs.valuestamp = getSensorState( tdev ).timebase
-			vs.changed = 1
-		else
-			vs.changed = nil
-		end
-	end
-	cstate.vars[vname].err = errmsg
-
-	-- Store on state variable if exported
-	if ( cdata.variables[vname].export or 1 ) ~= 0 then -- ??? UI for export?
-		if not ( err or luaxp.isNull(result) ) then
-			-- Canonify for storage as state variable
-			local sv
-			if type(result) == "boolean" then
-				sv = result and "1" or "0"
-			elseif type(result) == "table" then
-				sv = json.encode( result )
-			else
-				sv = tostring( result )
-			end
-			setVar( VARSID, vname, sv, tdev ) -- sets (and triggers watches) only if changed
-			setVar( VARSID, vname .. "_Error", "", tdev )
-		else
-			-- Null or error
-			setVar( VARSID, vname, "", tdev )
-			setVar( VARSID, vname .. "_Error", errmsg or "", tdev )
-		end
-	else
-		-- Delete variables
-		deleteVar( VARSID, vname, tdev )
-		deleteVar( VARSID, vname .. "_Error", tdev )
-	end
-	return result, err ~= nil
 end
 
 -- Perform evaluations of configured variables/expressions
@@ -2947,7 +2947,7 @@ local function processCondition( cond, grp, cdata, tdev )
 		cs.changed = nil
 	end
 	if ( cond.type or "group" ) == "group" then
-		luup.variable_set( GRPSID, "GroupStatus_" .. cond.id, state and "1" or "0", tdev )
+		setVar( GRPSID, "GroupStatus_" .. cond.id, state and "1" or "0", tdev )
 	end
 
 	return cs.lastvalue, state, condTimer
