@@ -7,7 +7,7 @@
  * This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
  *
  */
-/* globals api,jQuery,$,unescape,ace,Promise,setTimeout */
+/* globals api,jQuery,$,unescape,ace,Promise,setTimeout,MultiBox */
 /* jshint multistr: true */
 
 //"use strict"; // fails on UI7, works fine with ALTUI
@@ -42,7 +42,7 @@ var ReactorSensor = (function(api, $) {
 	var configModified = false;
 	var inStatusPanel = false;
 	var isOpenLuup = false;
-	// unused: isALTUI = undefined !== MultiBox;
+	var isALTUI = false;
 	var lastx = 0;
 	var condTypeName = {
 		"comment": "Comment",
@@ -468,7 +468,7 @@ var ReactorSensor = (function(api, $) {
 			configModified = false;
 			inStatusPanel = false;
 			isOpenLuup = false;
-			// unused: isALTUI = undefined !== MultiBox;
+			isALTUI = "undefined" !== typeof(MultiBox);
 			lastx = 0;
 
 			/* Try to establish date format */
@@ -2477,8 +2477,21 @@ var ReactorSensor = (function(api, $) {
 			el.append( '<button class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" title="Click for device-defined events"><i class="material-icons">chevron_right</i></button>' );
 			var mm = jQuery( '<ul class="dropdown-menu" role="menu" />' );
 			el.append( mm );
-			var dtmp = api.getDeviceTemplate( -1 === cond.device ? api.getCpanelDeviceId() : cond.device );
-			if ( dtmp && dtmp.eventList2 ) {
+			var events;
+			if ( isALTUI ) {
+				/* AltUI doesn't implement getDeviceTemplate() as of 2019-06-09 */
+				var dobj = api.getDeviceObject( -1 === cond.device ? api.getCpanelDeviceId() : cond.device );
+				var eobj = dobj ? api.getEventDefinition( dobj.device_type ) || {} : {};
+				/* AltUI returns object; reduce to array */
+				events = [];
+				for ( var ie=0; undefined !== eobj[String(ie)] ; ie++ ) {
+					events.push( eobj[String(ie)] );
+				}
+			} else {
+				var dtmp = api.getDeviceTemplate( -1 === cond.device ? api.getCpanelDeviceId() : cond.device );
+				events = dtmp ? dtmp.eventList2 : false;
+			}
+			if ( events && events.length > 0 ) {
 				var wrapAction = function( eventinfo, cond, $row ) {
 					return function( ev ) {
 						var el = jQuery( ev.target );
@@ -2504,8 +2517,8 @@ var ReactorSensor = (function(api, $) {
 				var reptext = function( s ) {
 					return ( s || "?" ).replace( /_DEVICE_NAME_/g, "device" ).replace( /_ARGUMENT_VALUE_/g, "<i>value</i>" );
 				};
-				for ( var ix=0; ix<dtmp.eventList2.length; ix++ ) {
-					var cx = dtmp.eventList2[ix];
+				for ( var ix=0; ix<events.length; ix++ ) {
+					var cx = events[ix];
 					var li, item, txt, k;
 					if ( cx.serviceStateTable ) {
 						/* One fixed value (we hope--otherwise, we just use first) */
@@ -3890,8 +3903,6 @@ var ReactorSensor = (function(api, $) {
 
 	function handleExportClick( ev ) {
 		var $el = jQuery( ev.currentTarget );
-		var id = $el.closest( 'div.varexp' ).attr( 'id' );
-		var cd = getConfiguration();
 		if ( $el.hasClass( 'attn' ) ) {
 			/* Turn off export */
 			$el.removeClass( 'attn' ).attr( 'title', 'Result not exported to state variable' );
@@ -4740,12 +4751,18 @@ var ReactorSensor = (function(api, $) {
 					inp.slider("option", "disabled", false);
 					inp.slider("option", "value", undefined === parm.default ? parm.min : parm.default ); //??? fixme: clobbered later
 				} else if ( (parm.type || "").match(/^(r|u?i)[124]$/i ) ) {
-					inp = jQuery( '<input class="argument narrow form-control form-control-sm" list="reactorvarlist">' );
+					inp = jQuery( '<input class="argument narrow form-control form-control-sm">' );
+					if ( ! parm.novars ) {
+						inp.attr( 'list', 'reactorvarlist' );
+					}
 					inp.attr( 'placeholder', action.parameters[k].name );
 					inp.val( undefined==parm.default ? (undefined==parm.min ? (undefined==parm.optional ? 0 : "") : parm.min ) : parm.default );
 				} else {
 					console.log("J_ReactorSensor_UI7.js: using default field presentation for type " + String(parm.type));
-					inp = jQuery( '<input class="argument form-control form-control-sm" list="reactorvarlist">' );
+					inp = jQuery( '<input class="argument form-control form-control-sm">' );
+					if ( ! parm.novars ) {
+						inp.attr( 'list', 'reactorvarlist' );
+					}
 					inp.attr( 'placeholder', action.parameters[k].name );
 					inp.val( undefined===parm.default ? "" : parm.default );
 				}
