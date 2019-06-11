@@ -4,6 +4,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 3.3 (development)
 
+* Fix: Do a full restart on enable, which fixes problem of config changes not detected on a sensor that was disabled at plugin startup time.
 * Enhancement: Allow user control of export of variable/expression results; exported values (default, for backward compatibility) are written to state variables.
 * Enhancement: Allow the getluup() expression function to return tables (such as luup.devices).
 * Fix: Faster response to name change of geofence location (geotag)--previously only updated when in/out state changed.

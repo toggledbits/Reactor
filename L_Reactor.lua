@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.3develop-19159"
+local _PLUGIN_VERSION = "3.3develop-19162"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION = 301
@@ -3046,7 +3046,7 @@ local function processSensorUpdate( tdev, sst )
 		updateVariables( cdata, tdev )
 		local currTrip = getVarNumeric( "Tripped", 0, tdev, SENSOR_SID ) ~= 0
 		local retrig = getVarNumeric( "Retrigger", 0, tdev, RSSID ) ~= 0
-		local invert = getVarNumeric( "Invert", 0, tdev, RSSID ) ~= 0
+		local invert = getVarNumeric( "Invert", 0, tdev, RSSID ) ~= 0 -- deprecated, see startSensor()
 
 		local newTrip
 		_,newTrip,hasTimer = processCondition( cdata.conditions.root, nil, cdata, tdev )
@@ -3313,17 +3313,15 @@ local function startSensor( tdev, pdev )
 	sst.changeRate = initRate( 60, 15 )
 	sst.changeThrottled = false
 
-	math.randomseed( os.time() )
-
-	-- Load the config data.
-	loadSensorConfig( tdev )
-
-	-- Clean and restore our condition state.
-	loadCleanState( tdev )
-
 	if isEnabled( tdev ) then
 		addEvent{ dev=tdev, event='start' }
 		setMessage("Starting...", tdev)
+
+		-- Load the config data.
+		loadSensorConfig( tdev )
+
+		-- Clean and restore our condition state.
+		loadCleanState( tdev )
 
 		-- Watch our own cdata; when it changes, re-evaluate.
 		-- NOTE: MUST BE *AFTER* INITIAL LOAD OF CDATA
@@ -3468,6 +3466,8 @@ function startPlugin( pdev )
 	geofenceMode = 0
 	geofenceEvent = 0
 	usesHouseMode = false
+
+	math.randomseed( os.time() )
 
 	-- Save required UI version for collision detection.
 	setVar( MYSID, "_UIV", _UIVERSION, pdev )
@@ -3805,10 +3805,11 @@ function actionSetEnabled( enabled, tdev )
 		luup.variable_set( RSSID, "Enabled", enabled and "1" or "0", tdev )
 		-- If disabling, do nothing else, so current actions complete/expire.
 		if enabled then
-			-- Kick off a new timer thread, which will also re-eval.
-			scheduleDelay( { id=tostring(tdev), func=sensorTick, owner=tdev }, 2 )
+			L("Enabling %1 (#%2)", luup.devices[tdev].description, tdev)
 			setMessage( "Enabling...", tdev )
+			luup.call_action( RSSID, "Restart", {}, tdev )
 		else
+			L("Disabling %1 (#%2)", luup.devices[tdev].description, tdev)
 			showDisabled( tdev )
 		end
 	end
@@ -4090,11 +4091,15 @@ function watch( dev, sid, var, oldVal, newVal )
 
 	if sid == RSSID and var == "cdata" then
 		-- Sensor configuration change. Immediate update.
-		L("Child %1 (%2) configuration change, updating!", dev, luup.devices[dev].description)
-		addEvent{ dev=dev, event="configchange" }
-		stopScene( dev, nil, dev ) -- Stop all scenes in this device context.
-		loadSensorConfig( dev )
-		scheduleDelay( { id=tostring(dev), owner=dev, func=sensorTick }, 1 )
+		if isEnabled( dev ) then
+			L("%1 (#%2) configuration change, updating!", dev, luup.devices[dev].description)
+			addEvent{ dev=dev, event="configchange" }
+			stopScene( dev, nil, dev ) -- Stop all scenes in this device context.
+			loadSensorConfig( dev )
+			scheduleDelay( { id=tostring(dev), owner=dev, func=sensorTick }, 1 )
+		else
+			D("watch() ignoring config change on disabled RS %1 (#%2)", luup.devices[dev].description, dev)
+		end
 	elseif (luup.devices[dev] or {}).id == "hmt" and
 			luup.devices[dev].device_num_parent == pluginDevice and
 			sid == SENSOR_SID and var == "Armed" then
@@ -4114,7 +4119,7 @@ function watch( dev, sid, var, oldVal, newVal )
 		if watchData[key] ~= nil then
 			for t in pairs( watchData[key] ) do
 				local tdev = tonumber(t)
-				if tdev ~= nil then
+				if tdev ~= nil and isEnabled( tdev ) then
 					D("watch() dispatching to %1 (%2)", tdev, luup.devices[tdev].description)
 					local success,err = pcall( sensorWatch, dev, sid, var, oldVal, newVal, tdev, pluginDevice )
 					if not success then

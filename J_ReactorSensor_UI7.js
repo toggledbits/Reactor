@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.3develop-19159';
+	var pluginVersion = '3.3develop-19162';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -115,6 +115,11 @@ var ReactorSensor = (function(api, $) {
 	div.reactortab button.md-btn { line-height: 1em; cursor: pointer; color: #333; background-color: #fff; padding: 1px 0px 0px 0px; border-radius: 4px; box-shadow: #ccc 2px 2px; } \
 	div.reactortab button.md-btn i { font-size: 16pt; line-height: 1em; } \
 	div.reactortab optgroup { color: #333; font-weight: bold; } \
+	div.reactortab .dropdown-item { display: block; width: 100%; padding: 2px 12px; clear: both; font-weight: normal; color: #000; text-align: inherit; white-space: nowrap; background-color: transparent; border: 0; } \
+	div.reactortab .dropdown-item:hover { color: #fff; background-color: #66aaff; text-decoration: none; } \
+	div.reactortab .dropdown-divider { border-top: 1px solid #999; margin: 0.5em 0; } \
+	div.reactortab .dropdown-header { display: block; width: 100%; padding: 2px 12px; clear: both; font-weight: bold; color: #000; text-align: inherit; background-color: transparent; border: 0; } \
+	div.reactortab .dropdown-header:hover { text-decoration: none; } \
 	div#tbcopyright { display: block; margin: 12px 0px; } \
 	div#tbbegging { display: block; color: #ff6600; margin-top: 12px; } \
 </style>');
@@ -2474,8 +2479,8 @@ var ReactorSensor = (function(api, $) {
 		 */
 		function makeEventMenu( cond, $row ) {
 			var el = jQuery( '<div id="eventlist" class="dropdown" />' );
-			el.append( '<button class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" title="Click for device-defined events"><i class="material-icons">chevron_right</i></button>' );
-			var mm = jQuery( '<ul class="dropdown-menu" role="menu" />' );
+			el.append( '<button id="dropdownTriggers" class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" title="Click for device-defined events"><i class="material-icons" aria-haspopup="true" aria-expanded="false">chevron_right</i></button>' );
+			var mm = jQuery( '<div class="dropdown-menu" role="menu" aria-labelledby="dropdownTriggers" />' );
 			el.append( mm );
 			var events;
 			if ( isALTUI ) {
@@ -2495,11 +2500,10 @@ var ReactorSensor = (function(api, $) {
 				var wrapAction = function( eventinfo, cond, $row ) {
 					return function( ev ) {
 						var el = jQuery( ev.target );
-						var li = el.closest( 'li' );
-						cond.service = li.data( 'service' ) || "?";
-						cond.variable = li.data( 'variable' ) || "?";
-						cond.operator = li.data( 'operator' ) || "=";
-						cond.value = li.data( 'value' ) || "";
+						cond.service = el.data( 'service' ) || "?";
+						cond.variable = el.data( 'variable' ) || "?";
+						cond.operator = el.data( 'operator' ) || "=";
+						cond.value = el.data( 'value' ) || "";
 						delete cond.nocase;
 						var sk = cond.service + "/" + cond.variable;
 						if ( 0 === jQuery( 'select.varmenu option[value="' + idSelector( sk ) + '"]', $row ).length ) {
@@ -2519,21 +2523,19 @@ var ReactorSensor = (function(api, $) {
 				};
 				for ( var ix=0; ix<events.length; ix++ ) {
 					var cx = events[ix];
-					var li, item, txt, k;
+					var item, txt, k;
 					if ( cx.serviceStateTable ) {
 						/* One fixed value (we hope--otherwise, we just use first) */
-						li = jQuery( '<li />' );
-						li.attr( 'id', cx.id );
+						item = jQuery( '<a href="#" class="dropdown-item"></a>' );
+						item.attr( 'id', cx.id );
 						k = firstKey( cx.serviceStateTable );
-						li.data('service', cx.serviceId);
-						li.data('variable', k);
-						li.data('operator', cx.serviceStateTable[k].comparisson || "=");
-						li.data('value', String( cx.serviceStateTable[k].value ) );
-						item = jQuery( '<a href="#"></a>' );
+						item.data('service', cx.serviceId);
+						item.data('variable', k);
+						item.data('operator', (cx.serviceStateTable[k] || {}).comparisson || "=");
+						item.data('value', String( cx.serviceStateTable[k].value ) );
 						txt = reptext( (cx.label || {}).text || String(cx.id) );
 						item.html( txt );
-						li.append( item );
-						mm.append( li );
+						mm.append( item );
 						item.on( 'click.reactor', wrapAction( cx, cond, $row ) );
 					} else { /* argumentList */
 						for ( var iy=0; iy<(cx.argumentList || {}).length; iy++ ) {
@@ -2541,44 +2543,40 @@ var ReactorSensor = (function(api, $) {
 							if ( arg.allowedValueList ) {
 								for ( var iz=0; iz<arg.allowedValueList.length; iz++ ) {
 									var av = api.cloneObject( arg.allowedValueList[iz] );
-									li = jQuery( '<li />' );
-									li.attr( 'id', cx.id );
-									li.data('service', cx.serviceId);
-									li.data( 'variable', arg.name );
-									li.data( 'operator', arg.comparisson || "=" );
+									item = jQuery( '<a href="#" class="dropdown-item"></a>' );
+									item.attr( 'id', cx.id );
+									item.data('service', cx.serviceId);
+									item.data( 'variable', arg.name );
+									item.data( 'operator', arg.comparisson || "=" );
 									k = firstKey( av );
-									li.data( 'value', String( av[k] || "" ) );
-									item = jQuery( '<a href="#"></a>' );
+									item.data( 'value', String( av[k] || "" ) );
 									item.attr( 'id', arg.id );
 									item.html( reptext( av.HumanFriendlyText.text || "(invalid device_json description)" ) );
-									li.append( item );
-									mm.append( li );
+									mm.append( item );
 									item.on( 'click.reactor', wrapAction( cx, cond, $row ) );
 								}
 							} else {
-								li = jQuery( '<li />' );
-								li.data( 'id', cx.id );
-								li.data('service', cx.serviceId);
-								li.data( 'variable', arg.name );
-								li.data( 'operator', arg.comparisson || "=" );
-								li.data( 'value', String( arg.defaultValue || "" ) );
-								item = jQuery( '<a href="#"></a>' );
+								item = jQuery( '<a href="#" class="dropdown-item"></a>' );
+								item.data( 'id', cx.id );
+								item.data('service', cx.serviceId);
+								item.data( 'variable', arg.name );
+								item.data( 'operator', arg.comparisson || "=" );
+								item.data( 'value', String( arg.defaultValue || "" ) );
 								item.attr( 'id', arg.id );
 								item.html( reptext( arg.HumanFriendlyText.text || "(invalid device_json description)" ) );
-								li.append( item );
-								mm.append( li );
+								mm.append( item );
 								item.on( 'click.reactor', wrapAction( cx, cond, $row ) );
 							}
 						}
 					}
 				}
 			}
-			if ( jQuery( 'li', mm ).length > 0 ) {
-				mm.append( jQuery( '<li class="divider" />' ) );
-				mm.append( jQuery( '<li />' )
+			if ( jQuery( 'a', mm ).length > 0 ) {
+				mm.append( jQuery( '<div class="dropdown-divider" />' ) );
+				mm.append( jQuery( '<a href="#" class="dropdown-header" />' )
 					.text( "In addition to the above device-defined events, you can select any state variable defined on the device and test its value." ) );
 			} else {
-				mm.append( jQuery( '<li />' ).text( "This device does not define any events." ) );
+				mm.append( jQuery( '<a href="#" class="dropdown-header" />' ).text( "This device does not define any events." ) );
 			}
 			return el;
 		}
