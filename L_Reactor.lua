@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.3develop-19162"
+local _PLUGIN_VERSION = "3.3develop-19163"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION = 301
@@ -1943,7 +1943,7 @@ local function loadSensorConfig( tdev )
 	local upgraded = false
 	local s = luup.variable_get( RSSID, "cdata", tdev ) or ""
 	local cdata, pos, err
-	if "" ~=  s then
+	if "" ~= s then
 		cdata, pos, err = json.decode( s )
 		if err or type(cdata) ~= "table" then
 			L("Unable to parse JSON data at %2, %1 in %3", pos, err, s)
@@ -4527,51 +4527,52 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		local scenesUsed = {}
 		for n,d in pairs( luup.devices ) do
 			if d.device_type == RSTYPE and ( deviceNum==nil or n==deviceNum ) then
-				local condState = loadCleanState( n )
 				local status = ( ( getVarNumeric( "Armed", 0, n, SENSOR_SID ) ~= 0 ) and " armed" or "" )
 				status = status .. ( ( getVarNumeric("Tripped", 0, n, SENSOR_SID ) ~= 0 ) and " tripped" or "" )
 				status = status .. ( ( getVarNumeric("Trouble", 0, n, RSSID ) ~= 0 ) and " TROUBLE" or "" )
 				r = r .. string.rep( "=", 132 ) .. EOL
 				r = r .. string.format("%s (#%d)%s", tostring(d.description), n, status) .. EOL
-				local cdata,err = getVarJSON( "cdata", {}, n, RSSID )
-				if err then
-					r = r .. "**** UNPARSEABLE CONFIGURATION: " .. err .. EOL
+				local cdata = loadSensorConfig( n )
+				if not cdata then
+					r = r .. "    **** UNPARSEABLE CONFIGURATION ****" .. EOL
 					cdata = {}
-				end
-				r = r .. string.format("    Version %s.%s %s", cdata.version or 0, cdata.serial or 0, os.date("%x %X", cdata.timestamp or 0)) .. EOL
-				r = r .. string.format("    Message/status: %s", luup.variable_get( RSSID, "Message", n ) or "" ) .. EOL
-				local s = getVarNumeric( "TestTime", 0, n, RSSID )
-				if s ~= 0 then
-					r = r .. string.format("    Test time set: %s", os.date("%Y-%m-%d %H:%M", s)) .. EOL
-				end
-				s = getVarNumeric( "TestHouseMode", 0, n, RSSID )
-				if s ~= 0 then
-					r = r .. string.format("    Test house mode set: %d", s) .. EOL
-				end
-				local first = true
-				for _,vv in variables( cdata ) do
-					if first then
-						r = r .. "    Variable/expressions" .. EOL
-						first = false
+				else
+					r = r .. string.format("    Version %s.%s %s", cdata.version or 0, cdata.serial or 0, os.date("%x %X", cdata.timestamp or 0)) .. EOL
+					r = r .. string.format("    Message/status: %s", luup.variable_get( RSSID, "Message", n ) or "" ) .. EOL
+					local s = getVarNumeric( "TestTime", 0, n, RSSID )
+					if s ~= 0 then
+						r = r .. string.format("    Test time set: %s", os.date("%Y-%m-%d %H:%M", s)) .. EOL
 					end
-					local vs = (condState.vars or {})[vv.name] or {}
-					local lv = vs.lastvalue
-					local vt = type(lv)
-					if vt == "table" and lv.__type == "null" then lv = "null" vt = "luaxp.null"
-					elseif vt == "string" or vt == "table" then lv = json.encode( lv )
-					elseif lv == nil then lv = "(no value)"
-					else lv = tostring( lv ) end
-					r = r .. string.format("     %3d: %-24s %s [last %s(%s)]", vv.index or 0, vv.name or "?", vv.expression or "?", lv, vt) ..
-						( (vv.export or 1) ~= 0 and " (exported)" or "" ) ..
-						EOL
-					if vs.err then r = r .. "          *** Error: " .. tostring(vs.err) .. EOL end
-				end
-				r = r .. "    Condition group " .. RG( cdata.conditions.root or {}, condState )
+					s = getVarNumeric( "TestHouseMode", 0, n, RSSID )
+					if s ~= 0 then
+						r = r .. string.format("    Test house mode set: %d", s) .. EOL
+					end
+					local condState = loadCleanState( n )
+					local first = true
+					for _,vv in variables( cdata ) do
+						if first then
+							r = r .. "    Variable/expressions" .. EOL
+							first = false
+						end
+						local vs = (condState.vars or {})[vv.name] or {}
+						local lv = vs.lastvalue
+						local vt = type(lv)
+						if vt == "table" and lv.__type == "null" then lv = "null" vt = "luaxp.null"
+						elseif vt == "string" or vt == "table" then lv = json.encode( lv )
+						elseif lv == nil then lv = "(no value)"
+						else lv = tostring( lv ) end
+						r = r .. string.format("     %3d: %-24s %s [last %s(%s)]", vv.index or 0, vv.name or "?", vv.expression or "?", lv, vt) ..
+							( (vv.export or 1) ~= 0 and " (exported)" or "" ) ..
+							EOL
+						if vs.err then r = r .. "          *** Error: " .. tostring(vs.err) .. EOL end
+					end
+					r = r .. "    Condition group " .. RG( cdata.conditions.root or {}, condState )
 
-				for k,v in pairs( cdata.activities or {} ) do
-					r = r .. getReactorScene( k, v, n, scenesUsed )
+					for k,v in pairs( cdata.activities or {} ) do
+						r = r .. getReactorScene( k, v, n, scenesUsed )
+					end
+					r = r .. getEvents( n )
 				end
-				r = r .. getEvents( n )
 			end
 		end
 		local rs = ""
