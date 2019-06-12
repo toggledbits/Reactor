@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.3develop-19162';
+	var pluginVersion = '3.3develop-19163';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -77,14 +77,23 @@ var ReactorSensor = (function(api, $) {
 		"ui4": { min: 0, max: 4294967295 }, "i4": { min: -2147483648, max: 2147483647 },
 		"int": { min: -2147483648, max: 2147483647 }
 	};
-	var serviceOps = [ { op: '=', desc: 'equals', args: 1 }, { op: '<>', desc: 'not equals', args: 1 },
-		{ op: '<', desc: '<', args: 1, numeric: 1 }, { op: '<=', desc: '<=', args: 1, numeric: 1 },
-		{ op: '>', desc: '>', args: 1, numeric: 1 }, { op: '>=', desc: '>=', args: 1, numeric: 1 },
-		{ op: 'starts', desc: 'starts with', args: 1 }, { op: 'notstarts', desc: 'does not start with', args: 1 },
-		{ op: 'ends', desc: 'ends with', args: 1 }, { op: 'notends', desc: 'does not end with', args: 1 },
-		{ op: 'contains', desc: 'contains', args: 1 }, { op: 'notcontains', desc: 'does not contain', args: 1 },
-		{ op: 'in', desc: 'in', args: 1 }, { op: 'notin', desc: 'not in', args: 1 },
-		{ op: 'istrue', desc: 'is TRUE', args: 0 }, { op: 'isfalse', desc: 'is FALSE', args: 0 },
+	var serviceOps = [
+		{ op: '=', desc: 'equals', args: 1 },
+		{ op: '<>', desc: 'not equals', args: 1 },
+		{ op: '<', desc: '<', args: 1, numeric: 1 },
+		{ op: '<=', desc: '<=', args: 1, numeric: 1 },
+		{ op: '>', desc: '>', args: 1, numeric: 1 },
+		{ op: '>=', desc: '>=', args: 1, numeric: 1 },
+		{ op: 'starts', desc: 'starts with', args: 1 },
+		{ op: 'notstarts', desc: 'does not start with', args: 1 },
+		{ op: 'ends', desc: 'ends with', args: 1 },
+		{ op: 'notends', desc: 'does not end with', args: 1 },
+		{ op: 'contains', desc: 'contains', args: 1 },
+		{ op: 'notcontains', desc: 'does not contain', args: 1 },
+		{ op: 'in', desc: 'in', args: 1 },
+		{ op: 'notin', desc: 'not in', args: 1 },
+		{ op: 'istrue', desc: 'is TRUE', args: 0 },
+		{ op: 'isfalse', desc: 'is FALSE', args: 0 },
 		{ op: 'change', desc: 'changes', args: 2 }
 	];
 	var noCaseOptPattern = /^(=|<>|contains|notcontains|starts|notstarts|ends|notends|in|notin|change)$/i;
@@ -1719,15 +1728,17 @@ var ReactorSensor = (function(api, $) {
 					}
 					var op = serviceOpsIndex[cond.operator || ""];
 					// use op.args???
-					if ( "change" == cond.operator ) {
+					if ( op.args > 1 ) {
 						// Join simple two value list, but don't save "," on its own.
 						cond.value = jQuery( 'input#val1', $row ).val() || "";
 						val = jQuery( 'input#val2', $row ).val();
 						if ( ! isEmpty( val ) ) {
 							cond.value += "," + val;
 						}
-					} else {
+					} else if ( op.args == 1 ) {
 						cond.value = jQuery("input#value", $row).val() || "";
+					} else {
+						delete cond.value;
 					}
 					/* For numeric op, check that value is parseable as a number (unless var ref) */
 					if ( op && op.numeric && ! cond.value.match( varRefPattern ) ) {
@@ -2219,7 +2230,7 @@ var ReactorSensor = (function(api, $) {
 				var val = cond.operator || "=";
 				var op = serviceOpsIndex[val];
 				var $inp = jQuery( 'input#value', $row );
-				if ( "change" === val ) {
+				if ( op.args > 1 ) {
 					if ( $inp.length > 0 ) {
 						// Change single input field to double fields.
 						$inp.show();
@@ -2241,8 +2252,8 @@ var ReactorSensor = (function(api, $) {
 						jQuery( 'input#val2,label.tbsecondaryinput', $row ).remove();
 					}
 					$inp.val( vv.length > 0 ? String(vv[0]) : "" );
-					if ( op && 0 === op.args ) {
-						$inp.hide();
+					if ( 0 === op.args ) {
+						$inp.val("").hide();
 					} else {
 						$inp.show();
 					}
@@ -4764,7 +4775,7 @@ var ReactorSensor = (function(api, $) {
 					inp.attr( 'placeholder', action.parameters[k].name );
 					inp.val( undefined===parm.default ? "" : parm.default );
 				}
-				inp.attr('id', parm.name );
+				inp.attr('id', parm.name ).addClass( 'argument' );
 				inp.on( 'change.reactor', handleActionValueChange );
 				/* If there are more than one parameters, wrap each in a label. */
 				if ( action.parameters.length > 1 ) {
@@ -4781,7 +4792,6 @@ var ReactorSensor = (function(api, $) {
 				}
 			}
 		}
-		return;
 	}
 
 	function handleActionActionChange( ev ) {
@@ -4975,7 +4985,7 @@ var ReactorSensor = (function(api, $) {
 				} else {
 					/* No extended data; copy what we got from lu_actions */
 					nodata = true;
-					ai = { service: service.serviceId, action: actname, parameters: service.actionList[j].arguments };
+					ai = { service: service.serviceId, action: actname, parameters: service.actionList[j].arguments, noddb: true };
 					for ( var ip=0; ip < (service.actionList[j].arguments || []).length; ++ip ) {
 						var p = service.actionList[j].arguments[ip];
 						p.type = p.dataType || "string";
@@ -4999,7 +5009,7 @@ var ReactorSensor = (function(api, $) {
 
 				opt = jQuery( '<option/>' ).val( key ).text( actname + ( nodata ? "??(E)" : "") );
 				if ( nodata ) opt.addClass( "nodata" );
-				section.append( opt.clone() );
+				section.append( opt );
 
 				hasAction = true;
 			}
@@ -5017,42 +5027,41 @@ var ReactorSensor = (function(api, $) {
 				for ( j=0; j<over.length; j++ ) {
 					var thisover = over[j];
 					key = thisover.service + "/" + thisover.action;
-					var fake = false;
-					if ( undefined === deviceInfo.services[thisover.service] || undefined === ( deviceInfo.services[thisover.service].actions || {} )[thisover.action] ) {
-						/* Service/action in device exception not "real". Fake it real good. */
-						deviceInfo.services[thisover.service] = deviceInfo.services[thisover.service] || { actions: {} };
-						deviceInfo.services[thisover.service].actions[thisover.action] = { name: thisover.action, deviceOverride: {} };
-						fake = true;
-					}
-					/* There's a well-known service/action, so copy it, and apply overrides */
-					var act;
-					if ( undefined === actions[key] || undefined === ( actions[key].deviceOverride||{} )[dev] ) {
-						/* Store new action override */
-						var actinfo = deviceInfo.services[thisover.service].actions[thisover.action];
-						act = { service: thisover.service, name: thisover.action };
-						for ( var k in actinfo ) {
-							if ( actinfo.hasOwnProperty(k) ) {
-								act[k] = actinfo[k];
-							}
-						}
-						/* Apply overrides */
-						for ( k in thisover ) {
-							if ( thisover.hasOwnProperty(k) ) {
-								act[k] = thisover[k];
-							}
-						}
-						if ( undefined === actions[key] ) {
-							actions[key] = actinfo;
-							actions[key].deviceOverride = {};
-						}
-						actions[key].deviceOverride[dev] = act;
+					var el = jQuery( '<option/>' ).val( key );
+					if ( undefined === actions[key] || actions[key].noddb ) {
+						/* Service+action not in lu_actions or no DDB data for it */
+						el.text( String(thisover.description || thisover.action) + '??(M)' );
+						el.prop( 'disabled', true );
 					} else {
-						/* Override already processed; re-use */
-						act = actions[key].deviceOverride[dev];
+						/* There's a well-known service/action, so copy it, and apply overrides */
+						var act;
+						if ( undefined === ( actions[key].deviceOverride||{} )[dev] ) {
+							/* Store new action override */
+							var actinfo = deviceInfo.services[thisover.service].actions[thisover.action];
+							act = { service: thisover.service, name: thisover.action };
+							for ( var k in actinfo ) {
+								if ( actinfo.hasOwnProperty(k) ) {
+									act[k] = actinfo[k];
+								}
+							}
+							/* Apply overrides */
+							for ( k in thisover ) {
+								if ( thisover.hasOwnProperty(k) ) {
+									act[k] = thisover[k];
+								}
+							}
+							if ( undefined === actions[key].deviceOverride ) {
+								actions[key].deviceOverride = {};
+							}
+							actions[key].deviceOverride[dev] = act;
+						} else {
+							/* Override already processed; re-use */
+							act = actions[key].deviceOverride[dev];
+							if ( act.hidden ) continue;
+						}
+						el.text( act.description || act.name );
 					}
-					if ( act.hidden ) continue;
-					known.append( jQuery('<option/>').val( key ).text( ( act.description || act.name ) +
-						( fake ? " (O)" : "" ) ) );
+					known.append( el );
 					hasAction = true;
 				}
 				actionMenu.prepend( known );
@@ -5294,7 +5303,8 @@ var ReactorSensor = (function(api, $) {
 					if ( -1 === d ) d = api.getCpanelDeviceId();
 					var s = jQuery( 'select#actionmenu', row ).val() || "";
 					var pt = s.split( /\//, 2 );
-					var act = (deviceInfo.services[pt[0]] || { actions: {} }).actions[pt[1]];
+					// var act = (deviceInfo.services[pt[0]] || { actions: {} }).actions[pt[1]];
+					var act = actions[s];
 					if ( act && (act.deviceOverride || {})[d] ) {
 						act = act.deviceOverride[d];
 					}
@@ -6080,9 +6090,9 @@ var ReactorSensor = (function(api, $) {
 		return jqXHR.promise();
 	}
 
-	function sendDeviceData( device ) {
+	function sendDeviceData( device, chain ) {
 		/* Fetch the device file */
-		jQuery.ajax({
+		var p = jQuery.ajax({
 			url: api.getDataRequestURL(),
 			data: {
 				id: "lu_device",
@@ -6096,58 +6106,18 @@ var ReactorSensor = (function(api, $) {
 				var devid = $(this).children('Device_Num').text();
 				if ( devid == device ) {
 
-					// https://stackoverflow.com/questions/13651243/how-do-i-chain-a-sequence-of-deferred-functions-in-jquery-1-8-x#24041521
-					var copy = function(a) { return Array.prototype.slice.call(a); };
-					$.sequence = function( chain, continueOnFailure ) {
-						var handleStep, handleResult,
-							steps = copy(chain),
-							def = new $.Deferred(),
-							defs = [],
-							results = [];
-						handleStep = function () {
-							if (!steps.length) {
-								def.resolveWith(defs, [ results ]);
-								return;
-							}
-							var step = steps.shift(),
-								result = step();
-							handleResult(
-								$.when(result).always(function () {
-									defs.push(this);
-								}).done(function () {
-									results.push({ resolved: copy(arguments) });
-								}).fail(function () {
-									results.push({ rejected: copy(arguments) });
-								})
-							);
-						};
-						handleResult = continueOnFailure ?
-							function (result) {
-								result.always(function () {
-									handleStep();
-								});
-							} :
-							function (result) {
-								result.done(handleStep)
-									.fail(function () {
-										def.rejectWith(defs, [ results ]);
-									});
-							};
-						handleStep();
-						return def.promise();
-					};
-
-					var typ = $('deviceType', this).first().text();
-					var chain = [];
-
 					/* Send device data */
+					var typ = $('deviceType', this).first().text();
 					var dd = { version: 1, timestamp: Date.now(), devicetype: typ, services: {} };
-					dd.manufacturer = $( 'manufacturer', this ).text();
-					dd.modelname = $( 'modelName', this ).text();
-					dd.modelnum = $( 'modelNumber', this ).text();
-					dd.modeldesc = $( 'modelDescription', this ).text();
-					dd.category = $( 'Category_Num', this).text();
-					dd.subcat = $( 'Subcategory_Num', this).text();
+					dd.manufacturer = $( 'manufacturer', this ).first().text();
+					dd.modelname = $( 'modelName', this ).first().text();
+					dd.modelnum = $( 'modelNumber', this ).first().text();
+					dd.modeldesc = $( 'modelDescription', this ).first().text();
+					dd.category = $( 'Category_Num', this ).first().text();
+					dd.subcat = $( 'Subcategory_Num', this ).first().text();
+					dd.devfile = $( 'UpnpDevFilename', this ).first().text();
+					dd.staticjson = $( 'staticJson', this ).first().text();
+					dd.plugin = $( 'plugin', this ).first().text();
 
 					/* Handle services */
 					var rp = api.getDataRequestURL().replace( /\/data_request.*$/i, "" );
@@ -6175,12 +6145,6 @@ var ReactorSensor = (function(api, $) {
 							timeout: 15000
 						}).promise();
 					});
-
-					$.sequence( chain ).done( function() {
-						alert("Thank you! Your data has been submitted.");
-					}).fail( function() {
-						alert("Something went wrong and the data could not be submitted.");
-					});
 				}
 			});
 		}).fail( function( jqXHR, textStatus, errorThrown ) {
@@ -6188,7 +6152,9 @@ var ReactorSensor = (function(api, $) {
 			alert("Unable to request data from Vera. Try again in a moment; it may be reloading or busy.");
 			console.log("Failed to load lu_device data: " + textStatus + " " + String(errorThrown));
 			console.log(jqXHR.responseText);
-		});
+		}).promise();
+
+		chain.push( function() { return p; } );
 	}
 
 	function handleSendDeviceDataClick( ev ) {
@@ -6198,21 +6164,69 @@ var ReactorSensor = (function(api, $) {
 			alert("Please select a device first.");
 			return;
 		}
-		sendDeviceData( device );
+
+		// https://stackoverflow.com/questions/13651243/how-do-i-chain-a-sequence-of-deferred-functions-in-jquery-1-8-x#24041521
+		var copy = function(a) { return Array.prototype.slice.call(a); };
+		$.sequence = function( steps, continueOnFailure ) {
+			var handleStep, handleResult,
+				def = new $.Deferred(),
+				defs = [],
+				results = [];
+			handleStep = function () {
+				if (!steps.length) {
+					def.resolveWith(defs, [ results ]);
+					return;
+				}
+				var step = steps.shift(),
+					result = step();
+				handleResult(
+					$.when(result).always(function () {
+						defs.push(this);
+					}).done(function () {
+						results.push({ resolved: copy(arguments) });
+					}).fail(function () {
+						results.push({ rejected: copy(arguments) });
+					})
+				);
+			};
+			handleResult = continueOnFailure ?
+				function (result) {
+					result.always(function () {
+						handleStep();
+					});
+				} :
+				function (result) {
+					result.done(handleStep)
+						.fail(function () {
+							def.rejectWith(defs, [ results ]);
+						});
+				};
+			handleStep();
+			return def.promise();
+		};
+
+		var chain = [];
+		sendDeviceData( device, chain );
 		/* If device has a parent, or has children, send them as well */
 		var dobj = api.getDeviceObject( device );
 		if ( dobj && dobj.id_parent != 0 ) {
-			sendDeviceData( dobj.id_parent ); /* parent */
+			sendDeviceData( dobj.id_parent, chain ); /* parent */
 		}
 		var typs = {};
 		/* ??? only one level deep */
 		var ud = api.getUserData();
 		for ( var ix=0; ix<ud.devices.length; ix++ ) {
 			if ( ud.devices[ix].id_parent == device && undefined === typs[ ud.devices[ix].device_type ] ) {
-				sendDeviceData( ud.devices[ix].id );
+				sendDeviceData( ud.devices[ix].id, chain );
 				typs[ ud.devices[ix].device_type ] = true;
 			}
 		}
+
+		$.sequence( chain, true ).done( function() {
+			alert("Thank you! Your data has been submitted.");
+		}).fail( function() {
+			alert("Something went wrong and the data could not be submitted.");
+		});
 	}
 
 	function updateToolsVersionDisplay() {
