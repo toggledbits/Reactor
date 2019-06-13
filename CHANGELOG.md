@@ -2,6 +2,10 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
+## Version 3.2 (hotfix)
+
+* hotfix19164-01: Apply change from 3.3 to resolve poor dkjson round-trip performance on 0 index in array (converts all keys to strings, table is no longer an array)
+
 ## Version 3.2 (released)
 
 * Enhancement: Allow interval condition's base time to be true-edge time of another condition (Github issue #35).

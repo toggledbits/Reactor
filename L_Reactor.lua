@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.2"
+local _PLUGIN_VERSION = "3.2hotfix-19164"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION = 301
@@ -2559,7 +2559,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		local hold = getVarNumeric( "ReloadConditionHoldTime", 60, tdev, RSSID )
 		if not reloaded then
 			-- Not reloaded. Hold on until we've satisfied hold time from last TRUE.
-			local later = ( ( cond.stateedge or {} )[1] or 0 ) + hold
+			local later = ( ( cond.stateedge or {} ).t or 0 ) + hold
 			if now >= later then
 				return false,false
 			end
@@ -2580,7 +2580,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		local baseTime
 		if "condtrue" == ( cond.relto or "" ) then
 			local cs = ( sst.condState or {} )[cond.relcond]
-			if cs == nil or (cs.evaledge or {})[1] == nil then
+			if cs == nil or (cs.evaledge or {}).t == nil then
 				-- Trouble, missing condition or no state.
 				L({level=1,msg="Unrecognized condition or insufficient state for %1 in interval cond %2 of %3 (%4)"},
 					cond.relcond or "nil", cond.id, tdev, luup.devices[tdev].description)
@@ -2589,7 +2589,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 				sst.trouble = true
 				return now,nil
 			end
-			baseTime = cs.evaledge[1]
+			baseTime = cs.evaledge.t
 		else
 			local tpart = os.date("*t", now) -- basically a copy of ndt
 			tpart.hour = 0
@@ -2744,7 +2744,7 @@ local function processCondition( cond, grp, cdata, tdev )
 		cs.laststate = state
 		cs.statestamp = now
 		cs.stateedge = cs.stateedge or {}
-		cs.stateedge[state and 1 or 0] = now
+		cs.stateedge[state and "t" or "f"] = now
 		if state and ( condopt.repeatcount or 0 ) > 1 then
 			-- If condition now true and counting repeats, append time to list and prune
 			cs.repeats = cs.repeats or {}
@@ -2822,7 +2822,7 @@ local function processCondition( cond, grp, cdata, tdev )
 			-- lasted less than X seconds, meaning, we act when the condition goes
 			-- false, checking the "back interval".
 			if not state then
-				local age = (cs.stateedge[0] or now) - (cs.stateedge[1] or 0)
+				local age = (cs.stateedge.f or now) - (cs.stateedge.t or 0)
 				state = age < condopt.duration
 				D("processCondition() cond %1 was true for %2, limit is %3, state now %4", cond.id,
 					age, condopt.duration, state)
@@ -2852,8 +2852,8 @@ local function processCondition( cond, grp, cdata, tdev )
 		D("processCondition() hold time %1, going %1 to %2", condopt.holdtime, cs.evalstate, state)
 		if cs.evalstate and not state then
 			-- Hold time extends from false edge, so repeated true-false-true-false extends time
-			D("processCondition() reset edge last %1", cs.stateedge[1])
-			cs.holduntil = ( cs.stateedge[0] or now ) + condopt.holdtime
+			D("processCondition() reset edge last %1 (from %2)", cs.stateedge.f, cs.stateedge)
+			cs.holduntil = ( cs.stateedge.f or now ) + condopt.holdtime
 			if cs.holduntil > now then
 				D("processCondition() continue reset delay until %1", cs.holduntil)
 				state = true
@@ -2889,10 +2889,10 @@ local function processCondition( cond, grp, cdata, tdev )
 		addEvent{dev=tdev,event='evalchange',cond=cond.id,oldState=cs.evalstate,newState=state}
 		cs.evalstate = state
 		cs.evalstamp = now
-		cs.evaledge[ state and 1 or 0 ] = now
+		cs.evaledge[ state and "t" or "f" ] = now
 		cs.changed = true
 	else
-		cs.evaledge[ state and 1 or 0 ] = cs.evalstamp -- force
+		cs.evaledge[ state and "t" or "f" ] = cs.evalstamp -- force
 		cs.changed = nil
 	end
 	if ( cond.type or "group" ) == "group" then
