@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.3develop-19163';
+	var pluginVersion = '3.3develop-19165';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -1320,7 +1320,7 @@ var ReactorSensor = (function(api, $) {
 			console.log("cdata unavailable");
 			return;
 		}
-		var s = api.getDeviceState( pdev, serviceId, "cstate" ) || "";
+		var s = api.getDeviceStateVariable( pdev, serviceId, "cstate" ) || "";
 		var cstate = {};
 		if ( ! isEmpty( s ) ) {
 			try {

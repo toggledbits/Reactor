@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.3develop-19163"
+local _PLUGIN_VERSION = "3.3develop-19165"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION = 301
@@ -2946,9 +2946,6 @@ local function processCondition( cond, grp, cdata, tdev )
 		cs.evaledge[ state and "t" or "f" ] = cs.evalstamp -- force
 		cs.changed = nil
 	end
-	if ( cond.type or "group" ) == "group" then
-		setVar( GRPSID, "GroupStatus_" .. cond.id, state and "1" or "0", tdev )
-	end
 
 	return cs.lastvalue, state, condTimer
 end
@@ -3058,6 +3055,11 @@ local function processSensorUpdate( tdev, sst )
 		D("processSensorUpdate() trip %4was %1 now %2, retrig %3", currTrip, newTrip,
 			retrig, invert and "(inverted) " or "" )
 
+		-- Save the condition state immediately. This helps the status UI show more
+		-- crisply.
+		sst.condState.lastUsed = os.time()
+		luup.variable_set( RSSID, "cstate", json.encode(sst.condState), tdev )
+
 		-- Update runtime based on last status
 		local now = os.time()
 		if currTrip then
@@ -3088,6 +3090,8 @@ local function processSensorUpdate( tdev, sst )
 					execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } )
 				end
 			end
+			-- Update GroupState state variables here, after cstate is written.
+			setVar( GRPSID, "GroupStatus_" .. tostring( grp.id ), gs.evalstate and "1" or "0", tdev )
 		end
 
 		-- Set tripped state based on change in status.
@@ -3135,11 +3139,7 @@ local function processSensorUpdate( tdev, sst )
 		luup.set_failure( sst.trouble and 1 or 0, tdev )
 	end
 
-	-- Save the condition state.
-	sst.condState.lastUsed = os.time()
-	luup.variable_set( RSSID, "cstate", json.encode(sst.condState), tdev )
-
-		-- No need to reschedule timer if no demand. Condition may have rescheduled
+	-- No need to reschedule timer if no demand. Condition may have rescheduled
 	-- itself (no need to set hasTimer), so at the moment, hasTimer is only used
 	-- for throttle recovery.
 	if hasTimer or getVarNumeric( "ContinuousTimer", 0, tdev, RSSID ) ~= 0 then
