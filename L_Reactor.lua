@@ -4505,6 +4505,9 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		r = r .. EOL
 		r = r .. "Local time: " .. os.date("%Y-%m-%dT%H:%M:%S%z") ..
 			"; DST=" .. tostring(luup.variable_get( MYSID, "LastDST", pluginDevice ) or "") ..
+			"; " .. tostring(luup.attr_get("City_description",0)) .. 
+			", " .. tostring(luup.attr_get("Region_description",0)) ..
+			" " .. tostring(luup.attr_get("Country_description",0)) ..
 			EOL
 		r = r .. "House mode: plugin " .. tostring(luup.variable_get( MYSID, "HouseMode", pluginDevice ) or "?") ..
 			"; system " .. tostring( luup.attr_get('Mode',0) or "" ) ..
@@ -4535,7 +4538,6 @@ function request( lul_request, lul_parameters, lul_outputformat )
 				local cdata = loadSensorConfig( n )
 				if not cdata then
 					r = r .. "    **** UNPARSEABLE CONFIGURATION ****" .. EOL
-					cdata = {}
 				else
 					r = r .. string.format("    Version %s.%s %s", cdata.version or 0, cdata.serial or 0, os.date("%x %X", cdata.timestamp or 0)) .. EOL
 					r = r .. string.format("    Message/status: %s", luup.variable_get( RSSID, "Message", n ) or "" ) .. EOL
