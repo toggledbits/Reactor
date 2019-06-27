@@ -3121,7 +3121,7 @@ local function processSensorUpdate( tdev, sst )
 		D("processSensorUpdate() evaluating RS trip state")
 		if currTrip ~= newTrip or ( newTrip and retrig ) then
 			-- Changed, or retriggerable.
-			local maxTrip = getVarNumeric( "MaxChangeRate", 5, tdev, RSSID )
+			local maxTrip = getVarNumeric( "MaxChangeRate", 10, tdev, RSSID )
 			_, _, rate60 = rateLimit( sst.changeRate, maxTrip, false )
 			if maxTrip == 0 or rate60 <= maxTrip then
 				D("processSensorUpdate() new RS state %1", newTrip)
