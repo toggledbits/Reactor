@@ -4,6 +4,9 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 3.3 (development)
 
+* Enhancement: Make timing of watch-driven updates configurable, and make new default immediate evaluation to mitigate race condition in fast-changing states (like RFXtrx switches).
+* Enhancement: New "updates" condition pulses true when state variable is rewritten. Note that this is only valid/correct for use in Luup variables where the Luup watch mechanism calls the callback on a same-value rewrite, notably sl_SceneActivated and sl_SceneDeactivated, and other limited values. As a rule, current versions of Luup *do not* call the watch callback when a variable is re-written with the same value it currently has, and as a result, this operator will not perform as expected with any but the aforementioned special state variables.
+* Fix: Make sure all condition types display options data in Logic Summary, not just device state.
 * Fix: Unrecognized services (not in device data base) were not always handled with full parameters.
 * Fix: Do a full restart on enable, which fixes problem of config changes not detected on a sensor that was disabled at plugin startup time.
 * Enhancement: Allow user control of export of variable/expression results; exported values (default, for backward compatibility) are written to state variables.

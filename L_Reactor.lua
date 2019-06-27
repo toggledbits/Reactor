@@ -11,12 +11,12 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.3develop-19165"
+local _PLUGIN_VERSION = "3.3develop-19178"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
-local _CONFIGVERSION = 301
+local _CONFIGVERSION = 19178
 local _CDATAVERSION = 19082	-- must coincide with JS
-local _UIVERSION = 19150	-- must coincide with JS
+local _UIVERSION = 19178	-- must coincide with JS
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -638,6 +638,7 @@ local function sensor_runOnce( tdev )
 		initVar( "MaxChangeRate", "", tdev, RSSID )
 		initVar( "UseReactorScenes", 1, tdev, RSSID )
 		initVar( "FailOnTrouble", "0", tdev, RSSID )
+		initVar( "WatchResponseHoldOff", "-1", tdev, RSSID )
 
 		initVar( "Armed", 0, tdev, SENSOR_SID )
 		initVar( "Tripped", 0, tdev, SENSOR_SID )
@@ -679,6 +680,10 @@ local function sensor_runOnce( tdev )
 	if s < 301 then
 		initVar( "Trouble", "0", tdev, RSSID )
 		initVar( "FailOnTrouble", "0", tdev, RSSID )
+	end
+	
+	if s < 19178 then
+		initVar( "WatchResponseHoldOff", "-1", tdev, RSSID )
 	end
 
 	-- Update version last.
@@ -2251,6 +2256,23 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 			end
 			-- Changed without terminal values, pulse.
 			scheduleDelay( { id=tdev, info="change "..cond.id }, hold )
+		elseif op == "update" then
+			-- State variable written, possibly same value, watch has been called.
+			-- Refetch value to get timestamp
+			_,vv = luup.variable_get( cond.service or "", cond.variable or "", devnum )
+			D("evaluateCondition() service state update op, timestamp=%1, prior=%2",
+				vv, cond.laststate.lastvalue)
+			local hold = getVarNumeric( "ValueChangeHoldTime", 2, tdev, RSSID )
+			if vv == cond.laststate.lastvalue then
+				-- No change. If we haven't yet met the hold time, continue delay.
+				local later = ( cond.laststate.valuestamp or 0 ) + hold
+				if now >= later then
+					return vv,false -- time to reset
+				end
+				hold = math.min( hold, later - now )
+				D("evaluationCondition() no change, but hold time from prior change not yet met, continuing delay for %1 more...", hold)
+			end
+			scheduleDelay( { id=tdev, info="update "..cond.id }, hold )
 		else
 			L({level=1,msg="evaluateCondition() unknown op %1 in cond %2"}, op, cv)
 			addEvent{ dev=tdev, event="condition", condition=cond.id, ['error']="TROUBLE: unrecognized operator "..tostring(op or "nil") }
@@ -4081,7 +4103,15 @@ local function sensorWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
 			old=string.format("%q", tostring(oldVal):sub(1,64)),
 			new=string.format("%q", tostring(newVal):sub(1,64)) }
 	end
-	scheduleDelay( { id=tostring(tdev), owner=tdev, func=sensorTick }, 1 )
+	local holdOff = getVarNumeric( "WatchResponseHoldOff", -1, tdev, RSSID )
+	if holdOff < 0 then
+		-- Immediate update.
+		updateSensor( tdev )
+		D("sensorWatch() update #%1 finished", tdev)
+		return
+	end
+	D("sensorWatch() scheduling update of #%1 for +%2", tdev, holdOff)
+	scheduleDelay( { id=tostring(tdev), owner=tdev, func=sensorTick }, holdOff )
 end
 
 -- Watch callback. Dispatches to sensor-specific handling.
@@ -4392,26 +4422,6 @@ function RG( grp, condState, level, r )
 			r = r .. string.format("%s/%s %s %s", cond.service or "?", cond.variable or "?", cond.operator or cond.condition or "?",
 				cond.value or "")
 			if cond.nocase == 0 then r = r .. " (match case)" end
-			if condopt.duration then
-				r = r .. " for " .. ( condopt.duration_op or "ge" ) ..
-					" " .. condopt.duration .. "s"
-			end
-			if condopt.after then
-				if ( condopt.aftertime or 0 ) > 0 then
-					r = r .. " within " .. tostring(condopt.aftertime) .. "s"
-				end
-				r = r .. " after " .. condopt.after
-			end
-			if condopt.repeatcount then
-				r = r .. " repeat " .. condopt.repeatcount ..
-					" within " .. ( condopt.repeatwithin or 60 ).. "s"
-			end
-			if (condopt.holdtime or 0) > 0 then
-				r = r .. "; delay reset for " .. condopt.holdtime .. "s"
-			end
-			if (condopt.latch or 0) ~= 0 then
-				r = r .. "; latching"
-			end
 		elseif condtype == "grpstate" then
 			r = r .. string.format("%s (%d) ", cond.device == -1 and "(self)" or ( ( luup.devices[cond.device]==nil ) and ( "*** missing " .. ( cond.devicename or "unknown" ) ) or
 				luup.devices[cond.device].description ), cond.device )
@@ -4431,7 +4441,27 @@ function RG( grp, condState, level, r )
 		else
 			r = r .. json.encode(cond)
 		end
-		if not (":comment:group:"):match( condtype ) then
+		if condopt.after then
+			if ( condopt.aftertime or 0 ) > 0 then
+				r = r .. " within " .. tostring(condopt.aftertime) .. "s"
+			end
+			r = r .. " after " .. condopt.after
+		end
+		if condopt.duration then
+			r = r .. " for " .. ( condopt.duration_op or "ge" ) ..
+				" " .. condopt.duration .. "s"
+		end
+		if condopt.repeatcount then
+			r = r .. " repeats " .. condopt.repeatcount ..
+				" within " .. ( condopt.repeatwithin or 60 ).. "s"
+		end
+		if (condopt.holdtime or 0) > 0 then
+			r = r .. "; delay reset for " .. condopt.holdtime .. "s"
+		end
+		if (condopt.latch or 0) ~= 0 then
+			r = r .. "; latching"
+		end
+		if not (":comment:"):match( condtype ) then
 			r = r .. " ["
 			if cs.priorvalue then r = r .. tostring(cs.priorvalue) .. " => " end
 			r = r .. tostring(cs.lastvalue) .. " at " .. shortDate( cs.valuestamp )
@@ -4535,7 +4565,6 @@ function request( lul_request, lul_parameters, lul_outputformat )
 				local cdata = loadSensorConfig( n )
 				if not cdata then
 					r = r .. "    **** UNPARSEABLE CONFIGURATION ****" .. EOL
-					cdata = {}
 				else
 					r = r .. string.format("    Version %s.%s %s", cdata.version or 0, cdata.serial or 0, os.date("%x %X", cdata.timestamp or 0)) .. EOL
 					r = r .. string.format("    Message/status: %s", luup.variable_get( RSSID, "Message", n ) or "" ) .. EOL

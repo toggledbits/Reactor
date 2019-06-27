@@ -17,11 +17,11 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.3develop-19165';
+	var pluginVersion = '3.3develop-19178';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
-	var _UIVERSION = 19150;     /* must coincide with Lua core */
+	var _UIVERSION = 19178;     /* must coincide with Lua core */
 
 	var _CDATAVERSION = 19082;  /* must coincide with Lua core */
 
@@ -94,7 +94,8 @@ var ReactorSensor = (function(api, $) {
 		{ op: 'notin', desc: 'not in', args: 1 },
 		{ op: 'istrue', desc: 'is TRUE', args: 0 },
 		{ op: 'isfalse', desc: 'is FALSE', args: 0 },
-		{ op: 'change', desc: 'changes', args: 2 }
+		{ op: 'change', desc: 'changes', args: 2 },
+		{ op: 'update', desc: 'updates', args: 0 }
 	];
 	var noCaseOptPattern = /^(=|<>|contains|notcontains|starts|notstarts|ends|notends|in|notin|change)$/i;
 	var serviceOpsIndex = {};
@@ -851,7 +852,7 @@ var ReactorSensor = (function(api, $) {
 				} else {
 					str += ' ' + (t.desc || t.op);
 					if ( undefined === t.args || t.args > 0 ) {
-						if ( "change" == t.op ) {
+						if ( t.args > 1 ) {
 							k = ( cond.value || "" ).split( /,/ );
 							if ( k.length > 0 && k[0] !== "" ) {
 								str += " from " + conditionValueText( k[0] );
