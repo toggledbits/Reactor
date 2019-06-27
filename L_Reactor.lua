@@ -4535,6 +4535,9 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		r = r .. EOL
 		r = r .. "Local time: " .. os.date("%Y-%m-%dT%H:%M:%S%z") ..
 			"; DST=" .. tostring(luup.variable_get( MYSID, "LastDST", pluginDevice ) or "") ..
+			"; " .. tostring(luup.attr_get("City_description",0)) .. 
+			", " .. tostring(luup.attr_get("Region_description",0)) ..
+			" " .. tostring(luup.attr_get("Country_description",0)) ..
 			EOL
 		r = r .. "House mode: plugin " .. tostring(luup.variable_get( MYSID, "HouseMode", pluginDevice ) or "?") ..
 			"; system " .. tostring( luup.attr_get('Mode',0) or "" ) ..
