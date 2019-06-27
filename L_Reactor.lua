@@ -681,7 +681,7 @@ local function sensor_runOnce( tdev )
 		initVar( "Trouble", "0", tdev, RSSID )
 		initVar( "FailOnTrouble", "0", tdev, RSSID )
 	end
-	
+
 	if s < 19178 then
 		initVar( "WatchResponseHoldOff", "-1", tdev, RSSID )
 	end
@@ -1567,8 +1567,8 @@ local function execSceneGroups( tdev, taskid, scd )
 	-- are well and truly ready to respond.
 	if not systemReady then
 		L("%1 (#%2) attempting to run actions %3 (%4) but system is not yet ready; deferring 5 seconds.",
-			luup.devices[tdev].description, tdev, scd.name or scd.id, scd.id)
-		addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, notice="Deferring scene execution; waiting for system ready." }
+			luup.devices[tdev].description, tdev, (scd or {}).name or sst.scene, sst.scene)
+		addEvent{ dev=tdev, event="runscene", scene=sst.scene, sceneName=(scd or {}).name or sst.scene, notice="Deferring scene execution; waiting for system ready." }
 		scheduleDelay( { id=sst.taskid, owner=sst.owner, func=execSceneGroups, args={ scd } }, 5 )
 		return taskid
 	end
@@ -1830,8 +1830,9 @@ local function resumeScenes()
 			err)
 		luup.variable_set( MYSID, "runscene", "{}", pluginDevice )
 	end
-	sceneState = d
+	sceneState = d or {}
 	for _,data in pairs( sceneState ) do
+		addEvent{ dev=data.owner, event="runscene", scene=data.scene, notice="Queing scene resume after reload" }
 		scheduleDelay( { id=data.taskid, owner=data.owner, func=execSceneGroups, args={} }, 1 )
 	end
 end
@@ -3184,17 +3185,18 @@ local function updateSensor( tdev )
 
 	local sst = getSensorState( tdev )
 
-	if sst.updating then return end -- not if we're already updating
-
+	if sst.updating then
+		-- If already updating, schedule deferred update; each attempt extends.
+		scheduleDelay( tdev, 1, { replace=true } )
+		return
+	end
 	sst.updating = true
-
 	sst.trouble = false -- presumption of innocence
 	local success,err = pcall( processSensorUpdate, tdev, sst )
+	sst.updating = false
 	if not success then
 		L({level=1,msg="Sensor update failed: %1"}, err)
 	end
-
-	sst.updating = false
 end
 
 local function sensorTick( tdev)
@@ -3546,6 +3548,7 @@ function startPlugin( pdev )
 			end
 		elseif v.device_type == RSTYPE then
 			luup.variable_set( RSSID, "Message", "Stopped", k )
+			addEvent{ dev=k, event="reload", notice="Luup reload" }
 		end
 	end
 	if failmsg then
@@ -4535,7 +4538,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		r = r .. EOL
 		r = r .. "Local time: " .. os.date("%Y-%m-%dT%H:%M:%S%z") ..
 			"; DST=" .. tostring(luup.variable_get( MYSID, "LastDST", pluginDevice ) or "") ..
-			"; " .. tostring(luup.attr_get("City_description",0)) .. 
+			"; " .. tostring(luup.attr_get("City_description",0)) ..
 			", " .. tostring(luup.attr_get("Region_description",0)) ..
 			" " .. tostring(luup.attr_get("Country_description",0)) ..
 			EOL
