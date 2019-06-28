@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.3develop-19178"
+local _PLUGIN_VERSION = "3.3develop-19179"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION = 19178
@@ -4472,7 +4472,7 @@ function RG( grp, condState, level, r )
 		if (condopt.latch or 0) ~= 0 then
 			r = r .. "; latching"
 		end
-		if not (":comment:"):match( condtype ) then
+		if not (":comment:group:"):match( condtype ) then
 			r = r .. " ["
 			if cs.priorvalue then r = r .. tostring(cs.priorvalue) .. " => " end
 			r = r .. tostring(cs.lastvalue) .. " at " .. shortDate( cs.valuestamp )

@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.3develop-19178';
+	var pluginVersion = '3.3develop-19179';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -875,7 +875,8 @@ var ReactorSensor = (function(api, $) {
 				t = getDeviceFriendlyName( cond.device );
 				str += t ? t : '#' + cond.device + ' ' + ( cond.devicename === undefined ? "name unknown" : cond.devicename ) + ' (missing)';
 				try {
-					t = ( getConditionIndex( cond.device ) || {} )[ cond.groupid ];
+					var devnum = -1 === ( cond.device || -1 ) ? api.getCpanelDeviceId() : cond.device;
+					t = ( getConditionIndex( devnum ) || {} )[ cond.groupid ];
 					str += ' ' + ( t ? ( t.name || cond.groupid || "?" ) : ( ( cond.groupid || "?" ) + " (MISSING!)" ) );
 				} catch( e ) {
 					str += ' ' + ( cond.groupid || "?" ) + ' (' + String(e) + ')';
