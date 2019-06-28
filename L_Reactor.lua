@@ -2296,20 +2296,28 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 			return nil,nil
 		end
 
-		local varname = string.format( "GroupStatus_%s", cond.groupid or "?" )
-		local vv = getVarNumeric( varname, -1, devnum, GRPSID )
-		-- Boolean should come back 0 or 1; if -1, group does not exist or is not ready/available
-		if vv < 0 then
-			L({level=2,msg="%1 (%2) condition %3 refers to device %4 (%5) group %6 (%7), not available, skipped"},
-				luup.devices[tdev].description, tdev, cond.id, cond.device, cond.devicename or "unknown",
-				cond.groupid, cond.groupname)
-			addEvent{ dev=tdev, event="condition", condition=cond.id,
-				device=cond.device, groupid=cond.groupid, groupname=cond.groupname,
-				['error']='TROUBLE: group/state not available' }
-			sst.trouble = true -- flag trouble
-			return nil,nil
+		-- Get group state value; use cstate if local
+		local vv
+		if devnum == tdev then
+			local cs = sst.condState[cond.groupid] or {}
+			vv = cs.evalstate or false
+		else
+			local varname = string.format( "GroupStatus_%s", cond.groupid or "?" )
+			vv = getVarNumeric( varname, -1, devnum, GRPSID )
+
+			-- Boolean should come back 0 or 1; if -1, group does not exist or is not ready/available
+			if vv < 0 then
+				L({level=2,msg="%1 (%2) condition %3 refers to device %4 (%5) group %6 (%7), not available, skipped"},
+					luup.devices[tdev].description, tdev, cond.id, cond.device, cond.devicename or "unknown",
+					cond.groupid, cond.groupname)
+				addEvent{ dev=tdev, event="condition", condition=cond.id,
+					device=cond.device, groupid=cond.groupid, groupname=cond.groupname,
+					['error']='TROUBLE: group/state not available' }
+				sst.trouble = true -- flag trouble
+				return nil,nil
+			end
+			vv = vv ~= 0 -- boolean!
 		end
-		vv = vv ~= 0 -- boolean!
 
 		-- Add service watch if we don't have one.
 		addServiceWatch( devnum, GRPSID, varname, tdev )
