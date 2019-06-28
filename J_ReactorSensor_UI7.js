@@ -1257,7 +1257,7 @@ var ReactorSensor = (function(api, $) {
 					condDesc += "; latching";
 				}
 
-				row.append( jQuery( '<button class="btn condbtn" />' ).text( '=' ) );
+				row.append( jQuery( '<div class="condind" />' ).html( '<i class="material-icons">remove</i>' ) );
 				row.append( jQuery( '<div class="condtext" />' ).text( condType + ': ' + condDesc ) );
 
 				/* Append current value and condition state */
@@ -1276,9 +1276,11 @@ var ReactorSensor = (function(api, $) {
 						}
 					}
 					if ( cs.evalstate ) {
-						row.addClass( "truestate" );
+						row.addClass( "truestate" ).removeClass( "falsestate" );
+						jQuery( 'div.condind i', row ).text( 'check' );
 					} else {
-						row.removeClass("truestate");
+						row.removeClass("truestate").addClass( "falsestate" );
+						jQuery( 'div.condind i', row ).text( 'clear' );
 					}
 					/* Generate unique IDs for timers so that redraws will have
 					   different IDs, and the old timers will self-terminate. */
@@ -1435,6 +1437,9 @@ var ReactorSensor = (function(api, $) {
 			return;
 		}
 
+		/* Standard header stuff */
+		header();
+
 		/* Our styles. */
 		var html = "<style>";
 		html += 'div#reactorstatus div.reactorgroup { position: relative; border-radius: 4px; border: none; margin: 8px 0; }';
@@ -1447,9 +1452,12 @@ var ReactorSensor = (function(api, $) {
 		html += 'div#reactorstatus div.grpcond { list-style: none; padding: 0 0 0 44px; margin: 0; }';
 		html += 'div#reactorstatus .cond { position: relative; min-height: 2em; margin: 8px 0; padding: 0; border-radius: 4px; border: 1px solid #0c6099; background: #fff; }';
 		html += 'div#reactorstatus .cond.truestate { color: #00aa00; font-weight: bold; }';
-		html += 'div#reactorstatus .cond.truestate button.condbtn { background-color: #0b0; color: #fff; }';
 		html += 'div#reactorstatus div.reactorgroup.truestate > div.grouptitle > button.condbtn { background-color: #0b0; color: #fff; }';
-		html += 'div#reactorstatus div.condtext, div.currentvalue { display: inline-block; margin-left: 1em; }';
+		html += 'div#reactorstatus div.condind { display: inline-block; margin: 0 8px 0 0; padding: 0 4px; }';
+		html += 'div#reactorstatus div.condtext { display: inline-block; width: 50%; margin: 0; padding-top: 4px; vertical-align: top; }';
+		html += 'div#reactorstatus div.currentvalue { display: inline-block; margin-left: 1em; padding-top: 4px; vertical-align: top; }';
+		html += 'div#reactorstatus div.cond.falsestate div.condind { color: #ff0000; }';
+		html += 'div#reactorstatus div.cond.truestate div.condind { color: #00aa00; }';
 		html += 'div#reactorstatus div#variables .tb-valchanged { color: #006040; font-weight: bold; }';
 		html += 'div#reactorstatus div#variables .tb-exprerr { color: red; }';
 		html += 'div#reactorstatus div#variables .tb-hardwrap { overflow-wrap: break-word; }';
