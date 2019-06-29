@@ -2317,10 +2317,10 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 				return nil,nil
 			end
 			vv = vv ~= 0 -- boolean!
+			
+			-- Add service watch if we don't have one.
+			addServiceWatch( devnum, GRPSID, varname, tdev )
 		end
-
-		-- Add service watch if we don't have one.
-		addServiceWatch( devnum, GRPSID, varname, tdev )
 
 		if cond.operator == "change" then
 			D("evaluateCondition() group state change, curr=%1, prior=%2",
