@@ -589,6 +589,7 @@ var ReactorSensor = (function(api, $) {
 
 		if ( undefined === Promise ) {
 			alert( "Warning! The browser you are using does not support features required by this interface. The recommended browsers are Firefox, Chrome, Safari, and Edge. If you are using a modern version of one of these browsers and getting this message, please report to rigpapa via the Vera Community forums." );
+			return false;
 		}
 
 		/* Load ACE. Since the jury is still out with LuaView on this, default is no
