@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.3develop-19179"
+local _PLUGIN_VERSION = "3.3develop-19183"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION = 19178
@@ -1143,7 +1143,7 @@ local function getExpressionContext( cdata, tdev )
 		return n
 	end
 	ctx.__functions.getstate = function( args )
-		local dev, svc, var, trouble = unpack( args )
+		local dev, svc, var, trouble, watch = unpack( args )
 		local vn = finddevice( dev, tdev )
 		D("getstate(%1), dev=%2, svc=%3, var=%4, vn(dev)=%5", args, dev, svc, var, vn)
 		if vn == luaxp.NULL or vn == nil or luup.devices[vn] == nil then
@@ -1151,8 +1151,10 @@ local function getExpressionContext( cdata, tdev )
 			if trouble == false then return luaxp.NULL end
 			return luaxp.evalerror( "Device not found" )
 		end
-		-- Create a watch if we don't have one.
-		addServiceWatch( vn, svc, var, tdev )
+		-- Create a watch if we don't have one. Don't watch our own, unless forced.
+		if watch ~= false and ( watch==true or vn ~= tdev ) then
+			addServiceWatch( vn, svc, var, tdev )
+		end
 		-- Get and return value
 		return luup.variable_get( svc, var, vn ) or luaxp.NULL
 	end
@@ -2261,8 +2263,13 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 			-- State variable written, possibly same value, watch has been called.
 			-- Refetch value to get timestamp
 			_,vv = luup.variable_get( cond.service or "", cond.variable or "", devnum )
-			D("evaluateCondition() service state update op, timestamp=%1, prior=%2",
-				vv, cond.laststate.lastvalue)
+			D("evaluateCondition() service state update op, timestamp=%1, prior=%2, isRestart=%3",
+				vv, cond.laststate.lastvalue, sst.isRestart)
+			-- Some vars are rewritten by restart. Attempt to ignore this.
+			if sst.isRestart and getVarNumeric( "SuppressLuupRestartUpdate", 1, tdev, RSSID ) ~= 0 then
+				D("evaluateCondition() ignoring restart-time update")
+				return vv,false
+			end
 			local hold = getVarNumeric( "ValueChangeHoldTime", 2, tdev, RSSID )
 			if vv == cond.laststate.lastvalue then
 				-- No change. If we haven't yet met the hold time, continue delay.
@@ -2317,7 +2324,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 				return nil,nil
 			end
 			vv = vv ~= 0 -- boolean!
-			
+
 			-- Add service watch if we don't have one.
 			addServiceWatch( devnum, GRPSID, varname, tdev )
 		end
@@ -3096,11 +3103,13 @@ local function processSensorUpdate( tdev, sst )
 		if currTrip then
 			-- Update accumulated trip time
 			local delta = math.max( 0, now - getVarNumeric( "lastacc", now, tdev, RSSID ) )
-			local rt = delta + getVarNumeric( "Runtime", 0, tdev, RSSID )
-			D("processSensorUpdate() currently tripped, adding %1 seconds to runtime, now total %2", delta, rt)
-			luup.variable_set( RSSID, "Runtime", rt, tdev )
+			if delta > 0 then
+				local rt = delta + getVarNumeric( "Runtime", 0, tdev, RSSID )
+				D("processSensorUpdate() currently tripped, adding %1 seconds to runtime, now total %2", delta, rt)
+				setVar( RSSID, "Runtime", rt, tdev )
+			end
 		end
-		luup.variable_set( RSSID, "lastacc", now, tdev )
+		setVar( RSSID, "lastacc", now, tdev )
 
 		-- Pass through groups again, and run activities for any changed groups,
 		-- except root, which is handled by trip() below.
@@ -3178,6 +3187,9 @@ local function processSensorUpdate( tdev, sst )
 		local v = ( 60 - ( os.time() % 60 ) ) + TICKOFFS
 		scheduleDelay( tdev, v )
 	end
+
+	sst.isRestart = nil -- not false, remove it
+
 	D("processSensorUpdate() finished")
 end
 
@@ -3344,6 +3356,7 @@ local function startSensor( tdev, pdev )
 	sst.updateThrottled = false
 	sst.changeRate = initRate( 60, 15 )
 	sst.changeThrottled = false
+	sst.isRestart = true -- cleared by processSensorUpdate
 
 	if isEnabled( tdev ) then
 		addEvent{ dev=tdev, event='start' }
