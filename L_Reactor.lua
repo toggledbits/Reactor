@@ -3483,9 +3483,10 @@ function startPlugin( pdev )
 		for k,v in childDevices( pdev ) do
 			if v.device_type == RSTYPE then
 				luup.variable_set( RSSID, "Message", "PLUGIN DISABLED", k )
+				luup.variable_set( RSSID, "Trouble", "1", k )
 			end
 		end
-		return false
+		return false, "plugin disabled", _PLUGIN_NAME
 	end
 
 	luup.variable_set( MYSID, "Message", "Initializing...", pdev )
@@ -4310,7 +4311,7 @@ local function getEvents( deviceNum )
 	return resp
 end
 
--- A "safer" JSON encode for Lua structures that may contain recursive refereance.
+-- A "safer" JSON encode for Lua structures that may contain recursive references.
 -- This output is intended for display ONLY, it is not to be used for data transfer.
 local function alt_json_encode( st, seen )
 	seen = seen or {}
@@ -4656,8 +4657,9 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			return json.encode{ status=false, message="Invalid device number" }, "application/json"
 		end
 		local expr = lul_parameters['expr'] or ""
+		local cdata = loadSensorConfig( deviceNum )
 		local sst = getSensorState( deviceNum )
-		local ctx = sst.ctx or getExpressionContext( sst.configData, deviceNum )
+		local ctx = sst.ctx or getExpressionContext( cdata, deviceNum )
 		if luaxp == nil then luaxp = require("L_LuaXP_Reactor") end
 		-- if debugMode then luaxp._DEBUG = D end
 		D("request() tryexpression expr=%1", expr)
