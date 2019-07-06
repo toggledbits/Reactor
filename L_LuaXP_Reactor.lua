@@ -1444,5 +1444,3 @@ end
 -- Special exports
 NULL = NULLATOM
 null = NULLATOM
-
-return _M
