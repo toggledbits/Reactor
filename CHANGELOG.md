@@ -6,10 +6,10 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 * Enhancement: LuaXP updated to latest (0.9.9); fixes excessive strictness of parser not allowing whitespace between function name and arg list.
 * Enhancement: Make timing of watch-driven updates configurable, and make new default immediate evaluation to mitigate race condition in fast-changing states (like RFXtrx switches).
-* Enhancement: New "updates" condition pulses true when state variable is rewritten. Note that this is only valid/correct for use in Luup variables where the Luup watch mechanism calls the callback on a same-value rewrite, notably sl_SceneActivated and sl_SceneDeactivated, and other limited values. As a rule, current versions of Luup *do not* call the watch callback when a variable is re-written with the same value it currently has, and as a result, this operator will not perform as expected with any but the aforementioned special state variables.
+* Enhancement: New "updates" device state operator pulses true when the state variable is rewritten. Note that this is only valid/correct for use in Luup variables where the Luup watch mechanism calls the callback on a same-value rewrite (generally, variables with name starting `sl_`, like sl_SceneActivated, sl_SceneDeactivated, and sl_UserCode).
 * Fix: Make sure all condition types display options data in Logic Summary, not just device state.
 * Fix: Unrecognized services (not in device data base) were not always handled with full parameters.
-* Fix: Do a full restart on enable, which fixes problem of config changes not detected on a sensor that was disabled at plugin startup time.
+* Fix: Do a full RS restart on enable, which fixes problem of config changes not detected on a sensor that was disabled at plugin startup time.
 * Enhancement: Allow user control of export of variable/expression results; exported values (default, for backward compatibility) are written to state variables.
 * Enhancement: Allow the getluup() expression function to return tables (such as luup.devices).
 * Fix: Faster response to name change of geofence location (geotag)--previously only updated when in/out state changed.
@@ -20,7 +20,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 * Enhancement: SetVariable now forces an additional evaluation of the RS to ensure that any conditions that reference it display correctly.
 * Fix: When using ResetRuntime, make sure reference point is moved to reset time as well (only affects measurement if RS is tripped at time ResetRuntime is called).
 * Fix: Use Vera-defined date/time format in display (reported by sm2117).
-* Fix: Timing issue on hold time across reloads due to poor round-trip through dkjson (stringifying keys in array--ouch).
+* Fix: Timing issue on delay reset hold time across reloads due to poor round-trip through dkjson (stringifying keys in array--ouch).
 
 ## Version 3.2 (released)
 
