@@ -690,7 +690,7 @@ var ReactorSensor = (function(api, $) {
 		}
 		var dtms = dt * 1000;
 		var ago = Date.now() - dtms;
-		if ( ago < 86400 ) {
+		if ( ago < 86400000 ) {
 			return ftime( dtms, timeFormat );
 		}
 		return ftime( dtms, dateFormat + " " + timeFormat );
@@ -2366,7 +2366,7 @@ var ReactorSensor = (function(api, $) {
 				for ( var ic=0; ic<(grp.conditions || []).length; ic++) {
 					var gc = grp.conditions[ic];
 					/* Must be non-comment, not this condition, and not the predecessor to this condition (recursive) */
-					if ( cond.id !== gc.id && "comment" !== gc.type && ( gc.after === undefined || gc.after !== cond.id ) ) {
+					if ( cond.id !== gc.id && "comment" !== gc.type && ( undefined === gc.options.after || gc.options.after !== cond.id ) ) {
 						var $opt = jQuery( '<option/>' ).val( gc.id );
 						var t = makeConditionDescription( gc );
 						if ( t.length > 40 ) {
