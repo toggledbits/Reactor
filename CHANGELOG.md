@@ -4,6 +4,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 3.3 (development)
 
+* Enhancement: Condition options can now be applied to groups.
 * Enhancement: LuaXP updated to latest (0.9.9); fixes excessive strictness of parser not allowing whitespace between function name and arg list.
 * Enhancement: Make timing of watch-driven updates configurable, and make new default immediate evaluation to mitigate race condition in fast-changing states (like RFXtrx switches).
 * Enhancement: New "updates" device state operator pulses true when the state variable is rewritten. Note that this is only valid/correct for use in Luup variables where the Luup watch mechanism calls the callback on a same-value rewrite (generally, variables with name starting `sl_`, like sl_SceneActivated, sl_SceneDeactivated, and sl_UserCode).
