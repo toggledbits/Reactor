@@ -1880,8 +1880,10 @@ local function trip( state, tdev )
 			-- Reset latched conditions when group resets
 			for _,l in ipairs( cs or {} ) do
 				if l.latched and l.evalstate then
-					l.evalstate = l.laststate
+					l.evalstate = l.latchstate
 					l.evalstamp = os.time()
+					l.latched = nil
+					l.latchstate = nil
 				end
 			end
 		end
@@ -2963,10 +2965,17 @@ local function processCondition( cond, grp, cdata, tdev )
 	-- ReactorSensor untrips (another non-latched condition goes false), even if its
 	-- other test conditions are no longer met.
 	if ( condopt.latch or 0 ) ~= 0 then
-		if cs.evalstate and not state then
-			-- Attempting to transition from true to false with latch option set. Override.
+		D("processCondition() latching option, evalstate %1, state %2, latched %3", cs.evalstate, state, cs.latched)
+		cs.latchstate = state
+		if not state then
+			if cs.latched then
+				-- Attempting to transition from true to false while latched. Override.
+				state = true
+			else
+				cs.latched = nil -- false wipes
+			end
+		else
 			cs.latched = true
-			state = true
 		end
 	else
 		cs.latched = nil -- remove flag
@@ -3036,8 +3045,12 @@ evaluateGroup = function( grp, parentGroup, cdata, tdev )
 		-- Reset latched conditions when group resets
 		for _,l in ipairs( latched ) do
 			local cs = sst.condState[l]
-			cs.evalstate = cs.laststate
-			cs.evalstamp = now
+			if cs.latched then
+				cs.evalstate = cs.latchstate
+				cs.evalstamp = now
+				cs.latchstate = nil
+				cs.latched = nil
+			end
 		end
 	end
 
@@ -3207,6 +3220,7 @@ local function updateSensor( tdev )
 
 	if sst.updating then
 		-- If already updating, schedule deferred update; each attempt extends.
+		D("updateSensor() update in progress; queueing deferred update")
 		scheduleDelay( tdev, 1, { replace=true } )
 		return
 	end
@@ -3913,9 +3927,11 @@ function actionClearLatched( dev )
 	addEvent{ dev=dev, event="action", action="ClearLatched" }
 	local cs = loadCleanState( dev )
 	for _,l in ipairs( cs or {} ) do
-		if l.latched and l.evalstate then
-			l.evalstate = l.laststate
+		if l.latched then
+			l.evalstate = l.lastchstate
 			l.evalstamp = os.time()
+			l.latched = nil
+			l.latchstate = nil
 		end
 	end
 end
