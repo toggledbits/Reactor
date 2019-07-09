@@ -57,6 +57,7 @@ var ReactorSensor = (function(api, $) {
 		"grpstate": "Group State"
 	};
 	var condOptions = {
+		"group": { sequence: true, duration: true, repeat: true, latch: true, hold: true },
 		"service": { sequence: true, duration: true, repeat: true, latch: true, hold: true },
 		"housemode": { sequence: true, duration: true, latch: true, hold: true },
 		"weekday": { latch: true },
@@ -1147,10 +1148,74 @@ var ReactorSensor = (function(api, $) {
 		setTimeout( function() { updateTime( condid, target, prefix, countdown, limit ); }, 500 );
 	}
 
+	function getCondOptionDesc( cond ) {
+		var condOpts = cond.options || {};
+		var condDesc = "";
+		if ( undefined !== condOpts.after ) {
+			condDesc += ( ( condOpts.aftertime || 0 ) > 0 ? ' within ' + condOpts.aftertime + ' secs' : '' ) +
+				' after ' + makeConditionDescription( getConditionIndex()[ condOpts.after] );
+		}
+		if ( ( condOpts.repeatcount || 0 ) > 1 ) {
+			condDesc += " repeats " + condOpts.repeatcount +
+				" times within " + ( condOpts.repeatwithin || 60 ) + " secs";
+		} else if ( ( condOpts.duration || 0 ) > 0 ) {
+			condDesc += " for " +
+				( condOpts.duration_op === "lt" ? "less than " : "at least " ) +
+				condOpts.duration + " secs";
+		}
+		if ( ( condOpts.holdtime || 0 ) > 0 ) {
+			condDesc += "; delay reset for " + condOpts.holdtime + " secs";
+		}
+		if ( ( condOpts.latch || 0 ) != 0 ) {
+			condDesc += "; latching";
+		}
+		return condDesc;
+	}
+
+	function getCondState( cond, currentValue, cstate, el ) {
+		el.text( "" );
+		if ( cond.type !== "comment" && undefined !== currentValue ) {
+			var cs = cstate[cond.id] || {};
+			var shortVal = String( currentValue );
+			el.attr( 'title', shortVal ); /* before we cut it */
+			if ( shortVal.length > 20 ) {
+				shortVal = shortVal.substring( 0, 17 ) + '...';
+			}
+			el.text( shortVal +
+				( currentValue === cs.laststate ? "" : ( cs.laststate ? " (true)" : " (false)" ) ) +
+				' as of ' + shortLuaTime( cs.statestamp ) );
+			if ( condOptions[ cond.type || "group" ].repeat && ( ( cond.options||{} ).repeatcount || 0 ) > 1 ) {
+				if ( cs.repeats !== undefined && cs.repeats.length > 1 ) {
+					var dtime = cs.repeats[ cs.repeats.length - 1 ] - cs.repeats[0];
+					el.append( " (last " + cs.repeats.length + " span " + dtime + " secs)" );
+				}
+			}
+			/* Generate unique IDs for timers so that redraws will have
+			   different IDs, and the old timers will self-terminate. */
+			var id;
+			if ( cs.laststate && cs.waituntil ) {
+				id = getUID();
+				el.append( jQuery('<span class="timer"/>').attr( 'id', id ) );
+				(function( c, t, l ) {
+					setTimeout( function() { updateTime( c, t, "; sustained", false, l ); }, 20 );
+				})( id, cs.statestamp, ( cond.options || {} ).duration );
+			} else if (cs.evalstate && cs.holduntil) {
+				id = getUID();
+				el.append( jQuery('<span class="timer"/>').attr( 'id', id ) );
+				(function( c, t, l ) {
+					setTimeout( function() { updateTime( c, t, "; reset delayed", true, l ); }, 20 );
+				})( id, cs.holduntil, 0 );
+			}
+			if ( cs.latched ) {
+				el.append( '<span>&nbsp;(latched)' );
+			}
+		}
+	}
+
 	function showGroupStatus( grp, container, cstate, parentGroup ) {
 		var grpel = jQuery( '\
 <div class="reactorgroup"> \
-  <div class="grouptitle"><button class="btn condbtn"/><span id="titletext">??</span></div> \
+  <div class="grouptitle"><button class="btn condbtn"/><span id="titletext">??</span> <span class="currentvalue"/></div> \
   <div class="grpbody"> \
 	<div class="grpcond"/> \
   </div> \
@@ -1158,7 +1223,7 @@ var ReactorSensor = (function(api, $) {
 
 		var title = 'Group: ' + (grp.name || grp.id ) +
 			( grp.disabled ? " (disabled)" : "" ) + " <" + grp.id + ">";
-		jQuery( 'span#titletext', grpel ).text( title );
+		jQuery( 'span#titletext', grpel ).text( title + getCondOptionDesc( grp ) );
 		jQuery( '.condbtn', grpel ).text( (grp.invert ? "NOT " : "") + (grp.operator || "and" ).toUpperCase() );
 
 		/* Highlight groups that are "true" */
@@ -1166,9 +1231,7 @@ var ReactorSensor = (function(api, $) {
 			grpel.addClass( 'groupdisabled' );
 		} else {
 			var gs = cstate[ grp.id ] || {};
-			jQuery( 'span#titletext', grpel).append( ' - ' +
-				( gs.evalstate ? 'TRUE' : 'false' ) +
-				' since ' + shortLuaTime( gs.evalstamp || 0 ) );
+			getCondState( grp, gs.laststate, cstate, jQuery( 'span.currentvalue', grpel ) );
 			if ( gs.evalstate ) {
 				grpel.addClass( "truestate" );
 			}
@@ -1238,26 +1301,7 @@ var ReactorSensor = (function(api, $) {
 				}
 
 				/* Apply options to condition description */
-				if ( undefined !== condOpts.after ) {
-					condDesc += ' (' +
-						( ( condOpts.aftertime || 0 ) > 0 ? 'within ' + condOpts.aftertime + ' secs ' : '' ) +
-						'after ' + makeConditionDescription( getConditionIndex()[ condOpts.after] ) +
-						')';
-				}
-				if ( ( condOpts.repeatcount || 0 ) > 1 ) {
-					condDesc += " repeats " + condOpts.repeatcount +
-						" times within " + ( condOpts.repeatwithin || 60 ) + " secs";
-				} else if ( ( condOpts.duration || 0 ) > 0 ) {
-					condDesc += " for " +
-						( condOpts.duration_op === "lt" ? "less than " : "at least " ) +
-						condOpts.duration + " secs";
-				}
-				if ( ( condOpts.holdtime || 0 ) > 0 ) {
-					condDesc += "; delay reset for " + condOpts.holdtime + " secs";
-				}
-				if ( ( condOpts.latch || 0 ) != 0 ) {
-					condDesc += "; latching";
-				}
+				condDesc += getCondOptionDesc( cond );
 
 				row.append( jQuery( '<div class="condind" />' ).html( '<i class="material-icons">remove</i>' ) );
 				row.append( jQuery( '<div class="condtext" />' ).text( condType + ': ' + condDesc ) );
@@ -1265,40 +1309,17 @@ var ReactorSensor = (function(api, $) {
 				/* Append current value and condition state */
 				var el = jQuery( '<div class="currentvalue" />' );
 				row.append( el );
+				getCondState( cond, currentValue, cstate, el );
 
+				/* Apply highlight for state */
 				if ( cond.type !== "comment" && undefined !== currentValue ) {
 					var cs = cstate[cond.id] || {};
-					el.text( '(' + String(currentValue) + ') ' +
-						( cs.laststate ? "true" : "false" ) +
-						' as of ' + shortLuaTime( cs.statestamp ) );
-					if ( condOptions[ cond.type || "group" ].repeat && ( condOpts.repeatcount || 0 ) > 1 ) {
-						if ( cs.repeats !== undefined && cs.repeats.length > 1 ) {
-							var dtime = cs.repeats[ cs.repeats.length - 1 ] - cs.repeats[0];
-							el.append( " (last " + cs.repeats.length + " span " + dtime + " secs)" );
-						}
-					}
 					if ( cs.evalstate ) {
 						row.addClass( "truestate" ).removeClass( "falsestate" );
 						jQuery( 'div.condind i', row ).text( 'check' );
 					} else {
 						row.removeClass("truestate").addClass( "falsestate" );
 						jQuery( 'div.condind i', row ).text( 'clear' );
-					}
-					/* Generate unique IDs for timers so that redraws will have
-					   different IDs, and the old timers will self-terminate. */
-					var id;
-					if (cs.laststate && cs.waituntil) {
-						id = getUID();
-						el.append( jQuery('<span class="timer"/>').attr( 'id', id ) );
-						(function( c, t, l ) {
-							setTimeout( function() { updateTime( c, t, "; sustained", false, l ); }, 20 );
-						})( id, cs.statestamp, condOpts.duration );
-					} else if (cs.evalstate && cs.holduntil) {
-						id = getUID();
-						el.append( jQuery('<span class="timer"/>').attr( 'id', id ) );
-						(function( c, t, l ) {
-							setTimeout( function() { updateTime( c, t, "; reset delayed", true, l ); }, 20 );
-						})( id, cs.holduntil, 0 );
 					}
 				}
 
@@ -1447,9 +1468,9 @@ var ReactorSensor = (function(api, $) {
 		html += 'div#reactorstatus div.reactorgroup { position: relative; border-radius: 4px; border: none; margin: 8px 0; }';
 		html += 'div#reactorstatus div#variables.reactorgroup { border: 1px solid #039 }';
 		html += 'div#reactorstatus div.reactorgroup.groupdisabled * { background-color: #ccc !important; color: #000 !important }';
-		html += 'div#reactorstatus div.grouptitle { background-color: #039; min-height: 32px; line-height: 2em; border: 1px solid #000; border-radius: inherit; }';
-		html += 'div#reactorstatus div.grouptitle span#titletext { color: #fff; margin-left: 1em; }';
-		html += 'div#reactorstatus div.grouptitle button.condbtn { background-color: #bce8f1; width: 5em; border: none; padding: 6px 6px; }';
+		html += 'div#reactorstatus div.grouptitle { color: #fff; background-color: #039; min-height: 32px; line-height: 2em; border: 1px solid #000; border-radius: inherit; }';
+		html += 'div#reactorstatus div.grouptitle span#titletext { margin-left: 1em; }';
+		html += 'div#reactorstatus div.grouptitle button.condbtn { background-color: #bce8f1; color: #000; width: 5em; border: none; padding: 6px 6px; }';
 		html += 'div#reactorstatus div.grpbody { position: relative; padding: 0; background-color: #fff; }';
 		html += 'div#reactorstatus div.grpcond { list-style: none; padding: 0 0 0 44px; margin: 0; }';
 		html += 'div#reactorstatus .cond { position: relative; min-height: 2em; margin: 8px 0; padding: 0; border-radius: 4px; border: 1px solid #0c6099; background: #fff; }';
@@ -1505,7 +1526,7 @@ var ReactorSensor = (function(api, $) {
 		 * Renumber group conditions.
 		 */
 		function reindexConditions( grp ) {
-			var $el = jQuery( 'div#' + idSelector( grp.id ) + '.cond-group-container' ).children( 'div.cond-group-body' ).children( 'div.cond-list' );
+			var $el = jQuery( 'div#' + idSelector( grp.id ) + '.cond-container.cond-group' ).children( 'div.cond-group-body' ).children( 'div.cond-list' );
 			var ixCond = getConditionIndex();
 			var ix = 0;
 			grp.conditions.splice( 0, grp.conditions.length ); /* empty in place */
@@ -1697,7 +1718,7 @@ var ReactorSensor = (function(api, $) {
 		function updateConditionRow( $row, target ) {
 			var condId = $row.attr("id");
 			var cond = getConditionIndex()[ condId ];
-			var typ = jQuery("select#condtype", $row).val() || "";
+			var typ = $row.hasClass( "cond-cond" ) ? jQuery("select#condtype", $row).val() || "comment" : "group";
 			cond.type = typ;
 			jQuery('.tberror', $row).removeClass('tberror');
 			$row.removeClass('tberror');
@@ -2020,7 +2041,7 @@ var ReactorSensor = (function(api, $) {
 						jQuery('input#predtime', $row).val(pt);
 					}
 					if ( cond.options.after !== $pred.val() || cond.options.aftertime !== pt ) {
-						cond.options.after = $pred.val();
+						cond.after = $pred.val();
 						cond.options.aftertime = pt;
 						configModified = true;
 					}
@@ -2335,11 +2356,12 @@ var ReactorSensor = (function(api, $) {
 		function handleExpandOptionsClick( ev ) {
 			var $el = jQuery( ev.currentTarget );
 			var $row = $el.closest( 'div.cond-container' );
+			var isGroup = $row.hasClass( 'cond-group' );
 			var cond = getConditionIndex()[ $row.attr( "id" ) ];
 			var grp = cond.__parent;
 
 			/* If the options container already exists, just show it. */
-			var $container = jQuery( 'div.cond-body > div.condopts', $row );
+			var $container = jQuery( isGroup ? 'div.condopts' : 'div.cond-body > div.condopts', $row );
 			if ( $container.length > 0 ) {
 				/* Container exists and is open, close it. */
 				$container.slideUp({
@@ -2357,7 +2379,7 @@ var ReactorSensor = (function(api, $) {
 			$el.attr( 'title', msgOptionsHide );
 			$container = jQuery( '<div class="condopts" />' ).hide();
 
-			var displayed = condOptions[ cond.type || "comment" ] || {};
+			var displayed = condOptions[ cond.type || "group" ] || {};
 			var condOpts = cond.options || {};
 
 			/* Sequence (predecessor condition) */
@@ -2366,7 +2388,7 @@ var ReactorSensor = (function(api, $) {
 				for ( var ic=0; ic<(grp.conditions || []).length; ic++) {
 					var gc = grp.conditions[ic];
 					/* Must be non-comment, not this condition, and not the predecessor to this condition (recursive) */
-					if ( cond.id !== gc.id && "comment" !== gc.type && ( undefined === gc.options.after || gc.options.after !== cond.id ) ) {
+					if ( cond.id !== gc.id && "comment" !== gc.type && ( gc.options || {} ).after !== cond.id ) {
 						var $opt = jQuery( '<option/>' ).val( gc.id );
 						var t = makeConditionDescription( gc );
 						if ( t.length > 40 ) {
@@ -2379,9 +2401,10 @@ var ReactorSensor = (function(api, $) {
 				}
 				/* Add groups that are not ancestor of condition */
 				DOtraverse( (getConditionIndex()).root, function( node ) {
-					$preds.append( jQuery( '<option/>' ).val( node.id ).text( node.name || node.id ) );
+					$preds.append( jQuery( '<option/>' ).val( node.id ).text( makeConditionDescription( node ) ) );
 				}, false, function( node ) {
-					return "group" === ( node.type || "group" ) && !isAncestor( node.id, cond.id );
+					//return "group" === ( node.type || "group" ) && !isAncestor( node.id, cond.id );
+					return !isAncestor( node.id, cond.id );
 				});
 				$container.append('<div id="predopt" class="form-inline"><label>Only after&nbsp;</label></div>');
 				jQuery('div#predopt label', $container).append( $preds );
@@ -2431,7 +2454,11 @@ var ReactorSensor = (function(api, $) {
 			}
 
 			/* Add the options container (specific immediate child of this row selection) */
-			$row.children( 'div.cond-body' ).append( $container );
+			if ( isGroup ) {
+				$row.append( $container );
+			} else {
+				$row.children( 'div.cond-body' ).append( $container );
+			}
 			$container.slideDown();
 		}
 
@@ -2615,6 +2642,9 @@ var ReactorSensor = (function(api, $) {
 				row = jQuery( 'div.cond-container#' + idSelector( cond.id ) );
 			}
 			var container = jQuery('div.params', row).empty();
+
+			row.children( '#condmore' ).prop( 'disabled', "comment" === cond.type );
+
 			switch (cond.type) {
 				case "":
 					break;
@@ -3091,7 +3121,7 @@ var ReactorSensor = (function(api, $) {
 		 */
 		function handleAddConditionClick( ev ) {
 			var $el = jQuery( ev.currentTarget );
-			var $parentGroup = $el.closest( 'div.cond-group-container' );
+			var $parentGroup = $el.closest( 'div.cond-container' );
 			var parentId = $parentGroup.attr( 'id' );
 
 			/* Create a new condition in data, assign an ID */
@@ -3118,7 +3148,7 @@ var ReactorSensor = (function(api, $) {
 
 		function handleTitleChange( ev ) {
 			var input = jQuery( ev.currentTarget );
-			var grpid = input.closest( 'div.cond-group-container' ).attr( 'id' );
+			var grpid = input.closest( 'div.cond-container.cond-group' ).attr( 'id' );
 			var newname = (input.val() || "").trim();
 			var span = jQuery( 'span#titletext', input.parent() );
 			var grp = getConditionIndex()[grpid];
@@ -3133,7 +3163,7 @@ var ReactorSensor = (function(api, $) {
 				}
 
 				/* Update config */
-				input.closest( 'div.cond-group-container' ).addClass( 'tbmodified' );
+				input.closest( 'div.cond-group' ).addClass( 'tbmodified' );
 				grp.name = newname;
 				configModified = true;
 			}
@@ -3150,7 +3180,7 @@ var ReactorSensor = (function(api, $) {
 			var $el = jQuery( ev.currentTarget );
 			var $p = $el.closest( 'div.cond-group-title' );
 			$p.children().hide();
-			var grpid = $p.closest( 'div.cond-group-container' ).attr( 'id' );
+			var grpid = $p.closest( 'div.cond-container.cond-group' ).attr( 'id' );
 			var grp = getConditionIndex()[grpid];
 			if ( grp ) {
 				$p.append( jQuery( '<input class="titleedit form-control form-control-sm" title="Enter new group name">' )
@@ -3165,7 +3195,7 @@ var ReactorSensor = (function(api, $) {
 		 */
 		function handleGroupExpandClick( ev ) {
 			var $el = jQuery( ev.currentTarget );
-			var $p = $el.closest( 'div.cond-group-container' );
+			var $p = $el.closest( 'div.cond-container.cond-group' );
 			var $l = jQuery( 'div.cond-group-body:first', $p );
 			if ( "collapse" === $el.attr( 'id' ) ) {
 				$l.slideUp();
@@ -3238,7 +3268,7 @@ var ReactorSensor = (function(api, $) {
 			var $el = jQuery( ev.currentTarget );
 			if ( $el.prop( 'disabled' ) || "root" === $el.attr( 'id' ) ) { return; }
 
-			var $grpEl = $el.closest( 'div.cond-group-container' );
+			var $grpEl = $el.closest( 'div.cond-container.cond-group' );
 			var grpId = $grpEl.attr( 'id' );
 
 			var ixCond = getConditionIndex();
@@ -3251,7 +3281,7 @@ var ReactorSensor = (function(api, $) {
 			$grpEl.remove();
 			deleteCondition( grpId, ixCond, getConfiguration(), grp.__parent, true );
 			configModified = true;
-			$el.closest( 'div.cond-group-container' ).addClass( 'tbmodified' ); // ??? NO! Parent group!
+			$el.closest( 'div.cond-container.cond-group' ).addClass( 'tbmodified' ); // ??? NO! Parent group!
 			updateSaveControls();
 		}
 
@@ -3266,7 +3296,7 @@ var ReactorSensor = (function(api, $) {
 			var $condgroup = getGroupTemplate( newId );
 
 			/* Create an empty condition group in the data */
-			var $parentGroup = $el.closest( 'div.cond-group-container' );
+			var $parentGroup = $el.closest( 'div.cond-container.cond-group' );
 			var $container = jQuery( 'div.cond-list:first', $parentGroup );
 			var parentId = $parentGroup.attr( 'id' );
 			var ixCond = getConditionIndex();
@@ -3317,7 +3347,7 @@ var ReactorSensor = (function(api, $) {
 			/* Remove the condition row from display, reindex parent. */
 			row.remove();
 
-			el.closest( 'div.cond-group-container' ).addClass( 'tbmodified' );
+			el.closest( 'div.cond-container.cond-group' ).addClass( 'tbmodified' );
 			configModified = true;
 			updateSaveControls();
 		}
@@ -3337,7 +3367,7 @@ var ReactorSensor = (function(api, $) {
 			reindexConditions( obj.__parent );
 
 			/* Attach it to new parent. */
-			var prid = $target.closest( 'div.cond-group-container' ).attr( 'id' );
+			var prid = $target.closest( 'div.cond-container.cond-group' ).attr( 'id' );
 			var pr = ixCond[prid];
 			pr.conditions.push( obj ); /* doesn't matter where we put it */
 			obj.__parent = pr;
@@ -3356,7 +3386,7 @@ var ReactorSensor = (function(api, $) {
 			var ixCond = getConditionIndex();
 
 			/* UI is handled, so just reindex parent */
-			var prid = $target.closest( 'div.cond-group-container' ).attr( 'id' );
+			var prid = $target.closest( 'div.cond-container.cond-group' ).attr( 'id' );
 			var pr = ixCond[prid];
 			reindexConditions( pr );
 
@@ -3388,7 +3418,7 @@ var ReactorSensor = (function(api, $) {
 		function handleGroupControlClick( ev ) {
 			var $el = jQuery( ev.target );
 			var action = $el.attr( 'id' );
-			var grpid = $el.closest( 'div.cond-group-container' ).attr( 'id' );
+			var grpid = $el.closest( 'div.cond-container.cond-group' ).attr( 'id' );
 			var grp = getConditionIndex()[ grpid ];
 			var cdata = getConfiguration();
 
@@ -3444,7 +3474,7 @@ var ReactorSensor = (function(api, $) {
 			if ( false === grp.disabled ) delete grp.disabled;
 			if ( false === grp.invert ) delete grp.invert;
 
-			$el.closest( 'div.cond-group-container' ).addClass( 'tbmodified' );
+			$el.closest( 'div.cond-container.cond-group' ).addClass( 'tbmodified' );
 			configModified = true;
 			updateSaveControls();
 		}
@@ -3454,7 +3484,7 @@ var ReactorSensor = (function(api, $) {
 		 */
 		function getConditionTemplate( id ) {
 			var el = jQuery( '\
-<div class="cond-container"> \
+<div class="cond-container cond-cond"> \
   <div class="pull-right cond-actions"> \
 	  <button id="condmore" class="btn md-btn" title="Show condition options"><i class="material-icons">expand_more</i></button> \
 	  <button class="btn md-btn draghandle" title="Move condition (drag)"><i class="material-icons">reorder</i></button> \
@@ -3483,9 +3513,10 @@ var ReactorSensor = (function(api, $) {
 
 		function getGroupTemplate( grpid ) {
 			var el = jQuery( '\
-<div class="cond-group-container"> \
+<div class="cond-container cond-group"> \
   <div class="cond-group-header"> \
 	<div class="pull-right"> \
+	  <button id="condmore" class="btn md-btn noroot" title="Show condition options"><i class="material-icons">expand_more</i></button> \
 	  <button id="sortdrag" class="btn md-btn draghandle noroot" title="Move group (drag)"><i class="material-icons">reorder</i></button> \
 	  <button id="delgroup" class="btn md-btn noroot" title="Delete group"><i class="material-icons">clear</i></button> \
 	</div> \
@@ -3534,6 +3565,7 @@ var ReactorSensor = (function(api, $) {
 			jQuery( 'button#addcond', el ).on( 'click.reactor', handleAddConditionClick );
 			jQuery( 'button#addgroup', el ).on( 'click.reactor', handleAddGroupClick );
 			jQuery( 'button#delgroup', el ).on( 'click.reactor', handleDeleteGroupClick );
+			jQuery("button#condmore", el).on( 'click.reactor', handleExpandOptionsClick );
 			jQuery( 'span#titletext,button#edittitle', el ).on( 'click.reactor', handleTitleClick );
 			jQuery( 'button#collapse', el ).on( 'click.reactor', handleGroupExpandClick );
 			jQuery( '.cond-group-control > button', el ).on( 'click.reactor', handleGroupControlClick );
@@ -3653,12 +3685,12 @@ var ReactorSensor = (function(api, $) {
 			/* Our styles. */
 			var html = "<style>";
 			html += 'div#tab-conds.reactortab div#conditions { width: 100%; }';
-			html += 'div#tab-conds.reactortab .cond-group-container { position: relative; margin: 4px 0; border-radius: 4px; padding: 5px; border: 1px solid #EEE; background: rgba(255, 255, 255, 0.9); }';
-			html += 'div#tab-conds.reactortab .cond-group-container { padding: 10px; padding-bottom: 6px; border: 1px solid #0c6099; background: #bce8f1; }';
-			html += 'div#tab-conds.reactortab .cond-group-container.levelmod1 { background-color: #faebcc; }';
-			html += 'div#tab-conds.reactortab .cond-group-container.levelmod2 { background-color: #d6e9c6; }';
-			html += 'div#tab-conds.reactortab .cond-group-container.levelmod3 { background-color: #ebccd1; }';
-			html += 'div#tab-conds.reactortab .cond-container { position: relative; margin: 4px 0; border-radius: 4px; padding: 5px; border: 1px solid #0c6099; background: #fff; }';
+			html += 'div#tab-conds.reactortab .cond-group { position: relative; margin: 4px 0; border-radius: 4px; padding: 5px; border: 1px solid #EEE; background: rgba(255, 255, 255, 0.9); }';
+			html += 'div#tab-conds.reactortab .cond-group { padding: 10px; padding-bottom: 6px; border: 1px solid #0c6099; background: #bce8f1; }';
+			html += 'div#tab-conds.reactortab .cond-group.levelmod1 { background-color: #faebcc; }';
+			html += 'div#tab-conds.reactortab .cond-group.levelmod2 { background-color: #d6e9c6; }';
+			html += 'div#tab-conds.reactortab .cond-group.levelmod3 { background-color: #ebccd1; }';
+			html += 'div#tab-conds.reactortab .cond-cond { position: relative; margin: 4px 0; border-radius: 4px; padding: 5px; border: 1px solid #0c6099; background: #fff; }';
 			html += 'div#tab-conds.reactortab .cond-group-header { margin-bottom: 10px; }';
 			html += 'div#tab-conds.reactortab .cond-group-actions { margin-left: 15px; margin-bottom: 8px; }';
 			html += 'div#tab-conds.reactortab .cond-list { list-style: none; padding: 0 0 0 15px; margin: 0; min-height: 24px; }';
@@ -3674,10 +3706,10 @@ var ReactorSensor = (function(api, $) {
 			html += 'div#tab-conds.reactortab .btn.checked { background-color: #5cb85c; }';
 			html += 'div#tab-conds.reactortab .btn.tb-disable.checked { background-color: #d9534f; }';
 
-			html += 'div#tab-conds.reactortab div.cond-group-container.tbmodified:not(.tberror) { }';
-			html += 'div#tab-conds.reactortab div.cond-group-container.tberror { border-left: 4px solid red; }';
-			html += 'div#tab-conds.reactortab div.cond-container.tbmodified:not(.tberror) { }';
-			html += 'div#tab-conds.reactortab div.cond-container.tberror { border-left: 4px solid red; }';
+			html += 'div#tab-conds.reactortab div.cond-group.tbmodified:not(.tberror) { }';
+			html += 'div#tab-conds.reactortab div.cond-group.tberror { border-left: 4px solid red; }';
+			html += 'div#tab-conds.reactortab div.cond-cond.tbmodified:not(.tberror) { }';
+			html += 'div#tab-conds.reactortab div.cond-cond.tberror { border-left: 4px solid red; }';
 			html += 'div#tab-conds.reactortab div.condopts { padding-left: 32px; }';
 			html += 'div#tab-conds.reactortab div.cond-type { display: inline-block; vertical-align: top; }';
 			html += 'div#tab-conds.reactortab div.params { display: inline-block; clear: right; }';
