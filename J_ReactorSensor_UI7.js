@@ -463,6 +463,20 @@ var ReactorSensor = (function(api, $) {
 		return isAncestor( grp, c.__parent.id, myid );
 	}
 
+	/* Return true if node (id) is a descendent of grp (id) */
+	function isDescendent( node, grp, myid ) {
+		myid = myid || api.getCpanelDeviceId();
+		var c = getConditionIndex( myid )[grp];
+		/* Fast exit if our anchor condition isn't a group (only groups have descendents) */
+		if ( "group" !== ( c.type || "group" ) ) return false;
+		for ( var k=0; k<( c.conditions || [] ).length; k++ ) {
+			if ( node === c.conditions[k].id ) return true;
+			if ( "group" === ( c.conditions[k].type || "group" ) &&
+				isDescendent( node, c.conditions[k].id, myid ) ) return true;
+		}
+		return false;
+	}
+
 	/* Initialize the module */
 	function initModule( myid ) {
 		myid = myid || api.getCpanelDeviceId();
@@ -1729,7 +1743,7 @@ var ReactorSensor = (function(api, $) {
 					break;
 
 				case 'group':
-					removeConditionProperties( cond, 'conditions,operator,invert,disabled' );
+					removeConditionProperties( cond, 'name,conditions,operator,invert,disabled' );
 					if ( ( cond.conditions || [] ).length == 0 ) {
 						$row.addClass( 'tberror' );
 					}
@@ -2022,12 +2036,13 @@ var ReactorSensor = (function(api, $) {
 			}
 
 			/* If condition options are present, check them, too. */
-			if ( jQuery( 'div.condopts', $row ).length > 0 ) {
+			var $ct = $row.hasClass( 'cond-group' ) ? $row.children( 'div.condopts' ) : jQuery( 'div.condopts', $row );
+			if ( $ct.length > 0 ) {
 
 				cond.options = cond.options || {};
 
 				/* Predecessor condition (sequencing) */
-				var $pred = jQuery( 'select#pred', $row );
+				var $pred = jQuery( 'select#pred', $ct );
 				if ( isEmpty( $pred.val() ) ) {
 					if ( undefined !== cond.options.after ) {
 						delete cond.options.after;
@@ -2035,10 +2050,10 @@ var ReactorSensor = (function(api, $) {
 						configModified = true;
 					}
 				} else {
-					var pt = parseInt( jQuery('input#predtime', $row).val() );
+					var pt = parseInt( jQuery('input#predtime', $ct).val() );
 					if ( isNaN( pt ) || pt < 0 ) {
 						pt = 0;
-						jQuery('input#predtime', $row).val(pt);
+						jQuery('input#predtime', $ct).val(pt);
 					}
 					if ( cond.options.after !== $pred.val() || cond.options.aftertime !== pt ) {
 						cond.after = $pred.val();
@@ -2048,11 +2063,11 @@ var ReactorSensor = (function(api, $) {
 				}
 
 				/* Repeats */
-				var $rc = jQuery('input#rcount', $row);
+				var $rc = jQuery('input#rcount', $ct);
 				if ( isEmpty( $rc.val() ) || $rc.prop('disabled') ) {
-					jQuery('input#duration', $row).prop('disabled', false);
-					jQuery('select#durop', $row).prop('disabled', false);
-					jQuery('input#rspan', $row).val("").prop('disabled', true);
+					jQuery('input#duration', $ct).prop('disabled', false);
+					jQuery('select#durop', $ct).prop('disabled', false);
+					jQuery('input#rspan', $ct).val("").prop('disabled', true);
 					if ( undefined !== cond.options.repeatcount ) {
 						delete cond.options.repeatcount;
 						delete cond.options.repeatwithin;
@@ -2070,17 +2085,17 @@ var ReactorSensor = (function(api, $) {
 							delete cond.options.duration_op;
 							configModified = true;
 						}
-						jQuery('input#duration', $row).val("").prop('disabled', true);
-						jQuery('select#durop', $row).val("ge").prop('disabled', true);
-						jQuery('input#rspan', $row).prop('disabled', false);
-						if ( jQuery('input#rspan', $row).val() === "" ) {
-							jQuery('input#rspan', $row).val( "60" );
+						jQuery('input#duration', $ct).val("").prop('disabled', true);
+						jQuery('select#durop', $ct).val("ge").prop('disabled', true);
+						jQuery('input#rspan', $ct).prop('disabled', false);
+						if ( jQuery('input#rspan', $ct).val() === "" ) {
+							jQuery('input#rspan', $ct).val( "60" );
 							cond.options.repeatwithin = 60;
 							configModified = true;
 						}
 					}
 				}
-				var $rs = jQuery('input#rspan', $row);
+				var $rs = jQuery('input#rspan', $ct);
 				if ( ! $rs.prop('disabled') ) {
 					var rspan = getInteger( $rs.val() );
 					if ( isNaN( rspan ) || rspan < 1 ) {
@@ -2095,10 +2110,10 @@ var ReactorSensor = (function(api, $) {
 				}
 
 				/* Duration */
-				var $dd = jQuery('input#duration', $row);
+				var $dd = jQuery('input#duration', $ct);
 				if ( isEmpty( $dd.val() ) || $dd.prop('disabled') ) {
-					jQuery('input#rcount', $row).prop('disabled', false);
-					// jQuery('input#rspan', $row).prop('disabled', false);
+					jQuery('input#rcount', $ct).prop('disabled', false);
+					// jQuery('input#rspan', $ct).prop('disabled', false);
 					if ( undefined !== cond.options.duration ) {
 						delete cond.options.duration;
 						delete cond.options.duration_op;
@@ -2110,8 +2125,8 @@ var ReactorSensor = (function(api, $) {
 						$dd.addClass('tberror');
 					} else {
 						$dd.removeClass('tberror');
-						jQuery('input#rcount', $row).val("").prop('disabled', true);
-						// jQuery('input#rspan', $row).val("").prop('disabled', true);
+						jQuery('input#rcount', $ct).val("").prop('disabled', true);
+						// jQuery('input#rspan', $ct).val("").prop('disabled', true);
 						delete cond.options.repeatwithin;
 						delete cond.options.repeatcount;
 						if ( ( cond.options.duration || 0 ) !== dur ) {
@@ -2119,11 +2134,11 @@ var ReactorSensor = (function(api, $) {
 							if ( dur === 0 ) {
 								delete cond.options.duration;
 								delete cond.options.duration_op;
-								jQuery('input#rcount', $row).prop('disabled', false);
-								// jQuery('input#rspan', $row).prop('disabled', false);
+								jQuery('input#rcount', $ct).prop('disabled', false);
+								// jQuery('input#rspan', $ct).prop('disabled', false);
 							} else {
 								cond.options.duration = dur;
-								cond.options.duration_op = jQuery('select#durop', $row).val() || "ge";
+								cond.options.duration_op = jQuery('select#durop', $ct).val() || "ge";
 							}
 							configModified = true;
 						}
@@ -2131,7 +2146,7 @@ var ReactorSensor = (function(api, $) {
 				}
 
 				/* Hold time (delay reset) */
-				$dd = jQuery( 'input#holdtime', $row );
+				$dd = jQuery( 'input#holdtime', $ct );
 				if ( isEmpty( $dd.val() ) || $dd.prop( 'disabled' ) ) {
 					if ( undefined !== (cond.options || {}).holdtime ) {
 						delete cond.options.holdtime;
@@ -2156,13 +2171,13 @@ var ReactorSensor = (function(api, $) {
 				}
 
 				/* Latching */
-				var latchval = jQuery('input#latchcond', $row).prop('checked') ? 1 : 0;
+				var latchval = jQuery('input#latchcond', $ct).prop('checked') ? 1 : 0;
 				if ( latchval != ( cond.options.latch || 0 ) ) {
 					/* Changed. Don't store false, just remove key */
 					if ( 0 !== latchval ) {
 						cond.options.latch = latchval;
 						if ( "and" !== ( cond.__parent.operator || "and" ) ) {
-							jQuery('input#latchcond', $row).addClass( 'tberror' );
+							jQuery('input#latchcond', $ct).addClass( 'tberror' );
 						} else {
 							configModified = true;
 						}
@@ -2171,18 +2186,15 @@ var ReactorSensor = (function(api, $) {
 						configModified = true;
 					}
 				}
-
-				/* Remove key if no subkeys */
-				if ( ! hasAnyProperty( cond.options ) ) {
-					delete cond.options;
-				}
 			}
 
 			/* Options open or not, make sure options expander is highlighted */
+			var optButton = JQuery( $row.hasClass( 'cond-group' ) ? 'cond-group-header > button#condmore' : 'cond-actions > button#condmore', $row );
 			if ( hasAnyProperty( cond.options ) ) {
-				jQuery( 'button#condmore', $row ).addClass( 'attn' );
+				optButton.addClass( 'attn' );
 			} else {
-				jQuery( 'button#condmore', $row ).removeClass( 'attn' );
+				optButton.removeClass( 'attn' );
+				delete cond.options;
 			}
 
 			$row.has('.tberror').addClass('tberror');
@@ -2358,24 +2370,23 @@ var ReactorSensor = (function(api, $) {
 			var $row = $el.closest( 'div.cond-container' );
 			var isGroup = $row.hasClass( 'cond-group' );
 			var cond = getConditionIndex()[ $row.attr( "id" ) ];
-			var grp = cond.__parent;
 
 			/* If the options container already exists, just show it. */
 			var $container = jQuery( isGroup ? 'div.condopts' : 'div.cond-body > div.condopts', $row );
 			if ( $container.length > 0 ) {
-				/* Container exists and is open, close it. */
+				/* Container exists and is open, close it, remove it. */
 				$container.slideUp({
 					complete: function() {
 						$container.remove();
 					}
 				});
-				jQuery( 'button#condmore i', $row ).text( 'expand_more' );
+				jQuery( 'i', $el ).text( 'expand_more' );
 				$el.attr( 'title', msgOptionsShow );
 				return;
 			}
 
 			/* Doesn't exist. Create the options container and add options */
-			jQuery( 'button#condmore i', $row ).text( 'expand_less' );
+			jQuery( 'i', $el ).text( 'expand_less' );
 			$el.attr( 'title', msgOptionsHide );
 			$container = jQuery( '<div class="condopts" />' ).hide();
 
@@ -2385,26 +2396,12 @@ var ReactorSensor = (function(api, $) {
 			/* Sequence (predecessor condition) */
 			if ( displayed.sequence ) {
 				var $preds = jQuery('<select id="pred" class="form-control form-control-sm"><option value="">(any time/no sequence)</option></select>');
-				for ( var ic=0; ic<(grp.conditions || []).length; ic++) {
-					var gc = grp.conditions[ic];
-					/* Must be non-comment, not this condition, and not the predecessor to this condition (recursive) */
-					if ( cond.id !== gc.id && "comment" !== gc.type && ( gc.options || {} ).after !== cond.id ) {
-						var $opt = jQuery( '<option/>' ).val( gc.id );
-						var t = makeConditionDescription( gc );
-						if ( t.length > 40 ) {
-							$opt.attr( 'title', t );
-							t = t.substring(0,37) + "...";
-						}
-						$opt.text( t );
-						$preds.append( $opt );
-					}
-				}
 				/* Add groups that are not ancestor of condition */
 				DOtraverse( (getConditionIndex()).root, function( node ) {
 					$preds.append( jQuery( '<option/>' ).val( node.id ).text( makeConditionDescription( node ) ) );
 				}, false, function( node ) {
-					//return "group" === ( node.type || "group" ) && !isAncestor( node.id, cond.id );
-					return !isAncestor( node.id, cond.id );
+					/* If node is not ancestor (line to root) or descendent of cond, allow as predecessor */
+					return cond.id !== node.id && !isAncestor( node.id, cond.id ) && !isDescendent( node.id, cond.id );
 				});
 				$container.append('<div id="predopt" class="form-inline"><label>Only after&nbsp;</label></div>');
 				jQuery('div#predopt label', $container).append( $preds );
@@ -2643,7 +2640,7 @@ var ReactorSensor = (function(api, $) {
 			}
 			var container = jQuery('div.params', row).empty();
 
-			row.children( '#condmore' ).prop( 'disabled', "comment" === cond.type );
+			row.children( 'button#condmore' ).prop( 'disabled', "comment" === cond.type );
 
 			switch (cond.type) {
 				case "":
@@ -3565,7 +3562,7 @@ var ReactorSensor = (function(api, $) {
 			jQuery( 'button#addcond', el ).on( 'click.reactor', handleAddConditionClick );
 			jQuery( 'button#addgroup', el ).on( 'click.reactor', handleAddGroupClick );
 			jQuery( 'button#delgroup', el ).on( 'click.reactor', handleDeleteGroupClick );
-			jQuery("button#condmore", el).on( 'click.reactor', handleExpandOptionsClick );
+			jQuery( 'button#condmore', el).on( 'click.reactor', handleExpandOptionsClick );
 			jQuery( 'span#titletext,button#edittitle', el ).on( 'click.reactor', handleTitleClick );
 			jQuery( 'button#collapse', el ).on( 'click.reactor', handleGroupExpandClick );
 			jQuery( '.cond-group-control > button', el ).on( 'click.reactor', handleGroupControlClick );
@@ -3607,6 +3604,9 @@ var ReactorSensor = (function(api, $) {
 			if ( grp.disabled ) {
 				jQuery( 'div.cond-group-conditions button#disable', el ).addClass( "checked" );
 			} else { delete grp.disabled; }
+			if ( grp.options && hasAnyProperty( grp.options ) ) {
+				jQuery( 'button#condmore', el ).addClass( 'attn' );
+			}
 
 			container = jQuery( 'div.cond-list', el );
 
