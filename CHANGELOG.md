@@ -4,6 +4,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 3.3 (development)
 
+* Fix: (attempt to fix) when editing a condition, selecting an item from the scene events menu was causing a scroll to top; this is idiopathic, and seems to only occur on this Bootstrap dropdown element, and is reactive with the setting of the enabled state of the "Save" and "Revert" buttons; work around by saving scroll position and restoring after update.
 * Enhancement: Condition options can now be applied to groups.
 * Enhancement: LuaXP updated to latest (0.9.9); fixes excessive strictness of parser not allowing whitespace between function name and arg list.
 * Enhancement: Make timing of watch-driven updates configurable, and make new default immediate evaluation to mitigate race condition in fast-changing states (like RFXtrx switches).
