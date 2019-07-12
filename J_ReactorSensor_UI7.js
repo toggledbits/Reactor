@@ -17,11 +17,11 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.3develop-19187';
+	var pluginVersion = '3.3develop-19193';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
-	var _UIVERSION = 19178;     /* must coincide with Lua core */
+	var _UIVERSION = 19193;     /* must coincide with Lua core */
 
 	var _CDATAVERSION = 19082;  /* must coincide with Lua core */
 
@@ -1122,8 +1122,10 @@ var ReactorSensor = (function(api, $) {
 	 */
 	function updateSaveControls() {
 		var errors = jQuery('.tberror');
+		var pos = $( window ).scrollTop();
 		jQuery('button#saveconf').prop('disabled', ! ( configModified && errors.length === 0 ) );
 		jQuery('button#revertconf').prop('disabled', !configModified);
+		setTimeout( function() { $(window).scrollTop( pos ); }, 100 );
 	}
 
 /** ***************************************************************************
@@ -2189,7 +2191,7 @@ var ReactorSensor = (function(api, $) {
 			}
 
 			/* Options open or not, make sure options expander is highlighted */
-			var optButton = JQuery( $row.hasClass( 'cond-group' ) ? 'cond-group-header > button#condmore' : 'cond-actions > button#condmore', $row );
+			var optButton = jQuery( $row.hasClass( 'cond-group' ) ? 'cond-group-header > button#condmore' : 'cond-actions > button#condmore', $row );
 			if ( hasAnyProperty( cond.options ) ) {
 				optButton.addClass( 'attn' );
 			} else {
@@ -2562,6 +2564,7 @@ var ReactorSensor = (function(api, $) {
 						setUpConditionOpFields( $row, cond );
 						updateCurrentServiceValue( $row );
 						updateConditionRow( $row, jQuery( ev ) );
+						jQuery( 'select.varmenu', $row ).focus();
 					};
 				};
 				var reptext = function( s ) {
@@ -3141,6 +3144,8 @@ var ReactorSensor = (function(api, $) {
 			condel.addClass( 'tbmodified' );
 			configModified = true;
 			updateConditionRow( condel );
+
+			jQuery( 'select#condtype', condel ).focus();
 		}
 
 		function handleTitleChange( ev ) {
@@ -3154,6 +3159,7 @@ var ReactorSensor = (function(api, $) {
 				/* Group name check */
 				if ( newname.length < 1 ) {
 					ev.preventDefault();
+					jQuery( 'button#saveconf' ).prop( 'disabled', true );
 					input.addClass( 'tberror' );
 					input.focus();
 					return;
@@ -3181,7 +3187,7 @@ var ReactorSensor = (function(api, $) {
 			var grp = getConditionIndex()[grpid];
 			if ( grp ) {
 				$p.append( jQuery( '<input class="titleedit form-control form-control-sm" title="Enter new group name">' )
-					.val( grp.name ) );
+					.val( grp.name || grp.id || "" ) );
 				jQuery( 'input.titleedit', $p ).on( 'change.reactor', handleTitleChange )
 					.on( 'blur.reactor', handleTitleChange );
 			}
