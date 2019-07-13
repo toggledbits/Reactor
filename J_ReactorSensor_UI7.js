@@ -1991,7 +1991,7 @@ var ReactorSensor = (function(api, $) {
 						cond.relto = v;
 						cond.relcond = jQuery( 'div.params select#relcond', $row).val() || "";
 						if ( "" === cond.relcond ) {
-							jQuery( 'div.params select#relcond' ).addClass( 'tberror' );
+							jQuery( 'div.params select#relcond', $row ).addClass( 'tberror' );
 						}
 						delete cond.basetime;
 					} else {
