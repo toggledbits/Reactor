@@ -2058,7 +2058,7 @@ var ReactorSensor = (function(api, $) {
 						jQuery('input#predtime', $ct).val(pt);
 					}
 					if ( cond.options.after !== $pred.val() || cond.options.aftertime !== pt ) {
-						cond.after = $pred.val();
+						cond.options.after = $pred.val();
 						cond.options.aftertime = pt;
 						configModified = true;
 					}
@@ -2191,7 +2191,7 @@ var ReactorSensor = (function(api, $) {
 			}
 
 			/* Options open or not, make sure options expander is highlighted */
-			var optButton = jQuery( $row.hasClass( 'cond-group' ) ? 'cond-group-header > button#condmore' : 'cond-actions > button#condmore', $row );
+			var optButton = jQuery( $row.hasClass( 'cond-group' ) ? '.cond-group-header > div > button#condmore:first' : '.cond-actions > button#condmore', $row );
 			if ( hasAnyProperty( cond.options ) ) {
 				optButton.addClass( 'attn' );
 			} else {
