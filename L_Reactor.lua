@@ -3415,6 +3415,7 @@ local function startSensors( pdev )
 			count = count + 1
 			L("Starting %1 (#%2)", luup.devices[k].description, k)
 			setVar( MYSID, "Message", "Starting " .. luup.devices[k].description, pdev )
+			-- N.B. start sensor whether enabled or not, as key inits happen regardless.
 			local status, err = pcall( startSensor, k, pdev )
 			if not status then
 				L({level=1,msg="%1 (#%2) failed to start: %3"}, luup.devices[k].description, k, err)
@@ -3426,7 +3427,7 @@ local function startSensors( pdev )
 				started = started + 1
 			end
 		elseif v.id == "hmt" then
-			D("waitSystemReady() adding watch for hmt device #%1", k)
+			D("startSensors() adding watch for hmt device #%1", k)
 			luup.attr_set( "invisible", debugMode and 0 or 1, k )
 			luup.attr_set( "hidden", debugMode and 0 or 1, k )
 			luup.attr_set( "room", luup.attr_get( "room", pdev ) or "0", k )
@@ -4205,6 +4206,7 @@ function watch( dev, sid, var, oldVal, newVal )
 end
 
 local EOL = "\r\n"
+local summaryDevices
 
 local function getDevice( dev, pdev, v )
 	if v == nil then v = luup.devices[dev] end
@@ -4377,18 +4379,19 @@ end
 
 local function getLuupSceneSummary( scd )
 	local r = EOL
+	local pfx = "            "
 	if ( scd.lua or "" ) ~= "" then
-		r = r .. "    Scene Lua:" .. EOL
-		r = r .. getLuaSummary( scd.lua, scd.encoded_lua, "      %6d: %s" )
+		r = r .. pfx .. "Scene Lua:" .. EOL
+		r = r .. getLuaSummary( scd.lua, scd.encoded_lua, pfx .. "  %6d: %s" )
 	end
 	for ix,gr in ipairs( scd.groups or {} ) do
-		r = r .. string.format( "    Group %d", ix )
+		r = r .. string.format( "%sGroup %d", pfx, ix )
 		if ( gr.delay or 0 ) > 0 then
 			r = r .. string.format( " delay %d", gr.delay )
 		end
 		r = r .. EOL
 		for _,ac in ipairs( gr.actions or {} ) do
-			r = r .. string.format( "        Device %s (%s) %s/%s ",
+			r = r .. string.format( "%s    Device %s (%s) %s/%s ", pfx,
 				ac.device,
 				(luup.devices[tonumber(ac.device or -1) or -1] or {}).description or "?missing?",
 				ac.service, ac.action )
@@ -4437,12 +4440,39 @@ local function showGeofenceData( r )
 	return r
 end
 
+function getCondOpt( cond )
+	local condopt = cond.options or {}
+	local r = ""
+	if condopt.after then
+		if ( condopt.aftertime or 0 ) > 0 then
+			r = r .. " within " .. tostring(condopt.aftertime) .. "s"
+		end
+		r = r .. " after " .. condopt.after
+	end
+	if condopt.duration then
+		r = r .. " for " .. ( condopt.duration_op or "ge" ) ..
+			" " .. condopt.duration .. "s"
+	end
+	if condopt.repeatcount then
+		r = r .. " repeats " .. condopt.repeatcount ..
+			" within " .. ( condopt.repeatwithin or 60 ).. "s"
+	end
+	if (condopt.holdtime or 0) > 0 then
+		r = r .. "; delay reset for " .. condopt.holdtime .. "s"
+	end
+	if (condopt.latch or 0) ~= 0 then
+		r = r .. "; latching"
+	end
+	return r
+end
+
 function RG( grp, condState, level, r )
 	r = r or ""
 	level = level or 1
 	local gs = condState[ grp.id ] or {}
 	r = r .. "\"" .. (grp.name or grp.id) .. "\" (" ..
 		( grp.invert and "NOT " or "" ) .. (grp.operator or "and"):upper() .. ") " ..
+		getCondOpt( grp ) ..
 		( gs.evalstate and "TRUE" or "false" ) .. " as of " .. shortDate( gs.evalstamp ) ..
 		( grp.disabled and " DISABLED" or "" ) ..
 		' <' .. tostring(grp.id) .. '>' ..
@@ -4450,7 +4480,6 @@ function RG( grp, condState, level, r )
 	local opch = ({ ['and']="&", ['or']="|", xor="^", ['nul']="Z" })[grp.operator or "and"] or "+"
 	for _,cond in ipairs( grp.conditions or {} ) do
 		local condtype = cond.type or "group"
-		local condopt = cond.options or {}
 		local cs = condState[cond.id] or {}
 		r = r .. "    " .. string.rep( "  |   ", level-1 ) ..
 			"  " .. opch .. "-" .. ( cond.disabled and "X" or ( (cs.evalstate == nil) and "?" or ( cs.evalstate and "T" or "F" ) ) ) ..
@@ -4463,6 +4492,10 @@ function RG( grp, condState, level, r )
 			r = r .. string.format("%s/%s %s %s", cond.service or "?", cond.variable or "?", cond.operator or cond.condition or "?",
 				cond.value or "")
 			if cond.nocase == 0 then r = r .. " (match case)" end
+			summaryDevices[tostring(cond.device)] = true
+			if ( ( luup.devices[cond.device] or {} ).device_num_parent or 0 ) ~= 0 then
+				summaryDevices[tostring(luup.devices[cond.device].device_num_parent)] = true
+			end
 		elseif condtype == "grpstate" then
 			r = r .. string.format("%s (%d) ", cond.device == -1 and "(self)" or ( ( luup.devices[cond.device]==nil ) and ( "*** missing " .. ( cond.devicename or "unknown" ) ) or
 				luup.devices[cond.device].description ), cond.device )
@@ -4482,25 +4515,8 @@ function RG( grp, condState, level, r )
 		else
 			r = r .. json.encode(cond)
 		end
-		if condopt.after then
-			if ( condopt.aftertime or 0 ) > 0 then
-				r = r .. " within " .. tostring(condopt.aftertime) .. "s"
-			end
-			r = r .. " after " .. condopt.after
-		end
-		if condopt.duration then
-			r = r .. " for " .. ( condopt.duration_op or "ge" ) ..
-				" " .. condopt.duration .. "s"
-		end
-		if condopt.repeatcount then
-			r = r .. " repeats " .. condopt.repeatcount ..
-				" within " .. ( condopt.repeatwithin or 60 ).. "s"
-		end
-		if (condopt.holdtime or 0) > 0 then
-			r = r .. "; delay reset for " .. condopt.holdtime .. "s"
-		end
-		if (condopt.latch or 0) ~= 0 then
-			r = r .. "; latching"
+		if condtype ~= "group" then
+			r = r .. getCondOpt( cond )
 		end
 		if not (":comment:group:"):match( condtype ) then
 			r = r .. " ["
@@ -4598,8 +4614,9 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			r = r .. "     Power: " .. tostring(luup.variable_get( MYSID, "SystemPowerSource", pluginDevice ) or "?")
 			r = r .. ", battery level " .. tostring(luup.variable_get( MYSID, "SystemBatteryLevel", pluginDevice ) or "?") .. EOL
 		end
-		local scenesUsed = {}
 		for n,d in pairs( luup.devices ) do
+			local scenesUsed = {}
+			summaryDevices = {}
 			if d.device_type == RSTYPE and ( deviceNum==nil or n==deviceNum ) then
 				local status = ( ( getVarNumeric( "Armed", 0, n, SENSOR_SID ) ~= 0 ) and " armed" or "" )
 				status = status .. ( ( getVarNumeric("Tripped", 0, n, SENSOR_SID ) ~= 0 ) and " tripped" or "" )
@@ -4644,20 +4661,47 @@ function request( lul_request, lul_parameters, lul_outputformat )
 					for k,v in pairs( cdata.activities or {} ) do
 						r = r .. getReactorScene( k, v, n, scenesUsed )
 					end
+
 					r = r .. getEvents( n )
+				end
+
+				if next( summaryDevices ) then
+					r = r .. "    Devices" .. EOL
+					for kd in pairs( summaryDevices ) do
+						local nd = tonumber( kd ) or -1
+						local sd = luup.devices[nd]
+						if sd == nil then
+							r = r .. string.format( "        *** UNKNOWN DEVICE #%s%s", kd, EOL )
+						else
+							local pn = luup.attr_get( 'plugin', nd ) or ""
+							r = r .. string.format( "        %s (%d) %s (%s/%s); parent %d; plugin %s%s",
+								sd.description or "?", nd,
+								sd.device_type or "?",
+								sd.category_num or "?", sd.subcategory_num or "?",
+								sd.device_num_parent or -1,
+								(pn == "") and "-" or pn,
+								EOL )
+						end
+					end
+				end
+				summaryDevices = nil
+
+				if next( scenesUsed ) then
+					r = r .. "    Scenes" .. EOL
+					for scid, scd in pairs( scenesUsed ) do
+						r = r .. '        Scene #' .. scid .. " " .. tostring(scd.name)
+						local success, t = pcall( getLuupSceneSummary, scd )
+						if success and t then
+							r = r .. t
+						else
+							r = r .. " - summary not available: " .. tostring(t) .. EOL
+						end
+					end
 				end
 			end
 		end
+
 		local rs = ""
-		for scid, scd in pairs( scenesUsed ) do
-			rs = rs .. 'Scene #' .. scid .. " " .. tostring(scd.name)
-			local success, t = pcall( getLuupSceneSummary, scd )
-			if success and t then
-				rs = rs .. t
-			else
-				rs = rs .. " - summary not available: " .. tostring(t) .. EOL
-			end
-		end
 		if getVarNumeric("SummaryShowStartupLua", 0, pluginDevice, MYSID) ~= 0 then
 			-- ??? 2019-03-05: this may not be relevant, since plugin env can't see startup/scene lua env
 			rs = rs .. showStartupLua()
