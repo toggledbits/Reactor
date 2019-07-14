@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.3';
+	var pluginVersion = '3.4develop-19195';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -485,7 +485,7 @@ var ReactorSensor = (function(api, $) {
 			/* Initialize module data */
 			console.log("Initializing module data for ReactorSensor_UI7");
 			try {
-				console.log("initModule() using jQuery " + String(jQuery.fn.jquery) + "; jQuery-UI " + String(jQuery.ui.version));
+				console.log("initModule() using jQuery " + String(jQuery.fn.jQuery) + "; jQuery-UI " + String(jQuery.ui.version));
 			} catch( e ) {
 				console.log("initModule() error reading jQuery/UI versions: " + String(e));
 			}
@@ -1182,6 +1182,9 @@ var ReactorSensor = (function(api, $) {
 		if ( ( condOpts.holdtime || 0 ) > 0 ) {
 			condDesc += "; delay reset for " + condOpts.holdtime + " secs";
 		}
+		if ( ( condOpts.pulsetime || 0 ) != 0 ) {
+			condDesc += "; pulse for " + condOpts.pulsetime + " secs";
+		}
 		if ( ( condOpts.latch || 0 ) != 0 ) {
 			condDesc += "; latching";
 		}
@@ -1221,6 +1224,12 @@ var ReactorSensor = (function(api, $) {
 				(function( c, t, l ) {
 					setTimeout( function() { updateTime( c, t, "; reset delayed", true, l ); }, 20 );
 				})( id, cs.holduntil, 0 );
+			} else if ( cs.pulseuntil) {
+				id = getUID();
+				el.append( jQuery('<span class="timer"/>').attr( 'id', id ) );
+				(function( c, t, l ) {
+					setTimeout( function() { updateTime( c, t, "; pulse ", true, l ); }, 20 );
+				})( id, cs.pulseuntil, 0 );
 			}
 			if ( cs.latched ) {
 				el.append( '<span>&nbsp;(latched)' );
@@ -2183,8 +2192,34 @@ var ReactorSensor = (function(api, $) {
 						} else {
 							configModified = true;
 						}
+						jQuery( 'input#pulsetime', $ct ).val("").prop( 'disabled', true );
 					} else {
 						delete cond.options.latch;
+						configModified = true;
+					}
+				}
+				if ( latchval == 0 ) {
+					jQuery( 'input#pulsetime', $ct ).prop( 'disabled', false );
+				}
+
+				/* Pulse */
+				var f = jQuery( 'input#pulsetime', $ct );
+				var pulsetime = f.val() || "";
+				if ( "" !== pulsetime ) {
+					pulsetime = parseInt( pulsetime );
+					if ( isNaN( pulsetime ) ) {
+						f.addClass( 'tberror' );
+						delete cond.options.pulsetime;
+					} else {
+						jQuery( 'input#latchcond', $ct ).prop( 'checked', false ).prop( 'disabled', true );
+						delete cond.options.latch;
+						cond.options.pulsetime = pulsetime;
+						configModified = true;
+					}
+				} else {
+					jQuery( 'input#latchcond', $ct ).prop( 'disabled', false );
+					if ( cond.options.pulsetime ) {
+						delete cond.options.pulsetime;
 						configModified = true;
 					}
 				}
@@ -2432,6 +2467,8 @@ var ReactorSensor = (function(api, $) {
 				$container.append('<div id="latchopt" class="form-inline"><label class="checkbox-inline"><input type="checkbox" id="latchcond" class="form-check">&nbsp;Latch (once met, condition remains true until group resets)<label></div>');
 			}
 
+			$container.append( '<div id="pulseopt" class="form-inline"><label>Pulse time: <input type="text" id="pulsetime" class="form-control form-control-sm narrow" autocomplete="off"> (seconds; 0=hold/follow)</label></div>' );
+
 			jQuery('input,select', $container).on( 'change.reactor', handleConditionRowChange );
 			if ( ( condOpts.duration || 0 ) > 0 ) {
 				jQuery('input#rcount,input#rspan', $container).prop('disabled', true);
@@ -2450,6 +2487,10 @@ var ReactorSensor = (function(api, $) {
 			} else {
 				jQuery('input#latchcond', $container).prop('checked', ( condOpts.latch || 0 ) != 0 );
 				jQuery( 'input#holdtime', $container ).prop( 'disabled', ( condOpts.latch || 0 ) != 0 ).val( "" );
+			}
+			if ( ( condOpts.pulsetime || 0 ) > 0 && ( ( condOpts.latch || 0 ) == 0 ) ) {
+				jQuery( 'input#pulsetime', $container ).val( condOpts.pulsetime ).prop( 'disabled', false );
+				jQuery( 'input#latchcond', $container ).prop( 'checked', false ).prop( 'disabled', true );
 			}
 
 			/* Add the options container (specific immediate child of this row selection) */
@@ -3579,7 +3620,7 @@ var ReactorSensor = (function(api, $) {
 				items: '> *:not([id="root"])',
 				// containment: 'div.cond-list.tb-sortable',
 				connectWith: 'div.cond-list.tb-sortable',
-				/* https://stackoverflow.com/questions/15724617/jquery-dragmove-but-leave-the-original-if-ctrl-key-is-pressed
+				/* https://stackoverflow.com/questions/15724617/jQuery-dragmove-but-leave-the-original-if-ctrl-key-is-pressed
 				start: function( ev, ui ) {
 					if ( ev.ctrlKey ) {
 						$clone = ui.item.clone().insertBefore( ui.item );
@@ -6214,7 +6255,7 @@ var ReactorSensor = (function(api, $) {
 			return;
 		}
 
-		// https://stackoverflow.com/questions/13651243/how-do-i-chain-a-sequence-of-deferred-functions-in-jquery-1-8-x#24041521
+		// https://stackoverflow.com/questions/13651243/how-do-i-chain-a-sequence-of-deferred-functions-in-jQuery-1-8-x#24041521
 		var copy = function(a) { return Array.prototype.slice.call(a); };
 		$.sequence = function( steps, continueOnFailure ) {
 			var handleStep, handleResult,
