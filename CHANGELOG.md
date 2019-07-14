@@ -2,6 +2,8 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
+## Version 3.4 (development)
+
 ## Version 3.3 (released)
 
 * Enhancement: Condition options can now be applied to groups.
