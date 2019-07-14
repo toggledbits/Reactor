@@ -2972,7 +2972,7 @@ var ReactorSensor = (function(api, $) {
 					DOtraverse( getConditionIndex().root, function( n ) {
 						mm.append( jQuery( '<option/>' ).val( n.id ).text( makeConditionDescription( n ) ) );
 					}, false, function( n ) {
-						return n.id != cond.id;
+						return n.id != cond.id && !isAncestor( n.id, cond.id );
 					});
 					fs.append( mm );
 					el.append( fs );
@@ -3014,7 +3014,7 @@ var ReactorSensor = (function(api, $) {
 								DOtraverse( getConditionIndex().root, function( n ) {
 									$mm.append( jQuery( '<option/>' ).val( n.id ).text( makeConditionDescription( n ) ) );
 								}, false, function( n ) {
-									return n.id != cond.id;
+									return n.id != cond.id && !isAncestor( n.id, cond.id );
 								});
 								$mm.val( "" );
 							} else {
