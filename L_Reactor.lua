@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.3"
+local _PLUGIN_VERSION = "3.4develop-19195"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION = 19178
@@ -2937,18 +2937,45 @@ local function processCondition( cond, grp, cdata, tdev )
 		cs.waituntil = nil
 	end
 
+	-- Pulsed output (timed reset). Pulse is held even if underlying drops out.
+	if ( condopt.pulsetime or 0 ) > 0 then
+		local pulseend
+		if state and not cs.evalstate then
+			-- Starting new pulse... or are we...
+			pulseend = cs.pulseuntil or ( now + condopt.pulsetime )
+		else
+			-- Continuing from last true edge (even if state false)
+			pulseend = ( (cs.evaledge or {}).t or 0 ) + condopt.pulsetime
+		end
+		if now < pulseend then
+			D("processCondition() continue pulse until %1", pulseend)
+			state = true -- hold up unconditionally
+			cs.pulseuntil = pulseend
+			scheduleDelay( tostring(tdev), pulseend - now )
+		else
+			-- Passed, but keep pulseuntil around until state goes false
+			cs.pulseuntil = state and pulseend or nil
+			state = false -- override
+		end
+		D("processCondition() pulse state is %1, until %2", state, cs.pulseuntil)
+	else
+		cs.pulseuntil = nil
+	end
+
 	-- Hold time (delay reset)
 	if ( condopt.holdtime or 0 ) > 0 then
 		-- If trying to go false, make sure hold time is honored.
 		D("processCondition() hold time %1, going %2 to %3", condopt.holdtime, cs.evalstate, state)
 		if cs.evalstate and not state then
 			-- Hold time extends from false edge, so repeated true-false-true-false extends time
-			D("processCondition() reset edge last %1 (from %2)", cs.stateedge.f, cs.stateedge)
-			cs.holduntil = ( cs.stateedge.f or now ) + condopt.holdtime
-			if cs.holduntil > now then
+			local lastFalse = cs.stateedge.f or now
+			D("processCondition() reset edge last %1 (from %2)", lastFalse, cs.stateedge)
+			local holdend = lastFalse + condopt.holdtime
+			if holdend > now then
 				D("processCondition() continue reset delay until %1", cs.holduntil)
 				state = true
-				scheduleDelay( tostring(tdev), cs.holduntil - now )
+				cs.holduntil = holdend
+				scheduleDelay( tostring(tdev), holdend - now )
 			else
 				-- OK to reset
 				D("processCondition() OK to reset, after %1", cs.holduntil)
