@@ -588,7 +588,7 @@ var ReactorSensor = (function(api, $) {
 		}
 
 		/* Check agreement of plugin core and UI */
-		var s = api.getDeviceState( myid, serviceId, "_UIV" ) || "0";
+		var s = api.getDeviceState( myid, serviceId, "_UIV", { dynamic: false } ) || "0";
 		console.log("initModule() for device " + myid + " requires UI version " + _UIVERSION + ", seeing " + s);
 		if ( String(_UIVERSION) != s ) {
 			api.setCpanelContent( '<div class="reactorwarning" style="border: 4px solid red; padding: 8px;">' +
