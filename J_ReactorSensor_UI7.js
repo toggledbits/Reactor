@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.4develop-19195';
+	var pluginVersion = '3.4develop-19196';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -2442,6 +2442,7 @@ var ReactorSensor = (function(api, $) {
 				$el.attr( 'title', msgOptionsShow );
 				if ( $row.hasClass( 'tbautohidden' ) ) {
 					jQuery( '.cond-group-title button#expand', $row ).click();
+					$row.removeClass( 'tbautohidden' );
 				}
 				return;
 			}
@@ -2461,7 +2462,7 @@ var ReactorSensor = (function(api, $) {
 			jQuery( '<div class="opttitle">Output Control</div>' ).append( getWiki( 'Condition-Options' ) ).appendTo( out );
 			jQuery( '<label><input type="radio" id="output" name="output" value="">Follow (default) - output remains true while condition matches</label>' ).appendTo( out );
 			if ( false !== displayed.hold ) {
-				jQuery( '<label>; delay reset <input type="number" id="holdtime" class="form-control form-control-sm narrow"> seconds</label>' ).appendTo( out );
+				jQuery( '<label>; delay reset <input type="number" id="holdtime" class="form-control form-control-sm narrow"> seconds (0=no delay)</label>' ).appendTo( out );
 			}
 			if ( false !== displayed.pulse ) {
 				jQuery( '<br/><label><input type="radio" id="output" name="output" value="P">Pulse - on match, output goes true for <input type="number" id="pulsetime" class="form-control form-control-sm narrow"> seconds</label>' ).appendTo( out );
@@ -2499,7 +2500,7 @@ var ReactorSensor = (function(api, $) {
 						/* If node is not ancestor (line to root) or descendent of cond, allow as predecessor */
 						return cond.type !== "comment" && cond.id !== node.id && !isAncestor( node.id, cond.id ) && !isDescendent( node.id, cond.id );
 					});
-					rst.append('<div id="predopt" class="form-inline"><label>Condition comes after&nbsp;</label></div>');
+					rst.append('<div id="predopt" class="form-inline"><label>Condition must occur after&nbsp;</label></div>');
 					jQuery('div#predopt label', rst).append( $preds );
 					jQuery('div#predopt', rst).append('&nbsp;<label>within <input type="text" id="predtime" class="form-control form-control-sm narrow" autocomplete="off">&nbsp;seconds (0=no time limit)</label>');
 					jQuery('select#pred', rst).val( condOpts.after || "" );
@@ -2508,12 +2509,12 @@ var ReactorSensor = (function(api, $) {
 
 				/* Duration */
 				if ( displayed.duration ) {
-					rst.append('<div id="duropt" class="form-inline"><label>Condition is sustained for&nbsp;</label><select id="durop" class="form-control form-control-sm"><option value="ge">at least</option><option value="lt">less than</option></select><input type="text" id="duration" class="form-control form-control-sm narrow" autocomplete="off"><label>&nbsp;seconds</label></div>');
+					rst.append('<div id="duropt" class="form-inline"><label>Condition must be sustained for&nbsp;</label><select id="durop" class="form-control form-control-sm"><option value="ge">at least</option><option value="lt">less than</option></select><input type="text" id="duration" class="form-control form-control-sm narrow" autocomplete="off"><label>&nbsp;seconds</label></div>');
 				}
 
 				/* Repeat */
 				if ( displayed.repeat ) {
-					rst.append('<div id="repopt" class="form-inline"><label>Condition repeats <input type="text" id="rcount" class="form-control form-control-sm narrow" autocomplete="off"> times within <input type="text" id="rspan" class="form-control form-control-sm narrow" autocomplete="off"> seconds</label></div>');
+					rst.append('<div id="repopt" class="form-inline"><label>Condition must repeat <input type="text" id="rcount" class="form-control form-control-sm narrow" autocomplete="off"> times within <input type="text" id="rspan" class="form-control form-control-sm narrow" autocomplete="off"> seconds</label></div>');
 				}
 
 				if ( ( condOpts.duration || 0 ) > 0 ) {
