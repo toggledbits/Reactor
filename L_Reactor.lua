@@ -1876,7 +1876,7 @@ local function trip( state, tdev )
 		-- Luup keeps (SecuritySensor1/)LastTrip, but we also keep LastReset
 		luup.variable_set( RSSID, "LastReset", os.time(), tdev )
 		-- Option, reset latched conditions
-		if getVarNumeric( "ResetLatchedOnUntrip", 1, tdev, RSSID ) ~= 0 then
+		if getVarNumeric( "ResetLatchedOnUntrip", 0, tdev, RSSID ) ~= 0 then
 			-- Reset latched conditions when group resets
 			for _,l in ipairs( cs or {} ) do
 				if l.latched and l.evalstate then
