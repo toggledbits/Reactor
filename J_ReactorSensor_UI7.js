@@ -164,7 +164,8 @@ var ReactorSensor = (function(api, $) {
 	}
 
 	function isEmpty( s ) {
-		return s === undefined || s === "" || s.match( /^\s*$/ );
+		return undefined === s || null === s || "" === s ||
+			( "string" === typeof( s ) && null !== s.match( /^\s*$/ ) );
 	}
 
 	function quot( s ) {
@@ -172,7 +173,8 @@ var ReactorSensor = (function(api, $) {
 	}
 
 	function hasAnyProperty( obj ) {
-		if ( undefined !== obj ) {
+		// assert( "object" === typeof( obj );
+		if ( "object" === typeof( obj ) ) {
 			for ( var p in obj ) {
 				if ( obj.hasOwnProperty( p ) ) return true;
 			}
@@ -181,7 +183,7 @@ var ReactorSensor = (function(api, $) {
 	}
 
 	function idSelector( id ) {
-		return id.replace( /([^A-Z0-9_])/ig, "\\$1" );
+		return String( id ).replace( /([^A-Z0-9_])/ig, "\\$1" );
 	}
 
 	/* Select current value in menu; if not present, select first item. */
@@ -208,7 +210,7 @@ var ReactorSensor = (function(api, $) {
 		$mm.val( val );
 		return val;
 	}
-	
+
 	/** getWiki - Get (as jQuery) a link to Wiki for topic */
 	function getWiki( where ) {
 		var $v = jQuery( '<a/>', {
@@ -4482,6 +4484,10 @@ var ReactorSensor = (function(api, $) {
 				}
 				break;
 
+			case 'resetlatch':
+				var group = jQuery( 'select#group', row ).val() || "";
+				break;
+
 			default:
 				row.addClass( "tberror" );
 		}
@@ -4622,12 +4628,21 @@ var ReactorSensor = (function(api, $) {
 					lua = lua.replace( /\s+\n/g, "\n" );
 					lua = lua.replace( /[\r\n\s]+$/m, "" ); // rtrim
 					lua = unescape( encodeURIComponent( lua ) ); // Fanciness to keep UTF-8 chars well
-					if ( "" === lua ) {
+					if ( isEmpty( lua ) ) {
 						delete action.encoded_lua;
 						action.lua = "";
 					} else {
 						action.encoded_lua = 1;
 						action.lua = btoa( lua );
+					}
+					break;
+
+				case 'resetlatch':
+					var group = jQuery( 'select#group', row ).val() || "";
+					if ( isEmpty( group ) ) {
+						delete action.group;
+					} else {
+						action.group = group;
 					}
 					break;
 
@@ -5381,6 +5396,15 @@ var ReactorSensor = (function(api, $) {
 				ct.append('<div class="tbhint">If your Lua code returns boolean <em>false</em>, scene execution will stop and the remaining actions that follow will not be run (this is a feature). It is also recommended that the first line of your Lua be a comment with text to help you identify the code--if there\'s an error logged, the first line of the script is almost always shown. Also, you can use the <tt>print()</tt> function to write to Reactor\'s event log, which is shown in the Logic Summary and easier/quicker to get at than the Vera log file.</div>');
 				break;
 
+			case 'resetlatch':
+				m = make menu of groups
+				m.prepend( '<option value="*">(all groups)</option>' )
+					.prepend( '<option value="" selected>(this group)</option>' )
+					.val( "" ).attr( 'id' 'group' );
+				m.on( 'change.reactor', handleActionValueChange );
+				ct.append( m );
+				break;
+
 			default:
 				ct.append('<div class="tberror">Type ' + newVal + '?</div>');
 		}
@@ -5619,6 +5643,7 @@ var ReactorSensor = (function(api, $) {
 			'<option value="delay">Delay</option>' +
 			'<option value="runlua">Run Lua</option>' +
 			'<option value="runscene">Run Scene</option>' +
+			'<option value="resetlatch">Reset Latched</option>' +
 			'</select></div>' );
 		row.append('<div class="actiondata col-xs-12 col-sm-12 col-md-6 col-lg-8 form-inline"></div>');
 		var controls = jQuery('<div class="controls col-xs-12 col-sm-12 col-md-2 col-lg-2 text-right"></div>');
@@ -5714,6 +5739,10 @@ var ReactorSensor = (function(api, $) {
 							lua = (act.encoded_lua || 0) != 0 ? atob( act.lua ) : act.lua;
 						}
 						jQuery( 'textarea.luacode', newRow ).val( lua ).trigger( 'reactorinit' );
+						break;
+
+					case "resetlatch":
+						jQuery( 'select#group', newRow ).val( act.group || "" );
 						break;
 
 					default:
