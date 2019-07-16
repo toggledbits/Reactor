@@ -1768,7 +1768,7 @@ local function execSceneGroups( tdev, taskid, scd )
 						stopScene( nil, taskid, tdev ) -- stop just this scene.
 						return nil
 					end
-				elseif action.type = "resetlatch" then
+				elseif action.type == "resetlatch" then
 					local group = action.group or ""
 					if "" == group then group = scd.id:gsub( '%..+', '' ) end
 					if "*" == group then group = false end
@@ -1917,7 +1917,7 @@ local function trip( state, tdev )
 	luup.variable_set( SWITCH_SID, "Status", state and "1" or "0", tdev )
 	addEvent{dev=tdev,event='sensorstate',state=state}
 	-- Make sure condState is loaded/ready (may have been expired by cache)
-	local cs = loadCleanState( tdev )
+	loadCleanState( tdev )
 	if not state then
 		-- Luup keeps (SecuritySensor1/)LastTrip, but we also keep LastReset
 		luup.variable_set( RSSID, "LastReset", os.time(), tdev )
@@ -3070,8 +3070,6 @@ evaluateGroup = function( grp, parentGroup, cdata, tdev )
 	D("evaluateGroup(%1,%2,cdata,%3)", grp.id, (parentGroup or {}).id, tdev)
 	if (grp.disabled or 0) ~= 0 then return false, nil end -- nil state means no data
 	local passed = nil
-	local sst = getSensorState( tdev )
-	local now = sst.timebase
 	local latched = {}
 	local hasTimer = false
 	local nTrue = 0
@@ -3129,7 +3127,7 @@ local function processSensorUpdate( tdev, sst )
 	D("processSensorUpdate(%1)", tdev)
 
 	-- Reload sensor state if cache purged
-	local condState = loadCleanState( tdev )
+	loadCleanState( tdev )
 
 	-- Check throttling for update rate
 	local hasTimer = false -- luacheck: ignore 311/hasTimer
@@ -3189,7 +3187,7 @@ local function processSensorUpdate( tdev, sst )
 		D("processSensorUpdate() checking groups for state changes")
 		for grp in conditionGroups( cdata.conditions.root ) do
 			D("processSensorUpdate() checking group %1 for state change", grp.id)
-			local gs = condState[ grp.id ]
+			local gs = sst.condState[ grp.id ]
 			if grp.id ~= "root" and gs.changed then
 				local activity = grp.id .. ( gs.evalstate and ".true" or ".false" )
 				D("processSensorUpdate() group %1 <%2> state changed to %3, looking for activity %4",
