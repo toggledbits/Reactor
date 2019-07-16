@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.4develop-19195"
+local _PLUGIN_VERSION = "3.4develop-19196"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION = 19178
@@ -837,6 +837,14 @@ local function loadCleanState( tdev )
 	end
 	D("loadCleanState() returning restored cstate")
 	return cstate
+end
+
+-- Clear conditions state entirely; returns empty cstate
+local function clearConditionState( tdev )
+	D("clearConditionState(%1), tdev)
+	luup.variable_set( RSSID, "cstate", "", tdev )
+	getSensorState( tdev ).condState = nil
+	return loadCleanState( tdev )
 end
 
 -- Return true if scene has no actions (takes sceneData table). Works on scenes
@@ -2993,7 +3001,7 @@ local function processCondition( cond, grp, cdata, tdev )
 	-- other test conditions are no longer met.
 	if ( condopt.latch or 0 ) ~= 0 then
 		D("processCondition() latching option, evalstate %1, state %2, latched %3", cs.evalstate, state, cs.latched)
-		cs.latchstate = state
+		cs.latchstate = state -- save actual last state
 		if not state then
 			if cs.latched then
 				-- Attempting to transition from true to false while latched. Override.
@@ -3928,7 +3936,7 @@ function actionSetArmed( armedVal, dev )
 	addEvent{ dev=dev, event="action", action="SetArmed", state=armed and 1 or 0 }
 end
 
--- Restart a ReactorSensor (reload config and force re-evals)
+-- Restart a ReactorSensor (clear saved state, reload config and force re-evals)
 function actionRestart( dev )
 	dev = tonumber( dev )
 	assert( dev ~= nil )
@@ -3936,6 +3944,7 @@ function actionRestart( dev )
 	L("Restarting %2 (#%1)", dev, luup.devices[dev].description)
 	addEvent{ dev=dev, event="action", action="Restart" }
 	stopScene( dev, nil, dev ) -- stop all scenes in device context
+	clearConditionState( dev )
 	local success, err = pcall( startSensor, dev, luup.devices[dev].device_num_parent )
 	if not success then
 		L({level=2,msg="Failed to start %1 (%2): %3"}, dev, luup.devices[dev].description, err)
@@ -3962,6 +3971,7 @@ function actionClearLatched( dev )
 			l.latchstate = nil
 		end
 	end
+	scheduleDelay( { id=tostring(dev), owner=dev, func=sensorTick }, 0 )
 end
 
 -- Run a scene. By default, it's assumed this action is being called from outside
@@ -4194,6 +4204,7 @@ function watch( dev, sid, var, oldVal, newVal )
 			L("%1 (#%2) configuration change, updating!", dev, luup.devices[dev].description)
 			addEvent{ dev=dev, event="configchange" }
 			stopScene( dev, nil, dev ) -- Stop all scenes in this device context.
+			clearConditionState( dev )
 			loadSensorConfig( dev )
 			scheduleDelay( { id=tostring(dev), owner=dev, func=sensorTick }, 1 )
 		else
