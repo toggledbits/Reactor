@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.3';
+	var pluginVersion = '3.3hotfix-19197';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -161,7 +161,8 @@ var ReactorSensor = (function(api, $) {
 	}
 
 	function isEmpty( s ) {
-		return s === undefined || s === "" || s.match( /^\s*$/ );
+		return undefined === s || null === s || "" === s ||
+			( "string" === typeof( s ) && null !== s.match( /^\s*$/ ) );
 	}
 
 	function quot( s ) {
@@ -178,7 +179,7 @@ var ReactorSensor = (function(api, $) {
 	}
 
 	function idSelector( id ) {
-		return id.replace( /([^A-Z0-9_])/ig, "\\$1" );
+		return String( id ).replace( /([^A-Z0-9_])/ig, "\\$1" );
 	}
 
 	/* Select current value in menu; if not present, select first item. */

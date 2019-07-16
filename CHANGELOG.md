@@ -2,6 +2,10 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
+## Version 3.3 (hotfix)
+
+* hotfix19197: Address boundary condition where isEmpty() may be passed non-string (treat as non-empty).
+
 ## Version 3.3 (released)
 
 * Enhancement: Condition options can now be applied to groups.
