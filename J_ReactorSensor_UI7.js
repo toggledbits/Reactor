@@ -2500,7 +2500,7 @@ var ReactorSensor = (function(api, $) {
 						$preds.append( jQuery( '<option/>' ).val( node.id ).text( makeConditionDescription( node ) ) );
 					}, false, function( node ) {
 						/* If node is not ancestor (line to root) or descendent of cond, allow as predecessor */
-						return cond.type !== "comment" && cond.id !== node.id && !isAncestor( node.id, cond.id ) && !isDescendent( node.id, cond.id );
+						return "comment" !== node.type && cond.id !== node.id && !isAncestor( node.id, cond.id ) && !isDescendent( node.id, cond.id );
 					});
 					rst.append('<div id="predopt" class="form-inline"><label>Condition must occur after&nbsp;</label></div>');
 					jQuery('div#predopt label', rst).append( $preds );
@@ -3059,7 +3059,7 @@ var ReactorSensor = (function(api, $) {
 					DOtraverse( getConditionIndex().root, function( n ) {
 						mm.append( jQuery( '<option/>' ).val( n.id ).text( makeConditionDescription( n ) ) );
 					}, false, function( n ) {
-						return n.id != cond.id && !isAncestor( n.id, cond.id );
+						return "comment" !== n.type && n.id != cond.id && !isAncestor( n.id, cond.id );
 					});
 					fs.append( mm );
 					el.append( fs );
@@ -3101,7 +3101,7 @@ var ReactorSensor = (function(api, $) {
 								DOtraverse( getConditionIndex().root, function( n ) {
 									$mm.append( jQuery( '<option/>' ).val( n.id ).text( makeConditionDescription( n ) ) );
 								}, false, function( n ) {
-									return n.id != cond.id && !isAncestor( n.id, cond.id );
+									return "comment" !== n.type && n.id != cond.id && !isAncestor( n.id, cond.id );
 								});
 								$mm.val( "" );
 							} else {
@@ -4638,11 +4638,11 @@ var ReactorSensor = (function(api, $) {
 					break;
 
 				case 'resetlatch':
-					var group = jQuery( 'select#group', row ).val() || "";
-					if ( isEmpty( group ) ) {
+					var gid = jQuery( 'select#group', row ).val() || "";
+					if ( isEmpty( gid ) ) {
 						delete action.group;
 					} else {
-						action.group = group;
+						action.group = gid;
 					}
 					break;
 
@@ -5397,10 +5397,17 @@ var ReactorSensor = (function(api, $) {
 				break;
 
 			case 'resetlatch':
-				m = make menu of groups
+				m = jQuery( '<select id="group" class="form-control form-control-sm" />' );
+				/* Add groups */
+				DOtraverse( (getConditionIndex()).root, function( node ) {
+					m.append( jQuery( '<option/>' ).val( node.id ).text( makeConditionDescription( node ) ) );
+				}, false, function( node ) {
+					/* If node is not ancestor (line to root) or descendent of cond, allow as predecessor */
+					return "group" === ( node.type || "group" );
+				});
 				m.prepend( '<option value="*">(all groups)</option>' )
 					.prepend( '<option value="" selected>(this group)</option>' )
-					.val( "" ).attr( 'id' 'group' );
+					.val( "" );
 				m.on( 'change.reactor', handleActionValueChange );
 				ct.append( m );
 				break;

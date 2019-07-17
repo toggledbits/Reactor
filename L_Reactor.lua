@@ -847,6 +847,46 @@ local function clearConditionState( tdev )
 	return loadCleanState( tdev )
 end
 
+-- Find a condition (or group) by ID. Type may also be included (so to find a
+-- group, pass findType="group").
+local function findCondition( findId, cdata, findType )
+	local function tr( grp, condid, typ )
+		if grp.id == condid and ( typ==nil or (grp.type or "group") == typ ) then return grp end
+		for _,cond in ipairs( grp.conditions or {} ) do
+			if ( cond.type or "group" ) == "group" then
+				local r = tr( cond, condid, typ )
+				if r then return r end
+			elseif cond.id == condid and ( typ==nil or (cond.type or "group") == typ ) then
+				return cond
+			end
+		end
+		return false
+	end
+	return tr( cdata.conditions.root or {}, findId, findType )
+end
+
+-- Return iterator for variables in eval order
+local function variables( cdata )
+	local ar = {}
+	for _,v in pairs( cdata.variables or {} ) do
+		table.insert( ar, v )
+	end
+	table.sort( ar, function( a, b )
+		local i1 = a.index or -1
+		local i2 = b.index or -1
+		if i1 == i2 then
+			return (a.name or ""):lower() < (b.name or ""):lower()
+		end
+		return i1 < i2
+	end )
+	local ix = 0
+	return function()
+		ix = ix + 1
+		if ix > #ar then return nil end
+		return ix, ar[ix]
+	end
+end
+
 -- Return true if scene has no actions (takes sceneData table). Works on scenes
 -- and activities (former is subset of latter, similar structure).
 local function isSceneEmpty( scd )
@@ -1046,15 +1086,18 @@ local function resetLatched( group, tdev )
 			end
 		end
 	else
-		local sst = getSensorState( tdev )
-		for _,c in ipairs( ( sst.configData[group] or {} ).conditions or {} ) do
+		local g = findCondition( group, getSensorState( tdev ).configData, "group" )
+		D("resetLatched() group %1", g)
+		for _,c in ipairs( ( g or {} ).conditions or {} ) do
+			D("resetLatched() cond %1 latched %2", c.id, (cs[c.id] or {}).latched)
 			if ( cs[c.id] or {} ).latched then
-				c.evalstate = c.latchstate
-				c.evalstamp = os.time()
-				c.latched = nil
-				c.latchstate = nil
+				cs[c.id].evalstate = c.latchstate
+				cs[c.id].evalstamp = os.time()
+				cs[c.id].latched = nil
+				cs[c.id].latchstate = nil
 				changed = true
 			end
+			D("resetLatched() AFTER cond %1 latched %2", c.id, (cs[c.id] or {}).latched)
 		end
 	end
 	return changed
@@ -1945,46 +1988,6 @@ local function trip( state, tdev )
 			stopScene( tdev, nil, tdev, 'root.false' ) -- stop contra-activity
 			execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } )
 		end
-	end
-end
-
--- Find a condition (or group) by ID. Type may also be included (so to find a
--- group, pass findType="group").
-local function findCondition( findId, cdata, findType )
-	local function tr( grp, condid, typ )
-		if grp.id == condid and ( typ==nil or (grp.type or "group") == typ ) then return grp end
-		for _,cond in ipairs( grp.conditions or {} ) do
-			if ( cond.type or "group" ) == "group" then
-				local r = tr( cond, condid, typ )
-				if r then return r end
-			elseif cond.id == condid and ( typ==nil or (cond.type or "group") == typ ) then
-				return cond
-			end
-		end
-		return false
-	end
-	return tr( cdata.conditions.root or {}, findId, findType )
-end
-
--- Return iterator for variables in eval order
-local function variables( cdata )
-	local ar = {}
-	for _,v in pairs( cdata.variables or {} ) do
-		table.insert( ar, v )
-	end
-	table.sort( ar, function( a, b )
-		local i1 = a.index or -1
-		local i2 = b.index or -1
-		if i1 == i2 then
-			return (a.name or ""):lower() < (b.name or ""):lower()
-		end
-		return i1 < i2
-	end )
-	local ix = 0
-	return function()
-		ix = ix + 1
-		if ix > #ar then return nil end
-		return ix, ar[ix]
 	end
 end
 
@@ -2980,6 +2983,7 @@ local function processCondition( cond, grp, cdata, tdev )
 
 	-- Pulsed output (timed reset). Pulse is held even if underlying drops out.
 	if ( condopt.pulsetime or 0 ) > 0 then
+		D("processCondition() pulse time %1 state %2 evalstate %3", condopt.pulsetime, state, cs.evalstate)
 		local pulseend
 		if state and not cs.evalstate then
 			-- Starting new pulse... or are we...
@@ -2988,6 +2992,7 @@ local function processCondition( cond, grp, cdata, tdev )
 			-- Continuing from last true edge (even if state false)
 			pulseend = ( (cs.evaledge or {}).t or 0 ) + condopt.pulsetime
 		end
+		D("processCondition() pulseend is %1 (pulsing %2), cs.pulseuntil is %3", pulseend, now < pulseend, cs.pulseuntil)
 		if now < pulseend then
 			D("processCondition() continue pulse until %1", pulseend)
 			state = true -- hold up unconditionally
@@ -2995,6 +3000,7 @@ local function processCondition( cond, grp, cdata, tdev )
 			scheduleDelay( tostring(tdev), pulseend - now )
 		else
 			-- Passed, but keep pulseuntil around until state goes false
+			D("processCondition() pulse off phase (%1)", state)
 			cs.pulseuntil = state and pulseend or nil
 			state = false -- override
 		end
@@ -3927,6 +3933,7 @@ function actionSetEnabled( enabled, tdev )
 		if enabled then
 			L("Enabling %1 (#%2)", luup.devices[tdev].description, tdev)
 			setMessage( "Enabling...", tdev )
+			clearConditionState( tdev )
 			luup.call_action( RSSID, "Restart", {}, tdev )
 		else
 			L("Disabling %1 (#%2)", luup.devices[tdev].description, tdev)
@@ -3967,7 +3974,6 @@ function actionRestart( dev )
 	L("Restarting %2 (#%1)", dev, luup.devices[dev].description)
 	addEvent{ dev=dev, event="action", action="Restart" }
 	stopScene( dev, nil, dev ) -- stop all scenes in device context
-	clearConditionState( dev )
 	local success, err = pcall( startSensor, dev, luup.devices[dev].device_num_parent )
 	if not success then
 		L({level=2,msg="Failed to start %1 (%2): %3"}, dev, luup.devices[dev].description, err)
@@ -4346,12 +4352,19 @@ local function getReactorScene( t, s, tdev, runscenes )
 					resp = resp .. EOL
 				elseif act.type == "housemode" then
 					resp = resp .. pfx .. "Change house mode to " .. tostring(act.housemode) .. EOL
+				elseif act.type == "resetlatch" then
+					resp = resp .. pfx .. "Reset latched conditions in "
+					if act.group == "*" then resp = resp .. "all groups"
+					elseif ( act.group or "" ) == "" then resp = resp .. "this group"
+					else resp = resp .. tostring(act.group) 
+					end
+					resp = resp .. EOL
 				else
 					resp = resp .. pfx .. "Action type " .. act.type .. "?"
 					local arr = {}
 					for k,v in pairs(act) do
 						if k ~= "type" then
-							table.insert( arr, k + "=" + tostring(v) )
+							table.insert( arr, k .. "=" .. tostring(v) )
 						end
 					end
 					if #arr then resp = resp .. " " .. table.concat( arr, ", " ) end

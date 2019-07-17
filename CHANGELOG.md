@@ -4,7 +4,8 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 3.4 (development)
 
-* Add "Reset Latched" action for activites to reset latched conditions in a specific group or for the entire RS (adding new way to reset latched conditions).
+* Enhancement: The transition of a sensor from disabled to enabled state clears all prior condition state data; this starts with a clean slate, in case the sensor has been disabled for some time. There was also no easy way to clear the state, and doing it on Restart actions proved a little aggressive in testing.
+* Enhancement: Add "Reset Latched" action for activites to reset latched conditions in a specific group or for the entire RS (adding new way to reset latched conditions).
 * Enhancement: Condition and group logic output is now distinctly settable in three modes: follow (maintains *true* output while underlying condition is true), pulse (pulse of configurable length starting when underlying condition goes true), and latch (go true when underlying condition goes true and holds until reset). The default is follow, which is also the legacy behavior. The output type is settable in the options pane for the condition.
 * Fix: prevent JS stop when isEmpty() is passed a non-string.
 
