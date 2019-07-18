@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.3"
+local _PLUGIN_VERSION = "3.4develop-19199"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION = 19178
@@ -839,6 +839,54 @@ local function loadCleanState( tdev )
 	return cstate
 end
 
+-- Clear conditions state entirely; returns empty cstate
+local function clearConditionState( tdev )
+	D("clearConditionState(%1)", tdev)
+	luup.variable_set( RSSID, "cstate", "", tdev )
+	getSensorState( tdev ).condState = nil
+	return loadCleanState( tdev )
+end
+
+-- Find a condition (or group) by ID. Type may also be included (so to find a
+-- group, pass findType="group").
+local function findCondition( findId, cdata, findType )
+	local function tr( grp, condid, typ )
+		if grp.id == condid and ( typ==nil or (grp.type or "group") == typ ) then return grp end
+		for _,cond in ipairs( grp.conditions or {} ) do
+			if ( cond.type or "group" ) == "group" then
+				local r = tr( cond, condid, typ )
+				if r then return r end
+			elseif cond.id == condid and ( typ==nil or (cond.type or "group") == typ ) then
+				return cond
+			end
+		end
+		return false
+	end
+	return tr( cdata.conditions.root or {}, findId, findType )
+end
+
+-- Return iterator for variables in eval order
+local function variables( cdata )
+	local ar = {}
+	for _,v in pairs( cdata.variables or {} ) do
+		table.insert( ar, v )
+	end
+	table.sort( ar, function( a, b )
+		local i1 = a.index or -1
+		local i2 = b.index or -1
+		if i1 == i2 then
+			return (a.name or ""):lower() < (b.name or ""):lower()
+		end
+		return i1 < i2
+	end )
+	local ix = 0
+	return function()
+		ix = ix + 1
+		if ix > #ar then return nil end
+		return ix, ar[ix]
+	end
+end
+
 -- Return true if scene has no actions (takes sceneData table). Works on scenes
 -- and activities (former is subset of latter, similar structure).
 local function isSceneEmpty( scd )
@@ -1020,6 +1068,39 @@ local function stopScene( ctx, taskid, tdev, scene )
 		end
 	end
 	luup.variable_set( MYSID, "runscene", json.encode(sceneState), pluginDevice )
+end
+
+-- Reset latches on group (all groups if group is false/nil)
+local function resetLatched( group, tdev )
+	D("resetLatched(%1,%2)", group, tdev)
+	local changed = false
+	local cs = loadCleanState( tdev )
+	if not group then
+		for _,c in pairs( cs ) do
+			if type(c) == "table" and c.latched then
+				c.evalstate = c.latchstate
+				c.evalstamp = os.time()
+				c.latched = nil
+				c.latchstate = nil
+				changed = true
+			end
+		end
+	else
+		local g = findCondition( group, getSensorState( tdev ).configData, "group" )
+		D("resetLatched() group %1", g)
+		for _,c in ipairs( ( g or {} ).conditions or {} ) do
+			D("resetLatched() cond %1 latched %2", c.id, (cs[c.id] or {}).latched)
+			if ( cs[c.id] or {} ).latched then
+				cs[c.id].evalstate = c.latchstate
+				cs[c.id].evalstamp = os.time()
+				cs[c.id].latched = nil
+				cs[c.id].latchstate = nil
+				changed = true
+			end
+			D("resetLatched() AFTER cond %1 latched %2", c.id, (cs[c.id] or {}).latched)
+		end
+	end
+	return changed
 end
 
 local function evaluateVariable( vname, ctx, cdata, tdev )
@@ -1730,6 +1811,14 @@ local function execSceneGroups( tdev, taskid, scd )
 						stopScene( nil, taskid, tdev ) -- stop just this scene.
 						return nil
 					end
+				elseif action.type == "resetlatch" then
+					local group = action.group or ""
+					if "" == group then group = scd.id:gsub( '%..+', '' ) end
+					if "*" == group then group = false end
+					local changed = resetLatched( group, tdev )
+					if changed then
+						scheduleDelay( tostring(tdev), 0 ) -- queue an eval if anything changed
+					end
 				else
 					L({level=1,msg="Unhandled action type %1 at %2 in scene %3 for %4 (%5)"},
 						action.type, ix, scd.id, tdev, luup.devices[tdev].description)
@@ -1871,20 +1960,15 @@ local function trip( state, tdev )
 	luup.variable_set( SWITCH_SID, "Status", state and "1" or "0", tdev )
 	addEvent{dev=tdev,event='sensorstate',state=state}
 	-- Make sure condState is loaded/ready (may have been expired by cache)
-	local cs = loadCleanState( tdev )
+	loadCleanState( tdev )
 	if not state then
 		-- Luup keeps (SecuritySensor1/)LastTrip, but we also keep LastReset
 		luup.variable_set( RSSID, "LastReset", os.time(), tdev )
 		-- Option, reset latched conditions
-		if getVarNumeric( "ResetLatchedOnUntrip", 1, tdev, RSSID ) ~= 0 then
+		if getVarNumeric( "ResetLatchedOnUntrip", 0, tdev, RSSID ) ~= 0 then
 			-- Reset latched conditions when group resets
-			for _,l in ipairs( cs or {} ) do
-				if l.latched and l.evalstate then
-					l.evalstate = l.latchstate
-					l.evalstamp = os.time()
-					l.latched = nil
-					l.latchstate = nil
-				end
+			if resetLatched( false, tdev ) then
+				scheduleDelay( tostring(tdev), 0 )
 			end
 		end
 		-- Run the reset scene, if we have one.
@@ -1904,46 +1988,6 @@ local function trip( state, tdev )
 			stopScene( tdev, nil, tdev, 'root.false' ) -- stop contra-activity
 			execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } )
 		end
-	end
-end
-
--- Find a condition (or group) by ID. Type may also be included (so to find a
--- group, pass findType="group").
-local function findCondition( findId, cdata, findType )
-	local function tr( grp, condid, typ )
-		if grp.id == condid and ( typ==nil or (grp.type or "group") == typ ) then return grp end
-		for _,cond in ipairs( grp.conditions or {} ) do
-			if ( cond.type or "group" ) == "group" then
-				local r = tr( cond, condid, typ )
-				if r then return r end
-			elseif cond.id == condid and ( typ==nil or (cond.type or "group") == typ ) then
-				return cond
-			end
-		end
-		return false
-	end
-	return tr( cdata.conditions.root or {}, findId, findType )
-end
-
--- Return iterator for variables in eval order
-local function variables( cdata )
-	local ar = {}
-	for _,v in pairs( cdata.variables or {} ) do
-		table.insert( ar, v )
-	end
-	table.sort( ar, function( a, b )
-		local i1 = a.index or -1
-		local i2 = b.index or -1
-		if i1 == i2 then
-			return (a.name or ""):lower() < (b.name or ""):lower()
-		end
-		return i1 < i2
-	end )
-	local ix = 0
-	return function()
-		ix = ix + 1
-		if ix > #ar then return nil end
-		return ix, ar[ix]
 	end
 end
 
@@ -2937,18 +2981,48 @@ local function processCondition( cond, grp, cdata, tdev )
 		cs.waituntil = nil
 	end
 
+	-- Pulsed output (timed reset). Pulse is held even if underlying drops out.
+	if ( condopt.pulsetime or 0 ) > 0 then
+		D("processCondition() pulse time %1 state %2 evalstate %3", condopt.pulsetime, state, cs.evalstate)
+		local pulseend
+		if state and not cs.evalstate then
+			-- Starting new pulse... or are we...
+			pulseend = cs.pulseuntil or ( now + condopt.pulsetime )
+		else
+			-- Continuing from last true edge (even if state false)
+			pulseend = ( (cs.evaledge or {}).t or 0 ) + condopt.pulsetime
+		end
+		D("processCondition() pulseend is %1 (pulsing %2), cs.pulseuntil is %3", pulseend, now < pulseend, cs.pulseuntil)
+		if now < pulseend then
+			D("processCondition() continue pulse until %1", pulseend)
+			state = true -- hold up unconditionally
+			cs.pulseuntil = pulseend
+			scheduleDelay( tostring(tdev), pulseend - now )
+		else
+			-- Passed, but keep pulseuntil around until state goes false
+			D("processCondition() pulse off phase (%1)", state)
+			cs.pulseuntil = state and pulseend or nil
+			state = false -- override
+		end
+		D("processCondition() pulse state is %1, until %2", state, cs.pulseuntil)
+	else
+		cs.pulseuntil = nil
+	end
+
 	-- Hold time (delay reset)
 	if ( condopt.holdtime or 0 ) > 0 then
 		-- If trying to go false, make sure hold time is honored.
 		D("processCondition() hold time %1, going %2 to %3", condopt.holdtime, cs.evalstate, state)
 		if cs.evalstate and not state then
 			-- Hold time extends from false edge, so repeated true-false-true-false extends time
-			D("processCondition() reset edge last %1 (from %2)", cs.stateedge.f, cs.stateedge)
-			cs.holduntil = ( cs.stateedge.f or now ) + condopt.holdtime
-			if cs.holduntil > now then
+			local lastFalse = cs.stateedge.f or now
+			D("processCondition() reset edge last %1 (from %2)", lastFalse, cs.stateedge)
+			local holdend = lastFalse + condopt.holdtime
+			if holdend > now then
 				D("processCondition() continue reset delay until %1", cs.holduntil)
 				state = true
-				scheduleDelay( tostring(tdev), cs.holduntil - now )
+				cs.holduntil = holdend
+				scheduleDelay( tostring(tdev), holdend - now )
 			else
 				-- OK to reset
 				D("processCondition() OK to reset, after %1", cs.holduntil)
@@ -2966,7 +3040,7 @@ local function processCondition( cond, grp, cdata, tdev )
 	-- other test conditions are no longer met.
 	if ( condopt.latch or 0 ) ~= 0 then
 		D("processCondition() latching option, evalstate %1, state %2, latched %3", cs.evalstate, state, cs.latched)
-		cs.latchstate = state
+		cs.latchstate = state -- save actual last state
 		if not state then
 			if cs.latched then
 				-- Attempting to transition from true to false while latched. Override.
@@ -3002,8 +3076,6 @@ evaluateGroup = function( grp, parentGroup, cdata, tdev )
 	D("evaluateGroup(%1,%2,cdata,%3)", grp.id, (parentGroup or {}).id, tdev)
 	if (grp.disabled or 0) ~= 0 then return false, nil end -- nil state means no data
 	local passed = nil
-	local sst = getSensorState( tdev )
-	local now = sst.timebase
 	local latched = {}
 	local hasTimer = false
 	local nTrue = 0
@@ -3041,17 +3113,9 @@ evaluateGroup = function( grp, parentGroup, cdata, tdev )
 
 	-- Save group state.
 	if grp.invert and passed ~= nil then passed = not passed end
-	if passed == false then -- but not nil
+	if passed == false and #latched then -- but not nil
 		-- Reset latched conditions when group resets
-		for _,l in ipairs( latched ) do
-			local cs = sst.condState[l]
-			if cs.latched then
-				cs.evalstate = cs.latchstate
-				cs.evalstamp = now
-				cs.latchstate = nil
-				cs.latched = nil
-			end
-		end
+		resetLatched( grp.id, tdev )
 	end
 
 	return passed, passed, hasTimer -- allow pass of nil state for no data
@@ -3069,7 +3133,7 @@ local function processSensorUpdate( tdev, sst )
 	D("processSensorUpdate(%1)", tdev)
 
 	-- Reload sensor state if cache purged
-	local condState = loadCleanState( tdev )
+	loadCleanState( tdev )
 
 	-- Check throttling for update rate
 	local hasTimer = false -- luacheck: ignore 311/hasTimer
@@ -3129,7 +3193,7 @@ local function processSensorUpdate( tdev, sst )
 		D("processSensorUpdate() checking groups for state changes")
 		for grp in conditionGroups( cdata.conditions.root ) do
 			D("processSensorUpdate() checking group %1 for state change", grp.id)
-			local gs = condState[ grp.id ]
+			local gs = sst.condState[ grp.id ]
 			if grp.id ~= "root" and gs.changed then
 				local activity = grp.id .. ( gs.evalstate and ".true" or ".false" )
 				D("processSensorUpdate() group %1 <%2> state changed to %3, looking for activity %4",
@@ -3869,6 +3933,7 @@ function actionSetEnabled( enabled, tdev )
 		if enabled then
 			L("Enabling %1 (#%2)", luup.devices[tdev].description, tdev)
 			setMessage( "Enabling...", tdev )
+			clearConditionState( tdev )
 			luup.call_action( RSSID, "Restart", {}, tdev )
 		else
 			L("Disabling %1 (#%2)", luup.devices[tdev].description, tdev)
@@ -3901,7 +3966,7 @@ function actionSetArmed( armedVal, dev )
 	addEvent{ dev=dev, event="action", action="SetArmed", state=armed and 1 or 0 }
 end
 
--- Restart a ReactorSensor (reload config and force re-evals)
+-- Restart a ReactorSensor (clear saved state, reload config and force re-evals)
 function actionRestart( dev )
 	dev = tonumber( dev )
 	assert( dev ~= nil )
@@ -3926,14 +3991,8 @@ function actionClearLatched( dev )
 	assert( luup.devices[dev] ~= nil and luup.devices[dev].device_type == RSTYPE )
 	L("Clearing latched conditions on %2 (#%1)", dev, luup.devices[dev].description)
 	addEvent{ dev=dev, event="action", action="ClearLatched" }
-	local cs = loadCleanState( dev )
-	for _,l in ipairs( cs or {} ) do
-		if l.latched then
-			l.evalstate = l.lastchstate
-			l.evalstamp = os.time()
-			l.latched = nil
-			l.latchstate = nil
-		end
+	if resetLatched( false, dev ) then
+		scheduleDelay( { id=tostring(dev), owner=dev, func=sensorTick }, 0 )
 	end
 end
 
@@ -4167,6 +4226,7 @@ function watch( dev, sid, var, oldVal, newVal )
 			L("%1 (#%2) configuration change, updating!", dev, luup.devices[dev].description)
 			addEvent{ dev=dev, event="configchange" }
 			stopScene( dev, nil, dev ) -- Stop all scenes in this device context.
+			clearConditionState( dev )
 			loadSensorConfig( dev )
 			scheduleDelay( { id=tostring(dev), owner=dev, func=sensorTick }, 1 )
 		else
@@ -4292,12 +4352,19 @@ local function getReactorScene( t, s, tdev, runscenes )
 					resp = resp .. EOL
 				elseif act.type == "housemode" then
 					resp = resp .. pfx .. "Change house mode to " .. tostring(act.housemode) .. EOL
+				elseif act.type == "resetlatch" then
+					resp = resp .. pfx .. "Reset latched conditions in "
+					if act.group == "*" then resp = resp .. "all groups"
+					elseif ( act.group or "" ) == "" then resp = resp .. "this group"
+					else resp = resp .. tostring(act.group) 
+					end
+					resp = resp .. EOL
 				else
 					resp = resp .. pfx .. "Action type " .. act.type .. "?"
 					local arr = {}
 					for k,v in pairs(act) do
 						if k ~= "type" then
-							table.insert( arr, k + "=" + tostring(v) )
+							table.insert( arr, k .. "=" .. tostring(v) )
 						end
 					end
 					if #arr then resp = resp .. " " .. table.concat( arr, ", " ) end

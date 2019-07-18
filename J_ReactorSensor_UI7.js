@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.3hotfix-19197';
+	var pluginVersion = '3.4develop-19199';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -56,17 +56,18 @@ var ReactorSensor = (function(api, $) {
 		"reload": "Luup Reloaded",
 		"grpstate": "Group State"
 	};
+	/* Note: default true for the following: hold, pulse, latch */
 	var condOptions = {
-		"group": { sequence: true, duration: true, repeat: true, latch: true, hold: true },
-		"service": { sequence: true, duration: true, repeat: true, latch: true, hold: true },
-		"housemode": { sequence: true, duration: true, latch: true, hold: true },
-		"weekday": { latch: true },
-		"sun": { sequence: true, latch: true },
-		"trange": { latch: true },
-		"interval": { latch: true, hold: true },
-		"ishome": { sequence: true, duration: true, latch: true, hold: true },
-		"reload": { latch: true, hold: true },
-		"grpstate": { sequence: true, duration: true, repeat:true, latch: true, hold: true }
+		"group": { sequence: true, duration: true, repeat: true },
+		"service": { sequence: true, duration: true, repeat: true },
+		"housemode": { sequence: true, duration: true, repeat: true },
+		"weekday": { },
+		"sun": { sequence: true },
+		"trange": { },
+		"interval": { latch: false },
+		"ishome": { sequence: true, duration: true },
+		"reload": { },
+		"grpstate": { sequence: true, duration: true, repeat: true }
 	};
 	var weekDayName = [ '?', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat' ];
 	var monthName = [ '?', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec' ];
@@ -121,6 +122,8 @@ var ReactorSensor = (function(api, $) {
 	div.reactortab .tb-about { margin-top: 24px; } \
 	div.reactortab .tberror { border: 1px solid red; } \
 	div.reactortab .tbwarn { border: 1px solid yellow; background-color: yellow; } \
+	div.reactortab .tbwikilink { margin-left: 4px; } \
+	div.reactortab .tbwikilink i.material-icons { font-size: 18px; position: relative; top: 4px; }\
 	div.reactortab button.md-btn:disabled { color: #ccc; cursor: not-allowed; } \
 	div.reactortab button.md-btn[disabled] { color: #ccc; cursor: not-allowed; } \
 	div.reactortab button.md-btn { line-height: 1em; cursor: pointer; color: #333; background-color: #fff; padding: 1px 0px 0px 0px; border-radius: 4px; box-shadow: #ccc 2px 2px; } \
@@ -170,7 +173,8 @@ var ReactorSensor = (function(api, $) {
 	}
 
 	function hasAnyProperty( obj ) {
-		if ( undefined !== obj ) {
+		// assert( "object" === typeof( obj );
+		if ( "object" === typeof( obj ) ) {
 			for ( var p in obj ) {
 				if ( obj.hasOwnProperty( p ) ) return true;
 			}
@@ -205,6 +209,19 @@ var ReactorSensor = (function(api, $) {
 		val = $opt.val(); /* actual value now */
 		$mm.val( val );
 		return val;
+	}
+
+	/** getWiki - Get (as jQuery) a link to Wiki for topic */
+	function getWiki( where ) {
+		var $v = jQuery( '<a/>', {
+			"class": "tbwikilink",
+			"alt": "Link to Reactor Wiki for topic help",
+			"title": "Link to Reactor Wiki for topic help",
+			"target": "_blank",
+			"href": "https://github.com/toggledbits/Reactor/wiki/" + String(where || "")
+		} );
+		$v.append( '<i class="material-icons">help_outline</i>' );
+		return $v;
 	}
 
 	/* Return value or default if undefined */
@@ -486,7 +503,7 @@ var ReactorSensor = (function(api, $) {
 			/* Initialize module data */
 			console.log("Initializing module data for ReactorSensor_UI7");
 			try {
-				console.log("initModule() using jQuery " + String(jQuery.fn.jquery) + "; jQuery-UI " + String(jQuery.ui.version));
+				console.log("initModule() using jQuery " + String(jQuery.fn.jQuery) + "; jQuery-UI " + String(jQuery.ui.version));
 			} catch( e ) {
 				console.log("initModule() error reading jQuery/UI versions: " + String(e));
 			}
@@ -1183,6 +1200,9 @@ var ReactorSensor = (function(api, $) {
 		if ( ( condOpts.holdtime || 0 ) > 0 ) {
 			condDesc += "; delay reset for " + condOpts.holdtime + " secs";
 		}
+		if ( ( condOpts.pulsetime || 0 ) != 0 ) {
+			condDesc += "; pulse for " + condOpts.pulsetime + " secs";
+		}
 		if ( ( condOpts.latch || 0 ) != 0 ) {
 			condDesc += "; latching";
 		}
@@ -1222,6 +1242,12 @@ var ReactorSensor = (function(api, $) {
 				(function( c, t, l ) {
 					setTimeout( function() { updateTime( c, t, "; reset delayed", true, l ); }, 20 );
 				})( id, cs.holduntil, 0 );
+			} else if ( cs.pulseuntil) {
+				id = getUID();
+				el.append( jQuery('<span class="timer"/>').attr( 'id', id ) );
+				(function( c, t, l ) {
+					setTimeout( function() { updateTime( c, t, "; pulse ", true, l ); }, 20 );
+				})( id, cs.pulseuntil, 0 );
 			}
 			if ( cs.latched ) {
 				el.append( '<span>&nbsp;(latched)' );
@@ -2047,12 +2073,14 @@ var ReactorSensor = (function(api, $) {
 				/* Predecessor condition (sequencing) */
 				var $pred = jQuery( 'select#pred', $ct );
 				if ( isEmpty( $pred.val() ) ) {
+					jQuery( 'input#predtime', $ct ).prop( 'disabled', true ).val( "" );
 					if ( undefined !== cond.options.after ) {
 						delete cond.options.after;
 						delete cond.options.aftertime;
 						configModified = true;
 					}
 				} else {
+					jQuery( 'input#predtime', $ct ).prop( 'disabled', false );
 					var pt = parseInt( jQuery('input#predtime', $ct).val() );
 					if ( isNaN( pt ) || pt < 0 ) {
 						pt = 0;
@@ -2112,7 +2140,7 @@ var ReactorSensor = (function(api, $) {
 					}
 				}
 
-				/* Duration */
+				/* Duration (sustained for) */
 				var $dd = jQuery('input#duration', $ct);
 				if ( isEmpty( $dd.val() ) || $dd.prop('disabled') ) {
 					jQuery('input#rcount', $ct).prop('disabled', false);
@@ -2148,45 +2176,74 @@ var ReactorSensor = (function(api, $) {
 					}
 				}
 
-				/* Hold time (delay reset) */
-				$dd = jQuery( 'input#holdtime', $ct );
-				if ( isEmpty( $dd.val() ) || $dd.prop( 'disabled' ) ) {
-					if ( undefined !== (cond.options || {}).holdtime ) {
-						delete cond.options.holdtime;
-						configModified = true;
-					}
-				} else {
-					var holdtime = getInteger( $dd.val() );
-					if ( isNaN( holdtime ) ) {
-						$dd.addClass( 'tberror' );
-					} else if ( cond.options.holdtime !== holdtime ) {
-						if ( holdtime > 0 ) {
-							cond.options.holdtime = holdtime;
-						} else if ( 0 === holdtime ) {
-							$dd.val("");
-							delete cond.options.holdtime;
-						} else {
-							/* Negative */
-							$dd.addClass( 'tberror' );
-						}
-						configModified = true;
-					}
-				}
+				var mode = jQuery( 'input#output:checked', $ct ).val() || "";
+				if ( "L" === mode ) {
+					/* Latching */
+					jQuery( 'input#holdtime', $ct ).prop( 'disabled', true );
+					configModified = configModified || ( undefined !== cond.options.holdtime );
+					delete cond.options.holdtime;
+					jQuery( 'input#pulsetime', $ct ).prop( 'disabled', true );
+					configModified = configModified || ( undefined !== cond.options.pulsetime );
+					delete cond.options.pulsetime;
 
-				/* Latching */
-				var latchval = jQuery('input#latchcond', $ct).prop('checked') ? 1 : 0;
-				if ( latchval != ( cond.options.latch || 0 ) ) {
-					/* Changed. Don't store false, just remove key */
-					if ( 0 !== latchval ) {
-						cond.options.latch = latchval;
-						if ( "and" !== ( cond.__parent.operator || "and" ) ) {
-							jQuery('input#latchcond', $ct).addClass( 'tberror' );
-						} else {
+					if ( undefined === cond.options.latch ) {
+						cond.options.latch = 1;
+						configModified = true;
+					}
+				} else if ( "P"  === mode ) {
+					/* Pulse output */
+					jQuery( 'input#holdtime', $ct ).prop( 'disabled', true );
+					configModified = configModified || ( undefined !== cond.options.holdtime );
+					delete cond.options.holdtime;
+					jQuery( 'input#pulsetime', $ct ).prop( 'disabled', false );
+					configModified = configModified || ( undefined !== cond.options.latch );
+					delete cond.options.latch;
+
+					var $f = jQuery( 'input#pulsetime', $ct );
+					var pulsetime = $f.val() || "";
+					if ( isEmpty( pulsetime ) ) {
+						pulsetime = 15; /* force a default */
+						$f.val( pulsetime );
+						configModified = configModified || pulsetime !== cond.options.pulsetime;
+						cond.options.pulsetime = pulsetime;
+					} else {
+						pulsetime = getInteger( pulsetime );
+						if ( isNaN( pulsetime ) || pulsetime <= 0 ) {
+							$f.addClass( 'tberror' );
+							cond.options.pulsetime = 1;
+						} else if ( pulsetime !== cond.options.pulsetime ) {
+							cond.options.pulsetime = pulsetime;
 							configModified = true;
 						}
+					}
+				} else {
+					/* Follow mode (default) */
+					jQuery( 'input#holdtime', $ct ).prop( 'disabled', false );
+					jQuery( 'input#pulsetime', $ct ).prop( 'disabled', true );
+					configModified = configModified || ( undefined !== cond.options.pulsetime );
+					delete cond.options.pulsetime;
+					configModified = configModified || ( undefined !== cond.options.latch );
+					delete cond.options.latch;
+
+					/* Hold time (delay reset) */
+					$dd = jQuery( 'input#holdtime', $ct );
+					if ( isEmpty( $dd.val() ) ) {
+						/* Empty and 0 are equivalent */
+						configModified = configModified || ( undefined !== cond.options.holdtime );
+						delete cond.options.holdtime;
 					} else {
-						delete cond.options.latch;
-						configModified = true;
+						var holdtime = getInteger( $dd.val() );
+						if ( isNaN( holdtime ) || holdtime < 0 ) {
+							delete cond.options.holdtime;
+							$dd.addClass( 'tberror' );
+						} else if ( ( cond.options.holdtime || 0 ) !== holdtime ) {
+							if ( holdtime > 0 ) {
+								cond.options.holdtime = holdtime;
+							} else {
+								delete cond.options.holdtime;
+							}
+							configModified = true;
+						}
 					}
 				}
 			}
@@ -2385,6 +2442,10 @@ var ReactorSensor = (function(api, $) {
 				});
 				jQuery( 'i', $el ).text( 'expand_more' );
 				$el.attr( 'title', msgOptionsShow );
+				if ( $row.hasClass( 'tbautohidden' ) ) {
+					jQuery( '.cond-group-title button#expand', $row ).click();
+					$row.removeClass( 'tbautohidden' );
+				}
 				return;
 			}
 
@@ -2396,66 +2457,91 @@ var ReactorSensor = (function(api, $) {
 			var displayed = condOptions[ cond.type || "group" ] || {};
 			var condOpts = cond.options || {};
 
-			/* Sequence (predecessor condition) */
-			if ( displayed.sequence ) {
-				var $preds = jQuery('<select id="pred" class="form-control form-control-sm"><option value="">(any time/no sequence)</option></select>');
-				/* Add groups that are not ancestor of condition */
-				DOtraverse( (getConditionIndex()).root, function( node ) {
-					$preds.append( jQuery( '<option/>' ).val( node.id ).text( makeConditionDescription( node ) ) );
-				}, false, function( node ) {
-					/* If node is not ancestor (line to root) or descendent of cond, allow as predecessor */
-					return cond.id !== node.id && !isAncestor( node.id, cond.id ) && !isDescendent( node.id, cond.id );
-				});
-				$container.append('<div id="predopt" class="form-inline"><label>Only after&nbsp;</label></div>');
-				jQuery('div#predopt label', $container).append( $preds );
-				jQuery('div#predopt', $container).append('&nbsp;<label>within <input type="text" id="predtime" class="form-control form-control-sm narrow" autocomplete="off">&nbsp;seconds (0=no time limit)</label>');
-				jQuery('select#pred', $container).val( condOpts.after );
-				jQuery('input#predtime', $container).val( condOpts.aftertime || 0 );
+			/* Options now fall into two general groups: output control, and restrictions. */
+
+			/* Output Control */
+			var out = jQuery( '<div/>', { "id": "outputopt", "class": "form-inline tboptgroup" } ).appendTo( $container );
+			jQuery( '<div class="opttitle">Output Control</div>' ).append( getWiki( 'Condition-Options' ) ).appendTo( out );
+			jQuery( '<label><input type="radio" id="output" name="output" value="">Follow (default) - output remains true while condition matches</label>' ).appendTo( out );
+			if ( false !== displayed.hold ) {
+				jQuery( '<label>; delay reset <input type="number" id="holdtime" class="form-control form-control-sm narrow"> seconds (0=no delay)</label>' ).appendTo( out );
+			}
+			if ( false !== displayed.pulse ) {
+				jQuery( '<br/><label><input type="radio" id="output" name="output" value="P">Pulse - on match, output goes true for <input type="number" id="pulsetime" class="form-control form-control-sm narrow"> seconds</label>' ).appendTo( out );
+			}
+			if ( false !== displayed.latch ) {
+				jQuery( '<br/><label><input type="radio" id="output" name="output" value="L">Latch - output is held true until external reset</label>' ).appendTo( out );
 			}
 
-			/* Duration */
-			if ( displayed.duration ) {
-				$container.append('<div id="duropt" class="form-inline"><label>Condition is sustained for&nbsp;</label><select id="durop" class="form-control form-control-sm"><option value="ge">at least</option><option value="lt">less than</option></select><input type="text" id="duration" class="form-control form-control-sm narrow" autocomplete="off"><label>&nbsp;seconds</label></div>');
-			}
-
-			/* Repeat */
-			if ( displayed.repeat ) {
-				$container.append('<div id="repopt" class="form-inline"><label>Condition repeats <input type="text" id="rcount" class="form-control form-control-sm narrow" autocomplete="off"> times within <input type="text" id="rspan" class="form-control form-control-sm narrow" autocomplete="off"> seconds</label></div>');
-			}
-
-			/* Hold time (delay reset) */
-			if ( displayed.hold ) {
-				$container.append('<div id="holdopt class="form-inline"><label for="holdtime">Delay reset of condition for <input type="text" id="holdtime" class="form-control form-control-sm narrow" autocomplete="off"> seconds</div>');
-			}
-
-			/* Latching */
-			if ( displayed.latch ) {
-				$container.append('<div id="latchopt" class="form-inline"><label class="checkbox-inline"><input type="checkbox" id="latchcond" class="form-check">&nbsp;Latch (once met, condition remains true until group resets)<label></div>');
-			}
-
-			jQuery('input,select', $container).on( 'change.reactor', handleConditionRowChange );
-			if ( ( condOpts.duration || 0 ) > 0 ) {
-				jQuery('input#rcount,input#rspan', $container).prop('disabled', true);
-				jQuery('input#duration', $container).val( condOpts.duration );
-				jQuery('select#durop', $container).val( condOpts.duration_op || "ge" );
+			/* Restore/configure */
+			if ( ( condOpts.pulsetime || 0 ) > 0 ) {
+				jQuery( 'input#output[value="P"]', out ).prop( 'checked', true );
+				jQuery( 'input#pulsetime', out ).prop( 'disabled', false ).val( condOpts.pulsetime || 15 );
+				jQuery( 'input#holdtime', out ).prop( 'disabled', true ).val( "" );
+			} else if ( 0 !== ( condOpts.latch || 0 ) ) {
+				jQuery( 'input#output[value="L"]', out ).prop( 'checked', true );
+				jQuery( 'input#pulsetime', out ).prop( 'disabled', true ).val( "" );
+				jQuery( 'input#holdtime', out ).prop( 'disabled', true ).val( "" );
 			} else {
-				var rc = condOpts.repeatcount || "";
-				jQuery('input#duration', $container).prop('disabled', rc != "");
-				jQuery('select#durop', $container).prop('disabled', rc != "");
-				jQuery('input#rcount', $container).val( rc );
-				jQuery('input#rspan', $container).prop('disabled', rc=="").val( rc == "" ? "" : ( condOpts.repeatwithin || "60" ) );
+				jQuery( 'input#output[value=""]', out ).prop( 'checked', true );
+				jQuery( 'input#pulsetime', out ).prop( 'disabled', true ).val( "" );
+				jQuery( 'input#holdtime', out ).prop( 'disabled', false ).val( condOpts.holdtime || 0 );
 			}
-			if ( ( condOpts.holdtime || 0 ) > 0 ) {
-				jQuery( 'input#holdtime', $container ).prop( 'disabled', false ).val( condOpts.holdtime );
-				jQuery( 'input#latchcond', $container ).prop( 'disabled', true );
-			} else {
-				jQuery('input#latchcond', $container).prop('checked', ( condOpts.latch || 0 ) != 0 );
-				jQuery( 'input#holdtime', $container ).prop( 'disabled', ( condOpts.latch || 0 ) != 0 ).val( "" );
+
+			/* Restrictions */
+			if ( displayed.sequence || displayed.duration || displayed.repeat ) {
+				var rst = jQuery( '<div/>', { "id": "restrictopt", "class": "form-inline tboptgroup" } ).appendTo( $container );
+				jQuery( '<div class="opttitle">Restrictions</div>' ).append( getWiki( 'Condition-Options' ) ).appendTo( rst );
+				/* Sequence (predecessor condition) */
+				if ( displayed.sequence ) {
+					var $preds = jQuery('<select id="pred" class="form-control form-control-sm"><option value="">(any time/no sequence)</option></select>');
+					/* Add groups that are not ancestor of condition */
+					DOtraverse( (getConditionIndex()).root, function( node ) {
+						$preds.append( jQuery( '<option/>' ).val( node.id ).text( makeConditionDescription( node ) ) );
+					}, false, function( node ) {
+						/* If node is not ancestor (line to root) or descendent of cond, allow as predecessor */
+						return "comment" !== node.type && cond.id !== node.id && !isAncestor( node.id, cond.id ) && !isDescendent( node.id, cond.id );
+					});
+					rst.append('<div id="predopt" class="form-inline"><label>Condition must occur after&nbsp;</label></div>');
+					jQuery('div#predopt label', rst).append( $preds );
+					jQuery('div#predopt', rst).append('&nbsp;<label>within <input type="text" id="predtime" class="form-control form-control-sm narrow" autocomplete="off">&nbsp;seconds (0=no time limit)</label>');
+					jQuery('select#pred', rst).val( condOpts.after || "" );
+					jQuery('input#predtime', rst).val( condOpts.aftertime || 0 ).prop( 'disabled', "" !== ( condOpts.after || "" ) );
+				}
+
+				/* Duration */
+				if ( displayed.duration ) {
+					rst.append('<div id="duropt" class="form-inline"><label>Condition must be sustained for&nbsp;</label><select id="durop" class="form-control form-control-sm"><option value="ge">at least</option><option value="lt">less than</option></select><input type="text" id="duration" class="form-control form-control-sm narrow" autocomplete="off"><label>&nbsp;seconds</label></div>');
+				}
+
+				/* Repeat */
+				if ( displayed.repeat ) {
+					rst.append('<div id="repopt" class="form-inline"><label>Condition must repeat <input type="text" id="rcount" class="form-control form-control-sm narrow" autocomplete="off"> times within <input type="text" id="rspan" class="form-control form-control-sm narrow" autocomplete="off"> seconds</label></div>');
+				}
+
+				if ( ( condOpts.duration || 0 ) > 0 ) {
+					jQuery('input#rcount,input#rspan', rst).prop('disabled', true);
+					jQuery('input#duration', rst).val( condOpts.duration );
+					jQuery('select#durop', rst).val( condOpts.duration_op || "ge" );
+				} else {
+					var rc = condOpts.repeatcount || "";
+					jQuery('input#duration', rst).prop('disabled', rc != "");
+					jQuery('select#durop', rst).prop('disabled', rc != "");
+					jQuery('input#rcount', rst).val( rc );
+					jQuery('input#rspan', rst).prop('disabled', rc=="").val( rc == "" ? "" : ( condOpts.repeatwithin || "60" ) );
+				}
 			}
+
+			/* Handler for all fields */
+			jQuery( 'input,select', $container ).on( 'change.reactor', handleConditionRowChange );
 
 			/* Add the options container (specific immediate child of this row selection) */
 			if ( isGroup ) {
 				$row.append( $container );
+				if ( 1 === jQuery( '.cond-group-title button#collapse', $row ).length ) {
+					jQuery( '.cond-group-title button#collapse', $row ).click();
+					$row.addClass('tbautohidden');
+				}
 			} else {
 				$row.children( 'div.cond-body' ).append( $container );
 			}
@@ -2973,7 +3059,7 @@ var ReactorSensor = (function(api, $) {
 					DOtraverse( getConditionIndex().root, function( n ) {
 						mm.append( jQuery( '<option/>' ).val( n.id ).text( makeConditionDescription( n ) ) );
 					}, false, function( n ) {
-						return n.id != cond.id && !isAncestor( n.id, cond.id );
+						return "comment" !== n.type && n.id != cond.id && !isAncestor( n.id, cond.id );
 					});
 					fs.append( mm );
 					el.append( fs );
@@ -3015,7 +3101,7 @@ var ReactorSensor = (function(api, $) {
 								DOtraverse( getConditionIndex().root, function( n ) {
 									$mm.append( jQuery( '<option/>' ).val( n.id ).text( makeConditionDescription( n ) ) );
 								}, false, function( n ) {
-									return n.id != cond.id && !isAncestor( n.id, cond.id );
+									return "comment" !== n.type && n.id != cond.id && !isAncestor( n.id, cond.id );
 								});
 								$mm.val( "" );
 							} else {
@@ -3580,7 +3666,7 @@ var ReactorSensor = (function(api, $) {
 				items: '> *:not([id="root"])',
 				// containment: 'div.cond-list.tb-sortable',
 				connectWith: 'div.cond-list.tb-sortable',
-				/* https://stackoverflow.com/questions/15724617/jquery-dragmove-but-leave-the-original-if-ctrl-key-is-pressed
+				/* https://stackoverflow.com/questions/15724617/jQuery-dragmove-but-leave-the-original-if-ctrl-key-is-pressed
 				start: function( ev, ui ) {
 					if ( ev.ctrlKey ) {
 						$clone = ui.item.clone().insertBefore( ui.item );
@@ -3729,6 +3815,10 @@ var ReactorSensor = (function(api, $) {
 			html += 'div#tab-conds.reactortab div.warning { color: red; }';
 			html += 'div#tab-conds.reactortab button.md-btn.attn { background-color: #ffff80; }';
 			html += 'div#tab-conds.reactortab button.md-btn.draghandle { cursor: grab; }';
+			html += 'div#tab-conds.reactortab div.tboptgroup { background: #fff; border: 1px solid grey; border-radius: 12px; padding: 12px 12px; }';
+			// html += 'div#tab-conds.reactortab div#outputopt { }';
+			html += 'div#tab-conds.reactortab div#restrictopt { margin-top: 4px; }';
+			html += 'div#tab-conds.reactortab div.opttitle { font-size: 1.15em; font-weight: bold; }';
 			html += 'div#tab-conds.reactortab fieldset.condfields { display: inline-block; }';
 			html += 'div#tab-conds.reactortab input.titleedit { font-size: 12px; height: 24px; }';
 			html += "</style>";
@@ -4394,6 +4484,10 @@ var ReactorSensor = (function(api, $) {
 				}
 				break;
 
+			case 'resetlatch':
+				var group = jQuery( 'select#group', row ).val() || "";
+				break;
+
 			default:
 				row.addClass( "tberror" );
 		}
@@ -4534,12 +4628,21 @@ var ReactorSensor = (function(api, $) {
 					lua = lua.replace( /\s+\n/g, "\n" );
 					lua = lua.replace( /[\r\n\s]+$/m, "" ); // rtrim
 					lua = unescape( encodeURIComponent( lua ) ); // Fanciness to keep UTF-8 chars well
-					if ( "" === lua ) {
+					if ( isEmpty( lua ) ) {
 						delete action.encoded_lua;
 						action.lua = "";
 					} else {
 						action.encoded_lua = 1;
 						action.lua = btoa( lua );
+					}
+					break;
+
+				case 'resetlatch':
+					var gid = jQuery( 'select#group', row ).val() || "";
+					if ( isEmpty( gid ) ) {
+						delete action.group;
+					} else {
+						action.group = gid;
 					}
 					break;
 
@@ -5293,6 +5396,22 @@ var ReactorSensor = (function(api, $) {
 				ct.append('<div class="tbhint">If your Lua code returns boolean <em>false</em>, scene execution will stop and the remaining actions that follow will not be run (this is a feature). It is also recommended that the first line of your Lua be a comment with text to help you identify the code--if there\'s an error logged, the first line of the script is almost always shown. Also, you can use the <tt>print()</tt> function to write to Reactor\'s event log, which is shown in the Logic Summary and easier/quicker to get at than the Vera log file.</div>');
 				break;
 
+			case 'resetlatch':
+				m = jQuery( '<select id="group" class="form-control form-control-sm" />' );
+				/* Add groups */
+				DOtraverse( (getConditionIndex()).root, function( node ) {
+					m.append( jQuery( '<option/>' ).val( node.id ).text( makeConditionDescription( node ) ) );
+				}, false, function( node ) {
+					/* If node is not ancestor (line to root) or descendent of cond, allow as predecessor */
+					return "group" === ( node.type || "group" );
+				});
+				m.prepend( '<option value="*">(all groups)</option>' )
+					.prepend( '<option value="" selected>(this group)</option>' )
+					.val( "" );
+				m.on( 'change.reactor', handleActionValueChange );
+				ct.append( m );
+				break;
+
 			default:
 				ct.append('<div class="tberror">Type ' + newVal + '?</div>');
 		}
@@ -5531,6 +5650,7 @@ var ReactorSensor = (function(api, $) {
 			'<option value="delay">Delay</option>' +
 			'<option value="runlua">Run Lua</option>' +
 			'<option value="runscene">Run Scene</option>' +
+			'<option value="resetlatch">Reset Latched</option>' +
 			'</select></div>' );
 		row.append('<div class="actiondata col-xs-12 col-sm-12 col-md-6 col-lg-8 form-inline"></div>');
 		var controls = jQuery('<div class="controls col-xs-12 col-sm-12 col-md-2 col-lg-2 text-right"></div>');
@@ -5626,6 +5746,10 @@ var ReactorSensor = (function(api, $) {
 							lua = (act.encoded_lua || 0) != 0 ? atob( act.lua ) : act.lua;
 						}
 						jQuery( 'textarea.luacode', newRow ).val( lua ).trigger( 'reactorinit' );
+						break;
+
+					case "resetlatch":
+						jQuery( 'select#group', newRow ).val( act.group || "" );
 						break;
 
 					default:
@@ -6215,7 +6339,7 @@ var ReactorSensor = (function(api, $) {
 			return;
 		}
 
-		// https://stackoverflow.com/questions/13651243/how-do-i-chain-a-sequence-of-deferred-functions-in-jquery-1-8-x#24041521
+		// https://stackoverflow.com/questions/13651243/how-do-i-chain-a-sequence-of-deferred-functions-in-jQuery-1-8-x#24041521
 		var copy = function(a) { return Array.prototype.slice.call(a); };
 		$.sequence = function( steps, continueOnFailure ) {
 			var handleStep, handleResult,
