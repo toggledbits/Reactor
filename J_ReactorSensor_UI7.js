@@ -170,7 +170,7 @@ var ReactorSensor = (function(api, $) {
 	}
 
 	function hasAnyProperty( obj ) {
-		if ( undefined !== obj ) {
+		if ( "object" === typeof( obj ) ) {
 			for ( var p in obj ) {
 				if ( obj.hasOwnProperty( p ) ) return true;
 			}
@@ -2404,7 +2404,7 @@ var ReactorSensor = (function(api, $) {
 					$preds.append( jQuery( '<option/>' ).val( node.id ).text( makeConditionDescription( node ) ) );
 				}, false, function( node ) {
 					/* If node is not ancestor (line to root) or descendent of cond, allow as predecessor */
-					return cond.id !== node.id && !isAncestor( node.id, cond.id ) && !isDescendent( node.id, cond.id );
+					return "comment" !== node.type && cond.id !== node.id && !isAncestor( node.id, cond.id ) && !isDescendent( node.id, cond.id );
 				});
 				$container.append('<div id="predopt" class="form-inline"><label>Only after&nbsp;</label></div>');
 				jQuery('div#predopt label', $container).append( $preds );
@@ -2973,7 +2973,7 @@ var ReactorSensor = (function(api, $) {
 					DOtraverse( getConditionIndex().root, function( n ) {
 						mm.append( jQuery( '<option/>' ).val( n.id ).text( makeConditionDescription( n ) ) );
 					}, false, function( n ) {
-						return n.id != cond.id && !isAncestor( n.id, cond.id );
+						return "comment" !== n.type && n.id != cond.id && !isAncestor( n.id, cond.id );
 					});
 					fs.append( mm );
 					el.append( fs );
@@ -3015,7 +3015,7 @@ var ReactorSensor = (function(api, $) {
 								DOtraverse( getConditionIndex().root, function( n ) {
 									$mm.append( jQuery( '<option/>' ).val( n.id ).text( makeConditionDescription( n ) ) );
 								}, false, function( n ) {
-									return n.id != cond.id && !isAncestor( n.id, cond.id );
+									return "comment" !== n.type && n.id != cond.id && !isAncestor( n.id, cond.id );
 								});
 								$mm.val( "" );
 							} else {
@@ -4534,7 +4534,7 @@ var ReactorSensor = (function(api, $) {
 					lua = lua.replace( /\s+\n/g, "\n" );
 					lua = lua.replace( /[\r\n\s]+$/m, "" ); // rtrim
 					lua = unescape( encodeURIComponent( lua ) ); // Fanciness to keep UTF-8 chars well
-					if ( "" === lua ) {
+					if ( isEmpty( lua ) ) {
 						delete action.encoded_lua;
 						action.lua = "";
 					} else {
