@@ -4559,9 +4559,11 @@ function RG( grp, condState, level, r )
 			r = r .. string.format("%s/%s %s %s", cond.service or "?", cond.variable or "?", cond.operator or cond.condition or "?",
 				cond.value or "")
 			if cond.nocase == 0 then r = r .. " (match case)" end
-			summaryDevices[tostring(cond.device)] = true
-			if ( ( luup.devices[cond.device] or {} ).device_num_parent or 0 ) ~= 0 then
-				summaryDevices[tostring(luup.devices[cond.device].device_num_parent)] = true
+			if cond.device ~= -1 then
+				summaryDevices[tostring(cond.device)] = true
+				if ( ( luup.devices[cond.device] or {} ).device_num_parent or 0 ) ~= 0 then
+					summaryDevices[tostring(luup.devices[cond.device].device_num_parent)] = true
+				end
 			end
 		elseif condtype == "grpstate" then
 			r = r .. string.format("%s (%d) ", cond.device == -1 and "(self)" or ( ( luup.devices[cond.device]==nil ) and ( "*** missing " .. ( cond.devicename or "unknown" ) ) or
