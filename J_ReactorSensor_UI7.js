@@ -246,10 +246,10 @@ var ReactorSensor = (function(api, $) {
 		return getInteger( s );
 	}
 
-	function getDeviceFriendlyName( dev ) {
+	function getDeviceFriendlyName( dev, devobj ) {
 		if ( -1 === dev ) return '(self)';
-		var devobj = api.getDeviceObject( dev );
-		if ( undefined === devobj || false === devobj ) {
+		devobj = devobj || api.getDeviceObject( dev );
+		if ( ! devobj ) {
 			console.log( "getDeviceFriendlyName() dev=(" + typeof(dev) + ")" + String(dev) + ", devobj=(" + typeof(devobj) + ")" + String(devobj) + ", returning false" );
 			return false;
 		}
@@ -503,7 +503,7 @@ var ReactorSensor = (function(api, $) {
 			/* Initialize module data */
 			console.log("Initializing module data for ReactorSensor_UI7");
 			try {
-				console.log("initModule() using jQuery " + String(jQuery.fn.jQuery) + "; jQuery-UI " + String(jQuery.ui.version));
+				console.log("initModule() using jQuery " + String(jQuery.fn.jquery) + "; jQuery-UI " + String(jQuery.ui.version));
 			} catch( e ) {
 				console.log("initModule() error reading jQuery/UI versions: " + String(e));
 			}
@@ -535,9 +535,10 @@ var ReactorSensor = (function(api, $) {
 
 			/* Make our own list of devices, sorted by room, and alpha within room. */
 			var devices = api.cloneObject( api.getListOfDevices() );
-			var rooms = [];
 			var noroom = { "id": 0, "name": "No Room", "devices": [] };
-			rooms[noroom.id] = noroom;
+			var rooms = [ noroom ];
+			var roomIx = {};
+			roomIx[String(noroom.id)] = noroom;
 			var dd = devices.sort( function( a, b ) {
 				if ( a.id == myid ) return -1;
 				if ( b.id == myid ) return 1;
@@ -547,20 +548,21 @@ var ReactorSensor = (function(api, $) {
 				return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1;
 			});
 			for (var i=0; i<dd.length; i+=1) {
-				var devobj = dd[i];
+				var devobj = api.cloneObject( dd[i] );
 				/* Detect openLuup while we're at it */
 				if ( "openLuup" === devobj.device_type ) {
 					isOpenLuup = true;
 				}
 
 				var roomid = devobj.room || 0;
-				var roomObj = rooms[roomid];
+				var roomObj = roomIx[String(roomid)];
 				if ( undefined === roomObj ) {
 					roomObj = api.cloneObject( api.getRoomObject(roomid) );
 					roomObj.devices = [];
-					rooms[roomid] = roomObj;
+					roomIx[String(roomid)] = roomObj;
+					rooms[rooms.length] = roomObj;
 				}
-				roomObj.devices.push( devobj.id );
+				roomObj.devices.push( devobj );
 			}
 			roomsByName = rooms.sort(
 				/* Special sort for room name -- sorts "No Room" last */
@@ -1107,13 +1109,13 @@ var ReactorSensor = (function(api, $) {
 			var haveItem = false;
 			var xg = jQuery( '<optgroup />' ).attr( 'label', roomObj.name );
 			for ( var j=0; j<roomObj.devices.length; j++ ) {
-				var devid = roomObj.devices[j];
-				if ( filter && !filter( api.getDeviceObject( devid ) || {} ) ) {
+				var devobj = roomObj.devices[j];
+				if ( filter && !filter( devobj ) ) {
 					continue;
 				}
 				haveItem = true;
-				var fn = getDeviceFriendlyName( devid );
-				xg.append( jQuery( '<option/>' ).val( devid ).text( fn ? fn : '#' + String(devid) + '?' ) );
+				var fn = getDeviceFriendlyName( devobj.id, devobj );
+				xg.append( jQuery( '<option/>' ).val( devobj.id ).text( fn ? fn : '#' + String(devobj.id) + '?' ) );
 			}
 			if ( haveItem ) {
 				el.append( xg );
