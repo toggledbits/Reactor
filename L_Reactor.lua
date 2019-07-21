@@ -11,12 +11,13 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.4develop-19199"
+local _PLUGIN_VERSION = "3.4develop-19202"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION = 19178
 local _CDATAVERSION = 19082	-- must coincide with JS
 local _UIVERSION = 19195	-- must coincide with JS
+      _SVCVERSION = 19202	-- must coincide with implementation file (not local)
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -52,6 +53,7 @@ local runStamp = 0
 local pluginDevice = false
 local isALTUI = false
 local isOpenLuup = false
+local installPath
 
 local TICKOFFS = 5 -- cond tasks try to run TICKOFFS seconds after top of minute
 
@@ -128,6 +130,19 @@ local function D(msg, ...)
 	if debugMode then
 		L( { msg=msg,prefix=(_PLUGIN_NAME .. "(debug)") }, ... )
 	end
+end
+
+local function getInstallPath()
+	if not installPath then
+		installPath = "/etc/cmh-ludl/" -- until we know otherwise
+		if isOpenLuup then
+			local loader = require "openLuup.loader"
+			if loader.find_file then
+				installPath = loader.find_file( "L_Reactor.lua" ):gsub( "L_Reactor.lua$", "" )
+			end
+		end
+	end
+	return installPath
 end
 
 local function checkVersion(dev)
@@ -2021,17 +2036,8 @@ local function loadSensorConfig( tdev )
 		}
 		upgraded = true
 	elseif ( cdata.version or 0 ) < _CDATAVERSION then
-		local fn = string.format( "reactor-dev%d-config-v%s-backup.json", tdev, tostring( cdata.version or 0 ) )
-		if isOpenLuup then
-			local loader = require "openLuup.loader"
-			if loader.find_file == nil then
-				fn = "./" .. fn -- old Reactor, punt
-			else
-				fn = loader.find_file( "L_Reactor.lua" ):gsub( "L_Reactor.lua$", "" ) .. fn
-			end
-		else
-			fn = "/etc/cmh-ludl/" .. fn
-		end
+		local fn = string.format( "%sreactor-dev%d-config-v%s-backup.json", 
+			getInstallPath(), tdev, tostring( cdata.version or 0 ) )
 		local f = io.open( fn, "r" )
 		if f == nil then
 			L("Backing up %1 (#%2) pre-upgrade configuration to %3",
@@ -3180,13 +3186,19 @@ local function processSensorUpdate( tdev, sst )
 		if currTrip then
 			-- Update accumulated trip time
 			local delta = math.max( 0, now - getVarNumeric( "lastacc", now, tdev, RSSID ) )
-			if delta > 0 then
+			-- If not changing state, require >5s delta before update, to dampen
+			-- update cycles for RSs that watch their own Runtime. Always update
+			-- when newTrip false and currTrip true (changing tripped state).
+			if delta > 5 or not newTrip then
 				local rt = delta + getVarNumeric( "Runtime", 0, tdev, RSSID )
 				D("processSensorUpdate() currently tripped, adding %1 seconds to runtime, now total %2", delta, rt)
 				setVar( RSSID, "Runtime", rt, tdev )
+				setVar( RSSID, "lastacc", now, tdev )
 			end
+		else
+			-- Update on each false/untrip result, too.
+			setVar( RSSID, "lastacc", now, tdev )
 		end
-		setVar( RSSID, "lastacc", now, tdev )
 
 		-- Pass through groups again, and run activities for any changed groups,
 		-- except root, which is handled by trip() below.
@@ -3454,7 +3466,7 @@ local function startSensor( tdev, pdev )
 		scheduleDelay( { id=tostring(tdev), owner=tdev, func=sensorTick }, 1, { replace=true } )
 	else
 		L("%1 (#%2) is disabled.", luup.devices[tdev].description, tdev)
-		addEvent{ dev=tdev, event='disabled at startup' }
+		addEvent{ dev=tdev, event='disabled at start-up' }
 		showDisabled( tdev )
 	end
 	return true
@@ -3483,7 +3495,7 @@ local function startSensors( pdev )
 			local status, err = pcall( startSensor, k, pdev )
 			if not status then
 				L({level=1,msg="%1 (#%2) failed to start: %3"}, luup.devices[k].description, k, err)
-				addEvent{ dev=k, event="error", message="Startup failed", reason=err }
+				addEvent{ dev=k, event="error", message="Start-up failed", reason=err }
 				setMessage( "Failed (see log)", k )
 				luup.set_failure( 1, k ) -- error on child device
 			else
@@ -3556,7 +3568,7 @@ function startPlugin( pdev )
 		error "This device is already started/running."
 	end
 
-	L("Plugin version %2, device %1 (%3)", pdev, _PLUGIN_VERSION, luup.devices[pdev].description)
+	L("Plugin version %1 starting on #%2 (%3)", _PLUGIN_VERSION, pdev, luup.devices[pdev].description)
 	if getVarNumeric( "Enabled", 1, pdev, MYSID ) == 0 then
 		luup.variable_set( MYSID, "Message", "PLUGIN DISABLED", pdev )
 		for k,v in childDevices( pdev ) do
@@ -4811,12 +4823,9 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		-- sent to my server to ensure that the correct file is received (if per-version exceptions are
 		-- needed). The version info and any other data collected by the process are not stored except
 		-- in temporary logs that are periodically purged, and not for any analytical purpose.
-		local targetPath = "/etc/cmh-ludl/D_ReactorDeviceInfo.json"
+		local targetPath = getInstallPath() .. "D_ReactorDeviceInfo.json"
 		local tmpPath = "/tmp/D_ReactorDeviceInfo.tmp"
 		if isOpenLuup then
-			local loader = require "openLuup.loader"
-			if loader.find_file == nil then return json.encode{ status=false, message="Your openLuup is out of update; please update." } end
-			targetPath = loader.find_file( "D_ReactorDeviceInfo.json" )
 			tmpPath = targetPath:gsub( ".json.*$", ".tmp" )
 		end
 		local http = require("socket.http")
@@ -4857,6 +4866,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			end
 			return json.encode{ status=true, message="Device info updated" }, "application/json"
 		end
+		os.execute( "rm -f " .. tmpPath )
 		return json.encode{ status=false, message="Download failed (" .. tostring(httpStatus) .. ")" }, "application/json"
 
 	elseif action == "submitdevice" then
@@ -4907,14 +4917,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		end
 		local bdata = json.encode( st )
 		if action == "backup" then
-			local bfile
-			if isOpenLuup then
-				local loader = require "openLuup.loader"
-				if loader.find_file == nil then return json.encode{ status=false, message="Your openLuup is out of date; please update to 2018.11.21 or higher." } end
-				bfile = loader.find_file( "L_Reactor.lua" ):gsub( "L_Reactor.lua$", "" ) .. "reactor-config-backup.json"
-			else
-				bfile = "/etc/cmh-ludl/reactor-config-backup.json"
-			end
+			local bfile = getInstallPath() .. "reactor-config-backup.json"
 			local f = io.open( bfile, "w" )
 			if f then
 				f:write( bdata )
@@ -4939,6 +4942,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			configversion=_CONFIGVERSION,
 			cdataversion=_CDATAVERSION,
 			uiversion=_UIVERSION,
+			svcversion=_SVCVERSION,
 			author="Patrick H. Rigney (rigpapa)",
 			url=_PLUGIN_URL,
 			['type']=MYTYPE,
@@ -4969,6 +4973,34 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			end
 		end
 		return alt_json_encode( st ), "application/json"
+
+	elseif action == "files" then
+		local path = getInstallPath()
+		local inf = { timestamp=os.time(), files={}, pluginVersion=_PLUGIN_VERSION, serviceVersion=_SVCVERSION, path=path }
+		for _,fn in ipairs( { "D_ReactorDeviceInfo.json", "D_ReactorSensor_UI7.json", "D_ReactorSensor.xml", "D_Reactor_UI7.json",
+			"D_Reactor.xml", "I_Reactor.xml", "J_Reactor_ALTUI.js", "J_ReactorSensor_ALTUI.js", "J_ReactorSensor_UI7.js",
+			"J_Reactor_UI7.js", "L_LuaXP_Reactor.lua", "L_Reactor.lua", "S_ReactorSensor.xml", "S_Reactor.xml" } ) do
+			local ff = path .. fn
+			local f = io.open( ff, "r" )
+			local usesCompressed = f == nil
+			if usesCompressed then
+				os.execute( "pluto-lzo d "..ff..".lzo /tmp/reactorfile.tmp" )
+				ff = "/tmp/reactorfile.tmp"
+			else
+				f:close()
+			end
+			local p = io.popen( "md5sum "..ff )
+			if p then
+				local sum = p:read("*a")
+				sum = tostring(sum or ""):gsub( "%s+.*$", "" )
+				p:close()
+				inf.files[fn] = { compressed=usesCompressed, check=sum }
+			else
+				inf.files[fn] = { compressed=false, check="", notice="No data" }
+			end
+			os.execute( "rm -f /tmp/reactorfile.tmp" )
+		end
+		return alt_json_encode( inf ), "application/json"
 
 	elseif action == "serviceinfo" then
 		error("not yet implemented")

@@ -8,8 +8,15 @@
 		-- https://www.toggledbits.com/reactor
 		-- --------------------------------------------------------------------
 		function startupReactor(devNum)
-			luup.log("Reactor STARTUP!")
+			luup.log("Reactor START-UP!")
+			luup.variable_set( "urn:toggledbits-com:serviceId:Reactor", "Message", "Booting...", devNum )
 			Reactor = require("L_Reactor")
+			if Reactor._SVCVERSION ~= 19202 then
+				luup.log("Reactor install error: the implementation XML and implementation Lua are not in sync. Please reinstall.",1)
+				luup.set_failure( 1, devNum )
+				luup.variable_set( "urn:toggledbits-com:serviceId:Reactor", "Message", "Installation faulty", devNum )
+				return false, "Installation faulty", "Reactor"
+			end
 			reactorTick = Reactor.tick
 			reactorWatch = Reactor.watch
 			reactorRequestHandler = Reactor.request
@@ -56,6 +63,7 @@
 			<name>ResetRuntime</name>
 			<run>
 				local now = os.time()
+				luup.log("Resetting runtime on ReactorSensor #"..tostring(lul_device))
 				luup.variable_set( "urn:toggledbits-com:serviceId:ReactorSensor", "TripCount", "0", lul_device )
 				luup.variable_set( "urn:toggledbits-com:serviceId:ReactorSensor", "Runtime", "0", lul_device )
 				luup.variable_set( "urn:toggledbits-com:serviceId:ReactorSensor", "RuntimeSince", now, lul_device )
