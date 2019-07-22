@@ -4120,6 +4120,24 @@ var ReactorSensor = (function(api, $) {
 		jQuery( 'div#varname input', editrow ).focus();
 	}
 
+	function handleVariableSaveClick( ev ) {
+		try {
+			var myid = api.getCpanelDeviceId();
+			var cdata = getConfiguration( myid );
+			for ( var vn in ( cdata.variables || {} ) ) {
+				if ( cdata.variables.hasOwnProperty( vn ) ) {
+					if ( 0 !== cdata.variables[vn].export ) {
+						api.setDeviceStateVariablePersistent( myid, "urn:toggledbits-com:serviceId:ReactorValues", vn, "" );
+						api.setDeviceStateVariablePersistent( myid, "urn:toggledbits-com:serviceId:ReactorValues", vn + "_Error", "Not yet initialized" );
+					}
+				}
+			}
+		} catch( e ) {
+			console.log(String(e));
+		}
+		return handleSaveClick( ev );
+	}
+
 	/**
 	 * Redraw variables and expressions.
 	*/
@@ -4208,7 +4226,7 @@ var ReactorSensor = (function(api, $) {
 
 
 		jQuery("button#addvar", container).on( 'click.reactor', handleAddVariableClick );
-		jQuery("button#saveconf", container).on( 'click.reactor', handleSaveClick );
+		jQuery("button#saveconf", container).on( 'click.reactor', handleVariableSaveClick );
 		jQuery("button#revertconf", container).on( 'click.reactor', handleRevertClick );
 
 		updateVariableControls();
