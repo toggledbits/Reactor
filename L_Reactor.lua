@@ -4008,46 +4008,124 @@ function actionClearLatched( dev )
 	end
 end
 
--- Run a scene. By default, it's assumed this action is being called from outside
--- Reactor, so starting a scene does not stop prior started scenes, and ReactorScenes
--- are forced (if you don't want ReactorScenes, call the HomeAutomationGateway1
--- service action on device 0).
-function actionRunScene( scene, options, dev )
-	L("RunScene action request, scene %1", scene)
-	if luup.devices[dev].device_type == RSTYPE then dev = luup.devices[dev].device_num_parent end
+local function findSceneOrActivity( scene, dev )
+	D("findSceneOrActivity(%1,%2)", scene, dev)
 	if type(scene) == "string" then
-		local ln = scene:lower()
-		for k,v in pairs( luup.scenes ) do
-			if v.name:lower() == ln then
-				scene = k
-				break
+		-- See if string contains a number. If so, that's just a Vera scene ID.
+		local tn = tonumber( scene )
+		if tn then
+			scene = tn
+		else
+			-- Non-numeric. May be RS activity or Vera scene name
+			local ln = scene:lower()
+			if ln:match( "%.true$" ) or ln:match( "%.false$" ) then
+				-- Activity reference.
+				if luup.devices[dev].device_type ~= RSTYPE then
+					return false, false, "Device must be ReactorSensor to use activity reference: " .. scene
+				end
+				-- Find it directly?
+				local cd = getSensorState( dev ).configData or {}
+				if not ( cd.activities or {} )[scene] then
+					-- No, maybe it uses a group name rather than ID. Find it.
+					local name = ln:gsub( ".true$", "" ):gsub( ".false$", "" )
+					local state = ln:gsub( name, "" )
+					ln = nil
+					for grp in conditionGroups( cd.conditions.root or {} ) do
+						if (grp.name or ""):lower() == name or (grp.id or ""):lower() == name then
+							ln = grp.id .. state;
+							break;
+						end
+					end
+					if not ln then
+						-- Nothing found.
+						return false, "error", "Activity not found: " .. scene
+					elseif not ( cd.activities or {})[ln] then
+						-- Found a group that matches, but it has no activity.
+						return true
+					end
+					D("findSceneOrActivity() remapping scene parameter (activity) %1 to canonical %2", scene, ln)
+					scene = ln
+				end
+			else
+				-- Assume Vera scene by name
+				for k,v in pairs( luup.scenes ) do
+					if v.name:lower() == ln then
+						tn = k
+						break
+					end
+				end
+				if not tn then
+					return false, "error", "Scene name not found: " .. scene
+				end
+				-- Replace scene passed with number
+				D("findSceneOrActivity() remapping scene parameter (name) %1 to Vera scene #%2", scene, tn)
+				scene = tn
 			end
 		end
 	end
-	scene = tonumber( scene or "-1" ) or -1
-	if scene <= 0 then
-		L({level=1,msg="RunScene action failed, scene %1 not found."}, scene)
+	D("findSceneOrActivity() returning %1", scene)
+	return scene
+end
+
+-- Run a Vera scene or ReactorSensor group activity in the context of the
+-- passed device.
+function actionRunScene( scene, options, dev )
+	L("RunScene action invoked, scene %1", scene)
+	local scid, event, message = findSceneOrActivity( scene, dev )
+	if not scid then
+		if event then
+			addEvent{ dev=dev, event="action", action="RunScene", scene=scene, options=options, [event]=message }
+		end
+		L({level=2,msg=message})
 		return false
+	elseif scid == true then
+		-- findSceneOrActivity telling us it's an empty activity, nothing to do.
+		-- So, we're done!
+		addEvent{ dev=dev, event="action", action="RunScene", scene=scene, options=options, warning="Activity contains no actions" }
+		L({level=2,msg="Activity %1 contains no actions"}, scene)
+		return true
 	end
-	options = options or {}
+
+	-- Default our options
+	if type(options) == "table" then
+	elseif type(options) == "string" and options ~= "" then
+		local opts,err,pos = json.decode( options )
+		if err then	
+			L({level=1,msg="Invalid JSON in Options parameter to RunScene action: %1 at %2 in %3"},
+				err, pos, options)
+			options = opts
+		end
+	else
+		options = { contextDevice=dev }
+	end
 	options.forceReactorScenes = true -- If we use this action, this is how we do it
 	if options.stopPriorScenes == nil then options.stopPriorScenes = false end
-	if options.contextDevice == nil then options.contextDevice = 0 end
-	addEvent{ dev=dev, event="action", action="RunScene", scene=scene, options=options }
-	runScene( scene, dev, options )
+	if options.contextDevice == nil then options.contextDevice = dev end
+	addEvent{ dev=dev, event="action", action="RunScene", scene=scene, sceneId=scid, options=options }
+	runScene( scid, dev, options )
 	return true
 end
 
--- Stop running scene. If scene is not provided or 0, all scenes are stopped.
--- ctx is the context device, or 0 (global context) if not specified.
+-- Stop running scene.
 function actionStopScene( ctx, scene, dev )
 	L("StopScene action, scene %1", scene)
-	if luup.devices[dev].device_type == RSTYPE then dev = luup.devices[dev].device_num_parent end
 	-- Treat blank/empty as nil
-	if (ctx or "") ~= "" then ctx = tonumber( ctx ) or 0 else ctx = nil end
-	if scene == "" then scene = nil end
-	addEvent{ dev=dev, event="action", action="StopScene", contextDevice=ctx or "(all)", scene=scene or "(all)" }
-	stopScene( ctx, nil, dev, scene )
+	if (ctx or "") ~= "" then ctx = tonumber( ctx ) or nil else ctx = dev end
+	local scid = nil
+	if (scene or "") ~= "" then 
+		local event, message
+		scid, event, message = findSceneOrActivity( scene, dev )
+		if not scid then
+			if event then
+				addEvent{ dev=dev, event="action", action="StopScene", scene=scene, [event]=message }
+			end
+			L({level=2,msg=message})
+			return false
+		end
+	end
+	addEvent{ dev=dev, event="action", action="StopScene", contextDevice=ctx or "(all)", scene=scene or "", sceneId=tostring(scid) }
+	stopScene( ctx, nil, dev, scid )
+	return true
 end
 
 -- Set group enabled state (job).

@@ -132,6 +132,11 @@
 			  <direction>in</direction>
 			  <relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
 			</argument>
+			<argument>
+			  <name>Options</name>
+			  <direction>in</direction>
+			  <relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
+			</argument>
 		  </argumentList>
 		</action>
 		<action>

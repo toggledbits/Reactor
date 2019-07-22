@@ -128,9 +128,7 @@
 			<job>
 				-- Run scene in Reactor master device context.
 				-- See https://www.toggledbits.com/reactor for explanation of Options
-				local opt = lul_settings.Options or {}
-				opt.contextDevice = opt.contextDevice or lul_device
-				Reactor.actionRunScene( lul_settings.SceneNum, opt, lul_device )
+				Reactor.actionRunScene( lul_settings.SceneNum, lul_settings.Options, lul_device )
 				return 4,0
 			</job>
 		</action>
@@ -140,11 +138,7 @@
 			<job>
 				-- Run scene in ReactorSensor context.
 				-- See https://www.toggledbits.com/reactor for explanation of Options
-				-- The ReactorSensor version of RunScene forces the context device to be the
-				-- ReactorSensor on which the call was made.
-				local opt = lul_settings.Options or {}
-				opt.contextDevice = opt.contextDevice or lul_device
-				Reactor.actionRunScene( lul_settings.SceneNum, opt, lul_device )
+				Reactor.actionRunScene( lul_settings.SceneNum, lul_settings.Options, lul_device )
 				return 4,0
 			</job>
 		</action>
