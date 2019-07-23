@@ -4009,15 +4009,39 @@ function actionRestart( dev )
 end
 
 -- Clear latched conditions on a ReactorSensor
-function actionClearLatched( dev )
+function actionClearLatched( dev, group )
 	dev = tonumber( dev )
 	assert( dev ~= nil )
-	assert( luup.devices[dev] ~= nil and luup.devices[dev].device_type == RSTYPE )
-	L("Clearing latched conditions on %2 (#%1)", dev, luup.devices[dev].description)
-	addEvent{ dev=dev, event="action", action="ClearLatched" }
-	if resetLatched( false, dev ) then
+	assert( luup.devices[dev] and luup.devices[dev].device_type == RSTYPE )
+	if "" == ( group or "" ) then group = false end
+	L("Clearing latched conditions on %1 (#%2) in " .. 
+		( group and group or "all groups" ), luup.devices[dev].description, dev)
+	local grpid = group
+	if group then
+		local cd = getSensorState( dev ).configData
+		if not findCondition( group, cd, "group" ) then
+			-- Not found. See if group param matches group name
+			D("actionClearLatched() no group with id %1, searching by name", group)
+			grpid = false
+			for d in conditionGroups( (cd.conditions or {}).root or {} ) do
+				if ( "group" == ( d.type or "group" ) ) and group:lower() == d.name:lower() then
+					grpid = d.id
+					break
+				end
+			end
+			if not grpid then
+				L({level=1,msg="Can't ClearLatched, group not found: %1 on %2 (#%3)"}, group,
+					luup.devices[dev].description, dev)
+				return false
+			end
+			D("actionClearLatched() found group id %1 for name %2", grpid, group)
+		end
+	end
+	addEvent{ dev=dev, event="action", action="ClearLatched", group=group and group or "any", groupid=grpid and grpid or "any" }
+	if resetLatched( grpid, dev ) then
 		scheduleDelay( { id=tostring(dev), owner=dev, func=sensorTick }, 0 )
 	end
+	return true
 end
 
 local function findSceneOrActivity( scene, dev )

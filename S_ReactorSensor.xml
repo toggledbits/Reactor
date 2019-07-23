@@ -122,7 +122,11 @@
 		</action>
 		<action>
 			<name>ClearLatched</name>
-			<argumentList/>
+			<argument>
+			  <name>Group</name>
+			  <direction>in</direction>
+			  <relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
+			</argument>
 		</action>
 		<action>
 		  <name>RunScene</name>

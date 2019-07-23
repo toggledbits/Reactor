@@ -75,7 +75,7 @@
 			<serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
 			<name>ClearLatched</name>
 			<run>
-				Reactor.actionClearLatched( lul_device )
+				Reactor.actionClearLatched( lul_device, (lul_settings or {}).Group )
 				return true
 			</run>
 		</action>
@@ -117,7 +117,7 @@
 			<serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
 			<name>AddSensor</name>
 			<job>
-				local count = lul_settings.Count or "1"
+				local count = (lul_settings or {}).Count or "1"
 				Reactor.actionAddSensor( lul_device, count )
 				return 4,0
 			</job>
@@ -152,7 +152,7 @@
 				-- users to use ReactorScenes with only a change to the device number in
 				-- their action calls.
 				local opt = lul_settings.Options or {}
-				opt.contextDevice = opt.contextDevice or 0
+				opt.contextDevice = opt.contextDevice or lul_device
 				Reactor.actionRunScene( lul_settings.SceneNum, opt, lul_device )
 				return 4,0
 			</job>
@@ -165,7 +165,7 @@
 				-- contextDevice is normally the device that originally called for the scene run
 				-- in the Options table. If SceneNum is nil or 0, all scenes for the context device
 				-- will be stopped.
-				Reactor.actionStopScene( lul_settings.contextDevice or lul_device, lul_settings.SceneNum, lul_device )
+				Reactor.actionStopScene( (lul_settings or {}).contextDevice or lul_device, (lul_settings or {}).SceneNum, lul_device )
 			</run>
 		</action>
 		<action>
@@ -176,7 +176,7 @@
 				-- contextDevice is normally the device that originally called for the scene run
 				-- in the Options table. If SceneNum is nil or 0, all scenes for the context device
 				-- will be stopped.
-				Reactor.actionStopScene( lul_settings.contextDevice or lul_device, lul_settings.SceneNum, lul_device )
+				Reactor.actionStopScene( (lul_settings or {}).contextDevice or lul_device, (lul_settings or {}).SceneNum, lul_device )
 				return true
 			</run>
 		</action>
@@ -185,7 +185,7 @@
 			<name>SetVariable</name>
 			<run>
 				-- Set a variable value (overwrite/create).
-				Reactor.actionSetVariable( lul_settings, lul_device )
+				Reactor.actionSetVariable( lul_settings or {}, lul_device )
 				return true
 			</run>
 		</action>
@@ -201,7 +201,7 @@
 			<serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
 			<name>UpdateGeofences</name>
 			<job>
-				return Reactor.actionUpdateGeofences( lul_device, lul_settings.event )
+				return Reactor.actionUpdateGeofences( lul_device, (lul_settings or {}).event )
 			</job>
 		</action>
 		<action>
