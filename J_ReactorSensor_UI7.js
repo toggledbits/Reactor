@@ -4385,6 +4385,7 @@ var ReactorSensor = (function(api, $) {
 		row.removeClass( 'tberror' );
 		jQuery( 'div.tberrmsg', row ).remove();
 
+		var dev;
 		switch ( actionType ) {
 			case "comment":
 				break;
@@ -4404,7 +4405,7 @@ var ReactorSensor = (function(api, $) {
 				break;
 
 			case "device":
-				var dev = jQuery( 'select.devicemenu', row ).val();
+				dev = jQuery( 'select.devicemenu', row ).val();
 				if ( isEmpty( dev ) ) {
 					jQuery( 'select.devicemenu', row ).addClass( 'tberror' );
 				} else {
@@ -4504,7 +4505,22 @@ var ReactorSensor = (function(api, $) {
 				}
 				break;
 
+			case "rungsa":
+				dev = jQuery( 'select.devicemenu', row ).val() || "";
+				if ( "" === dev ) {
+					jQuery( 'select#device' ).addClass( 'tberror' );
+				}
+				var activity = jQuery( 'select#activity', row ).val() || "";
+				if ( "" === activity ) {
+					jQuery( 'select#activity' ).addClass( 'tberror' );
+				}
+				break;
+
 			case 'resetlatch':
+				dev = jQuery( 'select.devicemenu', row ).val() || "";
+				if ( "" === dev ) {
+					jQuery( 'select#device' ).addClass( 'tberror' );
+				}
 				var group = jQuery( 'select#group', row ).val() || "";
 				break;
 
@@ -4529,7 +4545,7 @@ var ReactorSensor = (function(api, $) {
 			var row = jQuery( this );
 			var actionType = jQuery( 'select#actiontype', row ).val();
 			var action = { type: actionType, index: ix+1 };
-			var k, pt, t;
+			var k, pt, t, devnum, devobj;
 
 			switch ( actionType ) {
 				case "comment":
@@ -4570,9 +4586,9 @@ var ReactorSensor = (function(api, $) {
 
 				case "device":
 					action.device = parseInt( jQuery( 'select.devicemenu', row ).val() );
-					var devnum = -1 === action.device ? api.getCpanelDeviceId() : action.device;
-					var dobj = api.getDeviceObject( devnum );
-					action.deviceName = (dobj || {}).name;
+					devnum = -1 === action.device ? api.getCpanelDeviceId() : action.device;
+					devobj = api.getDeviceObject( devnum );
+					action.deviceName = (devobj || {}).name;
 					t = jQuery( 'select#actionmenu', row ).val() || "";
 					pt = t.split( /\//, 2 );
 					action.service = pt[0]; action.action = pt[1];
@@ -4657,7 +4673,29 @@ var ReactorSensor = (function(api, $) {
 					}
 					break;
 
+				case 'rungsa':
+					devnum = parseInt( jQuery( 'select.devicemenu', row ).val() || "-1" );
+					if ( isNaN( devnum ) || devnum < 0 ) {
+						delete action.device;
+						delete action.deviceName;
+					} else {
+						action.device = devnum;
+						devobj = api.getDeviceObject( devnum < 0 ? api.getCpanelDeviceId() : devnum );
+						action.deviceName = devobj.name;
+					}
+					action.activity = jQuery( 'select#activity', row ).val() || "";
+					break;
+
 				case 'resetlatch':
+					devnum = parseInt( jQuery( 'select.devicemenu', row ).val() || "-1" );
+					if ( devnum < 0 || isNaN( devnum ) ) {
+						delete action.device;
+						delete action.deviceName;
+					} else {
+						action.device = devnum;
+						devobj = api.getDeviceObject( devnum < 0 ? api.getCpanelDeviceId() : devnum );
+						action.deviceName = devobj.name;
+					}
 					var gid = jQuery( 'select#group', row ).val() || "";
 					if ( isEmpty( gid ) ) {
 						delete action.group;
@@ -5362,9 +5400,61 @@ var ReactorSensor = (function(api, $) {
 		field.on( 'reactorinit', function() { session.setValue( field.val() || "" ); } );
 	}
 
+	function makeDeviceGroupMenu( dev, $m ) {
+		var $row = $m.closest( '.actionrow' );
+
+		/* Parent group */
+		var $grpel = $row.closest( '.actionlist' );
+		var grp = String( $grpel.attr( 'id' ) || "" ).replace( /\.(true|false)$/i, "" );
+
+		/* Get root condition (group) of selected device */
+		var root = getConditionIndex().root;
+		if ( ! isNaN( dev ) && dev >= 0 ) {
+			root = ( ( ( getConfiguration( dev ) || {} ).conditions ) || {} ).root;
+			grp = null;
+			$m.val("*");
+			jQuery( 'option[value=""]', $m ).prop( 'disabled', true );
+		} else {
+			jQuery( 'option[value=""]', $m ).prop( 'disabled', false );
+		}
+		DOtraverse( root || {}, function( node ) {
+			$m.append( jQuery( '<option/>' )
+				.addClass( "groupoption" )
+				.val( node.id )
+				.text( makeConditionDescription( node ) ) );
+		}, false, function( node ) {
+			/* If node is not ancestor (line to root) or descendent of cond, allow as predecessor */
+			return "group" === ( node.type || "group" ) && "nul" !== node.operator;
+		});
+		return $m;
+	}
+
+	function makeDeviceActivityMenu( dev, $m ) {
+		var $row = $m.closest( '.actionrow' );
+
+		/* Parent group */
+		var $grpel = $row.closest( '.actionlist' );
+		var grp = String( $grpel.attr( 'id' ) || "" ).replace( /\.(true|false)$/i, "" );
+
+		/* Get root condition (group) of selected device */
+		var root = getConditionIndex().root;
+		if ( dev >= 0 ) {
+			root = ( ( ( getConfiguration( dev ) || {} ).conditions ) || {} ).root;
+			grp = null;
+		}
+		DOtraverse( root || {}, function( node ) {
+				$m.append( jQuery( '<option/>' ).val( node.id + ".true" ).text( node.name + " is true" ) )
+					.append( jQuery( '<option/>' ).val( node.id + ".false" ).text( node.name + " is false" ) );
+			}, false, function( node ) {
+				return node.id !== grp && "group" === ( node.type || "group" ) && "nul" !== node.operator;
+			}
+		);
+		return $m;
+	}
+
 	function changeActionType( row, newVal ) {
 		var ct = jQuery('div.actiondata', row);
-		var m;
+		var $m;
 		ct.empty();
 		jQuery( 'button#action-try,button#action-import', row ).hide();
 
@@ -5383,11 +5473,11 @@ var ReactorSensor = (function(api, $) {
 				break;
 
 			case "housemode":
-				m = jQuery( '<select id="housemode" class="form-control form-control-sm">')
+				$m = jQuery( '<select id="housemode" class="form-control form-control-sm">')
 					.append( '<option value="1">Home</option>' ).append( '<option value="2">Away</option>' )
-					.append( '<option value="3">Night</option>' ).append( '<option value="4">Vacation</option>' );
-				m.on( 'change.reactor', handleActionValueChange );
-				ct.append( m );
+					.append( '<option value="3">Night</option>' ).append( '<option value="4">Vacation</option>' )
+					.on( 'change.reactor', handleActionValueChange );
+				ct.append( $m );
 				break;
 
 			case "delay":
@@ -5398,10 +5488,12 @@ var ReactorSensor = (function(api, $) {
 				break;
 
 			case "runscene":
-				m = makeSceneMenu();
-				m.prepend('<option value="" selected>--choose--</option>').val("").attr('id', 'scene');
-				m.on( 'change.reactor', handleActionValueChange );
-				ct.append( m );
+				$m = makeSceneMenu()
+					.attr('id', 'scene')
+					.prepend('<option value="" selected>--choose--</option>')
+					.val("")
+					.on( 'change.reactor', handleActionValueChange );
+				ct.append( $m );
 				jQuery( 'button#action-import', row ).show();
 				break;
 
@@ -5416,20 +5508,57 @@ var ReactorSensor = (function(api, $) {
 				ct.append('<div class="tbhint">If your Lua code returns boolean <em>false</em>, scene execution will stop and the remaining actions that follow will not be run (this is a feature). It is also recommended that the first line of your Lua be a comment with text to help you identify the code--if there\'s an error logged, the first line of the script is almost always shown. Also, you can use the <tt>print()</tt> function to write to Reactor\'s event log, which is shown in the Logic Summary and easier/quicker to get at than the Vera log file.</div>');
 				break;
 
+			case "rungsa":
+				makeDeviceMenu( "", "", function( devobj ) {
+						return devobj.device_type === deviceType;
+					})
+					.val( "-1" )
+					.on( 'change', function( ev ) {
+						var $el = jQuery( ev.currentTarget );
+						var newVal = parseInt( $el.val() || -1 );
+						var $row = $el.closest( '.actionrow' );
+						var $m = jQuery( 'select#activity', $row ).empty();
+						if ( !isNaN( newVal ) ) {
+							makeDeviceActivityMenu( newVal, $m ).val( "root.true" );
+						} else {
+							$(this).addClass( "tberror" );
+							$m.addClass( "tberror" );
+						}
+						handleActionValueChange( ev );
+					}).appendTo( ct );
+				$m = jQuery( '<select/>', { id: "activity", class: "form-control form-control-sm" } )
+					.appendTo( ct );
+				makeDeviceActivityMenu( -1, $m )
+					.val( "root.true" )
+					.on( 'change.reactor', handleActionValueChange );
+				break;
+
 			case 'resetlatch':
-				m = jQuery( '<select id="group" class="form-control form-control-sm" />' );
-				/* Add groups */
-				DOtraverse( (getConditionIndex()).root, function( node ) {
-					m.append( jQuery( '<option/>' ).val( node.id ).text( makeConditionDescription( node ) ) );
-				}, false, function( node ) {
-					/* If node is not ancestor (line to root) or descendent of cond, allow as predecessor */
-					return "group" === ( node.type || "group" );
-				});
-				m.prepend( '<option value="*">(all groups)</option>' )
+				makeDeviceMenu( "", "", function( devobj ) {
+						return devobj.device_type === deviceType;
+					})
+					.val( "-1" )
+					.on( 'change', function( ev ) {
+						var $el = jQuery( ev.currentTarget );
+						var newVal = parseInt( $el.val() || -1 );
+						var $row = $el.closest( '.actionrow' );
+						var $m = jQuery( 'select#group', $row ).val("*");
+						jQuery( "option.groupoption", $m ).remove();
+						if ( !isNaN( newVal ) ) {
+							makeDeviceGroupMenu( newVal, $m );
+						} else {
+							$(this).addClass( "tberror" );
+							$m.addClass( "tberror" );
+						}
+						handleActionValueChange( ev );
+					}).appendTo( ct );
+				$m = jQuery( '<select id="group" class="form-control form-control-sm" />' )
+					.appendTo( ct );
+				makeDeviceGroupMenu( -1, $m )
+					.prepend( '<option value="*">(all groups)</option>' )
 					.prepend( '<option value="" selected>(this group)</option>' )
-					.val( "" );
-				m.on( 'change.reactor', handleActionValueChange );
-				ct.append( m );
+					.val( "*" )
+					.on( 'change.reactor', handleActionValueChange );
 				break;
 
 			default:
@@ -5670,6 +5799,7 @@ var ReactorSensor = (function(api, $) {
 			'<option value="delay">Delay</option>' +
 			'<option value="runlua">Run Lua</option>' +
 			'<option value="runscene">Run Scene</option>' +
+			'<option value="rungsa">Run Group Activity</option>' +
 			'<option value="resetlatch">Reset Latched</option>' +
 			'</select></div>' );
 		row.append('<div class="actiondata col-xs-12 col-sm-12 col-md-6 col-lg-8 form-inline"></div>');
@@ -5768,8 +5898,38 @@ var ReactorSensor = (function(api, $) {
 						jQuery( 'textarea.luacode', newRow ).val( lua ).trigger( 'reactorinit' );
 						break;
 
+					case "rungsa":
+						if ( undefined !== act.device && 0 === jQuery( 'select.devicemenu option[value="' + act.device + '"]', newRow ).length ) {
+							jQuery( '<option/>' ).val( act.device )
+								.text( '#' + act.device + ' ' + ( act.deviceName || 'name?' ) + ' (missing)' )
+								.prependTo( jQuery( 'select.devicemenu', newRow ).addClass( "tberror" ) );
+						}
+						jQuery( 'select.devicemenu', newRow ).val( act.device || "-1" );
+						var $m = jQuery( 'select#activity', newRow );
+						makeDeviceActivityMenu( act.device || -1, $m );
+						if ( 0 === jQuery( 'option[value=' + quot(act.activity) + ']', $m ).length ) {
+							jQuery( '<option/>' ).val( act.activity || "undef" )
+								.text( ( act.activity || "name?" ) + " (missing)" )
+								.prependTo( $m.addClass( 'tberror' ) );
+						}
+						$m.val( act.activity || "undef" );
+						break;
+
 					case "resetlatch":
-						jQuery( 'select#group', newRow ).val( act.group || "" );
+						if ( undefined !== act.device && 0 === jQuery( 'select.devicemenu option[value="' + act.device + '"]', newRow ).length ) {
+							jQuery( '<option/>' ).val( act.device )
+								.text( '#' + act.device + ' ' + ( act.deviceName || 'name?' ) + ' (missing)' )
+								.prependTo( jQuery( 'select.devicemenu', newRow ).addClass( "tberror" ) );
+						}
+						jQuery( 'select.devicemenu', newRow ).val( act.device || "-1" );
+						var $m = jQuery( 'select#group', newRow );
+						makeDeviceGroupMenu( act.device || -1, $m );
+						if ( 0 === jQuery( 'option[value=' + quot(act.group) + ']', $m ).length ) {
+							jQuery( '<option/>' ).val( act.group || "undef" )
+								.text( ( act.group || "name?" ) + " (missing)" )
+								.prependTo( $m.addClass( 'tberror' ) );
+						}
+						$m.val( act.group || "undef" );
 						break;
 
 					default:

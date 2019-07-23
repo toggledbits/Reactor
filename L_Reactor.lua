@@ -1826,13 +1826,25 @@ local function execSceneGroups( tdev, taskid, scd )
 						stopScene( nil, taskid, tdev ) -- stop just this scene.
 						return nil
 					end
+				elseif action.type == "rungsa" then
+					local device = action.device or -1
+					if device == -1 then
+						device = tdev
+					end
+					luup.call_action( RSSID, "RunScene", { SceneNum=action.activity or "error", Options={ contextDevice=device } }, device )
 				elseif action.type == "resetlatch" then
+					local device = action.device or -1
 					local group = action.group or ""
-					if "" == group then group = scd.id:gsub( '%..+', '' ) end
-					if "*" == group then group = false end
-					local changed = resetLatched( group, tdev )
-					if changed then
-						scheduleDelay( tostring(tdev), 0 ) -- queue an eval if anything changed
+					if device == -1 then
+						if "" == group then group = scd.id:gsub( '%..+', '' ) end
+						if "*" == group then group = false end
+						local changed = resetLatched( group, tdev )
+						if changed then
+							scheduleDelay( tostring(tdev), 0 ) -- queue an eval if anything changed
+						end
+					else
+						if "*" == group then group = nil end
+						luup.call_action( RSSID, "ClearLatched", { Group=group }, device )
 					end
 				else
 					L({level=1,msg="Unhandled action type %1 at %2 in scene %3 for %4 (%5)"},
@@ -4435,18 +4447,31 @@ local function getReactorScene( t, s, tdev, runscenes )
 					end
 					p = table.concat( p, ", " )
 					resp = resp .. pfx .. "Device "
-					resp = resp .. ( act.device == -1 and "(self) " or
-						( ((luup.devices[act.device or -1] or {}).description or (act.deviceName or "unknown?")) ..
-						  " (" .. (act.device or "?") .. ") " ) )
-					resp = resp .. "action " .. (act.service or "?") .. "/" .. (act.action or "?") .. "( " .. p .. " )"
+					resp = resp .. ( act.device or -1 ) == -1 and "(self)" or
+						( ( (luup.devices[act.device or -1] or {}).description or ( (act.deviceName or "unknown") .. "?" ) ) ..
+						  " (" .. tostring(act.device) .. ")" )
+					resp = resp .. " action " .. (act.service or "?") .. "/" .. (act.action or "?") .. "( " .. p .. " )"
 					resp = resp .. EOL
 				elseif act.type == "housemode" then
 					resp = resp .. pfx .. "Change house mode to " .. tostring(act.housemode) .. EOL
+				elseif act.type == "rungsa" then
+					resp = resp .. pfx .. "Run activity " .. tostring( act.activity )
+					if ( act.device or -1 ) ~= -1 then
+						resp = resp .. " on " ..
+							( (luup.devices[act.device or -1] or {}).description or ( (act.deviceName or "unknown") .. "?" ) ) ..
+							" (" .. tostring(act.device) .. ")"
+					end
+					resp = resp .. EOL
 				elseif act.type == "resetlatch" then
 					resp = resp .. pfx .. "Reset latched conditions in "
 					if act.group == "*" then resp = resp .. "all groups"
 					elseif ( act.group or "" ) == "" then resp = resp .. "this group"
 					else resp = resp .. tostring(act.group) 
+					end
+					if ( act.device or -1 ) ~= -1 then
+						resp = resp .. " on " ..
+							( (luup.devices[act.device or -1] or {}).description or ( (act.deviceName or "unknown") .. "?" ) ) ..
+							" (" .. tostring(act.device) .. ")"
 					end
 					resp = resp .. EOL
 				else

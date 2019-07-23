@@ -4,6 +4,8 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 3.4 (development)
 
+* Enhancement: The new "Run Group Activity" action in group state activities can be used to run an activity in the current or another ReactorSensor.
+* Enhancement: The RunScene service action has been extended to allow running of group state activities.
 * Enhancement: When exporting a variable, the underlying device state variables are created on save; previously, it would take an update of the expression result to get the state variable created (and thus was not immediately available in the Conditions editor, for example).
 * Enhancement: The transition of a sensor from disabled to enabled state clears all prior condition state data; this starts with a clean slate, in case the sensor has been disabled for some time. There was also no easy way to clear the state, and doing it on Restart actions proved a little aggressive in testing.
 * Enhancement: Add "Reset Latched" action for activites to reset latched conditions in a specific group or for the entire RS (adding new way to reset latched conditions).
