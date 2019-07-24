@@ -3927,7 +3927,8 @@ function actionUpdateGeofences( pdev, event )
 end
 
 -- Enable or disable debug
-function actionSetDebug( state, tdev ) -- luacheck: ignore 212
+function actionSetDebug( state, tdev )
+	D("actionSetDebug(%1,%2)", state, tdev)
 	debugMode = state or false
 	if debugMode then
 		D("Debug enabled")
@@ -3984,7 +3985,7 @@ end
 
 -- Set arming state of ReactorSensor
 function actionSetArmed( armedVal, dev )
-	L("Sensor %1 (%2) set armed to %4", dev, luup.devices[dev].description, armedVal)
+	L("Sensor %1 (%2) set armed to %3", dev, luup.devices[dev].description, armedVal)
 	local armed = ( tonumber( armedVal ) or 0 ) ~= 0
 	luup.variable_set( SENSOR_SID, "Armed", armed and "1" or "0", dev )
 	addEvent{ dev=dev, event="action", action="SetArmed", state=armed and 1 or 0 }

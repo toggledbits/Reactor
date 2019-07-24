@@ -226,7 +226,7 @@
 			<name>SetDebug</name>
 			<run>
 				local newDebugValue = tonumber(lul_settings.debug or "0") or 0
-				Reactor.actionSetDebug( debug ~= 0, lul_device )
+				Reactor.actionSetDebug( newDebugValue ~= 0, lul_device )
 				return true
 			</run>
 		</action>
