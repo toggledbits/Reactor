@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.4develop-19205"
+local _PLUGIN_VERSION = "3.4develop-19206"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION = 19178
@@ -278,6 +278,7 @@ end
 -- older versions require a request.
 local function deleteVar( sid, name, dev )
 	if luup.variable_get( sid, name, dev ) then
+		-- For firmware > 1036/3917/3918/3919 http://wiki.micasaverde.com/index.php/Luup_Lua_extensions#function:_variable_set
 		luup.variable_set( sid, name, nil, dev )
 	end
 end
@@ -658,6 +659,7 @@ local function sensor_runOnce( tdev )
 		initVar( "Runtime", 0, tdev, RSSID )
 		initVar( "TripCount", 0, tdev, RSSID )
 		initVar( "RuntimeSince", os.time(), tdev, RSSID )
+		initVar( "lastacc", os.time(), tdev, RSSID )
 		initVar( "ContinuousTimer", 0, tdev, RSSID )
 		initVar( "MaxUpdateRate", "", tdev, RSSID )
 		initVar( "MaxChangeRate", "", tdev, RSSID )
@@ -694,9 +696,9 @@ local function sensor_runOnce( tdev )
 		initVar( "MaxChangeRate", "", tdev, RSSID )
 		initVar( "AutoUntrip", 0, tdev, SENSOR_SID )
 		initVar( "UseReactorScenes", 1, tdev, RSSID ) -- 107
-		initVar( "RuntimeSince", 1533528000, tdev, RSSID ) -- 2018-08-16.00:00:00-0400
+		initVar( "RuntimeSince", os.time(), tdev, RSSID )
+		initVar( "lastacc", os.time(), tdev, RSSID )
 		deleteVar( RSSID, "sundata", tdev ) -- moved to master
-		initVar( "ValueChangeHoldTime", 2, tdev, RSSID )
 		local currState = getVarNumeric( "Tripped", 0, tdev, SENSOR_SID )
 		initVar( "Target", currState, tdev, SWITCH_SID )
 		initVar( "Status", currState, tdev, SWITCH_SID )
@@ -709,6 +711,12 @@ local function sensor_runOnce( tdev )
 
 	if s < 19178 then
 		initVar( "WatchResponseHoldOff", "-1", tdev, RSSID )
+	end
+	
+	if s < 19296 then
+		-- 19296 is 2019-10-23
+		deleteVar( RSSID, "ValueChangeHoldTime", tdev )
+		deleteVar( RSSID, "ReloadConditionHoldTime", tdev )
 	end
 
 	-- Update version last.
@@ -2316,7 +2324,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 			end
 			D("evaluateCondition() service change op without terms, currval=%1, prior=%2, term=%3",
 				vv, cond.laststate.lastvalue, cv)
-			local hold = getVarNumeric( "ValueChangeHoldTime", 2, tdev, RSSID )
+			local hold = getVarNumeric( "ValueChangeHoldTime", 0, tdev, RSSID ) -- DEPRECATED REMOVE AFTER >19296
 			if vv == cond.laststate.lastvalue then
 				-- No change. If we haven't yet met the hold time, continue delay.
 				local later = ( cond.laststate.valuestamp or 0 ) + hold
@@ -2339,7 +2347,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 				D("evaluateCondition() ignoring restart-time update")
 				return vv,false
 			end
-			local hold = getVarNumeric( "ValueChangeHoldTime", 2, tdev, RSSID )
+			local hold = getVarNumeric( "ValueChangeHoldTime", 0, tdev, RSSID ) -- DEPRECATED REMOVE AFTER >19296
 			if vv == cond.laststate.lastvalue then
 				-- No change. If we haven't yet met the hold time, continue delay.
 				local later = ( cond.laststate.valuestamp or 0 ) + hold
@@ -2401,7 +2409,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		if cond.operator == "change" then
 			D("evaluateCondition() group state change, curr=%1, prior=%2",
 				vv, cond.laststate.lastvalue)
-			local hold = getVarNumeric( "ValueChangeHoldTime", 2, tdev, RSSID )
+			local hold = getVarNumeric( "ValueChangeHoldTime", 0, tdev, RSSID ) -- DEPRECATED REMOVE AFTER >19296
 			if vv == cond.laststate.lastvalue then
 				-- No change. If we haven't yet met the hold time, continue delay.
 				local later = ( cond.laststate.valuestamp or 0 ) + hold
@@ -2441,7 +2449,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 			end
 			-- Simple change (any to any).
 			D("evaluateCondition() housemode change op, currval=%1, prior=%2 (no term)", mode, cond.laststate.lastvalue)
-			local hold = getVarNumeric( "ValueChangeHoldTime", 2, tdev, RSSID )
+			local hold = getVarNumeric( "ValueChangeHoldTime", 0, tdev, RSSID ) -- DEPRECATED REMOVE AFTER >19296
 			if mode == cond.laststate.lastvalue then
 				-- No change. If we haven't yet met the hold time, continue delay.
 				local later = ( cond.laststate.valuestamp or 0 ) + hold
@@ -2703,7 +2711,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		local lastload = getVarNumeric( "LastLoad", 0, tdev, RSSID )
 		local reloaded = loadtime ~= lastload
 		D("evaluateCondition() loadtime %1 lastload %2 reloaded %3", loadtime, lastload, reloaded)
-		local hold = getVarNumeric( "ReloadConditionHoldTime", 1, tdev, RSSID )
+		local hold = getVarNumeric( "ReloadConditionHoldTime", 0, tdev, RSSID ) -- DEPRECATED REMOVE AFTER >19296
 		if not reloaded then
 			-- Not reloaded. Hold on until we've satisfied hold time from last TRUE.
 			local later = ( ( cond.laststate.stateedge or {} ).t or 0 ) + hold
