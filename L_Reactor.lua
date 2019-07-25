@@ -14,7 +14,7 @@ local _PLUGIN_NAME = "Reactor"
 local _PLUGIN_VERSION = "3.4develop-19206"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
-local _CONFIGVERSION = 19178
+local _CONFIGVERSION = 19206
 local _CDATAVERSION = 19082	-- must coincide with JS
 local _UIVERSION = 19195	-- must coincide with JS
       _SVCVERSION = 19202	-- must coincide with implementation file (not local)
@@ -712,8 +712,8 @@ local function sensor_runOnce( tdev )
 	if s < 19178 then
 		initVar( "WatchResponseHoldOff", "-1", tdev, RSSID )
 	end
-	
-	if s < 19296 then
+
+	if s == 19296 then
 		-- 19296 is 2019-10-23
 		deleteVar( RSSID, "ValueChangeHoldTime", tdev )
 		deleteVar( RSSID, "ReloadConditionHoldTime", tdev )
@@ -746,6 +746,8 @@ local function plugin_runOnce( pdev )
 		initVar( "HouseMode", luup.attr_get( "Mode", 0 ) or "1", pdev, MYSID )
 		initVar( "LastDST", "0", pdev, MYSID )
 		initVar( "IsHome", "", pdev, MYSID )
+		initVar( "MaxRestartCount", "", pdev, MYSID )
+		initVar( "MaxRestartPeriod", "", pdev, MYSID )
 
 		luup.attr_set('category_num', 1, pdev)
 
@@ -766,6 +768,12 @@ local function plugin_runOnce( pdev )
 
 	if s < 00301 then
 		initVar( "Enabled", 1, pdev, MYSID )
+	end
+
+	if s < 19206 then
+		initVar( "MaxRestartCount", "", pdev, MYSID )
+		initVar( "MaxRestartPeriod", "", pdev, MYSID )
+		initVar( "rs", "", pdev, MYSID )
 	end
 
 	-- Update version last.
@@ -2061,7 +2069,7 @@ local function loadSensorConfig( tdev )
 		}
 		upgraded = true
 	elseif ( cdata.version or 0 ) < _CDATAVERSION then
-		local fn = string.format( "%sreactor-dev%d-config-v%s-backup.json", 
+		local fn = string.format( "%sreactor-dev%d-config-v%s-backup.json",
 			getInstallPath(), tdev, tostring( cdata.version or 0 ) )
 		local f = io.open( fn, "r" )
 		if f == nil then
@@ -3572,6 +3580,15 @@ local function waitSystemReady( pdev, taskid, callback )
 	clearTask( taskid )
 end
 
+local function markChildrenDown( msg, pdev )
+	for k,v in childDevices( pdev ) do
+		if v.device_type == RSTYPE then
+			luup.variable_set( RSSID, "Message", msg or "Stopped", k )
+			luup.variable_set( RSSID, "Trouble", "1", k )
+		end
+	end
+end
+
 -- Start plugin running.
 function startPlugin( pdev )
 --[[
@@ -3596,14 +3613,35 @@ function startPlugin( pdev )
 
 	L("Plugin version %1 starting on #%2 (%3)", _PLUGIN_VERSION, pdev, luup.devices[pdev].description)
 	if getVarNumeric( "Enabled", 1, pdev, MYSID ) == 0 then
-		luup.variable_set( MYSID, "Message", "PLUGIN DISABLED", pdev )
-		for k,v in childDevices( pdev ) do
-			if v.device_type == RSTYPE then
-				luup.variable_set( RSSID, "Message", "PLUGIN DISABLED", k )
-				luup.variable_set( RSSID, "Trouble", "1", k )
+		luup.variable_set( MYSID, "Message", "DISABLED", pdev )
+		markChildrenDown( "Reactor disabled", pdev )
+		luup.variable_set( MYSID, "rs", "", pdev ) -- clear restart tracking
+		L"Reactor has been disabled by configuration; startup aborted."
+		return false, "plugin disabled", _PLUGIN_NAME
+	end
+
+	-- Check for hard system restart loop; stand off if it's happening.
+	local nr = getVarNumeric( "MaxRestartCount", 5, pdev, MYSID )
+	local p = getVarNumeric( "MaxRestartPeriod", 900, pdev, MYSID )
+	if nr > 0 and p > 0 then
+		local s = luup.variable_get( MYSID, "rs", pdev ) or ""
+		s = split( s, ',' )
+		while #s >= nr do table.remove(s, 1) end
+		D("startPlugin() restart check (limit %1 in %2); previous restarts: %3", nr, p, s)
+		table.insert(s, os.time())
+		luup.variable_set( MYSID, "rs", table.concat( s, "," ), pdev )
+		if #s == nr then
+			local d = s[nr] - s[1]
+			if d <= p then
+				-- Too many restarts! Abort. No soup for you!
+				L({level=1,msg="Reactor has detected that this system has restarted %1 times in %2 seconds; disabling Reactor just in case."},
+					nr, d)
+				luup.variable_set( MYSID, "Message", "Safety Lockout!", pdev )
+				markChildrenDown( "Safety lockout!", pdev )
+				luup.set_failure( 1, pdev )
+				return false, "Safety lockout", _PLUGIN_NAME
 			end
 		end
-		return false, "plugin disabled", _PLUGIN_NAME
 	end
 
 	luup.variable_set( MYSID, "Message", "Initializing...", pdev )
@@ -4029,7 +4067,7 @@ function actionClearLatched( dev, group )
 	assert( dev ~= nil )
 	assert( luup.devices[dev] and luup.devices[dev].device_type == RSTYPE )
 	if "" == ( group or "" ) then group = false end
-	L("Clearing latched conditions on %1 (#%2) in " .. 
+	L("Clearing latched conditions on %1 (#%2) in " ..
 		( group and group or "all groups" ), luup.devices[dev].description, dev)
 	local grpid = group
 	if group then
@@ -4141,7 +4179,7 @@ function actionRunScene( scene, options, dev )
 	if type(options) == "table" then
 	elseif type(options) == "string" and options ~= "" then
 		local opts,err,pos = json.decode( options )
-		if err then	
+		if err then
 			L({level=1,msg="Invalid JSON in Options parameter to RunScene action: %1 at %2 in %3"},
 				err, pos, options)
 			options = opts
@@ -4163,7 +4201,7 @@ function actionStopScene( ctx, scene, dev )
 	-- Treat blank/empty as nil
 	if (ctx or "") ~= "" then ctx = tonumber( ctx ) or nil else ctx = dev end
 	local scid = nil
-	if (scene or "") ~= "" then 
+	if (scene or "") ~= "" then
 		local event, message
 		scid, event, message = findSceneOrActivity( scene, dev )
 		if not scid then
@@ -4505,7 +4543,7 @@ local function getReactorScene( t, s, tdev, runscenes )
 					resp = resp .. pfx .. "Reset latched conditions in "
 					if act.group == "*" then resp = resp .. "all groups"
 					elseif ( act.group or "" ) == "" then resp = resp .. "this group"
-					else resp = resp .. tostring(act.group) 
+					else resp = resp .. tostring(act.group)
 					end
 					if ( act.device or -1 ) ~= -1 then
 						resp = resp .. " on " ..
