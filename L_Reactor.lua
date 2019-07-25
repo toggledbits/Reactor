@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.4develop-19204"
+local _PLUGIN_VERSION = "3.4develop-19205"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION = 19178
@@ -630,6 +630,16 @@ local function conditionGroups( root )
 	end
 end
 
+-- Traverse all conditions from c down (assuming c is a group)
+local function traverse( c, func )
+	func( c )
+	if ( "group" == ( c.type or "group" ) ) then
+		for _,ch in ipairs( c.conditions or {} ) do
+			traverse( ch, func )
+		end
+	end
+end
+
 -- runOnce() looks to see if a core state variable exists; if not, a one-time initialization
 -- takes place.
 local function sensor_runOnce( tdev )
@@ -791,6 +801,8 @@ local function loadCleanState( tdev )
 			modified = true
 		end
 
+		cstate.lastUsed = nil -- remove while working
+
 		local cdata = sst.configData
 		if not cdata then
 			L({level=1,msg="ReactorSensor %1 (%2) has corrupt configuration data!"}, tdev, luup.devices[tdev].description)
@@ -800,17 +812,7 @@ local function loadCleanState( tdev )
 
 		-- Find all conditions in cdata
 		local conds = {}
-		local function traverse( grp )
-			conds[ grp.id ] = grp
-			for _,cond in ipairs( grp.conditions or {} ) do
-				if ( cond.type or "group" ) == "group" then
-					traverse( cond )
-				else
-					conds[ cond.id ] = cond
-				end
-			end
-		end
-		traverse( cdata.conditions.root or { id="root" } )
+		traverse( cdata.conditions.root or { id="root" }, function( c ) conds[c.id] = c end )
 
 		-- Make array of conditions in cstate that aren't in cdata
 		local dels = {}
@@ -1089,30 +1091,33 @@ end
 local function resetLatched( group, tdev )
 	D("resetLatched(%1,%2)", group, tdev)
 	local changed = false
+	local cf = getSensorState( tdev ).configData
 	local cs = loadCleanState( tdev )
-	if not group then
-		for _,c in pairs( cs ) do
-			if type(c) == "table" and c.latched then
-				c.evalstate = c.latchstate
-				c.evalstamp = os.time()
-				c.latched = nil
-				c.latchstate = nil
-				changed = true
-			end
-		end
-	else
-		local g = findCondition( group, getSensorState( tdev ).configData, "group" )
-		D("resetLatched() group %1", g)
-		for _,c in ipairs( ( g or {} ).conditions or {} ) do
-			D("resetLatched() cond %1 latched %2", c.id, (cs[c.id] or {}).latched)
-			if ( cs[c.id] or {} ).latched then
-				cs[c.id].evalstate = c.latchstate
+	local function _resetcond( c )
+		D("resetLatched() cond %1 latched %2", c.id, (cs[c.id] or {}).latched)
+		if ( cs[c.id] or {} ).latched then
+			if cs[c.id].evalstate ~= cs[c.id].latchstate then
+				addEvent{dev=tdev,event='evalchange',cond=c.id,oldState=cs[c.id].evalstate,newState=cs[c.id].latchstate,reason="latchreset"}
+				cs[c.id].evalstate = cs[c.id].latchstate
 				cs[c.id].evalstamp = os.time()
-				cs[c.id].latched = nil
-				cs[c.id].latchstate = nil
-				changed = true
+				cs[c.id].evaledge[ cs[c.id].latchstate and "t" or "f" ] = cs[c.id].evalstamp
 			end
-			D("resetLatched() AFTER cond %1 latched %2", c.id, (cs[c.id] or {}).latched)
+			cs[c.id].latched = nil
+			cs[c.id].latchstate = nil
+			cs[c.id].changed = true
+			changed = true
+		end
+		D("resetLatched() AFTER cond %1 latched %2", c.id, (cs[c.id] or {}).latched)
+	end
+	if not group then
+		traverse( cf.conditions.root, _resetcond )
+	else
+		local g = findCondition( group, cf, "group" )
+		if g then
+			-- Traverse down from g, resetting all latched conditions
+			for _,c in ipairs( g.conditions or {} ) do
+				_resetcond( c )
+			end
 		end
 	end
 	return changed
@@ -1835,7 +1840,7 @@ local function execSceneGroups( tdev, taskid, scd )
 				elseif action.type == "resetlatch" then
 					local device = action.device or -1
 					local group = action.group or ""
-					if device == -1 then
+					if device == -1 or device == tdev then
 						if "" == group then group = scd.id:gsub( '%..+', '' ) end
 						if "*" == group then group = false end
 						local changed = resetLatched( group, tdev )
@@ -3065,6 +3070,7 @@ local function processCondition( cond, grp, cdata, tdev )
 				state = true
 			else
 				cs.latched = nil -- false wipes
+				cs.latchstate = nil
 			end
 		else
 			cs.latched = true
@@ -3131,7 +3137,7 @@ evaluateGroup = function( grp, parentGroup, cdata, tdev )
 
 	-- Save group state.
 	if grp.invert and passed ~= nil then passed = not passed end
-	if passed == false and #latched then -- but not nil
+	if passed == false and #latched > 0 then -- but not nil
 		-- Reset latched conditions when group resets
 		resetLatched( grp.id, tdev )
 	end
@@ -4680,7 +4686,7 @@ function RG( grp, condState, level, r )
 	r = r .. "\"" .. (grp.name or grp.id) .. "\" (" ..
 		( grp.invert and "NOT " or "" ) .. (grp.operator or "and"):upper() .. ") " ..
 		getCondOpt( grp ) ..
-		( gs.evalstate and "TRUE" or "false" ) .. " as of " .. shortDate( gs.evalstamp ) ..
+		( gs.evalstate and " TRUE" or " false" ) .. " as of " .. shortDate( gs.evalstamp ) ..
 		( grp.disabled and " DISABLED" or "" ) ..
 		' <' .. tostring(grp.id) .. '>' ..
 		EOL
