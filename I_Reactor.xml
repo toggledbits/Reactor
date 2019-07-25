@@ -8,6 +8,7 @@
 		-- https://www.toggledbits.com/reactor
 		-- --------------------------------------------------------------------
 		function startupReactor(devNum)
+			local f = io.open( "/etc/cmh-ludl/Z_Reactor.zzz", "r" ) if f then f:close() luup.set_failure( 1, devNum ) return false, "Reactor Zzzz...", "Reactor" end
 			luup.log("Reactor START-UP!")
 			luup.variable_set( "urn:toggledbits-com:serviceId:Reactor", "Message", "Booting...", devNum )
 			Reactor = require("L_Reactor")
