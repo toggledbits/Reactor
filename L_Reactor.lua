@@ -14,10 +14,10 @@ local _PLUGIN_NAME = "Reactor"
 local _PLUGIN_VERSION = "3.4develop-19206"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
-local _CONFIGVERSION = 19206
-local _CDATAVERSION = 19082	-- must coincide with JS
-local _UIVERSION = 19195	-- must coincide with JS
-      _SVCVERSION = 19202	-- must coincide with implementation file (not local)
+local _CONFIGVERSION	= 19206
+local _CDATAVERSION		= 19082	-- must coincide with JS
+local _UIVERSION		= 19195	-- must coincide with JS
+      _SVCVERSION		= 19202	-- must coincide with impl file (not local)
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -3835,9 +3835,13 @@ function startPlugin( pdev )
 	return true, "Ready", _PLUGIN_NAME
 end
 
+-- Check enabled state for actions
+function assertEnabled( dev ) return isEnabled( dev ) or error "Cannot perform this operation on a disabled device" end
+
 -- Add a child (used as both action and local function)
 function actionAddSensor( pdev, count )
 	D("addSensor(%1)", pdev)
+	assertEnabled( pdev )
 	count = tonumber( count ) or 1
 	if count < 1 then count = 1 elseif count > 16 then count = 16 end
 	luup.variable_set( MYSID, "Message", "Adding sensor, please hard-refresh your browser.", pdev )
@@ -3882,6 +3886,7 @@ end
 
 -- Update geofence data. This is long-running, so runs as a job from the master tick.
 function actionUpdateGeofences( pdev, event )
+	assertEnabled( pdev )
 	local now = os.time()
 	-- Geofencing. If flag on, at least one sensor is using geofencing. Fetch
 	-- userdata, which can be very large. Shame that it comes back as JSON-
@@ -4092,6 +4097,7 @@ end
 
 -- Force trip a ReactorSensor
 function actionTrip( dev )
+	assertEnabled( dev )
 	L("Sensor %1 (%2) trip action!", dev, luup.devices[dev].description)
 	addEvent{ dev=dev, event="action", action="Trip" }
 	trip( true, dev )
@@ -4100,6 +4106,7 @@ end
 
 -- Force reset (untrip) a ReactorSensor
 function actionReset( dev )
+	assertEnabled( dev )
 	L("Sensor %1 (%2) reset action!", dev, luup.devices[dev].description)
 	addEvent{ dev=dev, event="action", action="Reset" }
 	trip( false, dev )
@@ -4116,9 +4123,7 @@ end
 
 -- Restart a ReactorSensor (clear saved state, reload config and force re-evals)
 function actionRestart( dev )
-	dev = tonumber( dev )
-	assert( dev ~= nil )
-	assert( luup.devices[dev] ~= nil and luup.devices[dev].device_type == RSTYPE )
+	assertEnabled( dev )
 	L("Restarting %2 (#%1)", dev, luup.devices[dev].description)
 	addEvent{ dev=dev, event="action", action="Restart" }
 	stopScene( dev, nil, dev ) -- stop all scenes in device context
@@ -4134,9 +4139,7 @@ end
 
 -- Clear latched conditions on a ReactorSensor
 function actionClearLatched( dev, group )
-	dev = tonumber( dev )
-	assert( dev ~= nil )
-	assert( luup.devices[dev] and luup.devices[dev].device_type == RSTYPE )
+	assertEnabled( dev )
 	if "" == ( group or "" ) then group = false end
 	L("Clearing latched conditions on %1 (#%2) in " ..
 		( group and group or "all groups" ), luup.devices[dev].description, dev)
@@ -4230,6 +4233,7 @@ end
 -- Run a Vera scene or ReactorSensor group activity in the context of the
 -- passed device.
 function actionRunScene( scene, options, dev )
+	assertEnabled( dev )
 	L("RunScene action invoked, scene %1", scene)
 	local scid, event, message = findSceneOrActivity( scene, dev )
 	if not scid then
@@ -4291,6 +4295,7 @@ end
 -- Set group enabled state (job).
 function actionSetGroupEnabled( grpid, enab, dev )
 	D("actionSetGroupEnabled(%1,%2,%3)", grpid, enab, dev)
+	assertEnabled( dev )
 	-- Load a clean copy of the configuration.
 	local cdata = getSensorConfig( dev )
 	local grp = findCondition( grpid, cdata, "group" )
@@ -4318,6 +4323,7 @@ function actionSetGroupEnabled( grpid, enab, dev )
 end
 
 function actionSetVariable( opt, tdev )
+	assertEnabled( tdev )
 	local cdata = getSensorConfig( tdev )
 	if ( cdata.variables or {} )[opt.VariableName or "_"] == nil then
 		L({level=2,msg="Warning: action attempt to set variable %3 on %1 (#%2)failed, variable not defined."},
