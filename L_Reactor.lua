@@ -145,23 +145,6 @@ local function getInstallPath()
 	return installPath
 end
 
-local function checkVersion(dev)
-	local ui7Check = luup.variable_get(MYSID, "UI7Check", dev) or ""
-	if isOpenLuup then
-		return true
-	end
-	if luup.version_branch == 1 and luup.version_major == 7 then
-		if ui7Check == "" then
-			-- One-time init for UI7 or better
-			luup.variable_set( MYSID, "UI7Check", "true", dev )
-		end
-		return true
-	end
-	L({level=1,msg="firmware %1 (%2.%3.%4) not compatible"}, luup.version,
-		luup.version_branch, luup.version_major, luup.version_minor)
-	return false
-end
-
 local function split( str, sep )
 	if sep == nil then sep = "," end
 	local arr = {}
@@ -278,6 +261,7 @@ end
 -- older versions require a request.
 local function deleteVar( sid, name, dev )
 	if luup.variable_get( sid, name, dev ) then
+		luup.variable_set( sid, name, "", dev )
 		-- For firmware > 1036/3917/3918/3919 http://wiki.micasaverde.com/index.php/Luup_Lua_extensions#function:_variable_set
 		luup.variable_set( sid, name, nil, dev )
 	end
@@ -607,11 +591,6 @@ local function compareTables( a, b )
 	return true
 end
 
--- Return the plugin version string
-function getPluginVersion()
-	return _PLUGIN_VERSION, _CONFIGVERSION
-end
-
 -- Iterator that returns depth-first traversal of condition groups
 local function conditionGroups( root )
 	local d = {}
@@ -639,6 +618,45 @@ local function traverse( c, func )
 			traverse( ch, func )
 		end
 	end
+end
+
+-- Return iterator for variables in eval order
+local function variables( cdata )
+	local ar = {}
+	for _,v in pairs( cdata.variables or {} ) do
+		table.insert( ar, v )
+	end
+	table.sort( ar, function( a, b )
+		local i1 = a.index or -1
+		local i2 = b.index or -1
+		if i1 == i2 then
+			return (a.name or ""):lower() < (b.name or ""):lower()
+		end
+		return i1 < i2
+	end )
+	local ix = 0
+	return function()
+		ix = ix + 1
+		if ix > #ar then return nil end
+		return ix, ar[ix]
+	end
+end
+
+local function checkVersion(dev)
+	local ui7Check = luup.variable_get(MYSID, "UI7Check", dev) or ""
+	if isOpenLuup then
+		return true
+	end
+	if luup.version_branch == 1 and luup.version_major == 7 then
+		if ui7Check == "" then
+			-- One-time init for UI7 or better
+			luup.variable_set( MYSID, "UI7Check", "true", dev )
+		end
+		return true
+	end
+	L({level=1,msg="firmware %1 (%2.%3.%4) not compatible"}, luup.version,
+		luup.version_branch, luup.version_major, luup.version_minor)
+	return false
 end
 
 -- runOnce() looks to see if a core state variable exists; if not, a one-time initialization
@@ -791,6 +809,171 @@ local function getHouseMode( tdev )
 	return luup.variable_get( MYSID, "HouseMode", pluginDevice ) or "1"
 end
 
+-- Load sensor config
+local function loadSensorConfig( tdev )
+	D("loadSensorConfig(%1)", tdev)
+	local upgraded = false
+	local s = luup.variable_get( RSSID, "cdata", tdev ) or ""
+	local cdata, pos, err
+	if "" ~= s then
+		cdata, pos, err = json.decode( s )
+		if err or type(cdata) ~= "table" then
+			L("Unable to parse JSON data at %2, %1 in %3", pos, err, s)
+			return error("Unable to load configuration")
+		end
+		D("loadSensorConfig() loaded configuration version %1", cdata.version)
+	end
+	if cdata == nil then
+		L("Initializing new configuration")
+		cdata = {
+			version=_CDATAVERSION,
+			variables={},
+			activities={},
+			conditions={
+				root={ id="root", name=luup.devices[tdev].description, ['type']="group", operator="and",
+					conditions={
+						{ id="cond0", ['type']="comment", comment="Welcome to your new ReactorSensor!" }
+					}
+				}
+			}
+		}
+		upgraded = true
+	elseif ( cdata.version or 0 ) < _CDATAVERSION then
+		local fn = string.format( "%sreactor-dev%d-config-v%s-backup.json",
+			getInstallPath(), tdev, tostring( cdata.version or 0 ) )
+		local f = io.open( fn, "r" )
+		if f == nil then
+			L("Backing up %1 (#%2) pre-upgrade configuration to %3",
+				luup.devices[tdev].description, tdev, fn )
+			f = io.open( fn, "w" )
+			if f then
+				-- Write in backup container format
+				local d = {}
+				d[tostring(tdev)] = { devnum=tdev, name=luup.devices[tdev].description, config=cdata }
+				local mt = { __jsontype="object" } -- empty tables render as object
+				setmetatable( d, mt )
+				f:write( json.encode(d) )
+				f:close()
+			end
+		else
+			f:close()
+		end
+	end
+	if not (cdata.conditions or {}).root then
+		L("Upgrading conditions in configuration")
+		setVar( RSSID, "oldcdata", json.encode( cdata ), tdev )
+		local root = { id="root", name=luup.devices[tdev].description, ['type']="group", conditions={}, operator="and" }
+		local od = cdata.conditions or {}
+		if #od == 0 or ( #od == 1 and #(od[1].groupconditions or {}) == 0 ) then
+			-- No group or first/only group has no conditions. Leave empty root.
+		elseif #od == 1 then
+			-- Exactly one group. Put all of its conditions into root.
+			root.name = od[1].name or od[1].groupid or root.name
+			root.conditions = od[1].groupconditions or {}
+		else
+			-- Multiple groups. Add them all.
+			root.operator = "or"
+			for ix,grp in ipairs( od ) do
+				local sub = { id=grp.groupid or grp.id or ix, name=grp.name or grp.id, ['type']="group", operator="and" }
+				sub.conditions = grp.groupconditions or {}
+				table.insert( root.conditions, sub )
+			end
+		end
+		cdata.conditions = { root=root }
+		-- Do variables index upgrade
+		cdata.variables = cdata.variables or {}
+		local ix = 0
+		for _,vv in pairs( cdata.variables ) do
+			vv.index = ix
+			ix = ix + 1
+		end
+		upgraded = true
+	end
+	cdata.activities = cdata.activities or {}
+	if cdata.tripactions then
+		L("Upgrading activities in configuration")
+		cdata.activities['root.true'] = cdata.tripactions
+		cdata.activities['root.true'].id = 'root.true'
+		cdata.tripactions = nil
+		upgraded = true
+	end
+	if cdata.untripactions then
+		L("Upgrading activities in configuration")
+		cdata.activities['root.false'] = cdata.untripactions
+		cdata.activities['root.false'].id = 'root.false'
+		cdata.untripactions = nil
+		upgraded = true
+	end
+
+	if ( cdata.version or 0 ) < 19080 then
+		-- Upgrade condition options
+		local function scanconds( grp )
+			for _,cond in ipairs( grp.conditions or {} ) do
+				if "group" == ( cond.type or "group" ) then
+					scanconds( cond )
+				else
+					for _,k in pairs( { 'duration','duration_op','after','aftertime','repeatcount','repeatwithin','latch' } ) do
+						if cond[k] then
+							cond.options = cond.options or {}
+							cond.options[k] = cond[k]
+							cond[k] = nil
+							upgraded = true
+						end
+					end
+				end
+			end
+		end
+		scanconds( cdata.conditions.root or {} )
+	end
+
+	-- Backport/downgrade attempt from future version?
+	if cdata.version and cdata.version > _CDATAVERSION then
+		L({level=1,msg="Configuration loaded is format v%1, max compatible with this version of Reactor is %2; upgrade Reactor or restore older config from backup."},
+			cdata.version, _CDATAVERSION)
+		error("Incompatible config format version. Upgrade Reactor or restore older config from backup.")
+	end
+
+	-- Special meta to control encode rendering when needed.
+	local mt = { __jsontype="object" } -- dkjson (later revs) empty tables render as object
+	if debugMode then
+		mt.__index = function(t, n) if debugMode then L({level=1,msg="access to %1 in cdata, which is undefined!"},n) end return rawget(t,n) end
+		mt.__newindex = function(t, n, v) rawset(t,n,v) if debugMode then L({level=2,msg="setting %1=%2 in cdata"}, n, v) end end
+	end
+	setmetatable( cdata, mt )
+
+	-- Rewrite if we upgraded.
+	if upgraded then
+		D("loadSensorConfig() writing updated sensor config")
+		cdata.version = _CDATAVERSION -- MUST COINCIDE WITH J_ReactorSensor_UI7.js
+		cdata.timestamp = os.time()
+		cdata.serial = 1 + ( tonumber(cdata.serial or 0) or 0 )
+		-- NOTA BENE: startup=true passed here! Don't fire watch for this rewrite.
+		luup.variable_set( RSSID, "cdata", json.encode( cdata ), tdev, false )
+	end
+
+	-- Save to cache.
+	getSensorState( tdev ).configData = cdata
+	-- When loading sensor config, dump luaFunc so that any changes to code
+	-- in actions or scenes are honored immediately. This empties without
+	-- changing metatable (which defines mode).
+	local t = next( luaFunc )
+	while t do
+		luaFunc[t] = nil
+		t = next( luaFunc )
+	end
+	return cdata
+end
+
+-- Get sensor configuration; may be cached.
+local function getSensorConfig( tdev, force )
+	D("getSensorConfig(%1,%2)", tdev, force)
+	local sst = getSensorState( tdev )
+	if sst.configData and not force then
+		return sst.configData
+	end
+	return loadSensorConfig( tdev )
+end
+
 -- Clean cstate
 local function loadCleanState( tdev )
 	D("loadCleanState(%1)", tdev)
@@ -819,7 +1002,7 @@ local function loadCleanState( tdev )
 
 		cstate.lastUsed = nil -- remove while working
 
-		local cdata = sst.configData
+		local cdata = getSensorConfig( tdev )
 		if not cdata then
 			L({level=1,msg="ReactorSensor %1 (%2) has corrupt configuration data!"}, tdev, luup.devices[tdev].description)
 			error("ReactorSensor " .. tdev .. " has invalid configuration data")
@@ -841,6 +1024,7 @@ local function loadCleanState( tdev )
 		for _,k in ipairs( dels ) do
 			D("loadCleanState() deleting saved state %1", k)
 			cstate[k] = nil
+			deleteVar( GRPSID, "GroupStatus_"..k, tdev )
 		end
 
 		-- Clean variables no longer in use
@@ -896,28 +1080,6 @@ local function findCondition( findId, cdata, findType )
 		return false
 	end
 	return tr( cdata.conditions.root or {}, findId, findType )
-end
-
--- Return iterator for variables in eval order
-local function variables( cdata )
-	local ar = {}
-	for _,v in pairs( cdata.variables or {} ) do
-		table.insert( ar, v )
-	end
-	table.sort( ar, function( a, b )
-		local i1 = a.index or -1
-		local i2 = b.index or -1
-		if i1 == i2 then
-			return (a.name or ""):lower() < (b.name or ""):lower()
-		end
-		return i1 < i2
-	end )
-	local ix = 0
-	return function()
-		ix = ix + 1
-		if ix > #ar then return nil end
-		return ix, ar[ix]
-	end
 end
 
 -- Return true if scene has no actions (takes sceneData table). Works on scenes
@@ -1031,7 +1193,7 @@ local function getSceneData( sceneId, tdev )
 
 	-- Check for activity (ReactorScene)
 	local skey = tostring(sceneId)
-	local cd = getSensorState( tdev ).configData or {}
+	local cd = getSensorConfig( tdev )
 	if ( cd.activities or {} )[skey] then
 		return cd.activities[skey]
 	end
@@ -1107,7 +1269,7 @@ end
 local function resetLatched( group, tdev )
 	D("resetLatched(%1,%2)", group, tdev)
 	local changed = false
-	local cf = getSensorState( tdev ).configData
+	local cf = getSensorConfig( tdev )
 	local cs = loadCleanState( tdev )
 	local function _resetcond( c )
 		D("resetLatched() cond %1 latched %2", c.id, (cs[c.id] or {}).latched)
@@ -1449,7 +1611,7 @@ end
 -- Returns result as string and number
 local function getValue( val, ctx, tdev )
 	D("getValue(%1,%2,%3)", val, ctx, tdev)
-	ctx = ctx or getSensorState( tdev ).ctx or getExpressionContext( getSensorState( tdev ).configData, tdev )
+	ctx = ctx or getSensorState( tdev ).ctx or getExpressionContext( getSensorConfig( tdev ), tdev )
 	if type(val) == "number" then return tostring(val), val end
 	val = tostring(val) or ""
 	if #val >=2 and val:byte(1) == 34 and val:byte(-1) == 34 then
@@ -1675,6 +1837,10 @@ local function execSceneGroups( tdev, taskid, scd )
 	if luup.devices[sst.owner] == nil then
 		L({level=2,msg="Unable to resume scene %1 because the owner device #%2 no longer exists"},
 			sst.scene, sst.owner)
+		return stopScene( nil, taskid, tdev )
+	elseif not isEnabled( tdev ) then
+		L({level=2,msg="Unable to resume scene %1 because the owner %2 (#%3) is disabled"},
+			sst.scene, luup.devices[sst.owner].description, sst.owner)
 		return stopScene( nil, taskid, tdev )
 	elseif sst.context ~= 0 and luup.devices[sst.context] == nil then
 		L({level=2,msg="Unable to resume scene %1 because the context device #%2 no longer exists"},
@@ -2037,161 +2203,6 @@ local function trip( state, tdev )
 			execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } )
 		end
 	end
-end
-
--- Load sensor config
-local function loadSensorConfig( tdev )
-	D("loadSensorConfig(%1)", tdev)
-	local upgraded = false
-	local s = luup.variable_get( RSSID, "cdata", tdev ) or ""
-	local cdata, pos, err
-	if "" ~= s then
-		cdata, pos, err = json.decode( s )
-		if err or type(cdata) ~= "table" then
-			L("Unable to parse JSON data at %2, %1 in %3", pos, err, s)
-			return error("Unable to load configuration")
-		end
-		D("loadSensorConfig() loaded configuration version %1", cdata.version)
-	end
-	if cdata == nil then
-		L("Initializing new configuration")
-		cdata = {
-			version=_CDATAVERSION,
-			variables={},
-			activities={},
-			conditions={
-				root={ id="root", name=luup.devices[tdev].description, ['type']="group", operator="and",
-					conditions={
-						{ id="cond0", ['type']="comment", comment="Welcome to your new ReactorSensor!" }
-					}
-				}
-			}
-		}
-		upgraded = true
-	elseif ( cdata.version or 0 ) < _CDATAVERSION then
-		local fn = string.format( "%sreactor-dev%d-config-v%s-backup.json",
-			getInstallPath(), tdev, tostring( cdata.version or 0 ) )
-		local f = io.open( fn, "r" )
-		if f == nil then
-			L("Backing up %1 (#%2) pre-upgrade configuration to %3",
-				luup.devices[tdev].description, tdev, fn )
-			f = io.open( fn, "w" )
-			if f then
-				-- Write in backup container format
-				local d = {}
-				d[tostring(tdev)] = { devnum=tdev, name=luup.devices[tdev].description, config=cdata }
-				local mt = { __jsontype="object" } -- empty tables render as object
-				setmetatable( d, mt )
-				f:write( json.encode(d) )
-				f:close()
-			end
-		else
-			f:close()
-		end
-	end
-	if not (cdata.conditions or {}).root then
-		L("Upgrading conditions in configuration")
-		setVar( RSSID, "oldcdata", json.encode( cdata ), tdev )
-		local root = { id="root", name=luup.devices[tdev].description, ['type']="group", conditions={}, operator="and" }
-		local od = cdata.conditions or {}
-		if #od == 0 or ( #od == 1 and #(od[1].groupconditions or {}) == 0 ) then
-			-- No group or first/only group has no conditions. Leave empty root.
-		elseif #od == 1 then
-			-- Exactly one group. Put all of its conditions into root.
-			root.name = od[1].name or od[1].groupid or root.name
-			root.conditions = od[1].groupconditions or {}
-		else
-			-- Multiple groups. Add them all.
-			root.operator = "or"
-			for ix,grp in ipairs( od ) do
-				local sub = { id=grp.groupid or grp.id or ix, name=grp.name or grp.id, ['type']="group", operator="and" }
-				sub.conditions = grp.groupconditions or {}
-				table.insert( root.conditions, sub )
-			end
-		end
-		cdata.conditions = { root=root }
-		-- Do variables index upgrade
-		cdata.variables = cdata.variables or {}
-		local ix = 0
-		for _,vv in pairs( cdata.variables ) do
-			vv.index = ix
-			ix = ix + 1
-		end
-		upgraded = true
-	end
-	cdata.activities = cdata.activities or {}
-	if cdata.tripactions then
-		L("Upgrading activities in configuration")
-		cdata.activities['root.true'] = cdata.tripactions
-		cdata.activities['root.true'].id = 'root.true'
-		cdata.tripactions = nil
-		upgraded = true
-	end
-	if cdata.untripactions then
-		L("Upgrading activities in configuration")
-		cdata.activities['root.false'] = cdata.untripactions
-		cdata.activities['root.false'].id = 'root.false'
-		cdata.untripactions = nil
-		upgraded = true
-	end
-
-	if ( cdata.version or 0 ) < 19080 then
-		-- Upgrade condition options
-		local function scanconds( grp )
-			for _,cond in ipairs( grp.conditions or {} ) do
-				if "group" == ( cond.type or "group" ) then
-					scanconds( cond )
-				else
-					for _,k in pairs( { 'duration','duration_op','after','aftertime','repeatcount','repeatwithin','latch' } ) do
-						if cond[k] then
-							cond.options = cond.options or {}
-							cond.options[k] = cond[k]
-							cond[k] = nil
-							upgraded = true
-						end
-					end
-				end
-			end
-		end
-		scanconds( cdata.conditions.root or {} )
-	end
-
-	-- Backport/downgrade attempt from future version?
-	if cdata.version and cdata.version > _CDATAVERSION then
-		L({level=1,msg="Configuration loaded is format v%1, max compatible with this version of Reactor is %2; upgrade Reactor or restore older config from backup."},
-			cdata.version, _CDATAVERSION)
-		error("Incompatible config format version. Upgrade Reactor or restore older config from backup.")
-	end
-
-	-- Special meta to control encode rendering when needed.
-	local mt = { __jsontype="object" } -- dkjson (later revs) empty tables render as object
-	if debugMode then
-		mt.__index = function(t, n) if debugMode then L({level=1,msg="access to %1 in cdata, which is undefined!"},n) end return rawget(t,n) end
-		mt.__newindex = function(t, n, v) rawset(t,n,v) if debugMode then L({level=2,msg="setting %1=%2 in cdata"}, n, v) end end
-	end
-	setmetatable( cdata, mt )
-
-	-- Rewrite if we upgraded.
-	if upgraded then
-		D("loadSensorConfig() writing updated sensor config")
-		cdata.version = _CDATAVERSION -- MUST COINCIDE WITH J_ReactorSensor_UI7.js
-		cdata.timestamp = os.time()
-		cdata.serial = 1 + ( tonumber(cdata.serial or 0) or 0 )
-		-- NOTA BENE: startup=true passed here! Don't fire watch for this rewrite.
-		luup.variable_set( RSSID, "cdata", json.encode( cdata ), tdev, false )
-	end
-
-	-- Save to cache.
-	getSensorState( tdev ).configData = cdata
-	-- When loading sensor config, dump luaFunc so that any changes to code
-	-- in actions or scenes are honored immediately. This empties without
-	-- changing metatable (which defines mode).
-	local t = next( luaFunc )
-	while t do
-		luaFunc[t] = nil
-		t = next( luaFunc )
-	end
-	return cdata
 end
 
 -- Perform evaluations of configured variables/expressions
@@ -3184,7 +3195,7 @@ local function processSensorUpdate( tdev, sst )
 		sst.updateThrottled = false
 
 		-- Fetch the condition data.
-		local cdata = sst.configData
+		local cdata = getSensorConfig( tdev )
 		-- if debugMode then luup.log( json.encode( cdata ), 2 ) end
 
 		-- Mark a stable base of time
@@ -3455,6 +3466,38 @@ local function masterTick(pdev)
 	end
 end
 
+-- Clean up sensor variables
+local function cleanSensorState( tdev )
+	D("cleanSensorState(%1)", tdev)
+	local sc,content,httpStatus = luup.inet.wget( 'http://127.0.0.1:3480/data_request?id=status&DeviceNum='..tdev..'&output_format=json' )
+	if sc ~= 0 then
+		L({level=2,msg="Failed to complete status request for #%1 (%2, %3)"}, sc, httpStatus)
+		return
+	end
+	local data = json.decode( content )
+	if data and data['Device_Num_'..tdev] then
+		data = data['Device_Num_'..tdev]
+		local cf = getSensorConfig( tdev ) or error "Configuration not available"
+		for _,st in ipairs( data.states ) do
+			if st.service == VARSID then
+				if not (cf.variables or {})[st.variable] then
+					D("cleanSensorState() removing orphan expression export %1", st.variable)
+					deleteVar( st.service, st.variable, tdev )
+					deleteVar( st.service, st.variable .. "_Error", tdev )
+				end
+			elseif st.service == GRPSID then
+				local gid = st.variable:gsub( "GroupStatus_", "" )
+				if not findCondition( gid, cf, "group" ) then
+					D("cleanSensorState() removing orphan group state %1", st.variable)
+					deleteVar( st.service, st.variable, tdev )
+				end
+			end
+		end
+	else
+		D("cleanSensorState() return data unusable: %1", data or content)
+	end
+end
+
 -- Start an instance
 local function startSensor( tdev, pdev )
 	D("startSensor(%1,%2)", tdev, pdev) -- DO NOT string--used for log snippet
@@ -3487,7 +3530,7 @@ local function startSensor( tdev, pdev )
 		setMessage("Starting...", tdev)
 
 		-- Load the config data.
-		loadSensorConfig( tdev )
+		getSensorConfig( tdev, true )
 
 		-- Clean and restore our condition state.
 		loadCleanState( tdev )
@@ -3517,6 +3560,8 @@ local function startSensors( pdev )
 	-- Resume any scenes that were running prior to restart
 	resumeScenes( pdev )
 
+	local isRecovery = getVarNumeric( "recoverymode", 0, pdev, MYSID ) ~= 0
+
 	-- Ready to go. Start our children.
 	local count = 0
 	local started = 0
@@ -3525,6 +3570,10 @@ local function startSensors( pdev )
 			count = count + 1
 			L("Starting %1 (#%2)", luup.devices[k].description, k)
 			setVar( MYSID, "Message", "Starting " .. luup.devices[k].description, pdev )
+			if isRecovery then
+				-- Recovery mode cleanups.
+				setVar( RSSID, "cstate", "{}", k )
+			end
 			-- N.B. start sensor whether enabled or not, as key inits happen regardless.
 			local status, err = pcall( startSensor, k, pdev )
 			if not status then
@@ -3535,6 +3584,10 @@ local function startSensors( pdev )
 			else
 				luup.set_failure( 0, k )
 				started = started + 1
+				-- Start a cleanup job on this sensor
+				if isEnabled( k ) then
+					scheduleDelay( { id="clean"..k, owner=k, func=cleanSensorState }, 25 + 5*started )
+				end
 			end
 		elseif v.id == "hmt" then
 			D("startSensors() adding watch for hmt device #%1", k)
@@ -3612,41 +3665,7 @@ function startPlugin( pdev )
 	end
 
 	L("Plugin version %1 starting on #%2 (%3)", _PLUGIN_VERSION, pdev, luup.devices[pdev].description)
-	if getVarNumeric( "Enabled", 1, pdev, MYSID ) == 0 then
-		luup.variable_set( MYSID, "Message", "DISABLED", pdev )
-		markChildrenDown( "Reactor disabled", pdev )
-		luup.variable_set( MYSID, "rs", "", pdev ) -- clear restart tracking
-		L"Reactor has been disabled by configuration; startup aborted."
-		return false, "plugin disabled", _PLUGIN_NAME
-	end
-
-	-- Check for hard system restart loop; stand off if it's happening.
-	local nr = getVarNumeric( "MaxRestartCount", 5, pdev, MYSID )
-	local p = getVarNumeric( "MaxRestartPeriod", 900, pdev, MYSID )
-	if nr > 0 and p > 0 then
-		local s = luup.variable_get( MYSID, "rs", pdev ) or ""
-		s = split( s, ',' )
-		while #s >= nr do table.remove(s, 1) end
-		D("startPlugin() restart check (limit %1 in %2); previous restarts: %3", nr, p, s)
-		table.insert(s, os.time())
-		luup.variable_set( MYSID, "rs", table.concat( s, "," ), pdev )
-		if #s == nr then
-			local d = s[nr] - s[1]
-			if d <= p then
-				-- Too many restarts! Abort. No soup for you!
-				L({level=1,msg="Reactor has detected that this system has restarted %1 times in %2 seconds; disabling Reactor just in case."},
-					nr, d)
-				luup.variable_set( MYSID, "Message", "Safety Lockout!", pdev )
-				markChildrenDown( "Safety lockout!", pdev )
-				luup.set_failure( 1, pdev )
-				return false, "Safety lockout", _PLUGIN_NAME
-			end
-		end
-	end
-
-	luup.variable_set( MYSID, "Message", "Initializing...", pdev )
 	luup.variable_set( MYSID, "NumRunning", "0", pdev )
-	luup.variable_set( MYSID, "LoadTime", os.time(), pdev )
 
 	-- Early inits
 	pluginDevice = pdev
@@ -3667,17 +3686,61 @@ function startPlugin( pdev )
 	geofenceMode = 0
 	geofenceEvent = 0
 	usesHouseMode = false
+	maxEvents = getVarNumeric( "MaxEvents", debugMode and 250 or 50, pdev, MYSID )
 
 	math.randomseed( os.time() )
 
-	-- Save required UI version for collision detection.
-	setVar( MYSID, "_UIV", _UIVERSION, pdev )
+	-- Enabled?
+	if getVarNumeric( "Enabled", 1, pdev, MYSID ) == 0 then
+		luup.variable_set( MYSID, "Message", "DISABLED", pdev )
+		markChildrenDown( "Reactor disabled", pdev )
+		setVar( MYSID, "rs", "", pdev ) -- clear restart tracking
+		setVar( MYSID, "recoverymode", 1, pdev )
+		L"Reactor has been disabled by configuration; startup aborted."
+		return false, "Disabled by config", _PLUGIN_NAME
+	end
 
 	-- Debug?
 	if getVarNumeric( "DebugMode", 0, pdev, MYSID ) ~= 0 then
 		debugMode = true
 		D("startPlugin() debug enabled by state variable DebugMode")
 	end
+
+	-- Check for hard system restart loop; stand off if it's happening. Not
+	-- because we've ever caused problems, but because plugins are always the
+	-- first to be blamed.
+	local nr = getVarNumeric( "MaxRestartCount", 5, pdev, MYSID )
+	local p = getVarNumeric( "MaxRestartPeriod", 900, pdev, MYSID )
+	if nr > 1 and p > 0 then
+		local s = luup.variable_get( MYSID, "rs", pdev ) or ""
+		s = split( s, ',' )
+		while #s >= nr do table.remove(s, 1) end
+		D("startPlugin() restart check (limit %1 in %2); previous restarts: %3", nr, p, s)
+		table.insert(s, os.time())
+		setVar( MYSID, "rs", table.concat( s, "," ), pdev )
+		if #s == nr then
+			local d = s[nr] - s[1]
+			if d <= p then
+				-- Too many restarts! Abort. No soup for you!
+				L({level=1,msg="Reactor has detected that this system has restarted %1 times in %2 seconds; disabling Reactor just in case."},
+					nr, d)
+				setVar( MYSID, "recoverymode", 1, pdev )
+				setVar( MYSID, "Message", "Safety Lockout!", pdev )
+				markChildrenDown( "Safety lockout!", pdev )
+				luup.set_failure( 1, pdev )
+				return false, "Safety lockout", _PLUGIN_NAME
+			end
+		end
+	else
+		D("startPlugin() restart loop check disabled (%1/%2)", nr, p)
+		setVar( MYSID, "rs", "", pdev ) -- clear restart tracking
+	end
+
+	luup.variable_set( MYSID, "Message", "Initializing...", pdev )
+	luup.variable_set( MYSID, "LoadTime", os.time(), pdev )
+
+	-- Save required UI version for collision detection.
+	setVar( MYSID, "_UIV", _UIVERSION, pdev )
 
 	-- Check for ALTUI and OpenLuup
 	local failmsg = false
@@ -3743,8 +3806,13 @@ function startPlugin( pdev )
 	-- One-time stuff
 	plugin_runOnce( pdev )
 
-	-- More inits
-	maxEvents = getVarNumeric( "MaxEvents", debugMode and 250 or 50, pdev, MYSID )
+	-- Check for recovery mode.
+	if getVarNumeric( "recoverymode", 0, pdev, MYSID ) ~= 0 then
+		-- Recovery mode. Wipe state data.
+		setVar( MYSID, "runscene", "{}", pdev )
+		setVar( MYSID, "scenedata", "{}", pdev )
+		setVar( MYSID, "recoverymode", "0", pdev )
+	end
 
 	-- Queue all scenes cached for refresh
 	local sd = luup.variable_get( MYSID, "scenedata", pdev ) or "{}"
@@ -3753,11 +3821,14 @@ function startPlugin( pdev )
 		refreshScene( scd.id )
 	end
 
+	-- Launch the system (Z-Wave) ready check.
+	scheduleDelay( { id="sysready", func=waitSystemReady, owner=pdev }, 5 )
+
 	-- Start sensors
 	startSensors( pdev )
 
-	-- Launch the system (Z-Wave) ready check.
-	scheduleDelay( { id="sysready", func=waitSystemReady, owner=pdev }, 5 )
+	-- Remove recovery mode flag if we can
+	deleteVar( MYSID, "recoverymode", pdev )
 
 	-- Return success
 	luup.set_failure( 0, pdev )
@@ -4071,7 +4142,7 @@ function actionClearLatched( dev, group )
 		( group and group or "all groups" ), luup.devices[dev].description, dev)
 	local grpid = group
 	if group then
-		local cd = getSensorState( dev ).configData
+		local cd = getSensorConfig( dev )
 		if not findCondition( group, cd, "group" ) then
 			-- Not found. See if group param matches group name
 			D("actionClearLatched() no group with id %1, searching by name", group)
@@ -4113,7 +4184,7 @@ local function findSceneOrActivity( scene, dev )
 					return false, false, "Device must be ReactorSensor to use activity reference: " .. scene
 				end
 				-- Find it directly?
-				local cd = getSensorState( dev ).configData or {}
+				local cd = getSensorConfig( dev )
 				if not ( cd.activities or {} )[scene] then
 					-- No, maybe it uses a group name rather than ID. Find it.
 					local name = ln:gsub( ".true$", "" ):gsub( ".false$", "" )
@@ -4221,7 +4292,7 @@ end
 function actionSetGroupEnabled( grpid, enab, dev )
 	D("actionSetGroupEnabled(%1,%2,%3)", grpid, enab, dev)
 	-- Load a clean copy of the configuration.
-	local cdata = loadSensorConfig( dev )
+	local cdata = getSensorConfig( dev )
 	local grp = findCondition( grpid, cdata, "group" )
 	if grp then
 		if type(enab) == "string" then
@@ -4247,7 +4318,7 @@ function actionSetGroupEnabled( grpid, enab, dev )
 end
 
 function actionSetVariable( opt, tdev )
-	local cdata = loadSensorConfig( tdev )
+	local cdata = getSensorConfig( tdev )
 	if ( cdata.variables or {} )[opt.VariableName or "_"] == nil then
 		L({level=2,msg="Warning: action attempt to set variable %3 on %1 (#%2)failed, variable not defined."},
 			luup.devices[tdev].description, tdev, opt.VariableName )
@@ -4293,6 +4364,11 @@ function actionSetVariable( opt, tdev )
 		L("SetVariable action %1 no change, value remains %2", opt.VariableName, vs.lastvalue == nil and "" or vs.lastvalue)
 	end
 	scheduleDelay( tdev, 1 )
+end
+
+-- Return the plugin version string
+function getPluginVersion()
+	return _PLUGIN_VERSION, _CONFIGVERSION
 end
 
 -- Plugin timer tick. Using the tickTasks table, we keep track of
@@ -4406,7 +4482,7 @@ function watch( dev, sid, var, oldVal, newVal )
 			addEvent{ dev=dev, event="configchange" }
 			stopScene( dev, nil, dev ) -- Stop all scenes in this device context.
 			clearConditionState( dev )
-			loadSensorConfig( dev )
+			getSensorConfig( dev, true )
 			scheduleDelay( { id=tostring(dev), owner=dev, func=sensorTick }, 1 )
 		else
 			D("watch() ignoring config change on disabled RS %1 (#%2)", luup.devices[dev].description, dev)
@@ -4884,7 +4960,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 				status = status .. ( ( getVarNumeric("Trouble", 0, n, RSSID ) ~= 0 ) and " TROUBLE" or "" )
 				r = r .. string.rep( "=", 132 ) .. EOL
 				r = r .. string.format("%s (#%d)%s", tostring(d.description), n, status) .. EOL
-				local cdata = loadSensorConfig( n )
+				local cdata = getSensorConfig( n )
 				if not cdata then
 					r = r .. "    **** UNPARSEABLE CONFIGURATION ****" .. EOL
 				else
@@ -4978,8 +5054,8 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			return json.encode{ status=false, message="Invalid device number" }, "application/json"
 		end
 		local expr = lul_parameters['expr'] or ""
-		local cdata = loadSensorConfig( deviceNum )
 		local sst = getSensorState( deviceNum )
+		local cdata = getSensorConfig( deviceNum )
 		local ctx = sst.ctx or getExpressionContext( cdata, deviceNum )
 		if luaxp == nil then luaxp = require("L_LuaXP_Reactor") end
 		-- if debugMode then luaxp._DEBUG = D end
