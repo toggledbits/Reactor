@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.4develop-19206"
+local _PLUGIN_VERSION = "3.4develop-19212"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION	= 19206
@@ -167,8 +167,7 @@ end
 local function finddevice( dev, tdev )
 	local vn
 	if type(dev) == "number" then
-		if dev == -1 then return tdev end
-		return dev
+		vn = ( dev == -1 ) and tdev or dev
 	elseif type(dev) == "string" then
 		if dev == "" then return tdev end
 		dev = string.lower( dev )
@@ -191,6 +190,8 @@ local function finddevice( dev, tdev )
 			end
 		end
 		vn = tonumber( dev )
+	else
+		return nil
 	end
 	return vn
 end
@@ -1413,22 +1414,32 @@ local function getExpressionContext( cdata, tdev )
 	ctx.__functions.finddevice = function( args )
 		local selector, trouble = unpack( args )
 		D("findDevice(%1) selector=%2", args, selector)
-		local n = finddevice( selector, tdev )
-		if n == nil then
-			-- default behavior for finddevice is return NULL (legacy, diff from getstate)
-			if trouble == true then luaxp.evalerror( "Device not found" ) end
-			return luaxp.NULL
+		local n
+		if luaxp.isNull( selector ) or selector == -1 then
+			n = tdev
+		else
+			n = finddevice( selector, tdev )
+			if n == nil then
+				-- default behavior for finddevice is return NULL (legacy, diff from getstate)
+				if trouble == true then luaxp.evalerror( "Device not found" ) end
+				return luaxp.NULL
+			end
 		end
 		return n
 	end
 	ctx.__functions.getstate = function( args )
 		local dev, svc, var, trouble, watch = unpack( args )
-		local vn = finddevice( dev, tdev )
-		D("getstate(%1), dev=%2, svc=%3, var=%4, vn(dev)=%5", args, dev, svc, var, vn)
-		if vn == luaxp.NULL or vn == nil or luup.devices[vn] == nil then
-			-- default behavior for getstate() is error (legacy, diff from finddevice)
-			if trouble == false then return luaxp.NULL end
-			return luaxp.evalerror( "Device not found" )
+		local vn
+		if luaxp.isNull( dev ) or dev == -1 then
+			vn = tdev
+		else
+			vn = finddevice( dev, tdev )
+			D("getstate(%1), dev=%2, svc=%3, var=%4, vn(dev)=%5", args, dev, svc, var, vn)
+			if luaxp.isNull( vn ) or vn == nil or luup.devices[vn] == nil then
+				-- default behavior for getstate() is error (legacy, diff from finddevice)
+				if trouble == false then return luaxp.NULL end
+				return luaxp.evalerror( "Device not found" )
+			end
 		end
 		-- Create a watch if we don't have one. Don't watch our own, unless forced.
 		if watch ~= false and ( watch==true or vn ~= tdev ) then
@@ -1439,10 +1450,15 @@ local function getExpressionContext( cdata, tdev )
 	end
 	ctx.__functions.setstate = function( args )
 		local dev, svc, var, val = unpack( args )
-		local vn = finddevice( dev, tdev )
-		D("setstate(%1), dev=%2, svc=%3, var=%4, val=%5, vn(dev)=%6", args, dev, svc, var, val, vn)
-		if vn == luaxp.NULL or vn == nil or luup.devices[vn] == nil then
-			return luaxp.evalerror( "Device not found" )
+		local vn
+		if luaxp.isNull( dev ) or dev == -1 then
+			vn = tdev
+		else
+			vn = finddevice( dev, tdev )
+			D("setstate(%1), dev=%2, svc=%3, var=%4, val=%5, vn(dev)=%6", args, dev, svc, var, val, vn)
+			if vn == luaxp.NULL or vn == nil or luup.devices[vn] == nil then
+				return luaxp.evalerror( "Device not found" )
+			end
 		end
 		if svc == nil or var == nil then return luaxp.evalerror("Invalid service or variable name") end
 		-- Set value.
@@ -1460,10 +1476,15 @@ local function getExpressionContext( cdata, tdev )
 	end
 	ctx.__functions.getattribute = function( args )
 		local dev, attr = unpack( args )
-		local vn = finddevice( dev, tdev )
-		D("getattribute(%1), dev=%2, attr=%3, vn(dev)=%4", args, dev, attr, vn)
-		if vn == luaxp.NULL or vn == nil or luup.devices[vn] == nil then
-			return luaxp.evalerror("Device not found")
+		local vn
+		if luaxp.isNull( dev ) or dev == -1 then
+			vn = tdev
+		else
+			vn = finddevice( dev, tdev )
+			D("setstate(%1), dev=%2, svc=%3, var=%4, val=%5, vn(dev)=%6", args, dev, svc, var, val, vn)
+			if vn == luaxp.NULL or vn == nil or luup.devices[vn] == nil then
+				return luaxp.evalerror( "Device not found" )
+			end
 		end
 		if attr == nil then return luaxp.evalerror("Invalid attribute name") end
 		-- Get and return value.
@@ -1481,6 +1502,9 @@ local function getExpressionContext( cdata, tdev )
 	end
 	ctx.__functions.stringify = function( args )
 		local val = unpack( args )
+		if ( val == nil or luaxp.isNull( val ) then
+			return "null"
+		end
 		return json.encode( val )
 	end
 	ctx.__functions.unstringify = function( args )

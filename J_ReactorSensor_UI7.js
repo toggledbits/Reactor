@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.4develop-19206';
+	var pluginVersion = '3.4develop-19212';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -3974,11 +3974,13 @@ var ReactorSensor = (function(api, $) {
 	function handleGetStateInsert( ev ) {
 		var row = jQuery( ev.currentTarget ).closest( 'div.row' );
 
-		var device = jQuery( 'select#gsdev', row ).val() || 0;
+		var device = jQuery( 'select#gsdev', row ).val() || "-1";
 		var service = jQuery( 'select#gsvar', row ).val() || "";
 		var variable = service.replace( /^[^\/]+\//, "" );
 		service = service.replace( /\/.*$/, "" );
-		if ( jQuery( 'input#usename', row ).prop( 'checked' ) ) {
+		if ( "-1" === device ) {
+			device = "null";
+		} else if ( jQuery( 'input#usename', row ).prop( 'checked' ) ) {
 			device = '"' + jQuery( 'select#gsdev option:selected' ).text().replace( / +\(#\d+\)$/, "" ) + '"';
 		}
 		var str = ' getstate( ' + device + ', "' + service + '", "' + variable + '" ) ';
@@ -4012,7 +4014,7 @@ var ReactorSensor = (function(api, $) {
 		var row = jQuery( ev.currentTarget ).closest( 'div.row' );
 		var f = jQuery( ev.currentTarget );
 		if ( f.attr( 'id' ) == "gsdev" ) {
-			var device = parseInt( f.val() || "" );
+			var device = parseInt( f.val() || "-1" );
 			var s = CondBuilder.makeVariableMenu( device, "", "" ).attr( 'id', 'gsvar' );
 			jQuery( 'select#gsvar', row ).replaceWith( s );
 			/* Switch to new varmenu */
