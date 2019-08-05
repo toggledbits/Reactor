@@ -492,6 +492,22 @@ local function clearTask( taskid )
 	tickTasks[tostring(taskid)] = nil
 end
 
+-- Clear all tasks for specific device
+local function clearOwnerTasks( owner )
+	D("clearOwnerTasks(%1)", owner)
+	local del = {}
+	for tid,t in pairs( tickTasks ) do
+		if t.owner == owner then
+			table.insert( del, tid )
+			t.when = 0
+		end
+	end
+	for _,tid in ipairs( del ) do
+		D("clearOwnerTasks() clearing task %1", tickTasks[tid])
+		tickTasks[tid] = nil
+	end
+end
+
 -- Schedule a timer tick for a future (absolute) time. If the time is sooner than
 -- any currently scheduled time, the task tick is advanced; otherwise, it is
 -- ignored (as the existing task will come sooner), unless repl=true, in which
@@ -1481,7 +1497,7 @@ local function getExpressionContext( cdata, tdev )
 			vn = tdev
 		else
 			vn = finddevice( dev, tdev )
-			D("setstate(%1), dev=%2, svc=%3, var=%4, val=%5, vn(dev)=%6", args, dev, svc, var, val, vn)
+			D("setstate(%1), dev=%2, attr=%3, vn(dev)=%4", args, dev, attr, vn)
 			if vn == luaxp.NULL or vn == nil or luup.devices[vn] == nil then
 				return luaxp.evalerror( "Device not found" )
 			end
@@ -1502,7 +1518,7 @@ local function getExpressionContext( cdata, tdev )
 	end
 	ctx.__functions.stringify = function( args )
 		local val = unpack( args )
-		if ( val == nil or luaxp.isNull( val ) then
+		if val == nil or luaxp.isNull( val ) then
 			return "null"
 		end
 		return json.encode( val )
@@ -2264,6 +2280,25 @@ local function doNextCondCheck( taskinfo, nowMSM, startMSM, endMSM, testing )
 	scheduleTick( taskinfo, tt )
 end
 
+-- Compute the next interval after lastTrue that's aligned to baseTime
+local function getNextInterval( lastTrue, interval, baseTime)
+	D("getNextInterval(%1,%2,%3,%4)", lastTrue, interval, baseTime)
+	if baseTime == nil then
+		local t = os.date("*t", lastTrue)
+		t.hour = 0
+		t.min = 0
+		t.sec = 9
+		baseTime = os.time(t)
+	end
+	-- Our next true relative to lastTrue considers both interval and baseTime
+	-- For example, if interval is 4 hours, and baseTime is 3:00pm, the condition
+	-- fires at 3am, 7am, 11am, 3pm, 7pm, 11pm (interval goes through baseTime).
+	local offs = lastTrue - baseTime
+	local nint = math.floor( offs / interval ) + 1
+	local nextTrue = baseTime + nint * interval
+	return nextTrue
+end
+
 local evaluateGroup -- Forward decl
 local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 212
 	D("evaluateCondition(%1,%2,cdata,%3)", cond.id, (grp or {}).id, tdev)
@@ -2774,22 +2809,38 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		local _,ndays = getValue( cond.days, nil, tdev )
 		local interval = 60 * ((ndays or 0) * 1440 + (nhours or 0) * 60 + (nmins or 0))
 		if interval < 60 then interval = 60 end -- "can never happen" (yeah, hold my beer)
+		D("evaluateCondition() interval %1 secs", interval)
 		-- Get our base time and make it a real time.
-		local baseTime
-		if "condtrue" == ( cond.relto or "" ) then
-			local cs = ( sst.condState or {} )[cond.relcond]
-			if cs == nil or (cs.evaledge or {}).t == nil then
+		local cs = ( sst.condState or {} )[cond.id]
+		D("evaluateCondition() condstate %1", cs)
+		local lastTrue, expected
+		if "free" == ( cond.relto or "" ) then
+			lastTrue = cs.lastvalue or ( now - interval )
+			expected = lastTrue + interval
+		elseif "condtrue" == ( cond.relto or "" ) then
+			local xs = ( sst.condState or {} )[cond.relcond]
+			if xs == nil then
 				-- Trouble, missing condition or no state.
-				L({level=1,msg="Unrecognized condition or insufficient state for %1 in interval cond %2 of %3 (%4)"},
+				L({level=1,msg="Unrecognized condition for %1 in interval cond %2 of %3 (%4)"},
 					cond.relcond or "nil", cond.id, tdev, luup.devices[tdev].description)
 				addEvent{ dev=tdev, event="condition", condition=cond.id,
-					referencing=cond.relcond, ['error']="TROUBLE: relative condition missing or insufficient state" }
+					referencing=cond.relcond, ['error']="TROUBLE: relative condition missing" }
 				sst.trouble = true
-				return now,nil
+				return now,false
 			end
-			baseTime = cs.evaledge.t
+			D("evaluateCondition() relcond state %1", xs)
+			-- If condition is not true, interval does not run.
+			lastTrue = cs.lastvalue or 0
+			if xs.evalstate ~= true then return lastTrue,false end
+			expected = getNextInterval( lastTrue, interval, xs.evalstamp )
 		else
-			local tpart = os.date("*t", now) -- basically a copy of ndt
+			if cs.lastvalue == nil then
+				-- No prior data, immediate interval.
+				scheduleDelay( { id=tdev, info="interval "..cond.id }, 1 )
+				return now,true
+			end
+			lastTrue = cs.lastvalue
+			local tpart = os.date("*t", cs.lastvalue)
 			tpart.hour = 0
 			tpart.min = 0
 			tpart.sec = 0
@@ -2798,54 +2849,27 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 				tpart.hour = tonumber(pt[1]) or 0
 				tpart.min = tonumber(pt[2]) or 0
 			end
-			baseTime = os.time( tpart )
+			local baseTime = os.time(tpart)
+			expected = getNextInterval( lastTrue, interval, baseTime )
 		end
-		D("evaluateCondition() interval %1 secs baseTime %2", interval, baseTime)
-		local cs = ( sst.condState or {} )[cond.id]
-		D("evaluateCondition() condstate %1", cs)
-		if cs ~= nil then
-			-- Not the very first run...
-			local lastTrue = cs.lastvalue or 0
-			-- Our next true relative to lastTrue considers both interval and baseTime
-			-- For example, if interval is 4 hours, and baseTime is 3:00pm, the condition
-			-- fires at 3am, 7am, 11am, 3pm, 7pm, 11pm (interval goes through baseTime).
-			local offs = lastTrue - baseTime
-			local nint = math.floor( offs / interval ) + 1
-			local nextTrue = baseTime + nint * interval
-			-- An interval is considered missed if we're a minute or more late.
-			local missed = now >= ( nextTrue + 60 )
-			D("evaluateCondition() current state is %1 as of %2, next %3, missed %4", cs.laststate, lastTrue, nextTrue, missed)
-			if cs.laststate then
-				-- We are currently true (in a pulse); schedule next interval.
-				while nextTrue <= now do nextTrue = nextTrue + interval end -- ??? use maths
-				D("evaluateCondition() resetting, next %1", nextTrue)
-				scheduleTick( { id=tdev, info="interval "..cond.id }, nextTrue )
-				return lastTrue,false
-			end
-			-- Not in a pulse. Announce a missed interval if that happened.
-			if missed then
-				local late = now - nextTrue
-				D("evaluateCondition() missed interval %2 by %1!", late, nextTrue)
-				addEvent{ dev=tdev, event="notify", cond=cond.id, delay=late,
-					message="Detected missed interval " .. os.date("%c", nextTrue ) ..
-					( cond.skipmissed and " (skipped)" or "" )
-				}
-				-- If we skip missed interval, just reschedule.
-				if cond.skipmissed then
-					scheduleTick( { id=tdev, info="interval "..cond.id }, nextTrue )
-					return lastTrue,false
-				end
-			end
-			-- Is it time yet?
-			if now < nextTrue then
-				-- No...
-				local delay = nextTrue - now
-				D("evaluateCondition() too early, delaying %1 seconds", delay)
-				scheduleDelay( { id=tdev,info="interval "..cond.id }, delay )
-				return lastTrue,false
-			end
-		else
-			-- First run. Delay until the first interval.
+		-- Find next trigger time.
+		if cs.laststate then
+			-- We are currently true (in a pulse); end pulse and schedule next interval.
+			while expected <= now do expected = expected + interval end
+			D("evaluateCondition() resetting, next %1", expected)
+			scheduleTick( { id=tdev, info="interval "..cond.id }, expected )
+			return lastTrue,false
+		end
+		-- Not in a pulse. Did we fully miss an interval?
+		if ( now - expected ) > 60 then
+			local late = now - expected
+			addEvent{dev=tdev,event='condition',cond=cond.id,message="Inserting missed interval",late=late}
+			D("evaluationCondition() hitting missed interval, expected %1 late %2", expected, late)
+		elseif now < expected then
+			-- Still need to wait...
+			D("evaluateCondition() too early, delaying %1 seconds until %2", expected-now, expected)
+			scheduleTick( { id=tdev,info="interval "..cond.id }, expected )
+			return lastTrue,false
 		end
 		-- Go true.
 		D("evaluateCondition() triggering interval condition %1", cond.id)
@@ -2871,9 +2895,17 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 			local userid,location = unpack(userlist)
 			if (ishome.users[userid] or {}).tags and ishome.users[userid].tags[location] then
 				local val = ishome.users[userid].tags[location].status or ""
-				return val,val==( op=="at" and "in" or "out" )
+				if val == "" then
+					val = luup.variable_get( RSSID, "GeofenceDefaultStatus", tdev ) or ""
+				end
+				if val ~= "" then
+					return val,val==( op=="at" and "in" or "out" )
+				end
 			end
 			-- Don't have data for this location or user.
+			addEvent{ dev=tdev, event="condition", userid=userid, condition=cond.id,
+				['type']=cond.type, ['error']="TROUBLE: no geofence status in user data" }
+			sst.trouble = true
 			return "",false
 		else
 			-- We could just traverse IsHome, but we want to show
@@ -3464,7 +3496,7 @@ local function masterTick(pdev)
 	end
 
 	-- Geofencing. If flag on, at least one sensor is using geofencing.
-	if geofenceMode ~= 0 then
+	if geofenceMode ~= 0 or getVarNumeric( "ForceGeofenceMode", 0, pdev, MYSID ) ~= 0 then
 		-- Getting geofence data can be a long-running task because of handling
 		-- userdata, so run as a job.
 		D("masterTick() geofence mode %1, launching geofence update job", geofenceMode)
@@ -3707,7 +3739,7 @@ function startPlugin( pdev )
 	sceneState = {}
 	luaEnv = nil
 	runStamp = 1
-	geofenceMode = 0
+	geofenceMode = getVarNumeric( "ForceGeofenceMode", 0, pdev, MYSID )
 	geofenceEvent = 0
 	usesHouseMode = false
 	maxEvents = getVarNumeric( "MaxEvents", debugMode and 250 or 50, pdev, MYSID )
@@ -3998,7 +4030,7 @@ function actionUpdateGeofences( pdev, event )
 				local inlist = {}
 				if urec.tags == nil then urec.tags = {} end
 				local oldtags = shallowCopy( urec.tags )
-				urec.homeid = nil -- clear it every time
+				local newhome, newhomestate
 				for _,g in ipairs( v.geotags or {} ) do
 					local st = ( { ['enter']='in',['exit']='out' } )[tostring( g.status ):lower()] or g.status or ""
 					local tag = urec.tags[tostring(g.id)]
@@ -4014,20 +4046,33 @@ function actionUpdateGeofences( pdev, event )
 						-- Update remaining fields, but don't mark changed.
 						changed = changed or ( tag.name ~= g.name )
 						tag.name = g.name
-						changed = changed or ( tag.homeloc ~= g.ishome )
-						tag.homeloc = g.ishome
+						changed = changed or ( tag.homeloc ~= ( g.ishome or 0 ) )
+						tag.homeloc = g.ishome or 0
 						oldtags[tostring(g.id)] = nil -- remove from old
 					else
 						-- New geotag
-						urec.tags[tostring(g.id)] = { id=g.id, name=g.name, homeloc=g.ishome, status=st, since=now }
+						urec.tags[tostring(g.id)] = { id=g.id, name=g.name, homeloc=g.ishome or 0, status=st, since=now }
 						L("Detected geofence change: user %1 has added %2 (%3) %4 %5",
 							v.iduser, g.name, g.id, g.ishome, st)
 						changed = true
 					end
-					if g.ishome then urec.homeid = g.id end
+					if ( g.ishome or 0 ) ~= 0 then
+						newhome = g.id
+						if st == "in" then newhomestate = 1
+						elseif st == "out" then newhomestate = 0
+						end
+					end
 					if st == "in" then table.insert( inlist, g.id ) end
 				end
 				urec.inlist = inlist
+				if newhome ~= urec.homeid then
+					urec.homeid = newhome
+					changed = true
+				end
+				if newhomestate ~= urec.ishome then
+					urec.ishome = newhomestate
+					changed = true
+				end
 				-- Handle geotags that have been removed
 				for k,g in pairs( oldtags ) do
 					L("Detected geofence change: user %1 deleted %2 (%3) %4",
@@ -4035,47 +4080,54 @@ function actionUpdateGeofences( pdev, event )
 					urec.tags[k] = nil
 					changed = true
 				end
-				urec.since = now
+				if changed then urec.since = now end
 			end
 		else
 			-- If not in long mode, clear minimal data, in case mode switches
 			-- back. This can happen if groups temporarily disabled, etc.
 			-- This preserves timestamps and data.
 			for _,v in pairs( ishome.users or {} ) do
-				v.inlist = nil -- not relevant in short mode, safe to clear.
-			end
-		end
-		D("actionUpdateGeofences() user home status=%1", ud.users_settings)
-		-- Short form check stands alone or amends long form for home status.
-		local ulist = map( getKeys( ishome.users ) )
-		for _,v in ipairs( ud.users_settings or {} ) do
-			local urec = ishome.users[tostring(v.id)]
-			if urec then
-				local newhome = v.ishome or 0
-				if urec.ishome ~= newhome then
-					L("Detected geofence change: user %1 now " ..
-						( ( newhome ~= 0 ) and "home" or "not home"), v.id)
-					urec.since = now
+				if v.inlist then
+					v.inlist = nil -- not relevant in short mode, safe to clear.
 					changed = true
 				end
-				urec.ishome = newhome
-				ulist[tostring(v.id)] = nil
-			else
-				L("Detected geofence change: new user %1 ishome %2", v.id, v.ishome)
-				urec = { ishome=v.ishome, tags={}, since=now }
-				ishome.users[tostring(v.id)] = urec
-				changed = true
+			end
+
+			-- Now do short-form check.
+			D("actionUpdateGeofences() user home status=%1", ud.users_settings)
+			-- Short form check stands alone or amends long form for home status.
+			local ulist = map( getKeys( ishome.users ) )
+			for _,v in ipairs( ud.users_settings or {} ) do
+				local urec = ishome.users[tostring(v.id)]
+				if urec then
+					local newhome = v.ishome
+					if urec.ishome ~= newhome then
+						L("Detected geofence change: user %1 now " ..
+							( ( newhome ~= 0 ) and "home" or "not home"), v.id)
+						urec.since = now
+						changed = true
+					end
+					urec.ishome = newhome
+					ulist[tostring(v.id)] = nil
+					if changed then urec.since = now end
+				else
+					L("Detected geofence change: new user %1 ishome %2", v.id, v.ishome)
+					urec = { ishome=v.ishome, tags={}, since=now }
+					ishome.users[tostring(v.id)] = urec
+					changed = true
+				end
+			end
+			-- Handle users that weren't listed (treat as not home)
+			for v,_ in pairs( ulist ) do
+				if ishome.users[v].ishome then
+					D("actionUpdateGeofences() user %1 not in users_settings, marking not home", v)
+					ishome.users[v].ishome = nil
+					ishome.users[v].since = now
+					changed = true
+				end
 			end
 		end
-		-- Handle users that weren't listed (treat as not home)
-		for v,_ in pairs( ulist ) do
-			if ishome.users[v].ishome ~= 0 then
-				D("actionUpdateGeofences() user %1 not in users_settings, marking not home", v)
-				ishome.users[v].ishome = 0
-				ishome.users[v].since = now
-				changed = true
-			end
-		end
+
 		-- Force update if geofenceMode has changed since last update.
 		changed = changed or ishome.lastmode ~= geofenceMode
 		ishome.lastmode = geofenceMode
@@ -4160,10 +4212,12 @@ end
 
 -- Restart a ReactorSensor (clear saved state, reload config and force re-evals)
 function actionRestart( dev )
+	if (luup.devices[ dev ] or {}).device_type ~= RSTYPE then error("Invalid device type") end
 	assertEnabled( dev )
 	L("Restarting %2 (#%1)", dev, luup.devices[dev].description)
 	addEvent{ dev=dev, event="action", action="Restart" }
 	stopScene( dev, nil, dev ) -- stop all scenes in device context
+	clearOwnerTasks( dev )
 	local success, err = pcall( startSensor, dev, luup.devices[dev].device_num_parent )
 	if not success then
 		L({level=2,msg="Failed to start %1 (%2): %3"}, dev, luup.devices[dev].description, err)
@@ -4938,6 +4992,31 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		local status, msg = pcall( loadScene, tonumber(lul_parameters.scene or 0), pluginDevice )
 		return json.encode( { status=status,message=msg } ), "application/json"
 
+	elseif action == "clearstate" then
+		L({level=2,msg="Request to clear plugin state... here we go..."})
+		local children = {}
+		for n,d in pairs( luup.devices ) do
+			if d.device_num_parent == pluginDevice and d.device_type == RSTYPE then
+				table.insert( children, n )
+				setVar( RSSID, "Message", "Stopped", n )
+				stopScene( nil, nil, n ) -- stop all scenes for this device
+				clearOwnerTasks( n )
+				sensorState[tostring(n)] = {}
+				luup.variable_set( RSSID, "cstate", "{}", n )
+				loadCleanState( n )
+			end
+		end
+		sceneState = {}
+		luup.variable_set( MYSID, "runscene", "{}", pluginDevice )
+		sceneData = {}
+		luup.variable_set( MYSID, "scenedata", "{}", pluginDevice )
+		luup.variable_set( MYSID, "isHome", "{}", pluginDevice )
+		L"Plugin state cleared; restarting sensors."
+		for _,n in ipairs( children ) do
+			pcall( actionRestart, n )
+		end
+		return '{"status":true,"message":"Plugin state cleared"}', "application/json"
+
 	elseif action == "summary" then
 		local r = "INSTRUCTIONS: When pasting this report into the Vera Community forums, please include ALL lines below this one. The next and last lines will ensure proper formatting and must not be removed!" ..
 			EOL .. "```" .. EOL
@@ -4969,6 +5048,9 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			r = r .. " " .. tostring(v)
 		end
 		r = r .. "; " .. tostring((_G or {})._VERSION)
+		pcall( function()
+			if json then r = r .. "; JSON " .. (json.version or "unknown") .. (json.using_lpeg and "+LPeg" or "" ) end
+		end )
 		r = r .. EOL
 		r = r .. "Local time: " .. os.date("%Y-%m-%dT%H:%M:%S%z") ..
 			"; DST=" .. tostring(luup.variable_get( MYSID, "LastDST", pluginDevice ) or "") ..
@@ -5275,7 +5357,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 
 	elseif action == "files" then
 		local path = getInstallPath()
-		local inf = { timestamp=os.time(), files={}, pluginVersion=_PLUGIN_VERSION, serviceVersion=_SVCVERSION, path=path }
+		local inf = { timestamp=os.time(), files={}, pluginVersion=_PLUGIN_VERSION, serviceVersion=_SVCVERSION, installpath=path }
 		for _,fn in ipairs( { "D_ReactorDeviceInfo.json", "D_ReactorSensor_UI7.json", "D_ReactorSensor.xml", "D_Reactor_UI7.json",
 			"D_Reactor.xml", "I_Reactor.xml", "J_Reactor_ALTUI.js", "J_ReactorSensor_ALTUI.js", "J_ReactorSensor_UI7.js",
 			"J_Reactor_UI7.js", "L_LuaXP_Reactor.lua", "L_Reactor.lua", "S_ReactorSensor.xml", "S_Reactor.xml" } ) do
@@ -5293,9 +5375,9 @@ function request( lul_request, lul_parameters, lul_outputformat )
 				local sum = p:read("*a")
 				sum = tostring(sum or ""):gsub( "%s+.*$", "" )
 				p:close()
-				inf.files[fn] = { compressed=usesCompressed, check=sum }
+				inf.files[fn] = { compressed=usesCompressed or nil, check=sum }
 			else
-				inf.files[fn] = { compressed=false, check="", notice="No data" }
+				inf.files[fn] = { notice="No data" }
 			end
 			os.execute( "rm -f /tmp/reactorfile.tmp" )
 		end
