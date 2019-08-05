@@ -104,7 +104,9 @@ var Reactor = (function(api, $) {
 			' <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=debug" target="_blank">Toggle&nbsp;Debug</a>' +
 			' &bull; <a href="/cgi-bin/cmh/log.sh?Device=LuaUPnP" target="_blank">Log&nbsp;File</a>' +
 			' &bull; <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=status" target="_blank">Plugin&nbsp;Status</a>' +
+			' &bull; <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=files" target="_blank">Plugin&nbsp;Files</a>' +
 			' &bull; <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=summary&device=' + api.getCpanelDeviceId() + '" target="_blank">Logic&nbsp;Summary</a>' +
+			' &bull; <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=clearstate" target="_blank">Clear&nbsp;Data</a>' +
 			'</div>';
 		return html;
 	}
