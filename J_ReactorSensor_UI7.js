@@ -1985,34 +1985,46 @@ var ReactorSensor = (function(api, $) {
 							nmin = nmin + 1440 * v;
 						}
 					}
-					v = jQuery('div.params #hours', $row).val() || "0";
-					if ( v.match( varRefPattern ) ) {
-						cond.hours = v;
-						nmin = 60;
+					if ( typeof(cond.days) == "string" || ( typeof(cond.days) == "number" && 0 !== cond.days ) ) {
+						jQuery('div.params #hours,#mins', $row).prop('disabled', true).val("0");
+						cond.hours = 0;
+						cond.mins = 0;
 					} else {
-						v = getOptionalInteger( v, 0 );
-						if ( isNaN(v) || v < 0 ) {
-							jQuery( 'div.params #hours', $row ).addClass( 'tberror' );
-						} else {
+						jQuery('div.params #hours,#mins', $row).prop('disabled', false);
+						v = jQuery('div.params #hours', $row).val() || "0";
+						if ( v.match( varRefPattern ) ) {
 							cond.hours = v;
-							nmin = nmin + 60 * v;
-						}
-					}
-					v = jQuery('div.params #mins', $row).val() || "0";
-					if ( v.match( varRefPattern ) ) {
-						cond.mins = v;
-						nmin = 1;
-					} else {
-						v = getOptionalInteger( v, 0 );
-						if ( isNaN(v) || v < 0 ) {
-							jQuery( 'div.params #mins', $row ).addClass( 'tberror' );
+							nmin = 60;
 						} else {
+							v = getOptionalInteger( v, 0 );
+							if ( isNaN(v) || v < 0 || v > 23 ) {
+								jQuery( 'div.params #hours', $row ).addClass( 'tberror' );
+							} else {
+								cond.hours = v;
+								nmin = nmin + 60 * v;
+							}
+						}
+						v = jQuery('div.params #mins', $row).val() || "0";
+						if ( v.match( varRefPattern ) ) {
 							cond.mins = v;
-							nmin = nmin + v;
+							nmin = 1;
+						} else {
+							v = getOptionalInteger( v, 0 );
+							if ( isNaN(v) || v < 0 || v > 59 ) {
+								jQuery( 'div.params #mins', $row ).addClass( 'tberror' );
+							} else {
+								cond.mins = v;
+								nmin = nmin + v;
+							}
+						}
+						if ( 0 !== nmin ) {
+							jQuery( '#days', $row ).prop( 'disabled', true ).val("0");
+						} else {
+							jQuery( '#days', $row ).prop( 'disabled', false );
 						}
 					}
 					if ( nmin <= 0 ) {
-						jQuery( 'div.params select', $row ).addClass( 'tberror' );
+						jQuery( 'div.params #days,#hours,#mins', $row ).addClass( 'tberror' );
 					}
 					/* Interval relative to... */
 					v = jQuery( 'div.params select#relto', $row ).val() || "";
@@ -3019,7 +3031,7 @@ var ReactorSensor = (function(api, $) {
 				case 'interval':
 					fs = jQuery( '<fieldset />' );
 					el = jQuery( '<label for="days">every </label>' );
-					el.append( '<input id="days" title="Enter an integer >= 0" value="0" class="tiny text-center form-control form-control-sm">' );
+					el.append( '<input id="days" title="Enter an integer >= 0; hours and minutes must be 0!" value="0" class="tiny text-center form-control form-control-sm">' );
 					el.append( ' days ' );
 					fs.append( el );
 					fs.append( " " );
