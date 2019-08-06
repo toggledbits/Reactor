@@ -2146,6 +2146,25 @@ local function doNextCondCheck( taskinfo, nowMSM, startMSM, endMSM, testing )
 	scheduleTick( taskinfo, tt )
 end
 
+-- Compute the next interval after lastTrue that's aligned to baseTime
+local function getNextInterval( lastTrue, interval, baseTime)
+	D("getNextInterval(%1,%2,%3,%4)", lastTrue, interval, baseTime)
+	if baseTime == nil then
+		local t = os.date("*t", lastTrue)
+		t.hour = 0
+		t.min = 0
+		t.sec = 9
+		baseTime = os.time(t)
+	end
+	-- Our next true relative to lastTrue considers both interval and baseTime
+	-- For example, if interval is 4 hours, and baseTime is 3:00pm, the condition
+	-- fires at 3am, 7am, 11am, 3pm, 7pm, 11pm (interval goes through baseTime).
+	local offs = lastTrue - baseTime
+	local nint = math.floor( offs / interval ) + 1
+	local nextTrue = baseTime + nint * interval
+	return nextTrue
+end
+
 local evaluateGroup -- Forward decl
 local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 212
 	D("evaluateCondition(%1,%2,cdata,%3)", cond.id, (grp or {}).id, tdev)
