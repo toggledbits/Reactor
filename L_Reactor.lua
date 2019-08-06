@@ -4575,7 +4575,6 @@ function watch( dev, sid, var, oldVal, newVal )
 			L("%1 (#%2) configuration change, updating!", dev, luup.devices[dev].description)
 			addEvent{ dev=dev, event="configchange" }
 			stopScene( dev, nil, dev ) -- Stop all scenes in this device context.
-			clearConditionState( dev )
 			getSensorConfig( dev, true )
 			scheduleDelay( { id=tostring(dev), owner=dev, func=sensorTick }, 1 )
 		else
