@@ -4530,7 +4530,7 @@ var ReactorSensor = (function(api, $) {
 				}
 				break;
 
-			case 'resetlatch':
+			case "resetlatch":
 				dev = jQuery( 'select.devicemenu', row ).val() || "";
 				if ( "" === dev ) {
 					jQuery( 'select#device' ).addClass( 'tberror' );
@@ -4538,11 +4538,59 @@ var ReactorSensor = (function(api, $) {
 				var group = jQuery( 'select#group', row ).val() || "";
 				break;
 
+			case "notify":
+				break;
+
 			default:
 				row.addClass( "tberror" );
 		}
 
 		row.has('.tberror').addClass('tberror');
+	}
+
+	/* Check that notification scene exists; create it if not */
+	function checkNotificationScene( myid ) {
+		myid = myid || api.getCpanelDeviceId();
+		var ud = api.getUserData();
+		for (var k=0; k<ud.scenes.length; k++) {
+			if ( ud.scenes[k].notification_only === myid &&
+				String((ud.scenes[k].triggers || [])[0].template) === "10" ) {
+					return ud.scenes[k].id;
+			}
+		}
+		/* Didn't find it. */
+		var scene = {
+			name: "__rsnotifyscene",
+			notification_only: myid,
+			modeStatus: "0",
+			triggers: [{
+				device: myid,
+				name: "TriggerName",
+				enabled: 1,
+				arguments: [],
+				template: "10",
+				users: "1680142"
+			}],
+			users: "1680142",
+			Timestamp: Math.floor( Date.now / 1000 ),
+			room: 0
+		};
+		jQuery.ajax({
+			url: api.getDataRequestURL(),
+			method: "POST",
+			data: {
+				id: "scene",
+				action: "create",
+				json: JSON.stringify( scene )
+			},
+			dataType: "json",
+			timeout: 15000
+		}).done( function( data, statusText, jqXHR ) {
+			debugger;
+		}).fail( function( jqXHR ) {
+			debugger;
+		});
+		return false;
 	}
 
 	function buildActionList( root ) {
@@ -4687,7 +4735,7 @@ var ReactorSensor = (function(api, $) {
 					}
 					break;
 
-				case 'rungsa':
+				case "rungsa":
 					devnum = parseInt( jQuery( 'select.devicemenu', row ).val() || "-1" );
 					if ( isNaN( devnum ) || devnum < 0 ) {
 						delete action.device;
@@ -4700,7 +4748,7 @@ var ReactorSensor = (function(api, $) {
 					action.activity = jQuery( 'select#activity', row ).val() || "";
 					break;
 
-				case 'resetlatch':
+				case "resetlatch":
 					devnum = parseInt( jQuery( 'select.devicemenu', row ).val() || "-1" );
 					if ( devnum < 0 || isNaN( devnum ) ) {
 						delete action.device;
@@ -4716,6 +4764,12 @@ var ReactorSensor = (function(api, $) {
 					} else {
 						action.group = gid;
 					}
+					break;
+
+				case "notify":
+					action.users = [ 1680142 ];
+					action.message = "This is a test message";
+					checkNotificationScene();
 					break;
 
 				default:
@@ -5547,7 +5601,7 @@ var ReactorSensor = (function(api, $) {
 					.on( 'change.reactor', handleActionValueChange );
 				break;
 
-			case 'resetlatch':
+			case "resetlatch":
 				makeDeviceMenu( "", "", function( devobj ) {
 						return devobj.device_type === deviceType;
 					})
@@ -5573,6 +5627,10 @@ var ReactorSensor = (function(api, $) {
 					.prepend( '<option value="" selected>(this group)</option>' )
 					.val( "*" )
 					.on( 'change.reactor', handleActionValueChange );
+				break;
+
+			case "notify":
+				jQuery('<div>Hardcoded message to 1680142</div>').appendTo( ct );
 				break;
 
 			default:
@@ -5811,6 +5869,7 @@ var ReactorSensor = (function(api, $) {
 			'<option value="device">Device Action</option>' +
 			'<option value="housemode">Change House Mode</option>' +
 			'<option value="delay">Delay</option>' +
+			'<option value="notify">Notify</option>' +
 			'<option value="runlua">Run Lua</option>' +
 			'<option value="runscene">Run Scene</option>' +
 			'<option value="rungsa">Run Group Activity</option>' +
@@ -5944,6 +6003,9 @@ var ReactorSensor = (function(api, $) {
 								.prependTo( $m.addClass( 'tberror' ) );
 						}
 						$m.val( act.group || "undef" );
+						break;
+
+					case "notify":
 						break;
 
 					default:

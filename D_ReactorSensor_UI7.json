@@ -552,6 +552,19 @@
 					"comparisson": "="
 				}
 			}
+		},{
+			"id": 10,
+			"label": {
+				"lang_tag": "tb_reactor_notify",
+				"text": "__notify--internal use only"
+			},
+			"serviceId": "urn:toggledbits-com:serviceId:ReactorSensor",
+			"serviceStateTable": {
+				"_notify": {
+					"value": "1",
+					"comparisson": "="
+				}
+			}
 		}
 	],
 	"DeviceType": "urn:schemas-toggledbits-com:device:ReactorSensor:1",

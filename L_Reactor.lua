@@ -826,6 +826,26 @@ local function getHouseMode( tdev )
 	return luup.variable_get( MYSID, "HouseMode", pluginDevice ) or "1"
 end
 
+local notifyQueue = {}
+local function runNotifyTask( tdev, taskid )
+	D("runNotifyTask(%1,%2)", tdev, taskid)
+	setVar( MYSID, "_notify", "0", pluginDevice)
+	local notice = table.remove( notifyQueue, 1 )
+	if notice then
+		D("runNotifyTask() sending notice from %1 to %2: %3", notice.owner, notice.user, notice.message)
+		setVar( RSSID, "_notify", "1", notice.owner )
+		scheduleDelay( taskid, 5 )
+	else
+		-- Nothing to do; don't reschedule.
+		D("runNotifyTask() empty queue")
+	end
+end
+
+local function queueNotification( user, message, tdev )
+	table.insert( notifyQueue, { user=user, message=message, owner=tdev, timestamp=os.time() } )
+	scheduleDelay( 'notifier', 5 )
+end
+
 -- Load sensor config
 local function loadSensorConfig( tdev )
 	D("loadSensorConfig(%1)", tdev)
@@ -2072,6 +2092,10 @@ local function execSceneGroups( tdev, taskid, scd )
 					else
 						if "*" == group then group = nil end
 						luup.call_action( RSSID, "ClearLatched", { Group=group }, device )
+					end
+				elseif action.type == "notify" then
+					for _,user in ipairs( action.users or {} ) do
+						queueNotification( user, action.message, tdev )
 					end
 				else
 					L({level=1,msg="Unhandled action type %1 at %2 in scene %3 for %4 (%5)"},
@@ -3876,6 +3900,9 @@ function startPlugin( pdev )
 
 	-- Launch the system (Z-Wave) ready check.
 	scheduleDelay( { id="sysready", func=waitSystemReady, owner=pdev }, 5 )
+
+	-- Launch the notifier
+	scheduleDelay( { id="notifier", owner=pluginDevice, func=runNotifyTask }, 5 )
 
 	-- Start sensors
 	startSensors( pdev )
