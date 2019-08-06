@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.3"
+local _PLUGIN_VERSION = "3.3hotfix-19217"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION = 19178
@@ -2651,27 +2651,39 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		return true,true
 
 	elseif cond.type == "interval" then
+		local cs = cond.laststate
 		local _,nmins = getValue( cond.mins, nil, tdev )
 		local _,nhours = getValue( cond.hours, nil, tdev )
 		local _,ndays = getValue( cond.days, nil, tdev )
 		local interval = 60 * ((ndays or 0) * 1440 + (nhours or 0) * 60 + (nmins or 0))
 		if interval < 60 then interval = 60 end -- "can never happen" (yeah, hold my beer)
+		D("evaluateCondition() interval %1 secs", interval)
 		-- Get our base time and make it a real time.
-		local baseTime
+		local lastTrue, expected
 		if "condtrue" == ( cond.relto or "" ) then
-			local cs = ( sst.condState or {} )[cond.relcond]
-			if cs == nil or (cs.evaledge or {}).t == nil then
+			local xs = ( sst.condState or {} )[cond.relcond]
+			if xs == nil then
 				-- Trouble, missing condition or no state.
-				L({level=1,msg="Unrecognized condition or insufficient state for %1 in interval cond %2 of %3 (%4)"},
+				L({level=1,msg="Unrecognized condition for %1 in interval cond %2 of %3 (%4)"},
 					cond.relcond or "nil", cond.id, tdev, luup.devices[tdev].description)
 				addEvent{ dev=tdev, event="condition", condition=cond.id,
-					referencing=cond.relcond, ['error']="TROUBLE: relative condition missing or insufficient state" }
+					referencing=cond.relcond, ['error']="TROUBLE: relative condition missing" }
 				sst.trouble = true
-				return now,nil
+				return now,false
 			end
-			baseTime = cs.evaledge.t
+			D("evaluateCondition() relcond state %1", xs)
+			-- If condition is not true, interval does not run.
+			lastTrue = cs.lastvalue or 0
+			if xs.evalstate ~= true then return lastTrue,false end
+			expected = getNextInterval( lastTrue, interval, xs.evalstamp )
 		else
-			local tpart = os.date("*t", now) -- basically a copy of ndt
+			if cs.lastvalue == nil then
+				-- No prior data, immediate interval.
+				scheduleDelay( { id=tdev, info="interval "..cond.id }, 1 )
+				return now,true
+			end
+			lastTrue = cs.lastvalue
+			local tpart = os.date("*t", cs.lastvalue)
 			tpart.hour = 0
 			tpart.min = 0
 			tpart.sec = 0
@@ -2680,54 +2692,27 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 				tpart.hour = tonumber(pt[1]) or 0
 				tpart.min = tonumber(pt[2]) or 0
 			end
-			baseTime = os.time( tpart )
+			local baseTime = os.time(tpart)
+			expected = getNextInterval( lastTrue, interval, baseTime )
 		end
-		D("evaluateCondition() interval %1 secs baseTime %2", interval, baseTime)
-		local cs = ( sst.condState or {} )[cond.id]
-		D("evaluateCondition() condstate %1", cs)
-		if cs ~= nil then
-			-- Not the very first run...
-			local lastTrue = cs.lastvalue or 0
-			-- Our next true relative to lastTrue considers both interval and baseTime
-			-- For example, if interval is 4 hours, and baseTime is 3:00pm, the condition
-			-- fires at 3am, 7am, 11am, 3pm, 7pm, 11pm (interval goes through baseTime).
-			local offs = lastTrue - baseTime
-			local nint = math.floor( offs / interval ) + 1
-			local nextTrue = baseTime + nint * interval
-			-- An interval is considered missed if we're a minute or more late.
-			local missed = now >= ( nextTrue + 60 )
-			D("evaluateCondition() current state is %1 as of %2, next %3, missed %4", cs.laststate, lastTrue, nextTrue, missed)
-			if cs.laststate then
-				-- We are currently true (in a pulse); schedule next interval.
-				while nextTrue <= now do nextTrue = nextTrue + interval end -- ??? use maths
-				D("evaluateCondition() resetting, next %1", nextTrue)
-				scheduleTick( { id=tdev, info="interval "..cond.id }, nextTrue )
-				return lastTrue,false
-			end
-			-- Not in a pulse. Announce a missed interval if that happened.
-			if missed then
-				local late = now - nextTrue
-				D("evaluateCondition() missed interval %2 by %1!", late, nextTrue)
-				addEvent{ dev=tdev, event="notify", cond=cond.id, delay=late,
-					message="Detected missed interval " .. os.date("%c", nextTrue ) ..
-					( cond.skipmissed and " (skipped)" or "" )
-				}
-				-- If we skip missed interval, just reschedule.
-				if cond.skipmissed then
-					scheduleTick( { id=tdev, info="interval "..cond.id }, nextTrue )
-					return lastTrue,false
-				end
-			end
-			-- Is it time yet?
-			if now < nextTrue then
-				-- No...
-				local delay = nextTrue - now
-				D("evaluateCondition() too early, delaying %1 seconds", delay)
-				scheduleDelay( { id=tdev,info="interval "..cond.id }, delay )
-				return lastTrue,false
-			end
-		else
-			-- First run. Delay until the first interval.
+		-- Find next trigger time.
+		if cs.laststate then
+			-- We are currently true (in a pulse); end pulse and schedule next interval.
+			while expected <= now do expected = expected + interval end
+			D("evaluateCondition() resetting, next %1", expected)
+			scheduleTick( { id=tdev, info="interval "..cond.id }, expected )
+			return lastTrue,false
+		end
+		-- Not in a pulse. Did we fully miss an interval?
+		if ( now - expected ) > 60 then
+			local late = now - expected
+			addEvent{dev=tdev,event='condition',cond=cond.id,message="Inserting missed interval",late=late}
+			D("evaluationCondition() hitting missed interval, expected %1 late %2", expected, late)
+		elseif now < expected then
+			-- Still need to wait...
+			D("evaluateCondition() too early, delaying %1 seconds until %2", expected-now, expected)
+			scheduleTick( { id=tdev,info="interval "..cond.id }, expected )
+			return lastTrue,false
 		end
 		-- Go true.
 		D("evaluateCondition() triggering interval condition %1", cond.id)

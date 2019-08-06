@@ -4,7 +4,8 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 3.3 (hotfix)
 
-* hotfix19197: Address boundary condition where isEmpty() may be passed non-string (treat as non-empty).
+* hotfix19217-01: Interval condition longer than one day fires daily (e.g. interval of 2 days triggers every day instead of every other day).
+* hotfix19197-01: Address boundary condition where isEmpty() may be passed non-string (treat as non-empty).
 
 ## Version 3.3 (released)
 
