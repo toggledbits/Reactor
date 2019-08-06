@@ -2306,7 +2306,9 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 	local now = sst.timebase
 	local ndt = sst.timeparts
 
-	assert( cond.laststate )
+	-- Fetch prior state/value
+	local cs = sst.condState[cond.id]
+	D("evaluateCondition() condstate %1", cs)
 
 	if ( cond.type or "group" ) == "group" then
 		return evaluateGroup( cond, grp, cdata, tdev )
@@ -2387,8 +2389,8 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 				local ar = split( cv, "," )
 				-- With terminal values. If value hasn't changed, consider as
 				-- re-eval, go back further in history for prior value.
-				local prior = ( cond.laststate.lastvalue == vv ) and
-					cond.laststate.priorvalue or cond.laststate.lastvalue
+				local prior = ( cs.lastvalue == vv ) and
+					cs.priorvalue or cs.lastvalue
 				D("evaluateCondition() service change op with terms, currval=%1, prior=%2, term=%3", vv, prior, ar)
 				if #ar > 0 and ar[1] ~= "" then
 					cv = getValue( ar[1], nil, tdev )
@@ -2401,11 +2403,11 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 				return vv,true
 			end
 			D("evaluateCondition() service change op without terms, currval=%1, prior=%2, term=%3",
-				vv, cond.laststate.lastvalue, cv)
+				vv, cs.lastvalue, cv)
 			local hold = getVarNumeric( "ValueChangeHoldTime", 0, tdev, RSSID ) -- DEPRECATED REMOVE AFTER >19296
-			if vv == cond.laststate.lastvalue then
+			if vv == cs.lastvalue then
 				-- No change. If we haven't yet met the hold time, continue delay.
-				local later = ( cond.laststate.valuestamp or 0 ) + hold
+				local later = ( cs.valuestamp or 0 ) + hold
 				if now >= later then
 					return vv,false -- time to reset
 				end
@@ -2419,16 +2421,16 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 			-- Refetch value to get timestamp
 			_,vv = luup.variable_get( cond.service or "", cond.variable or "", devnum )
 			D("evaluateCondition() service state update op, timestamp=%1, prior=%2, isRestart=%3",
-				vv, cond.laststate.lastvalue, sst.isRestart)
+				vv, cs.lastvalue, sst.isRestart)
 			-- Some vars are rewritten by restart. Attempt to ignore this.
 			if sst.isRestart and getVarNumeric( "SuppressLuupRestartUpdate", 1, tdev, RSSID ) ~= 0 then
 				D("evaluateCondition() ignoring restart-time update")
 				return vv,false
 			end
 			local hold = getVarNumeric( "ValueChangeHoldTime", 0, tdev, RSSID ) -- DEPRECATED REMOVE AFTER >19296
-			if vv == cond.laststate.lastvalue then
+			if vv == cs.lastvalue then
 				-- No change. If we haven't yet met the hold time, continue delay.
-				local later = ( cond.laststate.valuestamp or 0 ) + hold
+				local later = ( cs.valuestamp or 0 ) + hold
 				if now >= later then
 					return vv,false -- time to reset
 				end
@@ -2465,8 +2467,8 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 
 		local vv
 		if devnum == tdev then
-			local cs = sst.condState[cond.groupid] or {}
-			vv = cs.evalstate or false
+			local gs = sst.condState[cond.groupid] or {}
+			vv = gs.evalstate or false
 		else
 			vv = getVarNumeric( varname, -1, devnum, GRPSID )
 
@@ -2486,11 +2488,11 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 
 		if cond.operator == "change" then
 			D("evaluateCondition() group state change, curr=%1, prior=%2",
-				vv, cond.laststate.lastvalue)
+				vv, cs.lastvalue)
 			local hold = getVarNumeric( "ValueChangeHoldTime", 0, tdev, RSSID ) -- DEPRECATED REMOVE AFTER >19296
-			if vv == cond.laststate.lastvalue then
+			if vv == cs.lastvalue then
 				-- No change. If we haven't yet met the hold time, continue delay.
-				local later = ( cond.laststate.valuestamp or 0 ) + hold
+				local later = ( cs.valuestamp or 0 ) + hold
 				if now >= later then
 					return vv,false -- time to reset
 				end
@@ -2519,18 +2521,18 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 			if val ~= "" and val ~= "," then
 				-- With terminal values. If value hasn't changed, consider as
 				-- re-eval, go back further in history for prior value.
-				local prior = ( cond.laststate.lastvalue == mode ) and cond.laststate.priorvalue or cond.laststate.lastvalue
+				local prior = ( cs.lastvalue == mode ) and cs.priorvalue or cs.lastvalue
 				D("evaluateCondition() housemode change op, currval=%1, prior=%2, term=%3", mode, prior, modes)
 				if #modes > 0 and modes[1] ~= "" and prior ~= modes[1] then return mode,false end
 				if #modes > 1 and modes[2] ~= "" and mode ~= modes[2] then return mode,false end
 				return mode,true
 			end
 			-- Simple change (any to any).
-			D("evaluateCondition() housemode change op, currval=%1, prior=%2 (no term)", mode, cond.laststate.lastvalue)
+			D("evaluateCondition() housemode change op, currval=%1, prior=%2 (no term)", mode, cs.lastvalue)
 			local hold = getVarNumeric( "ValueChangeHoldTime", 0, tdev, RSSID ) -- DEPRECATED REMOVE AFTER >19296
-			if mode == cond.laststate.lastvalue then
+			if mode == cs.lastvalue then
 				-- No change. If we haven't yet met the hold time, continue delay.
-				local later = ( cond.laststate.valuestamp or 0 ) + hold
+				local later = ( cs.valuestamp or 0 ) + hold
 				if now >= later then
 					return mode,false
 				end
@@ -2792,7 +2794,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		local hold = getVarNumeric( "ReloadConditionHoldTime", 0, tdev, RSSID ) -- DEPRECATED REMOVE AFTER >19296
 		if not reloaded then
 			-- Not reloaded. Hold on until we've satisfied hold time from last TRUE.
-			local later = ( ( cond.laststate.stateedge or {} ).t or 0 ) + hold
+			local later = ( ( cs.stateedge or {} ).t or 0 ) + hold
 			if now >= later then
 				return false,false
 			end
@@ -2811,13 +2813,8 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		if interval < 60 then interval = 60 end -- "can never happen" (yeah, hold my beer)
 		D("evaluateCondition() interval %1 secs", interval)
 		-- Get our base time and make it a real time.
-		local cs = ( sst.condState or {} )[cond.id]
-		D("evaluateCondition() condstate %1", cs)
 		local lastTrue, expected
-		if "free" == ( cond.relto or "" ) then
-			lastTrue = cs.lastvalue or ( now - interval )
-			expected = lastTrue + interval
-		elseif "condtrue" == ( cond.relto or "" ) then
+		if "condtrue" == ( cond.relto or "" ) then
 			local xs = ( sst.condState or {} )[cond.relcond]
 			if xs == nil then
 				-- Trouble, missing condition or no state.
@@ -2938,7 +2935,8 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		return nil,nil
 	end
 
-	return cond.laststate.lastvalue, cond.laststate.state -- luacheck: ignore 511
+	-- If we fall through, return last value and state.
+	return cs.lastvalue, cs.state -- luacheck: ignore 511
 end
 
 local function processCondition( cond, grp, cdata, tdev )
@@ -2955,7 +2953,6 @@ local function processCondition( cond, grp, cdata, tdev )
 		cs = { id=cond.id, statestamp=0, stateedge={}, valuestamp=0, evaledge={} }
 		sst.condState[cond.id] = cs
 	end
-	cond.laststate = cs
 
 	-- Evaluate for state and value
 	local newvalue, state, condTimer = evaluateCondition( cond, grp, cdata, tdev )
