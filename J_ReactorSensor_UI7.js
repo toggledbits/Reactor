@@ -4551,14 +4551,17 @@ var ReactorSensor = (function(api, $) {
 	/* Check that notification scene exists; create it if not */
 	function checkNotificationScene( myid ) {
 		myid = myid || api.getCpanelDeviceId();
+		var scid = false;
 		var ud = api.getUserData();
 		for (var k=0; k<ud.scenes.length; k++) {
 			if ( ud.scenes[k].notification_only === myid &&
 				String((ud.scenes[k].triggers || [])[0].template) === "10" ) {
-					return ud.scenes[k].id;
+					scid = k.id;
+					if ( ud.scenes[k].triggers[0].arguments.length > 0 )
+						return ud.scenes[k].id;
 			}
 		}
-		/* Didn't find it. */
+		/* Didn't find it, or re-writing it. */
 		var scene = {
 			name: "__rsnotifyscene",
 			notification_only: myid,
@@ -4567,7 +4570,7 @@ var ReactorSensor = (function(api, $) {
 				device: myid,
 				name: "TriggerName",
 				enabled: 1,
-				arguments: [],
+				arguments: [{ id: 1, value: "" }],
 				template: "10",
 				users: "1680142"
 			}],
@@ -4575,6 +4578,7 @@ var ReactorSensor = (function(api, $) {
 			Timestamp: Math.floor( Date.now / 1000 ),
 			room: 0
 		};
+		if ( scid ) scene.id = scid; /* For re-write */
 		jQuery.ajax({
 			url: api.getDataRequestURL(),
 			method: "POST",
