@@ -4540,16 +4540,19 @@ var ReactorSensor = (function(api, $) {
 				break;
 
 			case "notify":
-				// ??? if no users selected, error
-				/* Error message cannot be empty. */
-				dev = jQuery( 'input#message', row ).val() || "";
-				if ( isEmpty( dev ) ) {
-					jQuery( 'input#message', row ).addClass( 'tberror' );
+				// If no users selected, error.
+				if ( 0 === jQuery("fieldset#users input:checked", row ).length ) {
+					jQuery( 'fieldset#users', row ).addClass( 'tberror' );
+				}
+				/* Message cannot be empty. */
+				dev = jQuery( 'input#message', row );
+				if ( isEmpty( dev.val() ) ) {
+					dev.addClass( 'tberror' );
 				}
 				break;
 
 			default:
-				row.addClass( "tberror" );
+				/* Do nothing */
 		}
 
 		row.has('.tberror').addClass('tberror');
@@ -4875,6 +4878,11 @@ var ReactorSensor = (function(api, $) {
 
 				case "notify":
 					var nid = jQuery( 'input#notifyid', row ).val() || "";
+					var ua = jQuery( 'fieldset#users input:checked', row );
+					var users = [];
+					ua.each( function() {
+						users.push( $(this).attr( 'id' ) );
+					});
 					var myid = api.getCpanelDeviceId();
 					var cf = getConfiguration( myid );
 					cf.notifications = cf.notifications || { nextid: 1 };
@@ -4887,7 +4895,7 @@ var ReactorSensor = (function(api, $) {
 						jQuery( 'input#notifyid', row ).val( nid );
 					}
 					cf.notifications[nid] = cf.notifications[nid] || { id: parseInt(nid) };
-					cf.notifications[nid].users = "1680142";
+					cf.notifications[nid].users = users.join(',');
 					cf.notifications[nid].message = jQuery( 'input#message', row ).val() || nid;
 					checkNotificationScene( myid, nid );
 					action.notifyid = nid;
@@ -5769,8 +5777,17 @@ var ReactorSensor = (function(api, $) {
 				break;
 
 			case "notify":
-				jQuery('<input type="text" id="notifyid" value="">').appendTo( ct );
-				jQuery('<div>User 1680142</div>').appendTo( ct );
+				jQuery('<input type="hidden" id="notifyid" value="">').appendTo( ct );
+				var fs = jQuery('<fieldset id="users"/>').appendTo( ct );
+				for ( var k in userIx ) {
+					if ( userIx.hasOwnProperty( k ) ) {
+						var $el = jQuery( '<label class="checkbox-inline"/>' ).text( userIx[k].name || k );
+						jQuery( '<input type="checkbox" class="form-check">' ).attr( 'id', k )
+							.prependTo( $el )
+							.on( 'change.reactor', handleActionValueChange );
+						$el.appendTo( fs );
+					}
+				}
 				jQuery('<input id="message" class="form-control form-control-sm" value="">')
 					.on( 'change.reactor', handleActionValueChange )
 					.appendTo( ct );
@@ -6158,6 +6175,13 @@ var ReactorSensor = (function(api, $) {
 							if ( undefined !== (cf.notifications || {} )[act.notifyid] ) {
 								jQuery( 'input#message', newRow ).val( cf.notifications[act.notifyid].message || act.notifyid );
 								// ??? re-select users
+								var ua = cf.notifications[act.notifyid].users || "";
+								if ( "" !== ua ) {
+									ua = ua.split( /,/ );
+									for ( var k=0; k<ua.length; k++ ) {
+										jQuery( 'fieldset#users input#' + idSelector(ua[k]), newRow ).prop( 'checked', true );
+									}
+								}
 							}
 						}
 						break;
