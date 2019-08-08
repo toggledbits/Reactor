@@ -4726,7 +4726,7 @@ var ReactorSensor = (function(api, $) {
 
 				default:
 					console.log("buildActionList: " + actionType + " action unrecognized");
-					var ad = jQuery( 'input#unrecdata' ).val() || "";
+					var ad = jQuery( 'input#unrecdata', row ).val() || "";
 					if ( "" !== ad ) {
 						action = JSON.parse( ad );
 						if ( ! action ) scene = false;
