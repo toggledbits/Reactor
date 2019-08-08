@@ -5975,7 +5975,6 @@ var ReactorSensor = (function(api, $) {
 						}
 						$am.val( act.type );
 						jQuery( 'input#unrecdata', newRow ).val( JSON.stringify( act ) );
-						continue;
 				}
 
 				newRow.insertBefore( insertionPoint );
