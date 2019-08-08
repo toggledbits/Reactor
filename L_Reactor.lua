@@ -826,26 +826,6 @@ local function getHouseMode( tdev )
 	return luup.variable_get( MYSID, "HouseMode", pluginDevice ) or "1"
 end
 
-local notifyQueue = {}
-local function runNotifyTask( tdev, taskid )
-	D("runNotifyTask(%1,%2)", tdev, taskid)
-	setVar( MYSID, "_notify", "0", pluginDevice)
-	local notice = table.remove( notifyQueue, 1 )
-	if notice then
-		D("runNotifyTask() sending notice from %1 to %2: %3", notice.owner, notice.user, notice.message)
-		setVar( RSSID, "_notify", "1", notice.owner )
-		scheduleDelay( taskid, 5 )
-	else
-		-- Nothing to do; don't reschedule.
-		D("runNotifyTask() empty queue")
-	end
-end
-
-local function queueNotification( user, message, tdev )
-	table.insert( notifyQueue, { user=user, message=message, owner=tdev, timestamp=os.time() } )
-	scheduleDelay( 'notifier', 5 )
-end
-
 -- Load sensor config
 local function loadSensorConfig( tdev )
 	D("loadSensorConfig(%1)", tdev)
@@ -1091,6 +1071,44 @@ local function loadCleanState( tdev )
 	end
 	D("loadCleanState() returning restored cstate")
 	return cstate
+end
+
+local notifyQueue = {}
+local function resetSensorNotify( tdev, taskid )
+	setVar( RSSID, "_notify", "0", tdev )
+	clearTask( taskid )
+end
+
+local function runNotifyTask( pdev, taskid )
+	D("runNotifyTask(%1,%2)", pdev, taskid)
+	local notice = table.remove( notifyQueue, 1 )
+	if notice then
+		-- Owner still exists and right type?
+		if (luup.devices[ notice.owner ] or {}).device_type == RSTYPE then
+			if debugMode then
+				local ni = ((getSensorConfig( notice.owner ) or {}).notifications or {})[notice.id]
+				D("runNotifyTask() sending notice from %1 to %2: %3", notice.owner, ni.users, ni.message)
+			end
+			setVar( RSSID, "_notify", notice.id, notice.owner )
+			scheduleDelay( { id="notifyreset"..notice.owner, owner=notice.owner, func=resetSensorNotify, replace=true }, 4 )
+		else
+			L({level=2,msg="Abandoning notification %1 for #%2, device no longer exists"}, notice.id, notice.owner)
+		end
+		scheduleDelay( taskid, 5 )
+	else
+		-- Nothing to do; don't reschedule (leave suspended).
+		D("runNotifyTask() empty queue")
+	end
+	-- Persist queue.
+	setVar( RSSID, "NotifyQueue", json.encode( notifyQueue ), pluginDevice )
+end
+
+local function queueNotification( nid, tdev )
+	D("queueNotification(%1,%2)", nid, tdev)
+	table.insert( notifyQueue, { id=nid, owner=tdev, timestamp=os.time() } )
+	while #notifyQueue > 0 and #notifyQueue > getVarNumeric( "NoticeQueueLimit", 20, tdev, RSSID ) do table.remove( notifyQueue, 1 ) end
+	setVar( RSSID, "NotifyQueue", json.encode( notifyQueue ), pluginDevice )
+	scheduleDelay( 'notifier', 5 )
 end
 
 -- Clear conditions state entirely; returns empty cstate
@@ -2094,13 +2112,22 @@ local function execSceneGroups( tdev, taskid, scd )
 						luup.call_action( RSSID, "ClearLatched", { Group=group }, device )
 					end
 				elseif action.type == "notify" then
-					for _,user in ipairs( action.users or {} ) do
-						queueNotification( user, action.message, tdev )
+					local nid = action.notifyid
+					local cf = getSensorConfig( tdev )
+					if ( cf.notifications or {} )[nid] then
+						queueNotification( nid, tdev )
+					else
+						L({level=2,msg="Unable to find notification configuration for nid=%1, scene=%2, group=%3"},
+							nid, scd.id, nextGroup)
+						addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, 
+							warning="TROUBLE: action #" .. tostring(ix) .. " missing notification config for " .. tostring(nid) .. ", skipped." }
+						getSensorState( tdev ).trouble = true
 					end
 				else
 					L({level=1,msg="Unhandled action type %1 at %2 in scene %3 for %4 (%5)"},
 						action.type, ix, scd.id, tdev, luup.devices[tdev].description)
-					addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, warning="TROUBLE: action #" .. tostring(ix) .. " unrecognized type: " .. tostring(action.type) .. ", ignored." }
+					addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, 
+						warning="TROUBLE: action #" .. tostring(ix) .. " unrecognized type: " .. tostring(action.type) .. ", ignored." }
 					getSensorState( tdev ).trouble = true
 				end
 			end
@@ -3651,6 +3678,8 @@ local function startSensors( pdev )
 				-- Recovery mode cleanups.
 				setVar( RSSID, "cstate", "{}", k )
 			end
+			-- Clear notification flag
+			setVar( RSSID, "_notify", "0", k )
 			-- N.B. start sensor whether enabled or not, as key inits happen regardless.
 			local status, err = pcall( startSensor, k, pdev )
 			if not status then
@@ -3888,6 +3917,7 @@ function startPlugin( pdev )
 		-- Recovery mode. Wipe state data.
 		setVar( MYSID, "runscene", "{}", pdev )
 		setVar( MYSID, "scenedata", "{}", pdev )
+		setVar( MYSID, "NotifyQueue", "[]", pdev )
 		setVar( MYSID, "recoverymode", "0", pdev )
 	end
 
@@ -3901,8 +3931,9 @@ function startPlugin( pdev )
 	-- Launch the system (Z-Wave) ready check.
 	scheduleDelay( { id="sysready", func=waitSystemReady, owner=pdev }, 5 )
 
-	-- Launch the notifier
-	scheduleDelay( { id="notifier", owner=pluginDevice, func=runNotifyTask }, 5 )
+	-- Reset and launch the notifier.
+	notifyQueue = getVarJSON( "NotifyQueue", {}, pluginDevice, MYSID )
+	scheduleDelay( { id="notifier", owner=pluginDevice, func=runNotifyTask }, 60 )
 
 	-- Start sensors
 	startSensors( pdev )

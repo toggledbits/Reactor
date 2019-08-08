@@ -4539,6 +4539,12 @@ var ReactorSensor = (function(api, $) {
 				break;
 
 			case "notify":
+				// ??? if no users selected, error
+				/* Error message cannot be empty. */
+				dev = jQuery( 'input#message', row ).val() || "";
+				if ( isEmpty( dev ) ) {
+					jQuery( 'input#message', row ).addClass( 'tberror' );
+				}
 				break;
 
 			default:
@@ -4549,52 +4555,143 @@ var ReactorSensor = (function(api, $) {
 	}
 
 	/* Check that notification scene exists; create it if not */
-	function checkNotificationScene( myid ) {
+	function checkNotificationScene( myid, nid ) {
 		myid = myid || api.getCpanelDeviceId();
-		var scid = false;
+		var scene = false;
 		var ud = api.getUserData();
 		for (var k=0; k<ud.scenes.length; k++) {
-			if ( ud.scenes[k].notification_only === myid &&
-				String((ud.scenes[k].triggers || [])[0].template) === "10" ) {
-					scid = k.id;
-					if ( ud.scenes[k].triggers[0].arguments.length > 0 )
-						return ud.scenes[k].id;
+			if ( String(ud.scenes[k].notification_only) === String(myid) &&
+				String((ud.scenes[k].triggers || [])[0].template) === "10" &&
+				String(ud.scenes[k].triggers[0].arguments[0].value) == String(nid) ) {
+					scene = ud.scenes[k];
+					break;
 			}
 		}
-		/* Didn't find it, or re-writing it. */
-		var scene = {
-			name: "__rsnotifyscene",
-			notification_only: myid,
-			modeStatus: "0",
-			triggers: [{
-				device: myid,
-				name: "TriggerName",
-				enabled: 1,
-				arguments: [{ id: 1, value: "" }],
-				template: "10",
-				users: "1680142"
-			}],
-			users: "1680142",
-			Timestamp: Math.floor( Date.now / 1000 ),
-			room: 0
-		};
-		if ( scid ) scene.id = scid; /* For re-write */
+		/* Create or update it. */
+		var cf = getConfiguration( myid );
+		var req = { id: "scene", action: "create" };
+		var nn = (cf.notifications || {})[String(nid)] || {};
+		if ( !scene ) {
+			/* Set up new scene */
+			scene = {
+				name: nn.message || nid, /* message should go here */
+				notification_only: myid,
+				modeStatus: "0",
+				triggers: [{
+					device: myid,
+					name: "_notify",
+					enabled: 1,
+					arguments: [{ id: "1", value: nid }], /* notification id here */
+					template: "10",
+					users: nn.users || ""
+				}],
+				users: nn.users || "",
+				room: 0
+			};
+		} else {
+			/* Maybe update existing scene */
+			nn.scene = scene.id;
+			if ( scene.name === nn.message && scene.users === nn.users ) {
+				return true;
+			}
+			scene.name = nn.message || nid;
+			scene.users = nn.users || "";
+			scene.triggers[0].users = scene.users;
+		}
+		req.json = JSON.stringify( scene );
 		jQuery.ajax({
 			url: api.getDataRequestURL(),
 			method: "POST",
-			data: {
-				id: "scene",
-				action: "create",
-				json: JSON.stringify( scene )
-			},
-			dataType: "json",
+			data: req,
+			dataType: "text",
 			timeout: 15000
 		}).done( function( data, statusText, jqXHR ) {
-			debugger;
+			if ( "OK" !== data ) {
+				debugger;
+				alert("Failed to save notification configuration. Vera may be reloading. Please wait a moment and try again.");
+			}
 		}).fail( function( jqXHR ) {
 			debugger;
+			alert("Failed to save notification configuration. Vera may be reloading. Please wait a moment and try again.");
 		});
 		return false;
+	}
+
+	/* Removes unused notification scenes from the RS */
+	function cleanNotificationScenes( myid ) {
+		var k;
+		myid = myid || api.getCpanelDeviceId();
+		var cf = getConfiguration( myid );
+
+		/* First, make map of all notification keys */
+		var nots = {};
+		var nk = Object.keys( cf.notifications || {} );
+		for ( k=0; k<nk.length; k++ ) {
+			nots[nk[k]] = true;
+		}
+
+		/* Remove all keys from nots for which there is an action. */
+		var valids = {};
+		for ( var act in (cf.activities || {}) ) {
+			if ( ! cf.activities.hasOwnProperty(act) ) continue;
+			for ( k=0; k<(cf.activities[act].groups || []).length; k++ ) {
+				for ( var l=0; l<(cf.activities[act].groups[k].actions || []).length; l++) {
+					if ( cf.activities[act].groups[k].actions[l].type == "notify" ) {
+						var key = String(cf.activities[act].groups[k].actions[l].notifyid);
+						if ( undefined === cf.notifications[key] ) {
+							console.log("Action #" + l + " in group #" + k + 
+								" of " + act + " refers to non-existent notification " +
+								key);
+						} else {
+							valids[key] = true;
+							delete nots[key];
+						}
+					}
+				}
+			}
+		}
+
+		/* At this point, any remaining in nots are not associated with any action */
+		for ( var n in nots ) {
+			if ( nots.hasOwnProperty( n ) && n !== "nextid" ) delete cf.notifications[n];
+		}
+
+		/* Now remove any notification scenes that are not associated with known actions. */
+		/* Work on a clone of the scene list so it doesn't shift while we work. */
+		var scenes = api.cloneObject( api.getUserData().scenes || [] );
+		nots = [];
+		for ( k=0; k<scenes.length; ++k ) {
+			if ( String(scenes[k].notification_only) === String(myid) &&
+					String((scenes[k].triggers || [])[0].template) === "10" ) {
+				/* This is a notification scene for this RS */
+				console.log("Checking notification scene #" + scenes[k].id);
+				if ( undefined === valids[String(scenes[k].triggers[0].arguments[0].value)] ) {
+					console.log("Marking unused notification scene #" + scenes[k].id);
+					nots.push(scenes[k].id);
+				} else {
+					/* Save scene on notification. Remove from valids so any dups are also removed. */
+					cf.notifications[String(scenes[k].triggers[0].arguments[0].value)].scene = scenes[k].id;
+					delete valids[String(scenes[k].triggers[0].arguments[0].value)];
+				}
+			}
+		}
+
+		/* Now remove the scenes that need removal, one at a time. Aync. */
+		function _rmscene( myid, nots ) {
+			if ( nots.length > 0 ) {
+				var scene = nots.pop();
+				console.log("Removing unused notifications scene #" + scene);
+				jQuery.ajax({
+					url: api.getDataRequestURL(),
+					data: { id: "scene", action: "delete", scene: scene },
+					dataType: "text",
+					timeout: 5000
+				}).always( function() {
+					_rmscene( myid, nots );
+				});
+			}
+		}
+		_rmscene( myid, nots );
 	}
 
 	function buildActionList( root ) {
@@ -4771,9 +4868,23 @@ var ReactorSensor = (function(api, $) {
 					break;
 
 				case "notify":
-					action.users = [ 1680142 ];
-					action.message = "This is a test message";
-					checkNotificationScene();
+					var nid = jQuery( 'input#notifyid', row ).val() || "";
+					var myid = api.getCpanelDeviceId();
+					var cf = getConfiguration( myid );
+					cf.notifications = cf.notifications || { nextid: 1 };
+					if ( isNaN( cf.notifications.nextid ) ) cf.notifications.nextid = 1;
+					if ( "" === nid ) {
+						/* Search for an empty slot */
+						do {
+							nid = String(cf.notifications.nextid++);
+						} while ( undefined !== cf.notifications[nid] );
+						jQuery( 'input#notifyid', row ).val( nid );
+					}
+					cf.notifications[nid] = cf.notifications[nid] || { id: parseInt(nid) };
+					cf.notifications[nid].users = "1680142";
+					cf.notifications[nid].message = jQuery( 'input#message', row ).val() || nid;
+					checkNotificationScene( myid, nid );
+					action.notifyid = nid;
 					break;
 
 				default:
@@ -4820,6 +4931,14 @@ var ReactorSensor = (function(api, $) {
 				return false; /* break */
 			}
 		});
+
+		try {
+			cleanNotificationScenes();
+		} catch( e ) {
+			console.log("Exception thrown while cleaning notifications: "+String(e));
+			console.log(e);
+			debugger;
+		}
 
 		if ( ! errors ) {
 			/* Save has async action, so use callback to complete. */
@@ -5634,7 +5753,11 @@ var ReactorSensor = (function(api, $) {
 				break;
 
 			case "notify":
-				jQuery('<div>Hardcoded message to 1680142</div>').appendTo( ct );
+				jQuery('<input type="text" id="notifyid" value="">').appendTo( ct );
+				jQuery('<div>User 1680142</div>').appendTo( ct );
+				jQuery('<input id="message" class="form-control form-control-sm" value="">')
+					.on( 'change.reactor', handleActionValueChange )
+					.appendTo( ct );
 				break;
 
 			default:
@@ -6010,6 +6133,14 @@ var ReactorSensor = (function(api, $) {
 						break;
 
 					case "notify":
+						jQuery( 'input#notifyid', newRow ).val( act.notifyid || "" );
+						if ( "" !== ( act.notifyid || "" ) ) {
+							var cf = getConfiguration();
+							if ( undefined !== (cf.notifications || {} )[act.notifyid] ) {
+								jQuery( 'input#message', newRow ).val( cf.notifications[act.notifyid].message || act.notifyid );
+								// ??? re-select users
+							}
+						}
 						break;
 
 					default:

@@ -1,5 +1,5 @@
 {
-	"__comment": "D_ReactorSensor_UI7.json",
+	"__comment": [ "D_ReactorSensor_UI7.json", "19219" ],
 	"default_icon": "https://www.toggledbits.com/assets/reactor/reactorsensor-default.png",
 	"state_icons": [{
 			"img": "https://www.toggledbits.com/assets/reactor/reactorsensor-disabled.png",
@@ -556,15 +556,27 @@
 			"id": 10,
 			"label": {
 				"lang_tag": "tb_reactor_notify",
-				"text": "__notify--internal use only"
+				"text": "Ignore -- for Reactor internal use only"
 			},
 			"serviceId": "urn:toggledbits-com:serviceId:ReactorSensor",
-			"serviceStateTable": {
-				"_notify": {
-					"value": "1",
-					"comparisson": "="
+			"argumentList": [{
+				"id": 1,
+				"dataType": "i4",
+				"name": "_notify",
+				"comparisson": "=",
+				"prefix": {
+					"lang_tag": "tb_nmsg_pfx",
+					"text": "id"
+				},
+				"suffix": {
+					"lang_tag": "tb_nmsg_sfx",
+					"text": "DO NOT MODIFY"
+				},
+				"HumanFriendlyText": {
+					"lang_tag": "tb_rs_nmsg",
+					"text": "_notify"
 				}
-			}
+			}]
 		}
 	],
 	"DeviceType": "urn:schemas-toggledbits-com:device:ReactorSensor:1",
