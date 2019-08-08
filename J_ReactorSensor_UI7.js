@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.4develop-19218';
+	var pluginVersion = '3.4develop-19220';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -4507,6 +4507,7 @@ var ReactorSensor = (function(api, $) {
 				if ( isEmpty( sc ) ) {
 					jQuery( 'select#scene', row ).addClass( "tberror" );
 				}
+				/* don't need to validate method */
 				break;
 
 			case "runlua":
@@ -4802,6 +4803,11 @@ var ReactorSensor = (function(api, $) {
 						scene = false;
 						return false;
 					}
+					if ( "V" === (jQuery( 'select#method', row ).val() || "") ) {
+						action.usevera = 1;
+					} else {
+						delete action.usevera;
+					}
 					// action.sceneName = sceneByNumber[ action.scene ].name
 					jQuery.ajax({
 						url: api.getDataRequestURL(),
@@ -4888,9 +4894,15 @@ var ReactorSensor = (function(api, $) {
 					break;
 
 				default:
-					console.log("buildActionList: " + actionType + " action unknown");
-					scene = false;
-					return false;
+					console.log("buildActionList: " + actionType + " action unrecognized");
+					var ad = jQuery( 'input#unrecdata', row ).val() || "";
+					if ( "" !== ad ) {
+						action = JSON.parse( ad );
+						if ( ! action ) scene = false;
+					} else {
+						scene = false;
+					}
+					if ( !scene ) return false;
 			}
 
 			/* Append action to current group */
@@ -5685,6 +5697,10 @@ var ReactorSensor = (function(api, $) {
 					.val("")
 					.on( 'change.reactor', handleActionValueChange );
 				ct.append( $m );
+				jQuery( '<select id="method" class="form-control form-control-sm"><option value="" selected">Use Reactor to run scene</option><option value="V">Hand off to Luup</option></select>' )
+					.on( 'change.reactor', handleActionValueChange )
+					.appendTo( ct );
+				getWiki( "Run-Scene-Action" ).appendTo( ct );
 				jQuery( 'button#action-import', row ).show();
 				break;
 
@@ -5761,7 +5777,9 @@ var ReactorSensor = (function(api, $) {
 				break;
 
 			default:
-				ct.append('<div class="tberror">Type ' + newVal + '?</div>');
+				jQuery( '<input type="hidden" id="unrecdata">' ).appendTo( ct );
+				jQuery( '<div>This action is not editable.</div>' ).appendTo( ct );
+				/* See loadActions */
 		}
 	}
 
@@ -6084,6 +6102,7 @@ var ReactorSensor = (function(api, $) {
 							jQuery( 'select#scene', newRow ).prepend( el ).addClass( "tberror" );
 						}
 						jQuery( 'select#scene', newRow).val( act.scene );
+						jQuery( 'select#method', newRow).val( act.usevera ? "V" : "" );
 						break;
 
 					case "housemode":
@@ -6145,8 +6164,14 @@ var ReactorSensor = (function(api, $) {
 
 					default:
 						console.log("loadActions: what's a " + act.type + "? Skipping it!");
-						alert( "Action type " + act.type + " unknown, skipping. Did you downgrade from a higher version of Reactor?" );
-						continue;
+						alert( "Action type " + act.type + " unrecognized. Did you downgrade from a higher version of Reactor? I will try to preserve this action, but I can't edit it." );
+						var $am = jQuery( 'select#actiontype', newRow );
+						if ( 0 === jQuery( 'option[value="'+act.type+'"]', $am ).length ) {
+							jQuery( '<option/>' ).val( act.type ).text( String(act.type) + ' (unrecognized)' )
+								.prependTo( $am );
+						}
+						$am.val( act.type );
+						jQuery( 'input#unrecdata', newRow ).val( JSON.stringify( act ) );
 				}
 
 				newRow.insertBefore( insertionPoint );

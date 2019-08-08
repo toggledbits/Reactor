@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.4develop-19218"
+local _PLUGIN_VERSION = "3.4develop-19220"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION	= 19206
@@ -2002,7 +2002,8 @@ local function execSceneGroups( tdev, taskid, scd )
 						scd.name or scd.id, scd.id )
 					-- If Lua HomeAutomationGateway RunScene action, run in Reactor
 					if action.service == "urn:micasaverde-com:serviceId:HomeAutomationGateway1" and
-							action.action == "RunScene" and devnum == 0 then
+							action.action == "RunScene" and devnum == 0 
+							and getVarNumeric( "UseReactorScenes", 1, tdev, RSSID ) ~= 0 then
 						-- Overriding like this runs the scene as a job (so it doesn't start immediately)
 						D("execSceneGroups() overriding Vera RunScene with our own!")
 						action.service = RSSID
@@ -2057,8 +2058,14 @@ local function execSceneGroups( tdev, taskid, scd )
 					local scene = resolveVarRef( action.scene, tdev )
 					D("execSceneGroups() launching scene %1 (%2) from scene %3",
 						scene, action.scene, scd.id)
-					-- Not running as job here because we want in-line execution of scene actions (the Reactor way).
-					runScene( scene, tdev, { contextDevice=sst.options.contextDevice, stopPriorScenes=false } )
+					if (action.usevera or 0) ~= 0 or getVarNumeric( "UseReactorScenes", 1, tdev, RSSID ) == 0 then
+						luup.call_action( "urn:micasaverde-com:serviceId:HomeAutomationGateway1",
+							"RunScene", { SceneNum=scene }, 0 )
+					else
+						-- Not running as job here because we want in-line execution of scene actions (the Reactor way).
+						local options = { contextDevice=sst.options.contextDevice, stopPriorScenes=false }
+						runScene( scene, tdev, options )
+					end
 				elseif action.type == "runlua" then
 					local fname = string.format("rs%s_sc%s_gr%d_ac%d",
 						tostring(tdev), tostring(scd.id), nextGroup, ix )
