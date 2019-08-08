@@ -2020,7 +2020,7 @@ local function execSceneGroups( tdev, taskid, scd )
 					local scene = resolveVarRef( action.scene, tdev )
 					D("execSceneGroups() launching scene %1 (%2) from scene %3",
 						scene, action.scene, scd.id)
-					if action.usevera or getVarNumeric( "UseReactorScenes", 1, tdev, RSSID ) == 0 then
+					if (action.usevera or 0) ~= 0 or getVarNumeric( "UseReactorScenes", 1, tdev, RSSID ) == 0 then
 						luup.call_action( "urn:micasaverde-com:serviceId:HomeAutomationGateway1",
 							"RunScene", { SceneNum=scene }, 0 )
 					else
