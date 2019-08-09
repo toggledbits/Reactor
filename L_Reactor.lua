@@ -4700,9 +4700,9 @@ local function getReactorScene( t, s, tdev, runscenes )
 					end
 					p = table.concat( p, ", " )
 					resp = resp .. pfx .. "Device "
-					resp = resp .. ( act.device or -1 ) == -1 and "(self)" or
+					resp = resp .. ( ( act.device or -1 ) == -1 and "(self)" or
 						( ( (luup.devices[act.device or -1] or {}).description or ( (act.deviceName or "unknown") .. "?" ) ) ..
-						  " (" .. tostring(act.device) .. ")" )
+						  " (" .. tostring(act.device) .. ")" ) )
 					resp = resp .. " action " .. (act.service or "?") .. "/" .. (act.action or "?") .. "( " .. p .. " )"
 					resp = resp .. EOL
 				elseif act.type == "housemode" then
