@@ -169,7 +169,7 @@ var ReactorSensor = (function(api, $) {
 	function getUID( prefix ) {
 		/* Not good, but good enough. */
 		var newx = Date.now() - 1529298000000;
-		if ( newx == lastx ) ++newx;
+		if ( newx <= lastx ) newx = lastx + 1;
 		lastx = newx;
 		return ( prefix === undefined ? "" : prefix ) + newx.toString(36);
 	}
@@ -2892,7 +2892,8 @@ var ReactorSensor = (function(api, $) {
 					// Checkboxes in their own fieldset
 					var d = jQuery( '<fieldset id="housemodechecks" class="condfields form-inline"/>' );
 					for ( k=1; k<=4; k++ ) {
-						getCheckbox( cond.id + '-mode-' + k, k, houseModeName[k] || k, "hmode" ).appendTo( d );
+						getCheckbox( cond.id + '-mode-' + k, k, houseModeName[k] || k, "hmode" )
+							.appendTo( d );
 					}
 					container.append( d );
 					jQuery( "input.hmode", container ).on( 'change.reactor', handleConditionRowChange );
@@ -3183,12 +3184,14 @@ var ReactorSensor = (function(api, $) {
 						jQuery( 'fieldset#geoquick', container ).show();
 						jQuery( 'fieldset#geolong', container ).hide();
 						(cond.value || "").split(',').forEach( function( val ) {
-							var $c = jQuery('input.useropt[value="' + val + '"]', container);
-							if ( 0 === $c.length ) {
-								$c = getCheckbox( cond.id + '-user-' + val, val, val + "?&nbsp;(unknown&nbsp;user)", "useropt" )
-									.appendTo( 'fieldset#geoquick', container );
+							if ( ! isEmpty( val ) ) {
+								var $c = jQuery('input.useropt[value="' + val + '"]', container);
+								if ( 0 === $c.length ) {
+									$c = getCheckbox( cond.id + '-user-' + val, val, val + "?&nbsp;(unknown&nbsp;user)", "useropt" );
+									$c.appendTo( jQuery( 'fieldset#geoquick', container ) );
+								}
+								$c.prop('checked', true);
 							}
-							$c.prop('checked', true);
 						});
 					}
 					break;
@@ -4905,7 +4908,8 @@ var ReactorSensor = (function(api, $) {
 					var ua = jQuery( 'fieldset#users input:checked', row );
 					var users = [];
 					ua.each( function() {
-						users.push( $(this).attr( 'id' ) );
+						var val = $(this).val();
+						if ( !isEmpty( val ) ) users.push( val );
 					});
 					var myid = api.getCpanelDeviceId();
 					var cf = getConfiguration( myid );
@@ -5690,7 +5694,7 @@ var ReactorSensor = (function(api, $) {
 	function changeActionType( row, newVal ) {
 		var ct = jQuery('div.actiondata', row);
 		var $m;
-		ct.empty();
+		ct.empty().addClass( "form-inline" );
 		jQuery( 'button#action-try,button#action-import', row ).hide();
 
 		switch ( newVal ) {
@@ -5801,18 +5805,18 @@ var ReactorSensor = (function(api, $) {
 				break;
 
 			case "notify":
+				ct.removeClass( "form-inline" );
 				jQuery('<input type="hidden" id="notifyid" value="">').appendTo( ct );
 				var fs = jQuery('<fieldset id="users"/>').appendTo( ct );
 				for ( var k in userIx ) {
 					if ( userIx.hasOwnProperty( k ) ) {
-						var $el = jQuery( '<label class="checkbox-inline"/>' ).text( userIx[k].name || k );
-						jQuery( '<input type="checkbox" class="form-check">' ).attr( 'id', k )
-							.prependTo( $el )
-							.on( 'change.reactor', handleActionValueChange );
-						$el.appendTo( fs );
+						getCheckbox( getUID( "chk" ), k, userIx[k].name || k )
+							.on( 'change.reactor', handleActionValueChange )
+							.appendTo( fs );
 					}
 				}
 				jQuery('<input id="message" class="form-control form-control-sm" value="">')
+					.attr( 'placeholder', 'Enter message' )
 					.on( 'change.reactor', handleActionValueChange )
 					.appendTo( ct );
 				break;
@@ -6055,7 +6059,7 @@ var ReactorSensor = (function(api, $) {
 			'<option value="device">Device Action</option>' +
 			'<option value="housemode">Change House Mode</option>' +
 			'<option value="delay">Delay</option>' +
-			'<option value="notify">Notify</option>' +
+			( isOpenLuup ? "" : '<option value="notify">Notify</option>' ) +
 			'<option value="runlua">Run Lua</option>' +
 			'<option value="runscene">Run Scene</option>' +
 			'<option value="rungsa">Run Group Activity</option>' +
@@ -6203,7 +6207,12 @@ var ReactorSensor = (function(api, $) {
 								if ( "" !== ua ) {
 									ua = ua.split( /,/ );
 									for ( var k=0; k<ua.length; k++ ) {
-										jQuery( 'fieldset#users input#' + idSelector(ua[k]), newRow ).prop( 'checked', true );
+										var $c = jQuery( 'fieldset#users input[value="' + ua[k] + '"]', newRow );
+										if ( 0 === $c.length ) {
+											$c = getCheckbox( getUID( 'chk' ), ua[k], ua[k] + '?&nbsp;(unknown&nbsp;user)' );
+											$c.appendTo( jQuery( 'fieldset#users', newRow ) );
+										}
+										$c.prop( 'checked', true );
 									}
 								}
 							}
