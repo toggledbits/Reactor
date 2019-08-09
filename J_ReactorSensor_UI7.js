@@ -110,6 +110,7 @@ var ReactorSensor = (function(api, $) {
 	var msgOptionsHide = "Hide condition options";
 
 	/* Insert the header items */
+	/* Checkboxes, see https://codepen.io/VoodooSV/pen/XoZJme */
 	function header() {
 		var $head = jQuery( 'head' );
 		/* Load material design icons */
@@ -119,11 +120,21 @@ var ReactorSensor = (function(api, $) {
 	div.reactortab input.narrow { max-width: 6em; } \
 	div.reactortab input.tiny { max-width: 4em; text-align: center; } \
 	div.reactortab label { font-weight: normal; } \
+	div.reactortab .checkbox { padding-left: 20px; } \
+	div.reactortab .checkbox label { display: inline-block; vertical-align: middle; position: relative; padding-left: 8px; } \
+	div.reactortab .checkbox label::before { content: ""; display: inline-block; position: absolute; width: 20px; height: 20px; left: 0; margin-left: -20px; border: 1px solid #ccc; border-radius: 3px; background-color: #fff; -webkit-transition: border 0.15s ease-in-out, color 0.15s ease-in-out; -o-transition: border 0.15s ease-in-out, color 0.15s ease-in-out; transition: border 0.15s ease-in-out, color 0.15s ease-in-out; } \
+	div.reactortab .checkbox label::after { display: inline-block; position: absolute; width: 20px; height: 20px; left: 1px; top: -2px; margin-left: -20px; padding-left: 0; padding-top: 0; font-size: 18px; color: #333; } \
+	div.reactortab .checkbox input[type="checkbox"],div.reactortab .checkbox input[type="radio"] { opacity: 0; z-index: 1; } \
+	div.reactortab .checkbox input[type="checkbox"]:focus + label::before { outline: thin dotted; outline: 5px auto -webkit-focus-ring-color; outline-offset: -2px; } \
+	div.reactortab .checkbox input[type="checkbox"]:checked + label::after { font-family: "Material Icons"; content: "\\e5ca"; } \
+	div.reactortab .checkbox input[type="checkbox"]:disabled + label { opacity: 0.65; } \
+	div.reactortab .checkbox input[type="checkbox"]:disabled + label::before { background-color: #eee; cursor: not-allowed; } \
+	div.reactortab .checkbox.checkbox-inline { margin-top: 0; display: inline-block; } \
 	div.reactortab .tb-about { margin-top: 24px; } \
 	div.reactortab .tberror { border: 1px solid red; } \
 	div.reactortab .tbwarn { border: 1px solid yellow; background-color: yellow; } \
 	div.reactortab .tbwikilink { margin-left: 4px; } \
-	div.reactortab .tbwikilink i.material-icons { font-size: 18px; position: relative; top: 4px; }\
+	div.reactortab .tbwikilink i.material-icons { font-size: 18px; position: relative; top: 4px; } \
 	div.reactortab button.md-btn:disabled { color: #ccc; cursor: not-allowed; } \
 	div.reactortab button.md-btn[disabled] { color: #ccc; cursor: not-allowed; } \
 	div.reactortab button.md-btn { line-height: 1em; cursor: pointer; color: #333; background-color: #fff; padding: 1px 0px 0px 0px; border-radius: 4px; box-shadow: #ccc 2px 2px; } \
@@ -273,6 +284,17 @@ var ReactorSensor = (function(api, $) {
 		myid = myid || api.getCpanelDeviceId();
 		iData[ myid ] = iData[ myid ] || {};
 		return iData[ myid ];
+	}
+
+	/* Generate an inline checkbox. */
+	function getCheckbox( id, value, label, classes ) {
+		var $div = jQuery( '<div class="checkbox checkbox-inline"/>' );
+		jQuery( '<input type="checkbox" />' ).attr( 'id', id ).val( value )
+			.addClass( classes || "" )
+			.appendTo( $div );
+		jQuery( '<label/>' ).attr( 'for', id ).html( label )
+			.appendTo( $div );
+		return $div;
 	}
 
 	/* Load configuration data. */
@@ -1794,7 +1816,7 @@ var ReactorSensor = (function(api, $) {
 					cond.operator = jQuery("div.params select.opmenu", $row).val() || "=";
 					if ( cond.operator.match( noCaseOptPattern ) ) {
 						/* Case-insensitive (nocase==1) is the default */
-						val = ( jQuery( 'input#nocase', $row ).prop( 'checked' ) || false ) ? 1 : 0;
+						val = ( jQuery( 'input.nocase', $row ).prop( 'checked' ) || false ) ? 1 : 0;
 						if ( val !== cond.nocase ) {
 							cond.nocase = ( 0 === val ) ? 0 : undefined;
 							configModified = true;
@@ -1838,7 +1860,7 @@ var ReactorSensor = (function(api, $) {
 					removeConditionProperties( cond, "operator,value,options" );
 					cond.operator = jQuery("div.params select.wdcond", $row).val() || "";
 					res = [];
-					jQuery("input#opts:checked", $row).each( function( ix, control ) {
+					jQuery("input.wdopt:checked", $row).each( function( ix, control ) {
 						res.push( control.value /* DOM element */ );
 					});
 					cond.value = res.join( ',' );
@@ -1856,7 +1878,7 @@ var ReactorSensor = (function(api, $) {
 						}
 					} else {
 						res = [];
-						jQuery("input#opts:checked", $row).each( function( ix, control ) {
+						jQuery("input.hmode:checked", $row).each( function( ix, control ) {
 							res.push( control.value /* DOM element */ );
 						});
 						cond.value = res.join( ',' );
@@ -2062,7 +2084,7 @@ var ReactorSensor = (function(api, $) {
 							jQuery( 'select#location', $row ).addClass( 'tberror' );
 						}
 					} else {
-						jQuery("input#opts:checked", $row).each( function( ix, control ) {
+						jQuery("input.useropt:checked", $row).each( function( ix, control ) {
 							res.push( control.value /* DOM element */ );
 						});
 					}
@@ -2341,7 +2363,7 @@ var ReactorSensor = (function(api, $) {
 					jQuery( 'fieldset#housemodechecks', $row ).show();
 					jQuery( 'fieldset#housemodeselects', $row ).hide();
 					vv.forEach( function( ov ) {
-						jQuery('input#opts[value="' + ov + '"]', $row).prop('checked', true);
+						jQuery('input#' + idSelector( cond.id + '-mode-' + ov ), $row).prop('checked', true);
 					});
 				}
 			} else if ( "service" === cond.type ) {
@@ -2379,7 +2401,7 @@ var ReactorSensor = (function(api, $) {
 				var $opt = jQuery( 'fieldset#nocaseopt', $row );
 				if ( val.match( noCaseOptPattern ) ) {
 					$opt.show();
-					jQuery( 'input#nocase', $opt ).prop( 'checked', coalesce( cond.nocase, 1 ) !== 0 );
+					jQuery( 'input.nocase', $opt ).prop( 'checked', coalesce( cond.nocase, 1 ) !== 0 );
 				} else {
 					$opt.hide();
 				}
@@ -2780,12 +2802,14 @@ var ReactorSensor = (function(api, $) {
 					container.append( makeVariableMenu( cond.device, cond.service, cond.variable ) );
 					container.append( makeServiceOpMenu( cond.operator || "=" ) );
 					container.append('<input type="text" id="value" class="form-control form-control-sm" autocomplete="off" list="reactorvarlist">');
-					container.append('<fieldset id="nocaseopt"><label class="checkbox-inline" for="nocase"><input id="nocase" type="checkbox" class="form-check">Ignore&nbsp;case</label></fieldset>');
+					v = jQuery( '<fieldset id="nocaseopt" />' ).appendTo( container );
+					getCheckbox( cond.id + "-nocase", "1", "Ignore&nbsp;case", "nocase" )
+						.appendTo( v );
 					container.append('<div id="currval"/>');
 
 					setUpConditionOpFields( container, cond );
-					jQuery( "input#value", container).on( 'change.reactor', handleConditionRowChange );
-					jQuery('input#nocase', container).on( 'change.reactor', handleConditionRowChange );
+					jQuery("input#value", container).on( 'change.reactor', handleConditionRowChange );
+					jQuery('input.nocase', container).on( 'change.reactor', handleConditionRowChange );
 					jQuery("select.opmenu", container).on( 'change.reactor', handleConditionOperatorChange );
 					jQuery("select.varmenu", container).on( 'change.reactor', handleConditionVarChange );
 					jQuery("select.devicemenu", container).on( 'change.reactor', handleDeviceChange );
@@ -2865,17 +2889,14 @@ var ReactorSensor = (function(api, $) {
 					mm.on( 'change.reactor', handleConditionOperatorChange );
 					container.append( mm );
 					container.append( " " );
-					// Checkboxes in their own div
+					// Checkboxes in their own fieldset
 					var d = jQuery( '<fieldset id="housemodechecks" class="condfields form-inline"/>' );
 					for ( k=1; k<=4; k++ ) {
-						mm = jQuery( '<input type="checkbox" class="form-check"/>' ).attr( 'value', k ).attr( 'id', 'opts' );
-						v = jQuery( '<label class="checkbox-inline" />' ).text( houseModeName[k] );
-						v.prepend( mm );
-						d.append( v );
+						getCheckbox( cond.id + '-mode-' + k, k, houseModeName[k] || k, "hmode" ).appendTo( d );
 					}
 					container.append( d );
-					jQuery( "input#opts", container ).on( 'change.reactor', handleConditionRowChange );
-					// Menus in a separate div
+					jQuery( "input.hmode", container ).on( 'change.reactor', handleConditionRowChange );
+					// Menus in a separate fieldset
 					d = jQuery( '<fieldset id="housemodeselects" class="condfields"/>' );
 					mm = jQuery( '<select class="form-control form-control-sm"/>' );
 					mm.append( '<option value="">(any)</option>' );
@@ -2894,20 +2915,19 @@ var ReactorSensor = (function(api, $) {
 
 				case 'weekday':
 					container.append(
-						'<select class="wdcond form-control form-control-sm"><option value="">Every</option><option value="1">First</option><option value="2">2nd</option><option value="3">3rd</option><option value="4">4th</option><option value="5">5th</option><option value="last">Last</option></select> ' +
-						'<fieldset id="wdopts">' +
-						'<label class="checkbox-inline"><input type="checkbox" id="opts" value="1">Sun</label>' +
-						'<label class="checkbox-inline"><input type="checkbox" id="opts" value="2">Mon</label>' +
-						'<label class="checkbox-inline"><input type="checkbox" id="opts" value="3">Tue</label>' +
-						'<label class="checkbox-inline"><input type="checkbox" id="opts" value="4">Wed</label>' +
-						'<label class="checkbox-inline"><input type="checkbox" id="opts" value="5">Thu</label>' +
-						'<label class="checkbox-inline"><input type="checkbox" id="opts" value="6">Fri</label>' +
-						'<label class="checkbox-inline"><input type="checkbox" id="opts" value="7">Sat</label>' +
-						'</fieldset>'
-					);
+						'<select class="wdcond form-control form-control-sm"><option value="">Every</option><option value="1">First</option><option value="2">2nd</option><option value="3">3rd</option><option value="4">4th</option><option value="5">5th</option><option value="last">Last</option></select>');
+					var fs = jQuery( '<fieldset id="wdopts" />' );
+					getCheckbox( cond.id + '-wd-1', '1', 'Sun', 'wdopt' ).appendTo( fs );
+					getCheckbox( cond.id + '-wd-2', '2', 'Mon', 'wdopt' ).appendTo( fs );
+					getCheckbox( cond.id + '-wd-3', '3', 'Tue', 'wdopt' ).appendTo( fs );
+					getCheckbox( cond.id + '-wd-4', '4', 'Wed', 'wdopt' ).appendTo( fs );
+					getCheckbox( cond.id + '-wd-5', '5', 'Thu', 'wdopt' ).appendTo( fs );
+					getCheckbox( cond.id + '-wd-6', '6', 'Fri', 'wdopt' ).appendTo( fs );
+					getCheckbox( cond.id + '-wd-7', '7', 'Sat', 'wdopt' ).appendTo( fs );
+					fs.appendTo( container );
 					menuSelectDefaultFirst( jQuery( 'select.wdcond', container ), cond.operator );
 					(cond.value || "").split(',').forEach( function( val ) {
-						jQuery('input#opts[value="' + val + '"]', container).prop('checked', true);
+						jQuery('input.wdopt[value="' + val + '"]', container).prop('checked', true);
 					});
 					jQuery("input", container).on( 'change.reactor', handleConditionRowChange );
 					jQuery("select.wdcond", container).on( 'change.reactor', handleConditionRowChange );
@@ -3135,9 +3155,8 @@ var ReactorSensor = (function(api, $) {
 					fs = jQuery( '<fieldset id="geoquick" />' );
 					for ( k in userIx ) {
 						if ( userIx.hasOwnProperty( k ) ) {
-							el = jQuery( '<label class="checkbox-inline"/>' ).text( ( userIx[k] || {} ).name || k );
-							el.append( jQuery( '<input type="checkbox" id="opts" value="' + k + '">' ) );
-							fs.append( el );
+							getCheckbox( cond.id + '-user-' + k, k, userIx[k].name || k, "useropt" )
+								.appendTo( fs );
 							mm.append( jQuery( '<option/>' ).val( k ).text( ( userIx[k] || {} ).name || k ) );
 						}
 					}
@@ -3146,7 +3165,7 @@ var ReactorSensor = (function(api, $) {
 					fs.append( mm );
 					fs.append( '<select id="location" class="form-control form-control-sm"/>' );
 					container.append( fs );
-					jQuery("input#opts", container).on( 'change.reactor', handleConditionRowChange );
+					jQuery("input.useropt", container).on( 'change.reactor', handleConditionRowChange );
 					jQuery("select.geofencecond", container)
 						.on( 'change.reactor', handleGeofenceOperatorChange );
 					op = menuSelectDefaultFirst( jQuery( "select.geofencecond", container ), cond.operator );
@@ -3164,7 +3183,12 @@ var ReactorSensor = (function(api, $) {
 						jQuery( 'fieldset#geoquick', container ).show();
 						jQuery( 'fieldset#geolong', container ).hide();
 						(cond.value || "").split(',').forEach( function( val ) {
-							jQuery('input#opts[value="' + val + '"]', container).prop('checked', true);
+							var $c = jQuery('input.useropt[value="' + val + '"]', container);
+							if ( 0 === $c.length ) {
+								$c = getCheckbox( cond.id + '-user-' + val, val, val + "?&nbsp;(unknown&nbsp;user)", "useropt" )
+									.appendTo( 'fieldset#geoquick', container );
+							}
+							$c.prop('checked', true);
 						});
 					}
 					break;
