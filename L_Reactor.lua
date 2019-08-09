@@ -1085,9 +1085,9 @@ local function runNotifyTask( pdev, taskid )
 	if notice then
 		-- Owner still exists and right type?
 		if (luup.devices[ notice.owner ] or {}).device_type == RSTYPE then
-			if debugMode then
+if true or debugMode then
 				local ni = ((getSensorConfig( notice.owner ) or {}).notifications or {})[notice.id]
-				D("runNotifyTask() sending notice from %1 to %2: %3", notice.owner, ni.users, ni.message)
+				L("runNotifyTask() sending notice from %1 to %2: %3", notice.owner, ni.users, ni.message)
 			end
 			setVar( RSSID, "_notify", notice.id, notice.owner )
 			scheduleDelay( { id="notifyreset"..notice.owner, owner=notice.owner, func=resetSensorNotify, replace=true }, 4 )
@@ -4731,7 +4731,7 @@ local function getLuaSummary( lua, encoded, fmt )
 	return r
 end
 
-local function getReactorScene( t, s, tdev, runscenes )
+local function getReactorScene( t, s, tdev, runscenes, cf )
 	local resp = "    Activity " .. t .. ( s and "" or " (none)" ) .. EOL
 	local pfx = "        "
 	if s then
@@ -4758,9 +4758,9 @@ local function getReactorScene( t, s, tdev, runscenes )
 					end
 					p = table.concat( p, ", " )
 					resp = resp .. pfx .. "Device "
-					resp = resp .. ( act.device or -1 ) == -1 and "(self)" or
+					resp = resp .. ( ( act.device or -1 ) == -1 and "(self)" or
 						( ( (luup.devices[act.device or -1] or {}).description or ( (act.deviceName or "unknown") .. "?" ) ) ..
-						  " (" .. tostring(act.device) .. ")" )
+						  " (" .. tostring(act.device) .. ")" ) )
 					resp = resp .. " action " .. (act.service or "?") .. "/" .. (act.action or "?") .. "( " .. p .. " )"
 					resp = resp .. EOL
 				elseif act.type == "housemode" then
@@ -4783,6 +4783,15 @@ local function getReactorScene( t, s, tdev, runscenes )
 						resp = resp .. " on " ..
 							( (luup.devices[act.device or -1] or {}).description or ( (act.deviceName or "unknown") .. "?" ) ) ..
 							" (" .. tostring(act.device) .. ")"
+					end
+					resp = resp .. EOL
+				elseif act.type == "notify" then
+					resp = resp .. pfx .. "Notify nid " .. act.notifyid .. ":"
+					if cf.notifications and cf.notifications[tostring(act.notifyid)] then
+						local nn = cf.notifications[tostring(act.notifyid)]
+						if nn.scene then resp = resp .. " sid " .. nn.scene end
+						resp = resp .. " users " .. tostring(nn.users)
+						resp = resp .. " message " .. string.format("%q", tostring(nn.message))
 					end
 					resp = resp .. EOL
 				else
@@ -5182,7 +5191,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 					r = r .. "    Condition group " .. RG( cdata.conditions.root or {}, condState )
 
 					for k,v in pairs( cdata.activities or {} ) do
-						r = r .. getReactorScene( k, v, n, scenesUsed )
+						r = r .. getReactorScene( k, v, n, scenesUsed, cdata )
 					end
 
 					r = r .. getEvents( n )
