@@ -169,7 +169,7 @@ var ReactorSensor = (function(api, $) {
 	function getUID( prefix ) {
 		/* Not good, but good enough. */
 		var newx = Date.now() - 1529298000000;
-		if ( newx == lastx ) ++newx;
+		if ( newx <= lastx ) newx = lastx + 1;
 		lastx = newx;
 		return ( prefix === undefined ? "" : prefix ) + newx.toString(36);
 	}
