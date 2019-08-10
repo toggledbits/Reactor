@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.4develop-19220';
+	var pluginVersion = '3.4develop-19222';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -4638,12 +4638,14 @@ var ReactorSensor = (function(api, $) {
 			timeout: 15000
 		}).done( function( data, statusText, jqXHR ) {
 			if ( "OK" !== data ) {
-				debugger;
 				alert("Failed to save notification configuration. Vera may be reloading. Please wait a moment and try again.");
+				configModified = true;
+				updateSaveControls();
 			}
 		}).fail( function( jqXHR ) {
-			debugger;
 			alert("Failed to save notification configuration. Vera may be reloading. Please wait a moment and try again.");
+			configModified = true;
+			updateSaveControls();
 		});
 		return false;
 	}
