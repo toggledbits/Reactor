@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.4develop-19222';
+	var pluginVersion = '3.4develop-19223';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -80,23 +80,25 @@ var ReactorSensor = (function(api, $) {
 		"int": { min: -2147483648, max: 2147483647 }
 	};
 	var serviceOps = [
-		{ op: '=', desc: 'equals', args: 1 },
-		{ op: '<>', desc: 'not equals', args: 1 },
-		{ op: '<', desc: '<', args: 1, numeric: 1 },
-		{ op: '<=', desc: '<=', args: 1, numeric: 1 },
-		{ op: '>', desc: '>', args: 1, numeric: 1 },
-		{ op: '>=', desc: '>=', args: 1, numeric: 1 },
-		{ op: 'starts', desc: 'starts with', args: 1 },
-		{ op: 'notstarts', desc: 'does not start with', args: 1 },
-		{ op: 'ends', desc: 'ends with', args: 1 },
-		{ op: 'notends', desc: 'does not end with', args: 1 },
-		{ op: 'contains', desc: 'contains', args: 1 },
-		{ op: 'notcontains', desc: 'does not contain', args: 1 },
+		{ op: '=', desc: 'equals', args: 1, optional: 1 },
+		{ op: '<>', desc: 'not equals', args: 1, optional: 1 },
+		{ op: '<', desc: '<', args: 1, numeric: 1,  },
+		{ op: '<=', desc: '<=', args: 1, numeric: 1,  },
+		{ op: '>', desc: '>', args: 1, numeric: 1,  },
+		{ op: '>=', desc: '>=', args: 1, numeric: 1,  },
+		{ op: 'bet', desc: 'between', args: 2, numeric: 1, format: "%1 and %2" },
+		{ op: 'nob', desc: 'not between', args: 2, numeric: 1, format: "%1 and %2" },
+		{ op: 'starts', desc: 'starts with', args: 1,  },
+		{ op: 'notstarts', desc: 'does not start with', args: 1,  },
+		{ op: 'ends', desc: 'ends with', args: 1,  },
+		{ op: 'notends', desc: 'does not end with', args: 1,  },
+		{ op: 'contains', desc: 'contains', args: 1,  },
+		{ op: 'notcontains', desc: 'does not contain', args: 1,  },
 		{ op: 'in', desc: 'in', args: 1 },
 		{ op: 'notin', desc: 'not in', args: 1 },
 		{ op: 'istrue', desc: 'is TRUE', args: 0 },
 		{ op: 'isfalse', desc: 'is FALSE', args: 0 },
-		{ op: 'change', desc: 'changes', args: 2 },
+		{ op: 'change', desc: 'changes', args: 2, format: "from %1 to %2", optional: 2 },
 		{ op: 'update', desc: 'updates', args: 0 }
 	];
 	var noCaseOptPattern = /^(=|<>|contains|notcontains|starts|notstarts|ends|notends|in|notin|change)$/i;
@@ -120,6 +122,7 @@ var ReactorSensor = (function(api, $) {
 	div.reactortab input.narrow { max-width: 6em; } \
 	div.reactortab input.tiny { max-width: 4em; text-align: center; } \
 	div.reactortab label { font-weight: normal; } \
+	div.reactortab label.tbsecondaryinput { margin-left: 0.5em; margin-right: 0.5em; } \
 	div.reactortab .checkbox { padding-left: 20px; } \
 	div.reactortab .checkbox label { display: inline-block; vertical-align: middle; position: relative; padding-left: 8px; } \
 	div.reactortab .checkbox label::before { content: ""; display: inline-block; position: absolute; width: 20px; height: 20px; left: 0; margin-left: -20px; border: 1px solid #ccc; border-radius: 3px; background-color: #fff; -webkit-transition: border 0.15s ease-in-out, color 0.15s ease-in-out; -o-transition: border 0.15s ease-in-out, color 0.15s ease-in-out; transition: border 0.15s ease-in-out, color 0.15s ease-in-out; } \
@@ -882,10 +885,15 @@ var ReactorSensor = (function(api, $) {
 		configModified = false;
 	}
 
-	function conditionValueText( v ) {
+	function conditionValueText( v, forceNumber ) {
 		if ( "number" === typeof(v) ) return v;
 		v = String(v);
 		if ( v.match( varRefPattern ) ) return v;
+		if ( forceNumber ) {
+			var n = parseInt( v );
+			if ( isNaN( n ) ) return JSON.stringify(v) + "(NaN)";
+			return String(n);
+		}
 		return JSON.stringify( v );
 	}
 
@@ -906,20 +914,18 @@ var ReactorSensor = (function(api, $) {
 				str += ' ' + ( cond.variable || "?" );
 				t = serviceOpsIndex[cond.operator || ""];
 				if ( undefined === t ) {
-					str += ' ' + cond.operator + '?' + cond.value;
+					str += ' ' + cond.operator + '? ' + conditionValueText( cond.value );
 				} else {
 					str += ' ' + (t.desc || t.op);
 					if ( undefined === t.args || t.args > 0 ) {
 						if ( t.args > 1 ) {
+							var fmt = t.format || "%1,%2";
 							k = ( cond.value || "" ).split( /,/ );
-							if ( k.length > 0 && k[0] !== "" ) {
-								str += " from " + conditionValueText( k[0] );
-							}
-							if ( k.length > 1 && k[1] !== "" ) {
-								str += " to " + conditionValueText( k[1] );
-							}
+							fmt = fmt.replace( '%1', k.length > 0 ? conditionValueText( k[0], t.numeric ) : "" );
+							fmt = fmt.replace( '%2', k.length > 1 ? conditionValueText( k[1], t.numeric ) : "" );
+							str += ' ' + fmt;
 						} else {
-							str += ' ' + conditionValueText( cond.value );
+							str += ' ' + conditionValueText( cond.value, t.numeric );
 						}
 					}
 				}
@@ -1826,16 +1832,25 @@ var ReactorSensor = (function(api, $) {
 						configModified = true;
 					}
 					var op = serviceOpsIndex[cond.operator || ""];
-					// use op.args???
 					if ( op.args > 1 ) {
 						// Join simple two value list, but don't save "," on its own.
 						cond.value = jQuery( 'input#val1', $row ).val() || "";
-						val = jQuery( 'input#val2', $row ).val();
+						val = jQuery( 'input#val2', $row ).val() || "";
+						if ( ( isEmpty( cond.value ) || isEmpty( val ) ) && ! op.optional ) {
+							jQuery( 'input.tbsecondaryinput', $row ).addClass( 'tberror' );
+						}
+						if ( 1 === op.optional && ( isEmpty( cond.value ) && isEmpty( val ) ) ) {
+							jQuery( 'input.tbsecondaryinput', $row ).addClass( 'tberror' );
+						}
+						/* Other possibility is 2 === op.optional, allows both fields blank */
 						if ( ! isEmpty( val ) ) {
 							cond.value += "," + val;
 						}
 					} else if ( op.args == 1 ) {
 						cond.value = jQuery("input#value", $row).val() || "";
+						if ( isEmpty( cond.value ) && ! op.optional ) {
+							jQuery( 'input#value', $row ).addClass( 'tberror' );
+						}
 					} else {
 						delete cond.value;
 					}
@@ -2372,15 +2387,37 @@ var ReactorSensor = (function(api, $) {
 				var $inp = jQuery( 'input#value', $row );
 				if ( op.args > 1 ) {
 					if ( $inp.length > 0 ) {
-						// Change single input field to double fields.
-						$inp.show();
-						$inp.attr( 'id', 'val1' ).attr( 'placeholder', 'blank=any value' );
-						var $in2 = $inp.clone().attr('id', 'val2')
-							.attr( 'placeholder', 'blank=any value' )
+						/* Single input field; change this one for double */
+						$inp.attr( 'id', 'val1' ).show();
+					} else {
+						/* Already there */
+						$inp = jQuery( 'input#val1', $row );
+					}
+					/* Work on second field */
+					var $in2 = jQuery( 'input#val2', $row );
+					if ( 0 === $in2.length ) {
+						$in2 = $inp.clone().attr('id', 'val2')
 							.off( 'change.reactor' ).on( 'change.reactor', handleConditionRowChange );
 						$in2.insertAfter( $inp );
-						jQuery( '<label for="val1" class="tbsecondaryinput"> from </label>' ).insertBefore( $inp );
-						jQuery( '<label for="val2" class="tbsecondaryinput"> to </label>' ).insertBefore( $in2 );
+					}
+					if ( op.optional ) {
+						$inp.attr( 'placeholder', 'blank=any value' );
+						$in2.attr( 'placeholder', 'blank=any value' );
+					}
+					/* Labels */
+					jQuery( 'label.tbsecondaryinput', $row ).remove();
+					var fmt = op.format || "%1,%2";
+					var lbl = fmt.match( /^([^%]*)%\d+([^%]*)%\d+(.*)$/ );
+					if ( null !== lbl ) {
+						if ( !isEmpty( lbl[1] ) ) {
+							jQuery( '<label for="val1" class="tbsecondaryinput"/>' ).text( lbl[1] ).insertBefore( $inp );
+						}
+						if ( !isEmpty( lbl[2] ) ) {
+							jQuery( '<label for="val2" class="tbsecondaryinput">' ).text( lbl[2] ).insertBefore( $in2 );
+						}
+						if ( !isEmpty( lbl[3] ) ) {
+							jQuery( '<label class="tbsecondaryinput">' ).text( lbl[3] ).insertAfter( $in2 );
+						}
 					}
 					/* Restore values */
 					$inp.val( vv.length > 0 ? String(vv[0]) : "" );
