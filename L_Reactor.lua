@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.4develop-19220"
+local _PLUGIN_VERSION = "3.4develop-19223"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION	= 19206
@@ -2364,6 +2364,15 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 			if vn == nil or cn == nil or vn < cn then return vv,false end
 		elseif op == "<=" then
 			if vn == nil or cn == nil or vn > cn then return vv,false end
+		elseif op == "bet" or op == "nob" then
+			local vs = split( cond.value or "", "," )
+			local lo = tonumber( #vs > 0 and vs[1] or "?" )
+			local hi = tonumber( #vs > 1 and vs[2] or "?" )
+			if vn ==  nil or lo == nil or hi == nil then return vv,false end
+			local between = vn >= lo and vn <= hi
+			if ( op == "bet" and not between ) or ( op == "nob" and between ) then
+				return vv,false
+			end
 		elseif op == "contains" then
 			if not string.find( vv, cv ) then return vv,false end
 		elseif op == "notcontains" then

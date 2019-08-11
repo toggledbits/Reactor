@@ -4,6 +4,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 3.4 (development)
 
+* Enhancement: New device condition operators "between" and "not between", an additional numeric comparison. Seem obvious; I never thought to add it, and somebody finally asked.
 * Enhancement: The *Run Scene* action, which runs a Vera scene, now has the option to run the scene in Reactor (default), or hand the scene off to Vera/Luup. Previously, all Vera scenes run by a *Run Scene* action could be handed off to Vera only if the `UseReactorScenes` state variable was set to 0; now it is explicitly controllable on a per-scene basis. The `UseReactorScenes` state variable still serves to override the default (i.e. if you have an RS with `UseReactorScenes=0` its behavior is not changed by this enhancement). Technically, this means `UseReactorScenes` is actually of minimal use going forward, and so is now deprecated, and will be removed from a future release. The setting on the *Run Scene* action should be used instead.
 * Enhancement: The new *Run Group Activity* action in group state activities can be used to run another activity from the current or another ReactorSensor.
 * Enhancement: The `RunScene` service action has been extended to allow running of group state activities.
