@@ -152,7 +152,7 @@ var ReactorSensor = (function(api, $) {
 	div.reactortab .dropdown-header:hover { text-decoration: none; } \
 	div#tbcopyright { display: block; margin: 12px 0px; } \
 	div#tbbegging { display: block; color: #ff6600; margin-top: 12px; } \
-	div.reactortab .vanotice { font-size: 0.9em; line-height: 1.5em; color: #666; \
+	div.reactortab .vanotice { font-size: 0.9em; line-height: 1.5em; color: #666; margin-top: 4px; } \
 </style>');
 	}
 
@@ -4675,9 +4675,10 @@ var ReactorSensor = (function(api, $) {
 						for ( k=0; k<md.length; k+=2 ) {
 							if ( vad.test( md[k] ) && !isEmpty( md[k+1] ) ) {
 								vad = md[k+1].replace( /',?$/, "" ).replace( /^'/, "" );
-console.log( vad );
-								nn.message = decodeURIComponent( vad);
-								nn.veraalerts = 1;
+								if ( !isEmpty( vad ) ) {
+									nn.message = decodeURIComponent( vad);
+									nn.veraalerts = 1;
+								}
 								break;
 							}
 						}
@@ -6673,8 +6674,8 @@ console.log( vad );
 			console.log("Failed to load D_ReactorDeviceInfo.json: " + textStatus + " " + String(errorThrown));
 			console.log(jqXHR.responseText);
 			deviceInfo = { services: {}, devices: {} };
-			if ( jqXHR.status == 500 ) {
-				jQuery('div#loading').html("<b>Sorry, not able to load data at this moment!</b> Vera may be busy or reloading. Don't panic! Wait a moment, switch to the Status tab, and then back here to retry loading.");
+			if ( jqXHR.status == 500 || jqXHR.status == 503 ) {
+				jQuery('div#loading').html("<b>Sorry, not able to load data at this moment!</b> Vera is busy or reloading. Don't panic! Wait a moment, switch to the Status tab, and then back here to retry loading.");
 			} else {
 				jQuery('div#loading').html('<h1>Hmmm...</h1>Well, that didn\'t go well. Try waiting a few moments, and then switching back to the Status tab and then back to this tab. If that doesn\'t work, please <a href="mailto:reactor@toggledbits.com?subject=Reactor+Activities+Load+Problem">send email to reactor@toggledbits.com</a> with the following text: <pre id="diag"></pre>');
 				var str = String(errorThrown) + "\n" + String(textStatus);
