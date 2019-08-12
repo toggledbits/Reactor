@@ -2002,7 +2002,7 @@ local function execSceneGroups( tdev, taskid, scd )
 						scd.name or scd.id, scd.id )
 					-- If Lua HomeAutomationGateway RunScene action, run in Reactor
 					if action.service == "urn:micasaverde-com:serviceId:HomeAutomationGateway1" and
-							action.action == "RunScene" and devnum == 0 
+							action.action == "RunScene" and devnum == 0
 							and getVarNumeric( "UseReactorScenes", 1, tdev, RSSID ) ~= 0 then
 						-- Overriding like this runs the scene as a job (so it doesn't start immediately)
 						D("execSceneGroups() overriding Vera RunScene with our own!")
@@ -2126,14 +2126,14 @@ local function execSceneGroups( tdev, taskid, scd )
 					else
 						L({level=2,msg="Unable to find notification configuration for nid=%1, scene=%2, group=%3"},
 							nid, scd.id, nextGroup)
-						addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, 
+						addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup,
 							warning="TROUBLE: action #" .. tostring(ix) .. " missing notification config for " .. tostring(nid) .. ", skipped." }
 						getSensorState( tdev ).trouble = true
 					end
 				else
 					L({level=1,msg="Unhandled action type %1 at %2 in scene %3 for %4 (%5)"},
 						action.type, ix, scd.id, tdev, luup.devices[tdev].description)
-					addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, 
+					addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup,
 						warning="TROUBLE: action #" .. tostring(ix) .. " unrecognized type: " .. tostring(action.type) .. ", ignored." }
 					getSensorState( tdev ).trouble = true
 				end

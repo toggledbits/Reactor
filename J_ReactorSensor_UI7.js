@@ -152,6 +152,7 @@ var ReactorSensor = (function(api, $) {
 	div.reactortab .dropdown-header:hover { text-decoration: none; } \
 	div#tbcopyright { display: block; margin: 12px 0px; } \
 	div#tbbegging { display: block; color: #ff6600; margin-top: 12px; } \
+	div.reactortab .vanotice { font-size: 0.9em; line-height: 1.5em; color: #666; \
 </style>');
 	}
 
@@ -2959,7 +2960,7 @@ var ReactorSensor = (function(api, $) {
 				case 'weekday':
 					container.append(
 						'<select class="wdcond form-control form-control-sm"><option value="">Every</option><option value="1">First</option><option value="2">2nd</option><option value="3">3rd</option><option value="4">4th</option><option value="5">5th</option><option value="last">Last</option></select>');
-					var fs = jQuery( '<fieldset id="wdopts" />' );
+					fs = jQuery( '<fieldset id="wdopts" />' );
 					getCheckbox( cond.id + '-wd-1', '1', 'Sun', 'wdopt' ).appendTo( fs );
 					getCheckbox( cond.id + '-wd-2', '2', 'Mon', 'wdopt' ).appendTo( fs );
 					getCheckbox( cond.id + '-wd-3', '3', 'Tue', 'wdopt' ).appendTo( fs );
@@ -4629,10 +4630,11 @@ var ReactorSensor = (function(api, $) {
 
 	/* Check that notification scene exists; create it if not */
 	function checkNotificationScene( myid, nid ) {
+		var k;
 		myid = myid || api.getCpanelDeviceId();
 		var scene = false;
 		var ud = api.getUserData();
-		for (var k=0; k<ud.scenes.length; k++) {
+		for ( k=0; k<ud.scenes.length; k++ ) {
 			if ( String(ud.scenes[k].notification_only) === String(myid) &&
 				String((ud.scenes[k].triggers || [])[0].template) === "10" &&
 				String(ud.scenes[k].triggers[0].arguments[0].value) == String(nid) ) {
@@ -4664,15 +4666,17 @@ var ReactorSensor = (function(api, $) {
 		} else {
 			if ( devVeraAlerts ) {
 				/* If VeraAlerts is in use, check for message override. */
+				var mo = api.getDeviceStateVariable( devVeraAlerts, "urn:richardgreen:serviceId:VeraAlert1", "MsgOverride" ) || "";
 				try {
-					var mo = api.getDeviceStateVariable( devVeraAlerts, "urn:richardgreen:serviceId:VeraAlert1", "MsgOverride" ) || "";
 					if ( !isEmpty(mo) ) {
 						/* custom array, Lua-ish, not JSON */
 						var md = mo.match( /'([^']*)',?/g );
 						var vad = new RegExp( "^'" + String(scene.id) + "_0'", "i" );
-						for ( var k=0; k<md.length; k+=2 ) {
+						for ( k=0; k<md.length; k+=2 ) {
 							if ( vad.test( md[k] ) && !isEmpty( md[k+1] ) ) {
-								nn.message = decodeURIComponent( md[k+1].substring( 1, md[k+1].length-2 ) );
+								vad = md[k+1].replace( /',?$/, "" ).replace( /^'/, "" );
+console.log( vad );
+								nn.message = decodeURIComponent( vad);
 								nn.veraalerts = 1;
 								break;
 							}
@@ -4695,11 +4699,11 @@ var ReactorSensor = (function(api, $) {
 							var uu = [];
 							r = r[1].match( /([^,]+)/g );
 							if ( r.length > 0 ) {
-								for ( var u=0; u<r.length; u++ ) {
-									if ( userNameIx[r[u]] ) uu.push( userNameIx[r[u]] );
-									else {
+								for ( k=0; k<r.length; k++ ) {
+									if ( userNameIx[r[k]] )
+										uu.push( userNameIx[r[k]] );
+									else
 										console.log("*** Did not find user ID for VeraAlerts username " + String(r[u]) + "; skipping.");
-									}
 								}
 							}
 							nn.users = uu.join( ',' );
@@ -4764,7 +4768,7 @@ var ReactorSensor = (function(api, $) {
 					if ( cf.activities[act].groups[k].actions[l].type == "notify" ) {
 						var key = String(cf.activities[act].groups[k].actions[l].notifyid);
 						if ( undefined === cf.notifications[key] ) {
-							console.log("Action #" + l + " in group #" + k + 
+							console.log("Action #" + l + " in group #" + k +
 								" of " + act + " refers to non-existent notification " +
 								key);
 						} else {
@@ -5079,7 +5083,6 @@ var ReactorSensor = (function(api, $) {
 		} catch( e ) {
 			console.log("Exception thrown while cleaning notifications: "+String(e));
 			console.log(e);
-			debugger;
 		}
 
 		if ( ! errors ) {
@@ -6199,6 +6202,7 @@ var ReactorSensor = (function(api, $) {
 				newRow.insertBefore( insertionPoint );
 			}
 			for ( var k=0; k < (gr.actions || []).length; k++ ) {
+				var $m;
 				var act = gr.actions[k];
 				newRow = getActionRow();
 				jQuery( 'select#actiontype', newRow).val( act.type || "comment" );
@@ -6263,7 +6267,7 @@ var ReactorSensor = (function(api, $) {
 								.prependTo( jQuery( 'select.devicemenu', newRow ).addClass( "tberror" ) );
 						}
 						jQuery( 'select.devicemenu', newRow ).val( act.device || "-1" );
-						var $m = jQuery( 'select#activity', newRow );
+						$m = jQuery( 'select#activity', newRow );
 						makeDeviceActivityMenu( act.device || -1, $m );
 						if ( 0 === jQuery( 'option[value=' + quot(act.activity) + ']', $m ).length ) {
 							jQuery( '<option/>' ).val( act.activity || "undef" )
@@ -6280,7 +6284,7 @@ var ReactorSensor = (function(api, $) {
 								.prependTo( jQuery( 'select.devicemenu', newRow ).addClass( "tberror" ) );
 						}
 						jQuery( 'select.devicemenu', newRow ).val( act.device || "-1" );
-						var $m = jQuery( 'select#group', newRow );
+						$m = jQuery( 'select#group', newRow );
 						makeDeviceGroupMenu( act.device || -1, $m );
 						if ( 0 === jQuery( 'option[value=' + quot(act.group) + ']', $m ).length ) {
 							jQuery( '<option/>' ).val( act.group || "undef" )
@@ -6301,18 +6305,19 @@ var ReactorSensor = (function(api, $) {
 								var ua = cf.notifications[act.notifyid].users || "";
 								if ( "" !== ua ) {
 									ua = ua.split( /,/ );
-									for ( var k=0; k<ua.length; k++ ) {
-										var $c = jQuery( 'fieldset#users input[value="' + ua[k] + '"]', newRow );
+									for ( var uk=0; uk<ua.length; uk++ ) {
+										var $c = jQuery( 'fieldset#users input[value="' + ua[uk] + '"]', newRow );
 										if ( 0 === $c.length ) {
-											$c = getCheckbox( getUID( 'chk' ), ua[k], ua[k] + '?&nbsp;(unknown&nbsp;user)' );
+											$c = getCheckbox( getUID( 'chk' ), ua[uk], ua[uk] + '?&nbsp;(unknown&nbsp;user)' );
 											$c.appendTo( jQuery( 'fieldset#users', newRow ) );
 										}
 										$c.prop( 'checked', true );
 									}
 								}
 								if ( devVeraAlerts && cf.notifications[act.notifyid].veraalerts ) {
-									jQuery( '<div class="vanotice"/>' ).text("NOTE: This notification has been modified by VeraAlerts; if you make changes here, you may still need to re-edit the notification in VeraAlerts to see changes. Also, be aware that if you place house mode restrictions on the notification in VA, those will be honored--this notification action is not unconditional, and regardless of the configuration/use here, VA controls the recipients, message, delivery, and filtering.")
-										.insertAfter( 'input#message', newRow );
+									jQuery( '<div class="vanotice"/>' ).text("NOTE: This notification has been modified by VeraAlerts. In order for changes to be effective, they must be made in VeraAlerts. Also note that regardless of the configuration/use here, VA controls the recipients, message text, delivery, and filtering.")
+										.insertAfter( jQuery( 'input#message', newRow ) );
+									jQuery( 'input', newRow ).prop( 'disabled', true );
 								}
 							}
 						}
