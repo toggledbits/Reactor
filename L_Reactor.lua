@@ -3600,7 +3600,8 @@ local function cleanSensorState( tdev )
 		local cf = getSensorConfig( tdev ) or error "Configuration not available"
 		for _,st in ipairs( data.states ) do
 			if st.service == VARSID then
-				if not (cf.variables or {})[st.variable] then
+				-- Expression default is *export*
+				if (((cf.variables or {})[st.variable] or {}).export or 1) == 0 then
 					D("cleanSensorState() removing orphan expression export %1", st.variable)
 					deleteVar( st.service, st.variable, tdev )
 					deleteVar( st.service, st.variable .. "_Error", tdev )
@@ -4677,7 +4678,7 @@ function watch( dev, sid, var, oldVal, newVal )
 					D("watch() dispatching to %1 (%2)", tdev, luup.devices[tdev].description)
 					local success,err = pcall( sensorWatch, dev, sid, var, oldVal, newVal, tdev, pluginDevice )
 					if not success then
-						L({level=1,msg="watch() dispatch error: %1"}, err)
+						L({level=1,msg="watch() device %2 dispatch error: %1"}, err, tdev)
 					end
 				end
 			end
