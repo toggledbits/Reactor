@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.4develop-19223';
+	var pluginVersion = '3.4develop-19224';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -37,12 +37,14 @@ var ReactorSensor = (function(api, $) {
 	var deviceActionData = {};
 	var deviceInfo = {};
 	var userIx = {};
+	var userNameIx = {};
 	var dateFormat = "%F"; /* ISO8601 defaults */
 	var timeFormat = "%T";
 	var configModified = false;
 	var inStatusPanel = false;
 	var isOpenLuup = false;
 	var isALTUI = false;
+	var devVeraAlerts = false;
 	var lastx = 0;
 	var condTypeName = {
 		"comment": "Comment",
@@ -538,6 +540,7 @@ var ReactorSensor = (function(api, $) {
 			deviceActionData = {};
 			deviceInfo = {};
 			userIx = {};
+			userNameIx = {};
 			configModified = false;
 			inStatusPanel = false;
 			isOpenLuup = false;
@@ -577,6 +580,8 @@ var ReactorSensor = (function(api, $) {
 				/* Detect openLuup while we're at it */
 				if ( "openLuup" === devobj.device_type ) {
 					isOpenLuup = true;
+				} else if ( "urn:richardgreen:device:VeraAlert:1" === devobj.device_type ) {
+					devVeraAlerts = devobj.id;
 				}
 
 				var roomid = devobj.room || 0;
@@ -599,9 +604,9 @@ var ReactorSensor = (function(api, $) {
 				}
 			);
 
-			userIx = {};
 			for ( ix=0; ix<(ud.users || []).length; ++ix ) {
 				userIx[ud.users[ix].id] = { name: ud.users[ix].Name || ud.users[ix].id };
+				userNameIx[ud.users[ix].Name || ud.users[ix].id] = ud.users[ix].id;
 			}
 			try {
 				jQuery.each( ud.usergeofences || [], function( ix, fobj ) {
@@ -4647,7 +4652,7 @@ var ReactorSensor = (function(api, $) {
 				modeStatus: "0",
 				triggers: [{
 					device: myid,
-					name: "_notify",
+					name: nn.message || nid,
 					enabled: 1,
 					arguments: [{ id: "1", value: nid }], /* notification id here */
 					template: "10",
@@ -4657,14 +4662,64 @@ var ReactorSensor = (function(api, $) {
 				room: 0
 			};
 		} else {
+			if ( devVeraAlerts ) {
+				/* If VeraAlerts is in use, check for message override. */
+				try {
+					var mo = api.getDeviceStateVariable( devVeraAlerts, "urn:richardgreen:serviceId:VeraAlert1", "MsgOverride" ) || "";
+					if ( !isEmpty(mo) ) {
+						/* custom array, Lua-ish, not JSON */
+						var md = mo.match( /'([^']*)',?/g );
+						var vad = new RegExp( "^'" + String(scene.id) + "_0'", "i" );
+						for ( var k=0; k<md.length; k+=2 ) {
+							if ( vad.test( md[k] ) && !isEmpty( md[k+1] ) ) {
+								nn.message = decodeURIComponent( md[k+1].substring( 1, md[k+1].length-2 ) );
+								nn.veraalerts = 1;
+								break;
+							}
+						}
+					}
+				} catch( e ) {
+					console.log("Failed to save VA message for " + scene.id + ", data " + mo);
+					console.log(e);
+				}
+				/* Recipients overrides as well. */
+				try {
+					if ( !isEmpty( scene.triggers[0].lua ) ) {
+						var m = scene.triggers[0].lua;
+						if ( 0 != ( scene.triggers[0].encoded_lua || 0 ) ) {
+							m = atob( m );
+						}
+						var r = m.match( /Recipients\s*=\s*'([^']*)'/ );
+						if ( r.length > 1 && !isEmpty( r[1] ) ) {
+							/* VA uses list of names; map them back to user IDs for Vera and us */
+							var uu = [];
+							r = r[1].match( /([^,]+)/g );
+							if ( r.length > 0 ) {
+								for ( var u=0; u<r.length; u++ ) {
+									if ( userNameIx[r[u]] ) uu.push( userNameIx[r[u]] );
+									else {
+										console.log("*** Did not find user ID for VeraAlerts username " + String(r[u]) + "; skipping.");
+									}
+								}
+							}
+							nn.users = uu.join( ',' );
+							nn.veraalerts = 1;
+						}
+					}
+				} catch( e ) {
+					console.log("Failed to decode/handle VA scene lua for #" + scene.id);
+					console.log(e);
+				}
+			}
 			/* Maybe update existing scene */
 			nn.scene = scene.id;
 			if ( scene.name === nn.message && scene.users === nn.users ) {
-				return true;
+				return false;
 			}
 			scene.name = nn.message || nid;
 			scene.users = nn.users || "";
 			scene.triggers[0].users = scene.users;
+			scene.triggers[0].name = nn.message || nid;
 		}
 		req.json = JSON.stringify( scene );
 		jQuery.ajax({
@@ -4684,7 +4739,7 @@ var ReactorSensor = (function(api, $) {
 			configModified = true;
 			updateSaveControls();
 		});
-		return false;
+		return true;
 	}
 
 	/* Removes unused notification scenes from the RS */
@@ -6240,8 +6295,9 @@ var ReactorSensor = (function(api, $) {
 						if ( "" !== ( act.notifyid || "" ) ) {
 							var cf = getConfiguration();
 							if ( undefined !== (cf.notifications || {} )[act.notifyid] ) {
+								/* Update here if VA in use */
+								if ( devVeraAlerts ) checkNotificationScene( false, act.notifyid );
 								jQuery( 'input#message', newRow ).val( cf.notifications[act.notifyid].message || act.notifyid );
-								// ??? re-select users
 								var ua = cf.notifications[act.notifyid].users || "";
 								if ( "" !== ua ) {
 									ua = ua.split( /,/ );
@@ -6253,6 +6309,10 @@ var ReactorSensor = (function(api, $) {
 										}
 										$c.prop( 'checked', true );
 									}
+								}
+								if ( devVeraAlerts && cf.notifications[act.notifyid].veraalerts ) {
+									jQuery( '<div class="vanotice"/>' ).text("NOTE: This notification has been modified by VeraAlerts; if you make changes here, you may still need to re-edit the notification in VeraAlerts to see changes. Also, be aware that if you place house mode restrictions on the notification in VA, those will be honored--this notification action is not unconditional, and regardless of the configuration/use here, VA controls the recipients, message, delivery, and filtering.")
+										.insertAfter( 'input#message', newRow );
 								}
 							}
 						}
