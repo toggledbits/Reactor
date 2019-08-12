@@ -825,6 +825,54 @@ var ReactorSensor = (function(api, $) {
 		dodel();
 	}
 
+	/* Return a Promise that resolves when Luup is reloaded and ready, as evidenced
+	   by the functional state of the Reactor plugin's request handler. */
+	function waitForReloadComplete( msg ) {
+		return new Promise( function( resolve, reject ) {
+			var expire = Date.now() + 90000;
+			var dlg = false;
+			function tryAlive() {
+				$.ajax({
+					url: api.getDataRequestURL(),
+					data: {
+						id: "lr_Reactor",
+						action: "alive"
+					},
+					dataType: "json",
+					timeout: 5000
+				}).done( function( data ) {
+					if ( data && data.status ) {
+						if (dlg) $("#myModal").hide();
+						resolve( true );
+					} else {
+						if ( ! $("#myModal").is(":visible") ) {
+							api.showCustomPopup( msg || "Waiting for Luup ready before operation...", { autoHide: false, category: 3 } );
+							dlg = true;
+						}
+						if ( Date.now() >= expire ) {
+							if (dlg) $("#myModal").hide();
+							reject( "timeout" );
+						} else {
+							setTimeout( tryAlive, 2000 );
+						}
+					}
+				}).fail( function() {
+					if ( Date.now() >= expire ) {
+						if (dlg) $("#myModal").hide();
+						reject( "timeout" );
+					} else {
+						if ( ! $("#myModal").is(":visible") ) {
+							api.showCustomPopup( msg || "Waiting for Luup ready before operation...", { autoHide: false, category: 3 } );
+							dlg = true;
+						}
+						setTimeout( tryAlive, 5000 );
+					}
+				});
+			}
+			tryAlive();
+		});
+	}
+
 	/**
 	 * Handle save click: save the current configuration.
 	 */
@@ -837,23 +885,39 @@ var ReactorSensor = (function(api, $) {
 		cdata.serial = ( cdata.serial || 0 ) + 1;
 		cdata.device = myid;
 		console.log("handleSaveClick(): saving config serial " + String(cdata.serial) + ", timestamp " + String(cdata.timestamp));
-		api.setDeviceStateVariablePersistent( myid, serviceId, "cdata",
-			JSON.stringify( cdata, function( k, v ) { return k.match( /^__/ ) ? undefined : v; } ),
-			{
-				'onSuccess' : function() {
-					configModified = false;
-					updateSaveControls();
-					if ( "function" === typeof(fnext) ) fnext.apply( null, fargs );
-					clearUnusedStateVariables( myid, cdata );
-					console.log("handleSaveClick(): successful save of config serial " + String(cdata.serial) + ", timestamp " + String(cdata.timestamp));
-				},
-				'onFailure' : function() {
-					alert('There was a problem saving the configuration. Vera/Luup may have been restarting. Please try hitting the "Save" button again.');
-					updateSaveControls();
-					if ( "function" === typeof(fnext) ) fnext.apply( null, fargs );
+		waitForReloadComplete( "Waiting for system ready before saving configuration..." ).then( function() {
+			api.setDeviceStateVariablePersistent( myid, serviceId, "cdata",
+				JSON.stringify( cdata, function( k, v ) { return k.match( /^__/ ) ? undefined : v; } ),
+				{
+					'onSuccess' : function() {
+						configModified = false;
+						updateSaveControls();
+						console.log("handleSaveClick(): successful save of config serial " + String(cdata.serial) + ", timestamp " + String(cdata.timestamp));
+						if ( "function" === typeof(fnext) ) fnext.apply( null, fargs );
+						if ( cdata.__reloadneeded ) {
+							delete cdata.__reloadneeded;
+							api.performActionOnDevice( 0, "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "Reload",
+								{ actionArguments: {} } );
+							api.showCustomPopup( "Reloading Luup...", { autoHide: false, category: 3 } );
+							setTimeout( function() {
+								waitForReloadComplete().then( function() {
+									$("#myModal").modal("hide");
+								}).catch( function(reason) {
+									$("#myModal").modal("hide");
+								});
+							}, 5000 );
+						} else {
+							clearUnusedStateVariables( myid, cdata );
+						}
+					},
+					'onFailure' : function() {
+						alert('There was a problem saving the configuration. Vera/Luup may have been restarting. Please try hitting the "Save" button again.');
+						updateSaveControls();
+						if ( "function" === typeof(fnext) ) fnext.apply( null, fargs );
+					}
 				}
-			}
-		);
+			);
+		});
 	}
 
 	/**
@@ -4674,9 +4738,9 @@ var ReactorSensor = (function(api, $) {
 						var vad = new RegExp( "^'" + String(scene.id) + "_0'", "i" );
 						for ( k=0; k<md.length; k+=2 ) {
 							if ( vad.test( md[k] ) && !isEmpty( md[k+1] ) ) {
-								vad = md[k+1].replace( /',?$/, "" ).replace( /^'/, "" );
+								vad = decodeURIComponent( md[k+1].replace( /',?$/, "" ).replace( /^'/, "" ) );
 								if ( !isEmpty( vad ) ) {
-									nn.message = decodeURIComponent( vad);
+									nn.message = vad;
 									nn.veraalerts = 1;
 								}
 								break;
@@ -4744,6 +4808,7 @@ var ReactorSensor = (function(api, $) {
 			configModified = true;
 			updateSaveControls();
 		});
+		cf.__reloadneeded = true;
 		return true;
 	}
 
@@ -6063,84 +6128,86 @@ var ReactorSensor = (function(api, $) {
 				}
 				var scene = parseInt( jQuery( 'select#scene', row ).val() );
 				if ( !isNaN( scene ) ) {
-					jQuery.ajax({
-						url: api.getDataRequestURL(),
-						data: {
-							id: "scene",
-							action: "list",
-							scene: scene,
-							output_format: "json"
-						},
-						dataType: "json",
-						timeout: 5000
-					}).done( function( data, statusText, jqXHR ) {
-						var pred = row;
-						var newRow;
-						if ( ! isEmpty( data.lua ) ) {
-							/* Insert Lua */
-							var lua = (data.encoded_lua || 0) != 0 ? atob(data.lua) : data.lua;
-							newRow = getActionRow();
-							jQuery( "select#actiontype", newRow).val( "runlua" );
-							changeActionType( newRow, "runlua" );
-							jQuery( "textarea.luacode", newRow ).val( lua ).trigger( "reactorinit" );
-							pred = newRow.addClass( "tbmodified" ).insertAfter( pred );
-						}
-						/* Sort groups by delay ascending */
-						data.groups = data.groups || [];
-						data.groups.sort( function( a, b ) { return (a.delay||0) - (b.delay||0); });
-						for ( var ig=0; ig<(data.groups || []).length; ig++ ) {
-							var gr = data.groups[ig];
-							if ( 0 != (gr.delay || 0) ) {
-								/* Delayed group -- insert delay action */
+					waitForReloadComplete().then( function() {
+						jQuery.ajax({
+							url: api.getDataRequestURL(),
+							data: {
+								id: "scene",
+								action: "list",
+								scene: scene,
+								output_format: "json"
+							},
+							dataType: "json",
+							timeout: 5000
+						}).done( function( data, statusText, jqXHR ) {
+							var pred = row;
+							var newRow;
+							if ( ! isEmpty( data.lua ) ) {
+								/* Insert Lua */
+								var lua = (data.encoded_lua || 0) != 0 ? atob(data.lua) : data.lua;
 								newRow = getActionRow();
-								jQuery( "select#actiontype", newRow).val( "delay" );
-								changeActionType( newRow, "delay" );
-								jQuery( "input#delay", newRow ).val( gr.delay );
-								jQuery( "select#delaytype", newRow ).val( "start" );
+								jQuery( "select#actiontype", newRow).val( "runlua" );
+								changeActionType( newRow, "runlua" );
+								jQuery( "textarea.luacode", newRow ).val( lua ).trigger( "reactorinit" );
 								pred = newRow.addClass( "tbmodified" ).insertAfter( pred );
 							}
-							for ( var k=0; k < (gr.actions || []).length; k++ ) {
-								var act = gr.actions[k];
-								newRow = getActionRow();
-								jQuery( 'select#actiontype', newRow).val( "device" );
-								changeActionType( newRow, "device" );
-								if ( 0 == jQuery( 'select.devicemenu option[value="' + act.device + '"]', newRow ).length ) {
-									var opt = jQuery( '<option/>' ).val( act.device ).text( '#' + act.device + ' ' + ( act.deviceName || 'name?' ) + ' (missing)' );
-									// opt.insertAfter( jQuery( 'select.devicemenu option[value=""]:first', newRow ) );
-									jQuery( 'select.devicemenu', newRow ).prepend( opt ).addClass( "tberror" );
+							/* Sort groups by delay ascending */
+							data.groups = data.groups || [];
+							data.groups.sort( function( a, b ) { return (a.delay||0) - (b.delay||0); });
+							for ( var ig=0; ig<(data.groups || []).length; ig++ ) {
+								var gr = data.groups[ig];
+								if ( 0 != (gr.delay || 0) ) {
+									/* Delayed group -- insert delay action */
+									newRow = getActionRow();
+									jQuery( "select#actiontype", newRow).val( "delay" );
+									changeActionType( newRow, "delay" );
+									jQuery( "input#delay", newRow ).val( gr.delay );
+									jQuery( "select#delaytype", newRow ).val( "start" );
+									pred = newRow.addClass( "tbmodified" ).insertAfter( pred );
 								}
-								jQuery( 'select.devicemenu', newRow ).val( act.device );
-								pred = newRow.addClass( "tbmodified" ).insertAfter( pred );
-								changeActionDevice( newRow, parseInt( act.device ), function( row, action ) {
-									var key = action.service + "/" + action.action;
-									if ( 0 == jQuery( 'select#actionmenu option[value="' + key + '"]', row ).length ) {
-										var opt = jQuery( '<option/>' ).val( key ).text( key );
-										jQuery( 'select#actionmenu', row ).prepend( opt ).prop( 'disabled', false );
+								for ( var k=0; k < (gr.actions || []).length; k++ ) {
+									var act = gr.actions[k];
+									newRow = getActionRow();
+									jQuery( 'select#actiontype', newRow).val( "device" );
+									changeActionType( newRow, "device" );
+									if ( 0 == jQuery( 'select.devicemenu option[value="' + act.device + '"]', newRow ).length ) {
+										var opt = jQuery( '<option/>' ).val( act.device ).text( '#' + act.device + ' ' + ( act.deviceName || 'name?' ) + ' (missing)' );
+										// opt.insertAfter( jQuery( 'select.devicemenu option[value=""]:first', newRow ) );
+										jQuery( 'select.devicemenu', newRow ).prepend( opt ).addClass( "tberror" );
 									}
-									jQuery( 'select#actionmenu', row ).val( key );
-									changeActionAction( row, key );
-									for ( var j=0; j<(action.arguments || []).length; j++ ) {
-										var a = action.arguments[j];
-										if ( 0 === jQuery( '#' + idSelector( a.name ), row ).length ) {
-											var inp = jQuery( '<input class="argument form-control form-control-sm">' ).attr('id', a.name);
-											var lbl = jQuery( '<label/>' ).attr('for', a.name).text(a.name).addClass('tbrequired').append(inp);
-											jQuery( 'div.actiondata', row ).append( lbl );
+									jQuery( 'select.devicemenu', newRow ).val( act.device );
+									pred = newRow.addClass( "tbmodified" ).insertAfter( pred );
+									changeActionDevice( newRow, parseInt( act.device ), function( row, action ) {
+										var key = action.service + "/" + action.action;
+										if ( 0 == jQuery( 'select#actionmenu option[value="' + key + '"]', row ).length ) {
+											var opt = jQuery( '<option/>' ).val( key ).text( key );
+											jQuery( 'select#actionmenu', row ).prepend( opt ).prop( 'disabled', false );
 										}
-										jQuery( '#' + idSelector( a.name ), row ).val( a.value || "" );
-									}
-								}, [ newRow, act ]);
+										jQuery( 'select#actionmenu', row ).val( key );
+										changeActionAction( row, key );
+										for ( var j=0; j<(action.arguments || []).length; j++ ) {
+											var a = action.arguments[j];
+											if ( 0 === jQuery( '#' + idSelector( a.name ), row ).length ) {
+												var inp = jQuery( '<input class="argument form-control form-control-sm">' ).attr('id', a.name);
+												var lbl = jQuery( '<label/>' ).attr('for', a.name).text(a.name).addClass('tbrequired').append(inp);
+												jQuery( 'div.actiondata', row ).append( lbl );
+											}
+											jQuery( '#' + idSelector( a.name ), row ).val( a.value || "" );
+										}
+									}, [ newRow, act ]);
+								}
 							}
-						}
 
-						/* All actions inserted. Remove original row. */
-						row.remove();
-						configModified = true;
-						changeActionRow( row );
-					}).fail( function( jqXHR, textStatus, errorThrown ) {
-						// Bummer.
-						console.log("Failed to load scene data: " + textStatus + " " + String(errorThrown));
-						console.log(jqXHR.responseText);
-						alert( "Unable to load scene data. Luup may be reloading; try again in a moment." );
+							/* All actions inserted. Remove original row. */
+							row.remove();
+							configModified = true;
+							changeActionRow( row );
+						}).fail( function( jqXHR, textStatus, errorThrown ) {
+							// Bummer.
+							console.log("Failed to load scene data: " + textStatus + " " + String(errorThrown));
+							console.log(jqXHR.responseText);
+							alert( "Unable to load scene data. Luup may be reloading; try again in a moment." );
+						});
 					});
 				}
 				break;
@@ -6634,58 +6701,58 @@ var ReactorSensor = (function(api, $) {
 
 		api.setCpanelContent( '<div id="loading">Please wait... loading device and activity data, which may take a few seconds.</div>' );
 
-		/* Load the device data */
-		var start = Date.now();
-		var urlbase = api.getDataRequestURL();
-		console.log("Base URL: " + urlbase);
-		urlbase = urlbase.replace( /data_request.*$/i, "" );
-		console.log("Fetching " + urlbase + "D_ReactorDeviceInfo.json");
-		jQuery.ajax({
-			url: urlbase + "D_ReactorDeviceInfo.json",
-			dataType: "json",
-			timeout: 15000
-		}).done( function( data, statusText, jqXHR ) {
-			console.log("D_ReactorDeviceInfo loaded (" + String(Date.now()-start) +
-				"ms), timestamp=" + String(data.timestamp) + ", serial=" +
-				String(data.serial));
-			if ( (data.serial || 0) < DEVINFO_MINSERIAL ) {
-				jQuery("div#loading").empty().append( '<h3>Update Required</h3>Your device information database file needs to be at least serial ' + String(DEVINFO_MINSERIAL) + ' to run with this version of Reactor. Please go to the Tools tab to update it, then come back here.' );
-				return;
-			}
-
-			deviceInfo = data;
-
-			/* Body content */
-			html += '<div id="tab-actions" class="reactortab">';
-
-			html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>Activities</h3></div></div>';
-
-			html += '<div id="activities"/>';
-
-			html += '</div>'; // tab-actions
-
-			html += footer();
-
-			jQuery('div#loading').replaceWith( html );
-
-			doActivities();
-		}).fail( function( jqXHR, textStatus, errorThrown ) {
-			// Bummer.
-			console.log("Failed to load D_ReactorDeviceInfo.json: " + textStatus + " " + String(errorThrown));
-			console.log(jqXHR.responseText);
-			deviceInfo = { services: {}, devices: {} };
-			if ( jqXHR.status == 500 || jqXHR.status == 503 ) {
-				jQuery('div#loading').html("<b>Sorry, not able to load data at this moment!</b> Vera is busy or reloading. Don't panic! Wait a moment, switch to the Status tab, and then back here to retry loading.");
-			} else {
-				jQuery('div#loading').html('<h1>Hmmm...</h1>Well, that didn\'t go well. Try waiting a few moments, and then switching back to the Status tab and then back to this tab. If that doesn\'t work, please <a href="mailto:reactor@toggledbits.com?subject=Reactor+Activities+Load+Problem">send email to reactor@toggledbits.com</a> with the following text: <pre id="diag"></pre>');
-				var str = String(errorThrown) + "\n" + String(textStatus);
-				for ( var k in jqXHR ) {
-					if ( jqXHR.hasOwnProperty(k) && typeof(jqXHR[k]) != "function" ) {
-						str += "\n" + k + '=' + String(jqXHR[k]);
-					}
+		/* Load the device data through the system-ready promise. */
+		waitForReloadComplete( "Waiting for system ready..." ).then( function() {
+			var start = Date.now();
+			var urlbase = api.getDataRequestURL().replace( /data_request.*$/i, "" );
+			console.log("Fetching " + urlbase + "D_ReactorDeviceInfo.json");
+			jQuery.ajax({
+				url: urlbase + "D_ReactorDeviceInfo.json",
+				dataType: "json",
+				timeout: 15000
+			}).done( function( data, statusText, jqXHR ) {
+				console.log("D_ReactorDeviceInfo loaded (" + String(Date.now()-start) +
+					"ms), timestamp=" + String(data.timestamp) + ", serial=" +
+					String(data.serial));
+				if ( (data.serial || 0) < DEVINFO_MINSERIAL ) {
+					jQuery("div#loading").empty().append( '<h3>Update Required</h3>Your device information database file needs to be at least serial ' + String(DEVINFO_MINSERIAL) + ' to run with this version of Reactor. Please go to the Tools tab to update it, then come back here.' );
+					return;
 				}
-				jQuery('#diag').text( str );
-			}
+
+				deviceInfo = data;
+
+				/* Body content */
+				html += '<div id="tab-actions" class="reactortab">';
+
+				html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>Activities</h3></div></div>';
+
+				html += '<div id="activities"/>';
+
+				html += '</div>'; // tab-actions
+
+				html += footer();
+
+				jQuery('div#loading').replaceWith( html );
+
+				doActivities();
+			}).fail( function( jqXHR, textStatus, errorThrown ) {
+				// Bummer.
+				console.log("Failed to load D_ReactorDeviceInfo.json: " + textStatus + " " + String(errorThrown));
+				console.log(jqXHR.responseText);
+				deviceInfo = { services: {}, devices: {} };
+				if ( jqXHR.status == 500 || jqXHR.status == 503 ) {
+					jQuery('div#loading').html("<b>Sorry, not able to load data at this moment!</b> Vera is busy or reloading. Don't panic! Wait a moment, switch to the Status tab, and then back here to retry loading.");
+				} else {
+					jQuery('div#loading').html('<h1>Hmmm...</h1>Well, that didn\'t go well. Try waiting a few moments, and then switching back to the Status tab and then back to this tab. If that doesn\'t work, please <a href="mailto:reactor@toggledbits.com?subject=Reactor+Activities+Load+Problem">send email to reactor@toggledbits.com</a> with the following text: <pre id="diag"></pre>');
+					var str = String(errorThrown) + "\n" + String(textStatus);
+					for ( var k in jqXHR ) {
+						if ( jqXHR.hasOwnProperty(k) && typeof(jqXHR[k]) != "function" ) {
+							str += "\n" + k + '=' + String(jqXHR[k]);
+						}
+					}
+					jQuery('#diag').text( str );
+				}
+			});
 		});
 	}
 
