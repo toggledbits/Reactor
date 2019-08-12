@@ -574,7 +574,7 @@
 				},
 				"HumanFriendlyText": {
 					"lang_tag": "tb_rs_nmsg",
-					"text": "_notify"
+					"text": "ReactorSensor Notify Action"
 				}
 			}]
 		}
