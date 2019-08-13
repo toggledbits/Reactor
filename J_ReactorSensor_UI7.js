@@ -8,7 +8,7 @@
  *
  */
 /* globals api,jQuery,$,unescape,ace,Promise,setTimeout,MultiBox */
-/* jshint multistr: true */
+/* jshint multistr: true, laxcomma: true */
 
 //"use strict"; // fails on UI7, works fine with ALTUI
 
@@ -17,11 +17,11 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.4develop-19224';
+	var pluginVersion = '3.4develop-19225';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
-	var _UIVERSION = 19195;     /* must coincide with Lua core */
+	var _UIVERSION = 19225;     /* must coincide with Lua core */
 
 	var _CDATAVERSION = 19082;  /* must coincide with Lua core */
 
@@ -108,6 +108,22 @@ var ReactorSensor = (function(api, $) {
 
 	var varRefPattern = /^\{([^}]+)\}\s*$/;
 
+	var notifyMethods = [
+		  { id: "", name: "Vera-native" }
+		, { id: "PR", name: "Prowl", users: false, extra: [
+				{ id: "priority", label: "Priority:", type: "select", default: "0", values: [ "-2=Very low", "-1=Low", "0=Normal", "1=High", "2=Emergency" ] }
+			] }
+		, { id: "SD", name: "Syslog", users: false, extra: [
+				{ id: "hostip", label: "Syslog Server IP:", placeholder: "Host IP4 Address", validpattern: "^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}$" },
+				{ id: "facility", label: "Facility:", type: "select", default: "23", values: [ "0=kern","1=user","2=mail","3-daemon","4=auth","5=syslog","6=lp","7=news","8=uucp","9=clock","10=security","11=FTP","12=NTP","13=audit","14=alert","16=local0","17=local1","18=local2","19=local3","20=local4","21=local5","22=local6","23=local7" ] },
+				{ id: "severity", label: "Severity:", type: "select", default: "5", values: [ "0=emerg","1=alert","2=crit","3=err","4=warn","5=notice","6=info","7-debug" ] }
+			] }
+		, { id: "UU", name: "User URL", users: false, extra: [
+				{ id: "url", label: "URL:", placeholder: "URL", validpattern: "^https?://", default: "http://localhost/alert?message={message}" }
+			] }
+		, { id: "VA", name: "VeraAlerts" }
+	];
+
 	var msgUnsavedChanges = "You have unsaved changes! Press OK to save them, or Cancel to discard them.";
 	var msgGroupIdChange = "Click to change group name";
 	var msgOptionsShow = "Show condition options";
@@ -122,9 +138,11 @@ var ReactorSensor = (function(api, $) {
 		$head.append( '\
 <style>\
 	div.reactortab input.narrow { max-width: 6em; } \
+	div.reactortab input.tbfullwidth { width: 100%; } \
 	div.reactortab input.tiny { max-width: 4em; text-align: center; } \
 	div.reactortab label { font-weight: normal; } \
 	div.reactortab label.tbsecondaryinput { margin-left: 0.5em; margin-right: 0.5em; } \
+	div.reactortab .tbinline { display: inline-block; } \
 	div.reactortab .checkbox { padding-left: 20px; } \
 	div.reactortab .checkbox label { display: inline-block; vertical-align: middle; position: relative; padding-left: 8px; } \
 	div.reactortab .checkbox label::before { content: ""; display: inline-block; position: absolute; width: 20px; height: 20px; left: 0; margin-left: -20px; border: 1px solid #ccc; border-radius: 3px; background-color: #fff; -webkit-transition: border 0.15s ease-in-out, color 0.15s ease-in-out; -o-transition: border 0.15s ease-in-out, color 0.15s ease-in-out; transition: border 0.15s ease-in-out, color 0.15s ease-in-out; } \
@@ -197,6 +215,13 @@ var ReactorSensor = (function(api, $) {
 			}
 		}
 		return false;
+	}
+
+	function arrayFindValue( arr, func, start ) {
+		for ( var k=(start || 0); k<arr.length; ++k ) {
+			if ( func( arr[k] ) ) return arr[k];
+		}
+		return null;
 	}
 
 	function idSelector( id ) {
@@ -842,7 +867,7 @@ var ReactorSensor = (function(api, $) {
 					timeout: 5000
 				}).done( function( data ) {
 					if ( data && data.status ) {
-						if (dlg) $("#myModal").hide();
+						if (dlg) $("#myModal").modal("hide");
 						resolve( true );
 					} else {
 						if ( ! $("#myModal").is(":visible") ) {
@@ -850,7 +875,7 @@ var ReactorSensor = (function(api, $) {
 							dlg = true;
 						}
 						if ( Date.now() >= expire ) {
-							if (dlg) $("#myModal").hide();
+							if (dlg) $("#myModal").modal("hide");
 							reject( "timeout" );
 						} else {
 							setTimeout( tryAlive, 2000 );
@@ -858,7 +883,7 @@ var ReactorSensor = (function(api, $) {
 					}
 				}).fail( function() {
 					if ( Date.now() >= expire ) {
-						if (dlg) $("#myModal").hide();
+						if (dlg) $("#myModal").modal("hide");
 						reject( "timeout" );
 					} else {
 						if ( ! $("#myModal").is(":visible") ) {
@@ -4674,14 +4699,22 @@ var ReactorSensor = (function(api, $) {
 				break;
 
 			case "notify":
-				// If no users selected, error.
-				if ( 0 === jQuery("fieldset#users input:checked", row ).length ) {
+				var method = jQuery( 'select#method', row ).val() || "";
+				var ninfo = arrayFindValue( notifyMethods, function( v ) { return v.id === method; } ) || notifyMethods[0];
+				if ( false !== ninfo.users && 0 === jQuery("fieldset#users input:checked", row ).length ) {
 					jQuery( 'fieldset#users', row ).addClass( 'tberror' );
 				}
 				/* Message cannot be empty. */
 				dev = jQuery( 'input#message', row );
 				if ( isEmpty( dev.val() ) ) {
 					dev.addClass( 'tberror' );
+				}
+				for ( var f=0; f<(ninfo.extra || []).length; f++ ) {
+					dev = jQuery( '#' + idSelector( ninfo.extra[f].id ), row );
+					var vv = dev.val() || "";
+					var fails = isEmpty( vv ) && !ninfo.extra[f].optional;
+					fails = fails || ( undefined !== ninfo.extra[f].validpattern && null === vv.match( ninfo.extra[f].validpattern ) );
+					dev.toggleClass( 'tberror', fails );
 				}
 				break;
 
@@ -4761,8 +4794,9 @@ var ReactorSensor = (function(api, $) {
 						var r = m.match( /Recipients\s*=\s*'([^']*)'/ );
 						if ( r.length > 1 && !isEmpty( r[1] ) ) {
 							/* VA uses list of names; map them back to user IDs for Vera and us */
+							var unames = r[1];
 							var uu = [];
-							r = r[1].match( /([^,]+)/g );
+							r = unames.match( /([^,]+)/g );
 							if ( r.length > 0 ) {
 								for ( k=0; k<r.length; k++ ) {
 									if ( userNameIx[r[k]] )
@@ -4772,6 +4806,7 @@ var ReactorSensor = (function(api, $) {
 								}
 							}
 							nn.users = uu.join( ',' );
+							nn.usernames = unames;
 							nn.veraalerts = 1;
 						}
 					}
@@ -4814,7 +4849,7 @@ var ReactorSensor = (function(api, $) {
 
 	/* Removes unused notification scenes from the RS */
 	function cleanNotificationScenes( myid ) {
-		var k;
+		var k, deletes = [];
 		myid = myid || api.getCpanelDeviceId();
 		var cf = getConfiguration( myid );
 
@@ -4831,8 +4866,9 @@ var ReactorSensor = (function(api, $) {
 			if ( ! cf.activities.hasOwnProperty(act) ) continue;
 			for ( k=0; k<(cf.activities[act].groups || []).length; k++ ) {
 				for ( var l=0; l<(cf.activities[act].groups[k].actions || []).length; l++) {
-					if ( cf.activities[act].groups[k].actions[l].type == "notify" ) {
-						var key = String(cf.activities[act].groups[k].actions[l].notifyid);
+					var action = cf.activities[act].groups[k].actions[l];
+					if ( "notify" === action.type ) {
+						var key = String(action.notifyid);
 						if ( undefined === cf.notifications[key] ) {
 							console.log("Action #" + l + " in group #" + k +
 								" of " + act + " refers to non-existent notification " +
@@ -4840,6 +4876,11 @@ var ReactorSensor = (function(api, $) {
 						} else {
 							valids[key] = true;
 							delete nots[key];
+							/* If this is a non-native method, remove a scene */
+							if ( "" !== (action.method || "") && cf.notifications[key].scene ) {
+								deletes.push( cf.notifications[key].scene );
+								delete cf.notifications[key].scene;
+							}
 						}
 					}
 				}
@@ -4848,21 +4889,26 @@ var ReactorSensor = (function(api, $) {
 
 		/* At this point, any remaining in nots are not associated with any action */
 		for ( var n in nots ) {
-			if ( nots.hasOwnProperty( n ) && n !== "nextid" ) delete cf.notifications[n];
+			if ( nots.hasOwnProperty( n ) && n !== "nextid" ) {
+				if ( cf.notifications[n].scene )
+					deletes.push( cf.notifications[n].scene );
+				delete cf.notifications[n];
+			}
 		}
 
-		/* Now remove any notification scenes that are not associated with known actions. */
-		/* Work on a clone of the scene list so it doesn't shift while we work. */
+		/* Now find and remove any notification scenes that are not associated
+		   with known notify actions remaining. */
 		var scenes = api.cloneObject( api.getUserData().scenes || [] );
-		nots = [];
 		for ( k=0; k<scenes.length; ++k ) {
 			if ( String(scenes[k].notification_only) === String(myid) &&
-					String((scenes[k].triggers || [])[0].template) === "10" ) {
+					String((scenes[k].triggers || [])[0].template) === "10" ) { /* template id from static JSON, never changes */
 				/* This is a notification scene for this RS */
 				console.log("Checking notification scene #" + scenes[k].id);
-				if ( undefined === valids[String(scenes[k].triggers[0].arguments[0].value)] ) {
+				if ( deletes.indexOf( scenes[k].id ) >= 0 ) {
+					console.log("Scene " + scenes[k].id + " already marked for deletion");
+				} else if ( undefined === valids[String(scenes[k].triggers[0].arguments[0].value)] ) {
 					console.log("Marking unused notification scene #" + scenes[k].id);
-					nots.push(scenes[k].id);
+					deletes.push(scenes[k].id);
 				} else {
 					/* Save scene on notification. Remove from valids so any dups are also removed. */
 					cf.notifications[String(scenes[k].triggers[0].arguments[0].value)].scene = scenes[k].id;
@@ -4870,23 +4916,21 @@ var ReactorSensor = (function(api, $) {
 				}
 			}
 		}
-
-		/* Now remove the scenes that need removal, one at a time. Aync. */
-		function _rmscene( myid, nots ) {
-			if ( nots.length > 0 ) {
-				var scene = nots.pop();
-				console.log("Removing unused notifications scene #" + scene);
+		function _rmscene( myid, dl ) {
+			var scene = dl.pop();
+			if ( scene ) {
+				console.log("Removing unused notification scene #" + scene);
 				jQuery.ajax({
 					url: api.getDataRequestURL(),
 					data: { id: "scene", action: "delete", scene: scene },
 					dataType: "text",
 					timeout: 5000
 				}).always( function() {
-					_rmscene( myid, nots );
+					_rmscene( myid, dl );
 				});
 			}
 		}
-		_rmscene( myid, nots );
+		_rmscene( myid, deletes );
 	}
 
 	function buildActionList( root ) {
@@ -5069,11 +5113,15 @@ var ReactorSensor = (function(api, $) {
 
 				case "notify":
 					var nid = jQuery( 'input#notifyid', row ).val() || "";
+					var method = jQuery( 'select#method', row ).val() || "";
 					var ua = jQuery( 'fieldset#users input:checked', row );
-					var users = [];
+					var users = [], unames = [];
 					ua.each( function() {
 						var val = $(this).val();
-						if ( !isEmpty( val ) ) users.push( val );
+						if ( !isEmpty( val ) ) {
+							users.push( val );
+							if ( userIx[val] ) unames.push( userIx[val].name );
+						}
 					});
 					var myid = api.getCpanelDeviceId();
 					var cf = getConfiguration( myid );
@@ -5088,9 +5136,30 @@ var ReactorSensor = (function(api, $) {
 					}
 					cf.notifications[nid] = cf.notifications[nid] || { id: parseInt(nid) };
 					cf.notifications[nid].users = users.join(',');
+					cf.notifications[nid].usernames = unames.join(',');
 					cf.notifications[nid].message = jQuery( 'input#message', row ).val() || nid;
-					checkNotificationScene( myid, nid );
+					if ( "" === method ) {
+						delete action.method;
+						checkNotificationScene( myid, nid );
+						jQuery( 'input', row ).prop( 'disabled', cf.notifications[nid].veraalerts == 1 );
+						jQuery( '.vanotice', row ).toggle( cf.notifications[nid].veraalerts == 1 );
+					} else {
+						action.method = method;
+						delete cf.notifications[nid].veraalerts;
+						jQuery( 'input', row ).prop( 'disabled', false );
+						jQuery( '.vanotice', row ).hide();
+					}
 					action.notifyid = nid;
+					var ninfo = arrayFindValue( notifyMethods, function( v ) { return v.id === action.method; } ) || notifyMethods[0];
+					for ( var f=0; f<(ninfo.extra || []).length; ++f ) {
+						var fld = ninfo.extra[f];
+						var fv = jQuery( '#' + idSelector( fld.id ), row ).val() || "";
+						if ( fv !== ( fld.default || "" ) ) {
+							action[fld.id] = fv;
+						} else {
+							delete action[fld.id]; /* eco, don't store default */
+						}
+					}
 					break;
 
 				default:
@@ -5221,6 +5290,83 @@ var ReactorSensor = (function(api, $) {
 		if ( hasOne ) {
 			menu.append( xg );
 		}
+	}
+
+	function changeNotifyActionMethod( $row, method, action ) {
+		var ninfo = arrayFindValue( notifyMethods, function( v ) { return v.id === method; } ) || notifyMethods[0];
+		jQuery( "select#method", $row ).val( ninfo.id ); /* override */
+		jQuery( 'fieldset#users', $row ).toggle( false !== ninfo.users );
+		jQuery( 'fieldset#extrafields', $row ).remove();
+		jQuery( 'div.vanotice', $row ).remove();
+		/*  Do not clear message or users (even if we don't use them) */
+		var f, fld;
+		if ( ninfo.extra ) {
+			var $extra = jQuery( '<fieldset id="extrafields" />' )
+				.insertAfter( jQuery( "input#message", $row ) );
+			for ( f=0; f<ninfo.extra.length; f++ ) {
+				fld = ninfo.extra[f];
+				var xf;
+				if ( "select" === fld.type ) {
+					xf = jQuery( '<select class="form-control form-control-sm" />' );
+					for ( var vi=0; vi<(fld.values || []).length; vi++ ) {
+						var pm = fld.values[vi].match( "^([^=]*)=(.*)$" );
+						if ( pm ) {
+							jQuery( '<option/>' ).val( pm[1] ).text( pm[2] )
+								.appendTo( xf );
+						}
+					}
+				} else {
+					xf = jQuery( '<input class="form-control form-control-sm" />' )
+						.attr( 'placeholder', fld.placeholder || "" );
+				}
+				xf.attr( 'id', fld.id ).val( fld.default || "" )
+					.on( 'change.reactor', handleActionValueChange );
+				if ( fld.label ) {
+					/* Wrap the field in a label */
+					xf = jQuery( '<label/>' ).attr( 'for', fld.id )
+						.text( fld.label )
+						.append( xf );
+				}
+				xf.appendTo( $extra );
+			}
+		}
+		var cf = getConfiguration();
+		if ( action && (cf.notifications || {})[action.notifyid] ) {
+			/* Load current values from passed action */
+			var note = cf.notifications[action.notifyid];
+			jQuery( 'input#message', $row ).val( note.message || "" );
+			if ( false !== ninfo.users ) {
+				var ua = note.users || "";
+				if ( "" !== ua ) {
+					ua = ua.split( /,/ );
+					for ( f=0; f<ua.length; f++ ) {
+						var $c = jQuery( 'fieldset#users input[value="' + ua[f] + '"]', $row );
+						if ( 0 === $c.length ) {
+							$c = getCheckbox( getUID( 'chk' ), ua[f], ua[f] + '?&nbsp;(unknown&nbsp;user)' );
+							$c.appendTo( jQuery( 'fieldset#users', $row ) );
+						}
+						$c.prop( 'checked', true );
+					}
+				}
+			}
+			for ( f=0; f<(ninfo.extra || []).length; f++ ) {
+				fld = ninfo.extra[f];
+				jQuery( '#' + idSelector( fld.id ), $row ).val( action[fld.id] || fld.default || "" );
+			}
+			if ( devVeraAlerts && note.veraalerts ) {
+				jQuery( '<div class="vanotice"/>' )
+					.text("NOTE: This notification has been modified by VeraAlerts. In order for changes to be effective, they must be made in VeraAlerts. Also note that regardless of the configuration/use here, VA controls the recipients, message text, delivery, and filtering.")
+					.insertAfter( jQuery( 'input#message', $row ) );
+				jQuery( 'input', $row ).prop( 'disabled', true );
+			}
+		}
+	}
+
+	function handleNotifyActionMethodChange( ev ) {
+		var $row = jQuery( ev.currentTarget ).closest( '.actionrow' );
+		var val = jQuery( ev.currentTarget ).val() || "";
+		changeNotifyActionMethod( $row, val );
+		return changeActionRow( $row );
 	}
 
 	function changeActionAction( row, newVal ) {
@@ -5968,9 +6114,16 @@ var ReactorSensor = (function(api, $) {
 				break;
 
 			case "notify":
-				ct.removeClass( "form-inline" );
 				jQuery('<input type="hidden" id="notifyid" value="">').appendTo( ct );
-				var fs = jQuery('<fieldset id="users"/>').appendTo( ct );
+				$m = jQuery( '<select id="method" class="form-control form-control-sm" />' );
+				for ( k=0; k<notifyMethods.length; ++k ) {
+					if ( "VA" === notifyMethods[k].id && !devVeraAlerts ) continue;
+					jQuery( '<option/>' ).val( notifyMethods[k].id )
+						.text( notifyMethods[k].name )
+						.appendTo( $m );
+				}
+				$m.on( 'change.reactor', handleNotifyActionMethodChange ).appendTo( ct );
+				var fs = jQuery('<fieldset id="users" class="tbinline" />').appendTo( ct );
 				for ( var k in userIx ) {
 					if ( userIx.hasOwnProperty( k ) ) {
 						getCheckbox( getUID( "chk" ), k, userIx[k].name || k )
@@ -5978,10 +6131,11 @@ var ReactorSensor = (function(api, $) {
 							.appendTo( fs );
 					}
 				}
-				jQuery('<input id="message" class="form-control form-control-sm" value="">')
+				jQuery('<input id="message" class="tbfullwidth form-control form-control-sm" value="">')
 					.attr( 'placeholder', 'Enter message' )
 					.on( 'change.reactor', handleActionValueChange )
 					.appendTo( ct );
+				changeNotifyActionMethod( ct, $m.val() );
 				break;
 
 			default:
@@ -6364,31 +6518,21 @@ var ReactorSensor = (function(api, $) {
 
 					case "notify":
 						jQuery( 'input#notifyid', newRow ).val( act.notifyid || "" );
-						if ( "" !== ( act.notifyid || "" ) ) {
-							var cf = getConfiguration();
-							if ( undefined !== (cf.notifications || {} )[act.notifyid] ) {
-								/* Update here if VA in use */
-								if ( devVeraAlerts ) checkNotificationScene( false, act.notifyid );
-								jQuery( 'input#message', newRow ).val( cf.notifications[act.notifyid].message || act.notifyid );
-								var ua = cf.notifications[act.notifyid].users || "";
-								if ( "" !== ua ) {
-									ua = ua.split( /,/ );
-									for ( var uk=0; uk<ua.length; uk++ ) {
-										var $c = jQuery( 'fieldset#users input[value="' + ua[uk] + '"]', newRow );
-										if ( 0 === $c.length ) {
-											$c = getCheckbox( getUID( 'chk' ), ua[uk], ua[uk] + '?&nbsp;(unknown&nbsp;user)' );
-											$c.appendTo( jQuery( 'fieldset#users', newRow ) );
-										}
-										$c.prop( 'checked', true );
-									}
-								}
-								if ( devVeraAlerts && cf.notifications[act.notifyid].veraalerts ) {
-									jQuery( '<div class="vanotice"/>' ).text("NOTE: This notification has been modified by VeraAlerts. In order for changes to be effective, they must be made in VeraAlerts. Also note that regardless of the configuration/use here, VA controls the recipients, message text, delivery, and filtering.")
-										.insertAfter( jQuery( 'input#message', newRow ) );
-									jQuery( 'input', newRow ).prop( 'disabled', true );
-								}
+						$m = jQuery( 'select#method', newRow );
+						if ( 0 === jQuery( 'option[value="' + (act.method || "") + '"]', $m ).length ) {
+							if ( !devVeraAlerts && "VA" === act.method ) {
+								jQuery( '<option/>' ).val("VA")
+									.text("VeraAlerts Direct (not running)")
+									.appendTo( $m );
+							} else {
+								jQuery( '<option/>' ).val( act.method )
+									.text( act.method + "? (unrecognized)" )
+									.appendTo( $m );
 							}
+							$m.addClass( 'tbwarn' ).show();
 						}
+						$m.val( act.method || "" );
+						changeNotifyActionMethod( newRow, act.method, act );
 						break;
 
 					default:
