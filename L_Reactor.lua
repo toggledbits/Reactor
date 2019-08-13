@@ -1097,9 +1097,9 @@ local function runNotifyTask( pdev, taskid )
 	if notice then
 		-- Owner still exists and right type?
 		if (luup.devices[ notice.owner ] or {}).device_type == RSTYPE then
-if true or debugMode then
+			if debugMode then
 				local ni = ((getSensorConfig( notice.owner ) or {}).notifications or {})[notice.id]
-				L("runNotifyTask() sending notice from %1 to %2: %3", notice.owner, ni.users, ni.message)
+				D("runNotifyTask() sending notice from %1 to %2: %3", notice.owner, ni.users, ni.message)
 			end
 			setVar( RSSID, "_notify", notice.id, notice.owner )
 			scheduleDelay( { id="notifyreset"..notice.owner, owner=notice.owner, func=resetSensorNotify, replace=true }, 4 )
