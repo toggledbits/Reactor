@@ -14,7 +14,7 @@ local _PLUGIN_NAME = "Reactor"
 local _PLUGIN_VERSION = "3.4develop-19225"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
-local _CONFIGVERSION	= 19206
+local _CONFIGVERSION	= 19225
 local _CDATAVERSION		= 19082	-- must coincide with JS
 local _UIVERSION		= 19225	-- must coincide with JS
       _SVCVERSION		= 19202	-- must coincide with impl file (not local)
@@ -791,6 +791,8 @@ local function plugin_runOnce( pdev )
 		initVar( "IsHome", "", pdev, MYSID )
 		initVar( "MaxRestartCount", "", pdev, MYSID )
 		initVar( "MaxRestartPeriod", "", pdev, MYSID )
+		initVar( "ProwlAPIKey", "", pdev, MYSID )
+		initVar( "ProwlProvider", "", pdev, MYSID )
 
 		luup.attr_set('category_num', 1, pdev)
 
@@ -813,10 +815,12 @@ local function plugin_runOnce( pdev )
 		initVar( "Enabled", 1, pdev, MYSID )
 	end
 
-	if s < 19206 then
+	if s < 19225 then
 		initVar( "MaxRestartCount", "", pdev, MYSID )
 		initVar( "MaxRestartPeriod", "", pdev, MYSID )
 		initVar( "rs", "", pdev, MYSID )
+		initVar( "ProwlAPIKey", "", pdev, MYSID )
+		initVar( "ProwlProvider", "", pdev, MYSID )
 	end
 
 	-- Update version last.
