@@ -11,12 +11,12 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.4develop-19224"
+local _PLUGIN_VERSION = "3.4develop-19225"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION	= 19206
 local _CDATAVERSION		= 19082	-- must coincide with JS
-local _UIVERSION		= 19195	-- must coincide with JS
+local _UIVERSION		= 19225	-- must coincide with JS
       _SVCVERSION		= 19202	-- must coincide with impl file (not local)
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
@@ -53,6 +53,7 @@ local runStamp = 0
 local pluginDevice = false
 local isALTUI = false
 local isOpenLuup = false
+local devVeraAlerts = false
 local installPath
 
 local TICKOFFS = 5 -- cond tasks try to run TICKOFFS seconds after top of minute
@@ -152,6 +153,13 @@ local function split( str, sep )
 	local rest = string.gsub( str or "", "([^" .. sep .. "]*)" .. sep, function( m ) table.insert( arr, m ) return "" end )
 	table.insert( arr, rest )
 	return arr, #arr
+end
+
+local function urlencode( s )
+	-- Could add dot per RFC3986; note space becomes %20
+	return s:gsub( "([^A-Za-z0-9_-])", function( m )
+			return string.format( "%%%02x", string.byte( m ) ) end
+		)
 end
 
 -- Shallow copy
@@ -2120,9 +2128,99 @@ local function execSceneGroups( tdev, taskid, scd )
 					end
 				elseif action.type == "notify" then
 					local nid = action.notifyid
+					local host = "Vera-" .. (luup.pk_accesspoint or "?")
 					local cf = getSensorConfig( tdev )
 					if ( cf.notifications or {} )[nid] then
-						queueNotification( nid, tdev )
+						local msg = cf.notifications[nid].message or ""
+						msg = msg:gsub( "%{([^}]+)%}", function( vname )
+							if (cf.variables or {})[vname] then
+								return (getSensorState( tdev ).ctx or {})[vname] or ""
+							end
+						end )
+						if action.method == "VA" then -- VeraAlerts
+							if devVeraAlerts then
+								luup.call_action( "urn:richardgreen:serviceId:VeraAlert1", "SendAlert",
+									{ Message=msg, Recipients=cf.notifications[nid].usernames or "" },
+									devVeraAlerts )
+							else
+								L({level=2,msg="Notification via VeraAlerts impossible because the plugin device was not found or did not start (%1 group %2)"},
+									scd.id, nextGroup)
+								addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup,
+									warning="TROUBLE: VeraAlerts unavailable to send notification, skipped." }
+								getSensorState( tdev ).trouble = true
+							end
+						elseif action.method == "PR" then -- Prowl
+							local apikey = luup.variable_get( MYSID, "ProwlAPIKey", pluginDevice ) or ""
+							if apikey == "" or apikey == "X" then
+								L({level=2,msg="Notification via Prowl can't be completed because the Prowl API Key has not been set"})
+								addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup,
+									warning="TROUBLE: Prowl API key not set, notification skipped." }
+								getSensorState( tdev ).trouble = true
+							else
+								local provider = luup.variable_get( MYSID, "ProwlProvider", pluginDevice ) or ""
+								local subject = luup.variable_get( MYSID, "ProwlSubject", pluginDevice ) or luup.devices[tdev].description
+								local baseurl = "https://api.prowlapp.com/publicapi/add"
+								local st,ht
+								-- Prefer request because we need POST, but some firmware doesn't support it,
+								-- and prowl servers don't really seem to care.
+								if not luup.inet.request then
+									baseurl = baseurl .. urlencode( apikey )
+									if provider ~= "" then baseurl = baseurl .. urlencode( provider ) end
+									baseurl = baseurl .. "&application=" .. urlencode( host )
+									if action.priority then baseurl = baseurl .. "&priority=" .. urlencode( action.priority ) end
+									baseurl = baseurl .. "&event=" .. urlencode( subject )
+									baseurl = baseurl .. "&description=" .. urlencode( msg )
+									st,_,ht = luup.inet.wget( baseurl )
+									D("execSceneGroup() Prowl wget returned %1,%2 [%3]", st, ht, baseurl)
+								else
+									local data = { apikey=apikey, application=host, event=subject, description=msg }
+									if provider ~= "" then data.provider = provider end
+									if action.priority then data.priority = action.priority end
+									st,_,ht = luup.inet.request{ url=baseurl, data=data, follow=false, timeout=5 }
+									D("execSceneGroup() Prowl request returned %1,%2", st, ht)
+								end
+								if st ~= 0 or ht ~= 200 then
+									L({level=2,msg="Prowl send returned %1 httpStatus=%2 [%3]"}, st, ht, baseurl)
+								end
+							end
+						elseif action.method == "SD" then -- Syslog Datagram
+							-- See https://tools.ietf.org/html/rfc5424#page-9
+							local pri = 8 * (tonumber(action.facility) or 23) + (tonumber(action.severity) or 5)
+							local datagram = string.format( "<%s>1 %s %s %s %s - - %s",
+								pri, -- priority
+								os.date("!%Y-%m-%dT%H:%M:%SZ"), -- timestamp
+								host:gsub("%s+", "_"), -- hostname
+								luup.devices[tdev].description:gsub( "%s+", "_" ), -- application
+								scd.id:gsub( "%s+", "_" ), -- process id
+								msg ):sub( 1, 1023 )
+							local socket = require "socket"
+							local udp = socket.udp()
+							if udp then
+								udp:setsockname("*", 0)
+								local stat,err = udp:sendto( datagram, action.hostip, 514 )
+								if stat == nil then
+									L({level=2,msg="Failed to send SYSLOG message to %1: %2"}, action.hostip, err)
+								end
+								udp:close()
+							end
+						elseif action.method == "AA" then -- AddAlert (Vera action) (undocumented)
+							local baseurl = "http://localhost/port_3480/data_request?id=add_alert&device=0&type=3&source=3"
+							baseurl = baseurl .. "&users=" .. urlencode( cf.notifications[nid].users )
+							baseurl = baseurl .. "&description=" .. urlencode( msg )
+							--[[ local st,_,ht = --]]
+							luup.inet.wget( baseurl )
+						elseif action.method == "UU" then -- User URL
+							local baseurl = action.url or ""
+							baseurl = baseurl:gsub( "%{message%}", urlencode( msg ):gsub("%%", "%%%%") )
+							local st,_,ht = luup.inet.wget( baseurl )
+							D("execSceneGroups() User URL notification returned %1,%2 [%3]", st, ht, baseurl)
+							if st ~= 0 or ht ~= 200 then
+								L({level=2,msg="User URL notification returned %1 httpStatus=%2 [%3]"}, st, ht, baseurl)
+							end
+						else
+							-- The "standard" Vera way, via hidden scene.
+							queueNotification( nid, tdev )
+						end
 					else
 						L({level=2,msg="Unable to find notification configuration for nid=%1, scene=%2, group=%3"},
 							nid, scd.id, nextGroup)
@@ -3795,6 +3893,7 @@ function startPlugin( pdev )
 	systemReady = false
 	isALTUI = false
 	isOpenLuup = false
+	devVeraAlerts = false
 	sensorState = {}
 	watchData = {}
 	sceneData = {}
@@ -3832,7 +3931,7 @@ function startPlugin( pdev )
 	-- Check for hard system restart loop; stand off if it's happening. Not
 	-- because we've ever caused problems, but because plugins are always the
 	-- first to be blamed.
-	local nr = getVarNumeric( "MaxRestartCount", 5, pdev, MYSID )
+	local nr = getVarNumeric( "MaxRestartCount", 10, pdev, MYSID )
 	local p = getVarNumeric( "MaxRestartPeriod", 900, pdev, MYSID )
 	if nr > 1 and p > 0 then
 		local s = luup.variable_get( MYSID, "rs", pdev ) or ""
@@ -3869,7 +3968,7 @@ function startPlugin( pdev )
 	local failmsg = false
 	for k,v in pairs(luup.devices) do
 		if not isALTUI and v.device_type == "urn:schemas-upnp-org:device:altui:1" and v.device_num_parent == 0 then
-			D("startPlugin() detected ALTUI at %1", k)
+			L("Detected ALTUI (%1)", k)
 			isALTUI = k
 			local rc,rs,jj,ra = luup.call_action("urn:upnp-org:serviceId:altui1", "RegisterPlugin",
 				{
@@ -3889,7 +3988,7 @@ function startPlugin( pdev )
 				}, k )
 			D("startPlugin() ALTUI's RegisterPlugin action for %5 returned resultCode=%1, resultString=%2, job=%3, returnArguments=%4", rc,rs,jj,ra, MYTYPE)
 		elseif not isOpenLuup and v.device_type == "openLuup" then
-			D("startPlugin() detected openLuup")
+			L("Detected openLuup (%1)", k)
 			isOpenLuup = k
 			local vv = getVarNumeric( "Vnumber", 0, k, v.device_type )
 			if vv < 181121 then
@@ -3909,6 +4008,9 @@ function startPlugin( pdev )
 			else
 				L({level=2,msg="Can't check Lua interpreter version, returned version string is %1"}, vv)
 			end
+		elseif v.device_type == "urn:richardgreen:device:VeraAlert:1" and v.device_num_parent == 0 then
+			devVeraAlerts = k
+			L("Detected VeraAlerts (%1)", k)
 		elseif v.device_type == RSTYPE then
 			luup.variable_set( RSSID, "Message", "Stopped", k )
 			addEvent{ dev=k, event="reload", notice="Luup reload" }
@@ -5462,6 +5564,10 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			os.execute( "rm -f /tmp/reactorfile.tmp" )
 		end
 		return alt_json_encode( inf ), "application/json"
+
+	elseif action == "alive" then
+		local loadtime = getVarNumeric( "LoadTime", 0, pluginDevice, MYSID )
+		return alt_json_encode( { status=true, loadtime=loadtime } ), "application/json"
 
 	elseif action == "serviceinfo" then
 		error("not yet implemented")
