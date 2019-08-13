@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.3hotfix-19197';
+	var pluginVersion = '3.3hotfix-19225';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -265,7 +265,7 @@ var ReactorSensor = (function(api, $) {
 		if ( ! ( me && deviceType === me.device_type ) ) {
 			throw "Device " + String(myid) + " not found or incorrect type";
 		}
-		var s = api.getDeviceState( myid, serviceId, "cdata" ) || {};
+		var s = api.getDeviceState( myid, serviceId, "cdata" ) || "";
 		var cdata;
 		if ( ! isEmpty( s ) ) {
 			try {
