@@ -17,9 +17,9 @@ var Reactor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '72acc6ea-f24d-11e8-bd87-74d4351650de';
 
-	var pluginVersion = '3.4develop-19224';
+	var pluginVersion = '3.4develop-19225';
 
-	var _UIVERSION = 19195;     /* must coincide with Lua core */
+	var _UIVERSION = 19225;     /* must coincide with Lua core */
 
 	var myModule = {};
 
@@ -115,7 +115,7 @@ var Reactor = (function(api, $) {
 		myid = myid || api.getCpanelDeviceId();
 
 		/* Check agreement of plugin core and UI */
-		var s = api.getDeviceState( myid, serviceId, "_UIV" ) || "0";
+		var s = api.getDeviceState( myid, serviceId, "_UIV", { dynamic: false } ) || "0";
 		console.log("initModule() for device " + myid + " requires UI version " + _UIVERSION + ", seeing " + s);
 		if ( String(_UIVERSION) != s ) {
 			api.setCpanelContent( '<div class="reactorwarning" style="border: 4px solid red; padding: 8px;">' +
