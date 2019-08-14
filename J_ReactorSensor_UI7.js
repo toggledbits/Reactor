@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.4develop-19225';
+	var pluginVersion = '3.4develop-19226';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -104,15 +104,18 @@ var ReactorSensor = (function(api, $) {
 		{ op: 'update', desc: 'updates', args: 0 }
 	];
 	var noCaseOptPattern = /^(=|<>|contains|notcontains|starts|notstarts|ends|notends|in|notin|change)$/i;
-	var serviceOpsIndex = {};
 
 	var varRefPattern = /^\{([^}]+)\}\s*$/;
 
 	var notifyMethods = [
 		  { id: "", name: "Vera-native" }
+		, { id: "SM", name: "SMTP Mail", users: false, extra: [
+				{ id: "recipient", label: "Recipient(s):", placeholder: "blank=default recipient; comma-separate multiple", optional: true },
+				{ id: "subject", label: "Subject:", placeholder: "blank=default subject (RS name)", optional: true }
+			], config: { name: "SMTPServer", warning: "This method requires additional configuration before use." } }
 		, { id: "PR", name: "Prowl", users: false, extra: [
 				{ id: "priority", label: "Priority:", type: "select", default: "0", values: [ "-2=Very low", "-1=Low", "0=Normal", "1=High", "2=Emergency" ] }
-			] }
+			], config: { name: "ProwlAPIKey", warning: "This method requires additional configuration before use." } }
 		, { id: "SD", name: "Syslog", users: false, extra: [
 				{ id: "hostip", label: "Syslog Server IP:", placeholder: "Host IP4 Address", validpattern: "^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}$" },
 				{ id: "facility", label: "Facility:", type: "select", default: "23", values: [ "0=kern","1=user","2=mail","3-daemon","4=auth","5=syslog","6=lp","7=news","8=uucp","9=clock","10=security","11=FTP","12=NTP","13=audit","14=alert","16=local0","17=local1","18=local2","19=local3","20=local4","21=local5","22=local6","23=local7" ] },
@@ -217,6 +220,7 @@ var ReactorSensor = (function(api, $) {
 		return false;
 	}
 
+	/* Find a value in an array using a function to match; returns value, not index. */
 	function arrayFindValue( arr, func, start ) {
 		for ( var k=(start || 0); k<arr.length; ++k ) {
 			if ( func( arr[k] ) ) return arr[k];
@@ -268,7 +272,7 @@ var ReactorSensor = (function(api, $) {
 
 	/* Return value or default if undefined */
 	function coalesce( v, d ) {
-		return ( undefined === v ) ? d : v;
+		return ( null === v || undefined === v ) ? d : v;
 	}
 
 	/* Evaluate input string as integer, strict (no non-numeric chars allowed other than leading/trailing whitespace, empty string fails). */
@@ -605,7 +609,7 @@ var ReactorSensor = (function(api, $) {
 				var devobj = api.cloneObject( dd[i] );
 				/* Detect openLuup while we're at it */
 				if ( "openLuup" === devobj.device_type ) {
-					isOpenLuup = true;
+					isOpenLuup = devobj.id;
 				} else if ( "urn:richardgreen:device:VeraAlert:1" === devobj.device_type ) {
 					devVeraAlerts = devobj.id;
 				}
@@ -652,11 +656,6 @@ var ReactorSensor = (function(api, $) {
 			catch (e) {
 				console.log("Error applying usergeofences to userIx: " + String(e));
 				console.log( e.stack );
-			}
-
-			serviceOpsIndex = {};
-			for ( var ix=0; ix<serviceOps.length; ix++ ) {
-				serviceOpsIndex[serviceOps[ix].op] = serviceOps[ix];
 			}
 
 			/* Don't do this again. */
@@ -1007,8 +1006,8 @@ var ReactorSensor = (function(api, $) {
 				t = getDeviceFriendlyName( cond.device );
 				str += t ? t : '#' + cond.device + ' ' + ( cond.devicename === undefined ? "name unknown" : cond.devicename ) + ' (missing)';
 				str += ' ' + ( cond.variable || "?" );
-				t = serviceOpsIndex[cond.operator || ""];
-				if ( undefined === t ) {
+				t = arrayFindValue( serviceOps, function( v ) { return v.op === cond.operator; } );
+				if ( !t ) {
 					str += ' ' + cond.operator + '? ' + conditionValueText( cond.value );
 				} else {
 					str += ' ' + (t.desc || t.op);
@@ -1040,7 +1039,7 @@ var ReactorSensor = (function(api, $) {
 				} catch( e ) {
 					str += ' ' + ( cond.groupid || "?" ) + ' (' + String(e) + ')';
 				}
-				t = serviceOpsIndex[cond.operator || ""];
+				t = arrayFindValue( serviceOps, function( v ) { return v.op === cond.operator; } );
 				if ( t ) {
 					str += ' ' + ( t.desc || t.op );
 				} else {
@@ -1595,22 +1594,13 @@ var ReactorSensor = (function(api, $) {
 			return;
 		}
 		var pdev = api.getCpanelDeviceId();
-		var doUpdate = false;
 		if ( args.id == pdev ) {
-			for ( var k=0; k<(args.states || []).length; ++k ) {
-				if ( args.states[k].variable.match( /^(cdata|cstate|Tripped|Armed)$/ ) ||
-						args.states[k].service == "urn:toggledbits-com:serviceId:ReactorValues" ) {
-					doUpdate = true;
-					break;
-					// console.log( args.states[k].service + '/' + args.states[k].variable + " updated!");
-				}
-			}
-			if ( doUpdate ) {
+			if ( arrayFindValue( args.states || [], function( v ) { return null !== v.variable.match( /^(cdata|cstate|Tripped|Armed)$/i ); } ) ) {
 				try {
 					updateStatus( pdev );
 				} catch (e) {
+					console.log( "Display update failed: " + String(e));
 					console.log( e );
-					console.log( e.stack );
 				}
 			}
 		}
@@ -1832,7 +1822,12 @@ var ReactorSensor = (function(api, $) {
 				} else {
 					/* Get config of another device */
 					dc = api.getDeviceState( cond.device, "urn:toggledbits-com:serviceId:ReactorSensor", "cdata" );
-					dc = JSON.parse( dc );
+					try {
+						dc = JSON.parse( dc );
+					} catch (e) {
+						console.log("Failed to parse cdata for " + String(cond.device) );
+						dc = null;
+					}
 				}
 				if ( dc ) {
 					var appendgrp = function ( grp, sel, pg ) {
@@ -1926,7 +1921,7 @@ var ReactorSensor = (function(api, $) {
 						delete cond.nocase;
 						configModified = true;
 					}
-					var op = serviceOpsIndex[cond.operator || ""];
+					var op = arrayFindValue( serviceOps, function( v ) { return v.op === cond.operator; } ) || serviceOps[0];
 					if ( op.args > 1 ) {
 						// Join simple two value list, but don't save "," on its own.
 						cond.value = jQuery( 'input#val1', $row ).val() || "";
@@ -2477,8 +2472,7 @@ var ReactorSensor = (function(api, $) {
 					});
 				}
 			} else if ( "service" === cond.type ) {
-				var val = cond.operator || "=";
-				var op = serviceOpsIndex[val];
+				var op = arrayFindValue( serviceOps, function( v ) { return v.op === cond.operator; } ) || serviceOps[0];
 				var $inp = jQuery( 'input#value', $row );
 				if ( op.args > 1 ) {
 					if ( $inp.length > 0 ) {
@@ -5360,6 +5354,15 @@ var ReactorSensor = (function(api, $) {
 				jQuery( 'input', $row ).prop( 'disabled', true );
 			}
 		}
+		if ( ninfo.config ) {
+			var s = getParentState( ninfo.config.name );
+			if ( isEmpty(s) ) {
+				jQuery( '<div class="notifynotice"/>' )
+					.text( ninfo.config.warning || ninfo.config.message || "This method requires additional configuration that has not yet been completed." )
+					.insertBefore( jQuery( 'input#message', $row ) );
+				jQuery( 'div.notifynotice', $row ).append( getWiki( 'Notify-Action' ) );
+			}
+		}
 	}
 
 	function handleNotifyActionMethodChange( ev ) {
@@ -6118,10 +6121,12 @@ var ReactorSensor = (function(api, $) {
 				$m = jQuery( '<select id="method" class="form-control form-control-sm" />' );
 				for ( k=0; k<notifyMethods.length; ++k ) {
 					if ( "VA" === notifyMethods[k].id && !devVeraAlerts ) continue;
+					if ( "" === notifyMethods[k].id && isOpenLuup ) continue;
 					jQuery( '<option/>' ).val( notifyMethods[k].id )
 						.text( notifyMethods[k].name )
 						.appendTo( $m );
 				}
+				menuSelectDefaultFirst( $m, "" );
 				$m.on( 'change.reactor', handleNotifyActionMethodChange ).appendTo( ct );
 				var fs = jQuery('<fieldset id="users" class="tbinline" />').appendTo( ct );
 				for ( var k in userIx ) {
@@ -6378,7 +6383,7 @@ var ReactorSensor = (function(api, $) {
 			'<option value="device">Device Action</option>' +
 			'<option value="housemode">Change House Mode</option>' +
 			'<option value="delay">Delay</option>' +
-			( isOpenLuup ? "" : '<option value="notify">Notify</option>' ) +
+			'<option value="notify">Notify</option>' +
 			'<option value="runlua">Run Lua</option>' +
 			'<option value="runscene">Run Scene</option>' +
 			'<option value="rungsa">Run Group Activity</option>' +

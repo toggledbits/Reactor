@@ -11,10 +11,10 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.4develop-19225"
+local _PLUGIN_VERSION = "3.4develop-19226"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
-local _CONFIGVERSION	= 19225
+local _CONFIGVERSION	= 19226
 local _CDATAVERSION		= 19082	-- must coincide with JS
 local _UIVERSION		= 19225	-- must coincide with JS
       _SVCVERSION		= 19202	-- must coincide with impl file (not local)
@@ -250,8 +250,11 @@ local function initVar( name, dflt, dev, sid )
 	assert( sid ~= nil )
 	local currVal = luup.variable_get( sid, name, dev )
 	if currVal == nil then
+luup.log("initVar() "..dev.."/"..(sid or RSSID).."/"..name.." initializing to "..tostring(dflt), 1)
 		luup.variable_set( sid, name, tostring(dflt), dev )
 		return tostring(dflt)
+	else
+luup.log("initVar() "..dev.."/"..(sid or RSSID).."/"..name.." is already set", 2)
 	end
 	return currVal
 end
@@ -276,23 +279,27 @@ local function deleteVar( sid, name, dev )
 	end
 end
 
+local function getVar( name, dflt, dev, sid )
+	assert ( name ~= nil and dev ~= nil )
+	local s,t = luup.variable_get( sid or RSSID, name, dev )
+	if s == nil or s == "" then return dflt,0 end
+	return s,t
+end
+
+local function getReactorVar( name, dflt, dev ) return getVar( name, dflt, dev or pluginDevice, MYSID ) end
+
 -- Get numeric variable, or return default value if not set or blank
 local function getVarNumeric( name, dflt, dev, sid )
-	assert( dev ~= nil )
-	assert( name ~= nil )
-	sid = sid or RSSID
-	local s = luup.variable_get( sid, name, dev )
-	if (s == nil or s == "") then return dflt end
-	s = tonumber(s, 10)
-	if (s == nil) then return dflt end
-	return s
+	assert ( name ~= nil and dev ~= nil )
+	local s = luup.variable_get( sid or RSSID, name, dev )
+	if s == nil or s == "" then return dflt end
+	return tonumber(s) or dflt
 end
 
 -- Get var that stores JSON data. Returns data, error flag.
 local function getVarJSON( name, dflt, dev, sid )
 	assert( dev ~= nil and name ~= nil )
-	sid = sid or RSSID
-	local s = luup.variable_get( sid, name, dev ) or ""
+	local s = getVar( name, "", dev, sid ) -- blank default
 	if s == "" then return dflt,false end
 	local data,pos,err = json.decode( s )
 	if data == nil then return dflt,err,pos,s end
@@ -668,7 +675,7 @@ local function variables( cdata )
 end
 
 local function checkVersion(dev)
-	local ui7Check = luup.variable_get(MYSID, "UI7Check", dev) or ""
+	local ui7Check = getReactorVar( "UI7Check", "", dev )
 	if isOpenLuup then
 		return true
 	end
@@ -791,6 +798,13 @@ local function plugin_runOnce( pdev )
 		initVar( "IsHome", "", pdev, MYSID )
 		initVar( "MaxRestartCount", "", pdev, MYSID )
 		initVar( "MaxRestartPeriod", "", pdev, MYSID )
+		initVar( "SMTPServer", "", pdev, MYSID )
+		initVar( "SMTPSender", "", pdev, MYSID )
+		initVar( "SMTPDefaultRecipient", "", pdev, MYSID )
+		initVar( "SMTPDefaultSubject", "", pdev, MYSID )
+		initVar( "SMTPUsername", "", pdev, MYSID )
+		initVar( "SMTPPassword", "", pdev, MYSID )
+		initVar( "SMTPPort", "", pdev, MYSID )
 		initVar( "ProwlAPIKey", "", pdev, MYSID )
 		initVar( "ProwlProvider", "", pdev, MYSID )
 
@@ -815,10 +829,17 @@ local function plugin_runOnce( pdev )
 		initVar( "Enabled", 1, pdev, MYSID )
 	end
 
-	if s < 19225 then
+	if s < 19226 then
 		initVar( "MaxRestartCount", "", pdev, MYSID )
 		initVar( "MaxRestartPeriod", "", pdev, MYSID )
 		initVar( "rs", "", pdev, MYSID )
+		initVar( "SMTPServer", "", pdev, MYSID )
+		initVar( "SMTPSender", "", pdev, MYSID )
+		initVar( "SMTPDefaultRecipient", "", pdev, MYSID )
+		initVar( "SMTPDefaultSubject", "", pdev, MYSID )
+		initVar( "SMTPUsername", "", pdev, MYSID )
+		initVar( "SMTPPassword", "", pdev, MYSID )
+		initVar( "SMTPPort", "", pdev, MYSID )
 		initVar( "ProwlAPIKey", "", pdev, MYSID )
 		initVar( "ProwlProvider", "", pdev, MYSID )
 	end
@@ -835,14 +856,14 @@ local function getHouseMode( tdev )
 	if mode ~= 0 then
 		return tostring(mode)
 	end
-	return luup.variable_get( MYSID, "HouseMode", pluginDevice ) or "1"
+	return getReactorVar( "HouseMode", "1" )
 end
 
 -- Load sensor config
 local function loadSensorConfig( tdev )
 	D("loadSensorConfig(%1)", tdev)
 	local upgraded = false
-	local s = luup.variable_get( RSSID, "cdata", tdev ) or ""
+	local s = getVar( "cdata", "", tdev )
 	local cdata, pos, err
 	if "" ~= s then
 		cdata, pos, err = json.decode( s )
@@ -1018,63 +1039,55 @@ local function loadCleanState( tdev )
 
 	-- Fetch cstate. If it's empty, there's nothing to do here.
 	local modified = false
-	local cstate = {} -- guilty until proven innocent
-	local s = luup.variable_get( RSSID, "cstate", tdev ) or ""
-	if s ~= "" then
-		local err
-		cstate,_,err = json.decode( s )
-		if cstate == nil then
-			L({level=2,msg="ReactorSensor %1 (%2) corrupted cstate, clearing!"}, tdev, luup.devices[tdev].description)
-			cstate = {}
-			modified = true
-		end
-
-		cstate.lastUsed = nil -- remove while working
-
-		local cdata = getSensorConfig( tdev )
-		if not cdata then
-			L({level=1,msg="ReactorSensor %1 (%2) has corrupt configuration data!"}, tdev, luup.devices[tdev].description)
-			error("ReactorSensor " .. tdev .. " has invalid configuration data")
-			-- no return
-		end
-
-		-- Find all conditions in cdata
-		local conds = {}
-		traverse( cdata.conditions.root or { id="root" }, function( c ) conds[c.id] = c end )
-
-		-- Make array of conditions in cstate that aren't in cdata
-		local dels = {}
-		for k in pairs( cstate ) do
-			if k ~= "vars" and conds[k] == nil then table.insert( dels, k ) end
-		end
-
-		-- Delete them
-		modified = modified or #dels > 0
-		for _,k in ipairs( dels ) do
-			D("loadCleanState() deleting saved state %1", k)
-			cstate[k] = nil
-			deleteVar( GRPSID, "GroupStatus_"..k, tdev )
-		end
-
-		-- Clean variables no longer in use
-		dels = {}
-		for n in pairs( cstate.vars or {} ) do
-			if (cdata.variables or {})[n] == nil then
-				table.insert( dels, n )
-			end
-		end
-		modified = modified or #dels > 0
-		for _,k in ipairs( dels ) do
-			D("loadCleanState() deleting variable %1, not in cdata.variables", k)
-			cstate.vars[k] = nil
-			deleteVar( VARSID, k, tdev )
-			deleteVar( VARSID, k .. "_Error", tdev )
-		end
-	else
+	local cstate,err = getVarJSON( "cstate", {}, tdev )
+	if err then
+		L({level=2,msg="ReactorSensor %1 (%2) corrupted cstate, clearing!"}, tdev, luup.devices[tdev].description)
 		modified = true
 	end
 
-	-- Save updated state
+	cstate.lastUsed = nil -- remove while working
+
+	local cdata = getSensorConfig( tdev )
+	if not cdata then
+		L({level=1,msg="ReactorSensor %1 (%2) has corrupt configuration data!"}, tdev, luup.devices[tdev].description)
+		error("ReactorSensor " .. tdev .. " has invalid configuration data")
+		-- no return
+	end
+
+	-- Find all conditions in cdata
+	local conds = {}
+	traverse( cdata.conditions.root or { id="root" }, function( c ) conds[c.id] = c end )
+
+	-- Make array of conditions in cstate that aren't in cdata
+	local dels = {}
+	for k in pairs( cstate ) do
+		if k ~= "vars" and conds[k] == nil then table.insert( dels, k ) end
+	end
+
+	-- Delete them
+	modified = modified or #dels > 0
+	for _,k in ipairs( dels ) do
+		D("loadCleanState() deleting saved state %1", k)
+		cstate[k] = nil
+		deleteVar( GRPSID, "GroupStatus_"..k, tdev )
+	end
+
+	-- Clean variables no longer in use
+	dels = {}
+	for n in pairs( cstate.vars or {} ) do
+		if (cdata.variables or {})[n] == nil then
+			table.insert( dels, n )
+		end
+	end
+	modified = modified or #dels > 0
+	for _,k in ipairs( dels ) do
+		D("loadCleanState() deleting variable %1, not in cdata.variables", k)
+		cstate.vars[k] = nil
+		deleteVar( VARSID, k, tdev )
+		deleteVar( VARSID, k .. "_Error", tdev )
+	end
+
+	-- Save (possibly) updated state
 	cstate.lastUsed = os.time()
 	sst.condState = cstate
 	if modified then
@@ -1512,7 +1525,7 @@ local function getExpressionContext( cdata, tdev )
 			addServiceWatch( vn, svc, var, tdev )
 		end
 		-- Get and return value
-		return luup.variable_get( svc, var, vn ) or luaxp.NULL
+		return getVar( var, luaxp.NULL, vn, svc )
 	end
 	ctx.__functions.setstate = function( args )
 		local dev, svc, var, val = unpack( args )
@@ -1904,7 +1917,7 @@ local function resolveVarRef( v, tdev, depth )
 			luup.devices[tdev].description, tdev, v)
 		return v
 	end
-	return resolveVarRef( luup.variable_get( VARSID, var, tdev ), tdev, depth+1 )
+	return resolveVarRef( getVar( var, "", tdev, VARSID ), tdev, depth+1 )
 end
 
 -- Run the next scene group(s), until we run out of groups or a group delay
@@ -2154,17 +2167,75 @@ local function execSceneGroups( tdev, taskid, scd )
 									warning="TROUBLE: VeraAlerts unavailable to send notification, skipped." }
 								getSensorState( tdev ).trouble = true
 							end
+						elseif action.method == "SM" then -- SMTP Mail
+							local ok,smtp = pcall( require, "socket.smtp" )
+							if not ok or type(smtp) ~= "table" then
+								L({level=1,msg="Unable to send SMTP notification: socket.smtp is not installed"})
+								addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup,
+									warning="TROUBLE: SMTP Mail unavailable; socket.smtp is not installed. Skipped." }
+								getSensorState( tdev ).trouble = true
+							else
+								local server = getReactorVar( "SMTPServer", "localhost" )
+								local port = getVarNumeric( "SMTPPort", 0, pluginDevice, MYSID )
+								local authuser = getReactorVar( "SMTPUsername", "" )
+								local authpass = getReactorVar( "SMTPPassword", "" )
+								local from = getReactorVar( "SMTPSender", "unconfigured@localhost" )
+								local to = action.recipient or getReactorVar( "SMTPDefaultRecipient", "unconfigured@localhost" )
+								local subj = action.subject or getReactorVar( "SMTPDefaultSubject", luup.devices[tdev].description .. " Notification" )
+								local sendt = { from = from:gsub( "^[^<]+<([^>]+)>.*$", "%1" ), rcpt = {}, server = server }
+								local msgt = { headers = { From=from, To={}, Subject=subj }, body = msg }
+								to = split( to ) or { from }
+								for _,rr in ipairs( to ) do
+									local rc = rr:gsub( "^[^<]+<([^>]+)>.*$", "%1" ) -- remove human readables, if present
+									table.insert( sendt.rcpt, "<" .. rc .. ">" )
+									table.insert( msgt.headers.To, rr )
+								end
+								if port > 0 then 
+									sendt.port = port 
+									if port == 465 or getVarNumeric( "SMTPConnectSSLTLS", 0, pluginDevice, MYSID ) ~= 0 then
+										sendt.create = function() 
+											local socket = require "socket"
+											local sock = socket.tcp()
+											return setmetatable({
+												connect = function(_, hh, pp)
+													local r, e = sock:connect( hh, pp )
+													if not r then return r, e end
+													local ssl = require "ssl"
+													sock = ssl.wrap( sock, { mode='client', protocol='tlsv1', verify='none' } )
+													return sock:dohandshake()
+												end
+											}, {
+												__index = function( t, n ) -- luacheck: ignore 212
+													return function( _, ... )
+														return sock[n](sock, ...)
+													end
+												end
+											})
+										end
+									end
+								end
+								if authuser ~= "" then sendt.user = authuser end
+								if authpass ~= "" then sendt.password = authpass end
+								msgt.headers.To = table.concat( msgt.headers.To, ", " )
+								sendt.source = smtp.message( msgt )
+								D("execSceneGroups() SMTP mail sending %1", sendt)
+								local r,e = smtp.send( sendt )
+								D("execSceneGroups() SMTP send returned %1, %2", r, e)
+								if r == nil then
+									L({level=2,msg="SMTP Send failed, %1; package %2"}, e, sendt)
+								end
+							end
 						elseif action.method == "PR" then -- Prowl
-							local apikey = luup.variable_get( MYSID, "ProwlAPIKey", pluginDevice ) or ""
+							local apikey = getReactorVar( "ProwlAPIKey", "" )
 							if apikey == "" or apikey == "X" then
 								L({level=2,msg="Notification via Prowl can't be completed because the Prowl API Key has not been set"})
 								addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup,
 									warning="TROUBLE: Prowl API key not set, notification skipped." }
 								getSensorState( tdev ).trouble = true
 							else
-								local provider = luup.variable_get( MYSID, "ProwlProvider", pluginDevice ) or ""
-								local subject = luup.variable_get( MYSID, "ProwlSubject", pluginDevice ) or luup.devices[tdev].description
-								local baseurl = "https://api.prowlapp.com/publicapi/add"
+								local provider = getReactorVar( "ProwlProvider", "" )
+								local subject = getReactorVar( "ProwlSubject", luup.devices[tdev].description )
+								local baseurl = getReactorVar( "ProwlURL", "https://api.prowlapp.com/publicapi/add" )
 								local st,ht
 								-- Prefer request because we need POST, but some firmware doesn't support it,
 								-- and prowl servers don't really seem to care.
@@ -3063,7 +3134,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 			if (ishome.users[userid] or {}).tags and ishome.users[userid].tags[location] then
 				local val = ishome.users[userid].tags[location].status or ""
 				if val == "" then
-					val = luup.variable_get( RSSID, "GeofenceDefaultStatus", tdev ) or ""
+					val = getVar( "GeofenceDefaultStatus", "", tdev )
 				end
 				if val ~= "" then
 					return val,val==( op=="at" and "in" or "out" )
@@ -3874,7 +3945,7 @@ end
 function startPlugin( pdev )
 --[[
 	local uilang = luup.attr_get('ui_lang', 0) or "en"
-	local plang = luup.variable_get( MYSID, "lang", pdev ) or ""
+	local plang = getReactorVar( "lang", "" )
 	if plang ~= "" then uilang = plang end
 	i18n.loadFile("T_Reactor_i18n.json") -- Load default language package
 	if uilang ~= "en" then
@@ -3941,7 +4012,7 @@ function startPlugin( pdev )
 	local nr = getVarNumeric( "MaxRestartCount", 10, pdev, MYSID )
 	local p = getVarNumeric( "MaxRestartPeriod", 900, pdev, MYSID )
 	if nr > 1 and p > 0 then
-		local s = luup.variable_get( MYSID, "rs", pdev ) or ""
+		local s = getReactorVar( "rs", "", pdev )
 		s = split( s, ',' )
 		while #s >= nr do table.remove(s, 1) end
 		D("startPlugin() restart check (limit %1 in %2); previous restarts: %3", nr, p, s)
@@ -4053,7 +4124,7 @@ function startPlugin( pdev )
 	end
 
 	-- Queue all scenes cached for refresh
-	local sd = luup.variable_get( MYSID, "scenedata", pdev ) or "{}"
+	local sd = getReactorVar( "scenedata", "{}", pdev )
 	sceneData = json.decode( sd ) or {}
 	for _,scd in pairs( sceneData ) do
 		refreshScene( scd.id )
@@ -5067,8 +5138,7 @@ local function showGeofenceData( r )
 				EOL
 		end
 	end
-	local c = luup.variable_get( MYSID, "raw_udgeo", pluginDevice ) or ""
-	r = r .. "            Raw: " .. c .. EOL
+	r = r .. "            Raw: " .. getReactorVar( "raw_udgeo", "" ) .. EOL
 	return r
 end
 
@@ -5253,15 +5323,15 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		end )
 		r = r .. EOL
 		r = r .. "Local time: " .. os.date("%Y-%m-%dT%H:%M:%S%z") ..
-			"; DST=" .. tostring(luup.variable_get( MYSID, "LastDST", pluginDevice ) or "") ..
+			"; DST=" .. getReactorVar( "LastDST", "?" ) ..
 			"; " .. tostring(luup.attr_get("City_description",0)) ..
 			", " .. tostring(luup.attr_get("Region_description",0)) ..
 			" " .. tostring(luup.attr_get("Country_description",0)) ..
 			EOL
-		r = r .. "House mode: plugin " .. tostring(luup.variable_get( MYSID, "HouseMode", pluginDevice ) or "?") ..
+		r = r .. "House mode: plugin " .. getReactorVar( "HouseMode", "?") ..
 			"; system " .. tostring( luup.attr_get('Mode',0) or "" ) ..
 			"; tracking " .. ( usesHouseMode and "on" or "off" ) .. EOL
-		r = r .. "  Sun data: " .. tostring(luup.variable_get( MYSID, "sundata", pluginDevice ) or "") .. EOL
+		r = r .. "  Sun data: " .. getReactorVar( "sundata", "" ) .. EOL
 		if geofenceMode ~= 0 then
 			local status, p = pcall( showGeofenceData )
 			if status then
@@ -5273,8 +5343,8 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			r = r .. "  Geofence: not running" .. EOL
 		end
 		if hasBattery then
-			r = r .. "     Power: " .. tostring(luup.variable_get( MYSID, "SystemPowerSource", pluginDevice ) or "?")
-			r = r .. ", battery level " .. tostring(luup.variable_get( MYSID, "SystemBatteryLevel", pluginDevice ) or "?") .. EOL
+			r = r .. "     Power: " .. getReactorVar( "SystemPowerSource", "?")
+			r = r .. ", battery level " .. getReactorVar( "SystemBatteryLevel", "?") .. EOL
 		end
 		for n,d in pairs( luup.devices ) do
 			local scenesUsed = {}
@@ -5290,7 +5360,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 					r = r .. "    **** UNPARSEABLE CONFIGURATION ****" .. EOL
 				else
 					r = r .. string.format("    Version %s.%s %s", cdata.version or 0, cdata.serial or 0, os.date("%x %X", cdata.timestamp or 0)) .. EOL
-					r = r .. string.format("    Message/status: %s", luup.variable_get( RSSID, "Message", n ) or "" ) .. EOL
+					r = r .. string.format("    Message/status: %s", getVar( "Message", "", n ) ) .. EOL
 					local s = getVarNumeric( "TestTime", 0, n, RSSID )
 					if s ~= 0 then
 						r = r .. string.format("    Test time set: %s", os.date("%Y-%m-%d %H:%M", s)) .. EOL
@@ -5422,9 +5492,9 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			headers = { ['Content-Length']=string.len( body ), ['Content-Type']="application/x-www-form-urlencoded" },
 			source = ltn12.source.string( body ),
 			sink = ltn12.sink.file( f ),
-			verify = luup.variable_get( MYSID, "SSLVerify", pluginDevice ) or "none",
-			protocol = luup.variable_get( MYSID, "SSLProtocol", pluginDevice ) or 'tlsv1',
-			options = luup.variable_get( MYSID, "SSLOptions", pluginDevice ) or 'all'
+			verify = getReactorVar( "SSLVerify", "none" ),
+			protocol = getReactorVar( "SSLProtocol", "tlsv1" ),
+			options = getReactorVar( "SSLOptions", "all" )
 		}
 		http.TIMEOUT = 30
 		https.TIMEOUT = 30
@@ -5465,9 +5535,9 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			headers = { ['Content-Length']=string.len( body ), ['Content-Type']="application/json" },
 			source = ltn12.source.string( body ),
 			sink = ltn12.sink.table(resp),
-			verify = luup.variable_get( MYSID, "SSLVerify", pluginDevice ) or "none",
-			protocol = luup.variable_get( MYSID, "SSLProtocol", pluginDevice ) or 'tlsv1',
-			options = luup.variable_get( MYSID, "SSLOptions", pluginDevice ) or 'all'
+			verify = getReactorVar( "SSLVerify", "none" ),
+			protocol = getReactorVar( "SSLProtocol", "tlsv1" ),
+			options = getReactorVar( "SSLOptions", "all" )
 		}
 		http.TIMEOUT = 30
 		https.TIMEOUT = 30
