@@ -16,7 +16,7 @@ local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION	= 19226
 local _CDATAVERSION		= 19082	-- must coincide with JS
-local _UIVERSION		= 19225	-- must coincide with JS
+local _UIVERSION		= 19226	-- must coincide with JS
       _SVCVERSION		= 19202	-- must coincide with impl file (not local)
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
@@ -124,13 +124,26 @@ local function L(msg, ...) -- luacheck: ignore 212
 			return tostring(val)
 		end
 	)
-	luup.log(str, level)
+	luup.log(str, math.max(1,level))
+	if level <= 2 then local f = io.open( "/etc/cmh-ludl/Reactor.log", "a" ) if f then f:write( str .. "\n" ) f:close() end end
+	if level == 0 then if debug and debug.traceback then luup.log( debug.traceback(), 1 ) end error(str, 2) end
 end
 
 local function D(msg, ...)
 	if debugMode then
-		L( { msg=msg,prefix=(_PLUGIN_NAME .. "(debug)") }, ... )
+		local inf = debug and debug.getinfo(2, "Snl") or {}
+		L( { msg=msg,
+			prefix=(_PLUGIN_NAME .. "(" .. 
+				(inf.name or string.format("<func@%s>", tostring(inf.linedefined or "?"))) ..
+				 ":" .. tostring(inf.currentline or "?") .. ")") }, ... )
 	end
+end
+
+-- An assert() that only functions in debug mode
+local function DA(cond, m, ...) 
+	if cond or not debugMode then return end
+	L({level=0,msg=m or "Assertion failed!"}, ...)
+	error("assertion failed") -- should be unreachable
 end
 
 local function getInstallPath()
@@ -250,11 +263,8 @@ local function initVar( name, dflt, dev, sid )
 	assert( sid ~= nil )
 	local currVal = luup.variable_get( sid, name, dev )
 	if currVal == nil then
-luup.log("initVar() "..dev.."/"..(sid or RSSID).."/"..name.." initializing to "..tostring(dflt), 1)
 		luup.variable_set( sid, name, tostring(dflt), dev )
 		return tostring(dflt)
-	else
-luup.log("initVar() "..dev.."/"..(sid or RSSID).."/"..name.." is already set", 2)
 	end
 	return currVal
 end
@@ -279,6 +289,7 @@ local function deleteVar( sid, name, dev )
 	end
 end
 
+-- Get variable with possible default
 local function getVar( name, dflt, dev, sid )
 	assert ( name ~= nil and dev ~= nil )
 	local s,t = luup.variable_get( sid or RSSID, name, dev )
@@ -286,11 +297,13 @@ local function getVar( name, dflt, dev, sid )
 	return s,t
 end
 
+-- Get variable on Reactor parent
 local function getReactorVar( name, dflt, dev ) return getVar( name, dflt, dev or pluginDevice, MYSID ) end
 
 -- Get numeric variable, or return default value if not set or blank
 local function getVarNumeric( name, dflt, dev, sid )
 	assert ( name ~= nil and dev ~= nil )
+	DA( dflt==nil or type(dflt)=="number", "Supplied default is not numeric or nil" )
 	local s = luup.variable_get( sid or RSSID, name, dev )
 	if s == nil or s == "" then return dflt end
 	return tonumber(s) or dflt
@@ -492,7 +505,7 @@ local function addEvent( t )
 	local sst = getSensorState( dev )
 	sst.eventList = sst.eventList or {}
 	table.insert( sst.eventList, p )
-	if #sst.eventList > maxEvents then table.remove( sst.eventList, 1 ) end
+	while #sst.eventList > 0 and #sst.eventList > maxEvents do table.remove( sst.eventList, 1 ) end
 end
 
 -- Enabled?
@@ -575,7 +588,7 @@ end
 
 -- Set the status message
 local function setMessage(s, dev)
-	assert( dev ~= nil )
+	DA( dev ~= nil )
 	luup.variable_set(RSSID, "Message", s or "", dev)
 end
 
@@ -763,7 +776,7 @@ local function sensor_runOnce( tdev )
 		initVar( "WatchResponseHoldOff", "-1", tdev, RSSID )
 	end
 
-	if s == 19296 then
+	if s >= 19296 then
 		-- 19296 is 2019-10-23
 		deleteVar( RSSID, "ValueChangeHoldTime", tdev )
 		deleteVar( RSSID, "ReloadConditionHoldTime", tdev )
@@ -1049,8 +1062,7 @@ local function loadCleanState( tdev )
 
 	local cdata = getSensorConfig( tdev )
 	if not cdata then
-		L({level=1,msg="ReactorSensor %1 (%2) has corrupt configuration data!"}, tdev, luup.devices[tdev].description)
-		error("ReactorSensor " .. tdev .. " has invalid configuration data")
+		L({level=0,msg="ReactorSensor %1 (%2) has corrupt configuration data!"}, tdev, luup.devices[tdev].description)
 		-- no return
 	end
 
@@ -1449,7 +1461,7 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
 	cstate.vars[vname].err = errmsg
 
 	-- Store on state variable if exported
-	if ( cdata.variables[vname].export or 1 ) ~= 0 then -- ??? UI for export?
+	if ( cdata.variables[vname].export or 1 ) ~= 0 then
 		if not ( err or luaxp.isNull(result) ) then
 			-- Canonify for storage as state variable
 			local sv
@@ -3199,6 +3211,7 @@ local function processCondition( cond, grp, cdata, tdev )
 	local newvalue, state, condTimer = evaluateCondition( cond, grp, cdata, tdev )
 	D("processCondition() group %1 cond %2 result %3 timer %4", (grp or {}).id,
 		cond.id, state, condTimer)
+	if condTimer then L({level=2,msg="Condition %1 in %2 returns true condition timer!"}, cond, grp.name or grp.id ) end
 	if state == nil then return newvalue, nil end -- as if it doesn't exist
 
 	-- Preserve the result of the condition eval. We are edge-triggered,
@@ -3427,6 +3440,7 @@ evaluateGroup = function( grp, parentGroup, cdata, tdev )
 	for ix,cond in ipairs( grp.conditions or {} ) do
 		D("evaluateGroup() process %3 #%1/%2: %4 %5", ix, #grp.conditions, grp.id, cond.type, cond.id )
 		local _, state, condTimer = processCondition( cond, grp, cdata, tdev )
+		if condTimer then L({level=2,msg="Condition %1 in %2 returns true condition timer!"}, cond, grp.name or grp.id ) end
 		if state ~= nil then
 			hasTimer = condTimer or hasTimer
 
@@ -3544,8 +3558,8 @@ local function processSensorUpdate( tdev, sst )
 		D("processSensorUpdate() checking groups for state changes")
 		for grp in conditionGroups( cdata.conditions.root ) do
 			D("processSensorUpdate() checking group %1 for state change", grp.id)
-			local gs = sst.condState[ grp.id ]
-			if grp.id ~= "root" and gs.changed then
+			local gs = sst.condState[ grp.id ] or {}
+			if grp.id ~= "root" and 0 == (grp.disabled or 0) and gs.changed then
 				local activity = grp.id .. ( gs.evalstate and ".true" or ".false" )
 				D("processSensorUpdate() group %1 <%2> state changed to %3, looking for activity %4",
 					grp.name or grp.id, grp.id, gs.evalstate, activity)
@@ -3723,7 +3737,7 @@ local function masterTick(pdev)
 
 	-- Check DST change. Re-eval all conditions if changed, just to be safe.
 	local dot = os.date("*t").isdst and "1" or "0"
-	local lastdst = initVar( "LastDST", dot, pdev, MYSID )
+	local lastdst = getReactorVar( "LastDST", "", pdev )
 	D("masterTick() current DST %1, last %2", dot, lastdst)
 	if dot ~= lastdst then
 		L({level=2,msg="DST change detected! Re-evaluating all children."})
@@ -4183,7 +4197,7 @@ function actionAddSensor( pdev, count )
 		highd = highd + 1
 		D("addSensor() creating child %3/%4 as r%1s%2", pdev, highd, k, count)
 		luup.chdev.append( pdev, ptr, string.format("r%ds%d", pdev, highd),
-			"Reactor Sensor " .. highd, "", "D_ReactorSensor.xml", "", "", false )
+			"Reactor Sensor " .. highd, "", "D_ReactorSensor.xml", "", RSSID..",Enabled=1", false )
 	end
 	luup.chdev.sync( pdev, ptr )
 	-- Should cause reload immediately.
@@ -5110,15 +5124,6 @@ local function getLuupSceneSummary( scd )
 	return r
 end
 
-local function showStartupLua()
-	local lua = luup.attr_get( "StartupCode", 0 ) or ""
-	if lua == "" then return "" end
-	local encoded = luup.attr_get( "encoded_lua", 0 ) or 0
-	local r = "Startup Lua:" .. EOL
-	r = r .. getLuaSummary( lua, encoded, "  %6d: %s" )
-	return r
-end
-
 local function showGeofenceData( r )
 	r = r or ""
 	local data = getVarJSON( "IsHome", {}, pluginDevice, MYSID )
@@ -5433,14 +5438,6 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			end
 		end
 
-		local rs = ""
-		if getVarNumeric("SummaryShowStartupLua", 0, pluginDevice, MYSID) ~= 0 then
-			-- ??? 2019-03-05: this may not be relevant, since plugin env can't see startup/scene lua env
-			rs = rs .. showStartupLua()
-		end
-		if rs ~= "" then
-			r = r .. string.rep( "=", 132 ) .. EOL .. rs
-		end
 		r = r .. "```" .. EOL
 		return r, "text/plain"
 
