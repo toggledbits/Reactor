@@ -5292,6 +5292,7 @@ var ReactorSensor = (function(api, $) {
 		jQuery( 'fieldset#users', $row ).toggle( false !== ninfo.users );
 		jQuery( 'fieldset#extrafields', $row ).remove();
 		jQuery( 'div.vanotice', $row ).remove();
+		jQuery( 'div.notifynotice', $row ).remove();
 		/*  Do not clear message or users (even if we don't use them) */
 		var f, fld;
 		if ( ninfo.extra ) {
