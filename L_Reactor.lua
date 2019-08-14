@@ -295,7 +295,7 @@ local function getVarJSON( name, dflt, dev, sid )
 	local s = luup.variable_get( sid, name, dev ) or ""
 	if s == "" then return dflt,false end
 	local data,pos,err = json.decode( s )
-	if err then return dflt,err,pos,s end
+	if data == nil then return dflt,err,pos,s end
 	return data,false
 end
 
@@ -846,7 +846,7 @@ local function loadSensorConfig( tdev )
 	local cdata, pos, err
 	if "" ~= s then
 		cdata, pos, err = json.decode( s )
-		if err or type(cdata) ~= "table" then
+		if type(cdata) ~= "table" then
 			L("Unable to parse JSON data at %2, %1 in %3", pos, err, s)
 			return error("Unable to load configuration")
 		end
@@ -1023,7 +1023,7 @@ local function loadCleanState( tdev )
 	if s ~= "" then
 		local err
 		cstate,_,err = json.decode( s )
-		if err then
+		if cstate == nil then
 			L({level=2,msg="ReactorSensor %1 (%2) corrupted cstate, clearing!"}, tdev, luup.devices[tdev].description)
 			cstate = {}
 			modified = true
@@ -1181,7 +1181,7 @@ local function loadScene( sceneId, pdev )
 		return false
 	end
 	local data, pos, err = json.decode(body)
-	if err then
+	if not data then
 		L("Can't decode JSON response for scene %1: %2 at %3 in %4", sceneId, err, pos, body)
 		return false
 	end
@@ -1577,7 +1577,7 @@ local function getExpressionContext( cdata, tdev )
 		local str = unpack( args )
 		-- Decode, converting "null" to LuaXP null.
 		local val,pos,err = json.decode( str, nil, luaxp.NULL )
-		if err then
+		if val == nil then
 			luaxp.evalerror("Failed to unstringify at " .. pos .. ": " .. err)
 		end
 		return val
@@ -2115,7 +2115,8 @@ local function execSceneGroups( tdev, taskid, scd )
 					if device == -1 then
 						device = tdev
 					end
-					luup.call_action( RSSID, "RunScene", { SceneNum=action.activity or "error", Options={ contextDevice=device } }, device )
+					local opts = json.encode( { contextDevice=device } )
+					luup.call_action( RSSID, "RunScene", { SceneNum=action.activity or "error", Options=opts }, device )
 				elseif action.type == "resetlatch" then
 					local device = action.device or -1
 					local group = action.group or ""
@@ -3588,7 +3589,9 @@ local function sensorTick( tdev)
 end
 
 -- Get the house mode tracker. If it doesn't exist, create it (child device).
--- No HMT on openLuup because it doesn't have native device file to support it.
+-- No HMT on openLuup because it doesn't have native device file to support it,
+-- but we can watch the HouseMode state variable on the openLuup device there,
+-- which is what Vera should have done in the first place.
 local function getHouseModeTracker( createit, pdev )
 	if not isOpenLuup then
 		local children = {}
@@ -3635,7 +3638,7 @@ local function masterTick(pdev)
 	-- Check and update house mode (by polling, always).
 	setVar( MYSID, "HouseMode", luup.attr_get( "Mode", 0 ) or "1", pdev )
 	if usesHouseMode and not isOpenLuup then
-		-- Find housemode tracking child. Create it if it doesn't exist.
+		-- Find housemode tracking child for Vera. Create it if it doesn't exist.
 		local hmt = getHouseModeTracker( true, pdev )
 		if hmt then
 			addServiceWatch( hmt, SENSOR_SID, "Armed", pdev )
@@ -4042,6 +4045,11 @@ function startPlugin( pdev )
 		setVar( MYSID, "scenedata", "{}", pdev )
 		setVar( MYSID, "NotifyQueue", "[]", pdev )
 		setVar( MYSID, "recoverymode", "0", pdev )
+	end
+
+	-- For openLuup, we watch the openLuup device's HouseMode variable.
+	if isOpenLuup then
+		addServiceWatch( isOpenLuup, "openLuup", "HouseMode", pdev )
 	end
 
 	-- Queue all scenes cached for refresh
@@ -4502,6 +4510,7 @@ end
 -- Run a Vera scene or ReactorSensor group activity in the context of the
 -- passed device.
 function actionRunScene( scene, options, dev )
+	D("actionRunScene(%1,%2,%3)", scene, options, dev)
 	assertEnabled( dev )
 	L("RunScene action invoked, scene %1", scene)
 	local scid, event, message = findSceneOrActivity( scene, dev )
@@ -4520,16 +4529,17 @@ function actionRunScene( scene, options, dev )
 	end
 
 	-- Default our options
-	if type(options) == "table" then
-	elseif type(options) == "string" and options ~= "" then
+	if ( options or "" ) ~= "" then
 		local opts,err,pos = json.decode( options )
-		if err then
-			L({level=1,msg="Invalid JSON in Options parameter to RunScene action: %1 at %2 in %3"},
-				err, pos, options)
-			options = opts
+		if not opts then
+			L({level=1,msg="Invalid JSON in Options parameter to RunScene action: %1 at %2 in "..options},
+				err, pos)
+			return false
 		end
+		options = opts
 	else
 		options = { contextDevice=dev }
+		D("actionRunScene() supplying default options %1", options)
 	end
 	options.forceReactorScenes = true -- If we use this action, this is how we do it
 	if options.stopPriorScenes == nil then options.stopPriorScenes = false end
@@ -4761,9 +4771,9 @@ function watch( dev, sid, var, oldVal, newVal )
 		else
 			D("watch() ignoring config change on disabled RS %1 (#%2)", luup.devices[dev].description, dev)
 		end
-	elseif (luup.devices[dev] or {}).id == "hmt" and
-			luup.devices[dev].device_num_parent == pluginDevice and
-			sid == SENSOR_SID and var == "Armed" then
+	elseif luup.devices[dev].device_num_parent == pluginDevice and
+			luup.devices[dev].id == "hmt" and sid == SENSOR_SID and 
+			var == "Armed" then
 		-- Arming state changed on HMT, update house mode.
 		D("watch() HMT device %1 arming state changed", dev)
 		if geofenceMode ~= 0 and getVarNumeric( "SuppressGeofenceHMTUpdate", 0, pluginDevice, MYSID ) == 0 then
@@ -4775,6 +4785,10 @@ function watch( dev, sid, var, oldVal, newVal )
 		D("watch() updating HouseMode to %1", mode)
 		setVar( MYSID, "HouseMode", mode, pluginDevice )
 		setHMTModeSetting( dev )
+	elseif dev == isOpenLuup and sid == "openLuup" and var == "HouseMode" then
+		D("watch() openLuup house mode changed to %1", newVal)
+		-- No geofencing on openLuup, so we don't need to worry about that here.
+		setVar( MYSID, "HouseMode", newVal, pluginDevice )
 	else
 		local key = string.format("%d/%s/%s", dev, sid, var)
 		if watchData[key] ~= nil then
