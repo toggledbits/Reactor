@@ -21,7 +21,7 @@ var ReactorSensor = (function(api, $) {
 
 	var DEVINFO_MINSERIAL = 71.222;
 
-	var _UIVERSION = 19225;     /* must coincide with Lua core */
+	var _UIVERSION = 19226;     /* must coincide with Lua core */
 
 	var _CDATAVERSION = 19082;  /* must coincide with Lua core */
 
@@ -103,7 +103,6 @@ var ReactorSensor = (function(api, $) {
 		{ op: 'change', desc: 'changes', args: 2, format: "from %1 to %2", optional: 2 },
 		{ op: 'update', desc: 'updates', args: 0 }
 	];
-	var noCaseOptPattern = /^(=|<>|contains|notcontains|starts|notstarts|ends|notends|in|notin|change)$/i;
 
 	var varRefPattern = /^\{([^}]+)\}\s*$/;
 
@@ -1023,8 +1022,8 @@ var ReactorSensor = (function(api, $) {
 						}
 					}
 				}
-				if ( ( cond.operator || "=" ).match( noCaseOptPattern ) &&
-						coalesce( cond.nocase, 1 ) == 0 ) {
+				if ( ( !t || 0 === ( t.numeric || 0 ) ) &&
+						0 === coalesce( cond.nocase, 1 ) ) {
 					str += ' (match case)';
 				}
 				break;
@@ -1910,7 +1909,8 @@ var ReactorSensor = (function(api, $) {
 					cond.variable = cond.service.replace( /^[^\/]+\//, "" );
 					cond.service = cond.service.replace( /\/.*$/, "" );
 					cond.operator = jQuery("div.params select.opmenu", $row).val() || "=";
-					if ( cond.operator.match( noCaseOptPattern ) ) {
+					var op = arrayFindValue( serviceOps, function( v ) { return v.op === cond.operator; } ) || serviceOps[0];
+					if ( 0 === ( op.numeric || 0 ) ) {
 						/* Case-insensitive (nocase==1) is the default */
 						val = ( jQuery( 'input.nocase', $row ).prop( 'checked' ) || false ) ? 1 : 0;
 						if ( val !== cond.nocase ) {
@@ -1921,7 +1921,6 @@ var ReactorSensor = (function(api, $) {
 						delete cond.nocase;
 						configModified = true;
 					}
-					var op = arrayFindValue( serviceOps, function( v ) { return v.op === cond.operator; } ) || serviceOps[0];
 					if ( op.args > 1 ) {
 						// Join simple two value list, but don't save "," on its own.
 						cond.value = jQuery( 'input#val1', $row ).val() || "";
@@ -2525,7 +2524,7 @@ var ReactorSensor = (function(api, $) {
 					}
 				}
 				var $opt = jQuery( 'fieldset#nocaseopt', $row );
-				if ( val.match( noCaseOptPattern ) ) {
+				if ( 0 === ( op.numeric || 0 ) ) {
 					$opt.show();
 					jQuery( 'input.nocase', $opt ).prop( 'checked', coalesce( cond.nocase, 1 ) !== 0 );
 				} else {
