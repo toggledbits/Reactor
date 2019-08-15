@@ -3781,7 +3781,7 @@ local function cleanSensorState( tdev )
 	D("cleanSensorState(%1)", tdev)
 	local sc,content,httpStatus = luup.inet.wget( 'http://127.0.0.1:3480/data_request?id=status&DeviceNum='..tdev..'&output_format=json' )
 	if sc ~= 0 then
-		L({level=2,msg="Failed to complete status request for #%1 (%2, %3)"}, sc, httpStatus)
+		L({level=2,msg="Failed to complete status request for #%1 (%2, %3)"}, tdev, sc, httpStatus)
 		return
 	end
 	local data = json.decode( content )
