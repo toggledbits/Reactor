@@ -16,7 +16,7 @@ local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION	= 19226
 local _CDATAVERSION		= 19082	-- must coincide with JS
-local _UIVERSION		= 19226	-- must coincide with JS
+local _UIVERSION		= 19227	-- must coincide with JS
       _SVCVERSION		= 19202	-- must coincide with impl file (not local)
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"

@@ -21,7 +21,7 @@ var ReactorSensor = (function(api, $) {
 
 	var DEVINFO_MINSERIAL = 71.222;
 
-	var _UIVERSION = 19226;     /* must coincide with Lua core */
+	var _UIVERSION = 19227;     /* must coincide with Lua core */
 
 	var _CDATAVERSION = 19082;  /* must coincide with Lua core */
 
