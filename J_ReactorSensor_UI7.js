@@ -592,7 +592,7 @@ var ReactorSensor = (function(api, $) {
 
 			/* Take a pass over devices and see what we discover */
 			var dl = api.getListOfDevices();
-			dl.forEach( function( i, devobj ) {
+			dl.forEach( function( devobj ) {
 				if ( devobj.device_type === "openLuup" && devobj.id_parent == 0 ) {
 					isOpenLuup = devobj.id;
 				} else if ( devobj.device_type === "urn:richardgreen:device:VeraAlert:1" && devobj.id_parent == 0 ) {
