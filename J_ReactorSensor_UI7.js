@@ -1257,15 +1257,7 @@ var ReactorSensor = (function(api, $) {
 		el.prepend( jQuery( '<option/>' ).val( "-1" ).text( "(this ReactorSensor)" ) );
 		el.prepend( jQuery( '<option/>' ).val( "" ).text( "--choose device--" ) );
 
-		if ( val !== "" ) {
-			var opt = jQuery( 'option[value="' + val + '"]', el );
-			if ( 0 === opt.length ) {
-				el.append( jQuery( '<option/>' ).val( val ).text( "(missing) #" + val + " " + name ) );
-			}
-			el.val( val );
-		} else {
-			jQuery( 'option:first', el ).prop('selected', true);
-		}
+		menuSelectDefaultInsert( el, val, "(missing) #" + String(val) + " " + String(name || "") );
 		return el;
 	}
 
@@ -1490,13 +1482,9 @@ var ReactorSensor = (function(api, $) {
 				/* Apply highlight for state */
 				if ( cond.type !== "comment" && undefined !== currentValue ) {
 					var cs = cstate[cond.id] || {};
-					if ( cs.evalstate ) {
-						row.addClass( "truestate" ).removeClass( "falsestate" );
-						jQuery( 'div.condind i', row ).text( 'check' );
-					} else {
-						row.removeClass("truestate").addClass( "falsestate" );
-						jQuery( 'div.condind i', row ).text( 'clear' );
-					}
+					row.toggleClass( 'truestate', true === cs.evalstate )
+						.toggleClass( 'falsestate', true === cs.evalstate );
+					jQuery( 'div.condind i', row ).text( cs.evalstate ? 'check' : 'clear' );
 				}
 
 				grpel.append( row );
@@ -1750,9 +1738,15 @@ var ReactorSensor = (function(api, $) {
 				var mm = {}, ms = [];
 				for ( var k=0; k<( devobj.states || []).length; ++k ) {
 					var st = devobj.states[k];
-					if ( undefined === st.variable || undefined === st.service ) continue;
+					if ( isEmpty( st.variable ) || isEmpty( st.service ) ) continue;
 					/* For self-reference, only allow variables created from configured expressions */
-					if ( device == myid && ! st.service.match( /^urn:toggledbits-com:serviceId:Reactor(Values|Group)$/ ) ) continue;
+					if ( devobj.device_type == deviceType ) {
+						/* Never allow group states, as these should be done using a grpstate cond */
+						if ( st.service === "urn:toggledbits-com:serviceId:ReactorGroup" ) continue;
+						/* If own RS, very limited list of variables allowed */
+						if ( device == myid && st.service !== "urn:toggledbits-com:serviceId:ReactorValues" && 
+							!st.variable.match( /^(TripCount|Runtime|Armed|LastTrip)$/ ) ) continue;
+					}
 					var vnm = st.variable.toLowerCase();
 					if ( undefined === mm[vnm] ) {
 						/* Just use variable name as menu text, unless multiple with same name (collision) */
@@ -1783,13 +1777,11 @@ var ReactorSensor = (function(api, $) {
 				}
 			}
 
-			if ( ! ( isEmpty( service ) || isEmpty( variable ) ) ) {
-				var opt = jQuery( 'option[value="' + service + '/' + variable + '"]', el );
-				if ( opt.length === 0 ) {
-					el.append( '<option value="' + service + '/' + variable + '" selected>' + service + '/' + variable + ' *</option>' );
-				} else {
-					el.val( service + '/' + variable );
-				}
+			if ( isEmpty( service ) || isEmpty( variable ) ) {
+				menuSelectDefaultFirst( el, "" );
+			} else {
+				var key = service + "/" + variable;
+				menuSelectDefaultInsert( el, key );
 			}
 			return el;
 		}
@@ -1865,7 +1857,7 @@ var ReactorSensor = (function(api, $) {
 				console.log( "makeRSGroupMenu: " + String(e) );
 			}
 			/* Default-select the current value, or root if none. */
-			menuSelectDefaultInsert( mm, cond.groupid || "", cond.groupname || cond.groupid + "?" );
+			menuSelectDefaultInsert( mm, cond.groupid || "", ( cond.groupname || cond.groupid ) + "? (missing)" );
 			return mm;
 		}
 
@@ -2774,19 +2766,23 @@ var ReactorSensor = (function(api, $) {
 			el.append( '<button id="dropdownTriggers" class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" title="Click for device-defined events"><i class="material-icons" aria-haspopup="true" aria-expanded="false">chevron_right</i></button>' );
 			var mm = jQuery( '<div class="dropdown-menu" role="menu" aria-labelledby="dropdownTriggers" />' );
 			el.append( mm );
+			var myid = api.getCpanelDeviceId();
+			var myself = -1 === cond.device || cond.device === myid;
 			var events;
-			if ( isALTUI ) {
-				/* AltUI doesn't implement getDeviceTemplate() as of 2019-06-09 */
-				var dobj = api.getDeviceObject( -1 === cond.device ? api.getCpanelDeviceId() : cond.device );
-				var eobj = dobj ? api.getEventDefinition( dobj.device_type ) || {} : {};
-				/* AltUI returns object; reduce to array */
-				events = [];
-				for ( var ie=0; undefined !== eobj[String(ie)] ; ie++ ) {
-					events.push( eobj[String(ie)] );
+			if ( ! myself ) {
+				if ( isALTUI ) {
+					/* AltUI doesn't implement getDeviceTemplate() as of 2019-06-09 */
+					var dobj = api.getDeviceObject( myself ? myid : cond.device );
+					var eobj = dobj ? api.getEventDefinition( dobj.device_type ) || {} : {};
+					/* AltUI returns object; reduce to array */
+					events = [];
+					for ( var ie=0; undefined !== eobj[String(ie)] ; ie++ ) {
+						events.push( eobj[String(ie)] );
+					}
+				} else {
+					var dtmp = api.getDeviceTemplate( myself ? myid : cond.device );
+					events = dtmp ? dtmp.eventList2 : false;
 				}
-			} else {
-				var dtmp = api.getDeviceTemplate( -1 === cond.device ? api.getCpanelDeviceId() : cond.device );
-				events = dtmp ? dtmp.eventList2 : false;
 			}
 			if ( events && events.length > 0 ) {
 				var wrapAction = function( eventinfo, cond, $row ) {
@@ -2798,10 +2794,7 @@ var ReactorSensor = (function(api, $) {
 						cond.value = el.data( 'value' ) || "";
 						delete cond.nocase;
 						var sk = cond.service + "/" + cond.variable;
-						if ( 0 === jQuery( 'select.varmenu option[value="' + idSelector( sk ) + '"]', $row ).length ) {
-							jQuery( 'select.varmenu', $row ).append( jQuery( '<option/>').val( sk ).text( sk ) );
-						}
-						jQuery( 'select.varmenu', $row ).val( sk );
+						menuSelectDefaultInsert( jQuery( 'select.varmenu', $row ), sk );
 						jQuery( 'select.opmenu', $row ).val( cond.operator );
 						jQuery( 'input#value', $row ).val( cond.value );
 						configModified = true;
@@ -2943,7 +2936,7 @@ var ReactorSensor = (function(api, $) {
 					cond.device = coalesce( cond.device, -1 );
 					/* Make a device menu that shows ReactorSensors only. */
 					container.append( makeDeviceMenu( cond.device, cond.devicename || "unknown device", function( dev ) {
-						return "urn:schemas-toggledbits-com:device:ReactorSensor:1" === dev.device_type;
+						return deviceType === dev.device_type;
 					}));
 					/* Fix-up: makeDeviceMenu will display current userdata name
 							   for device, but if that's changed from what we've stored,
@@ -3230,11 +3223,7 @@ var ReactorSensor = (function(api, $) {
 						jQuery( "fieldset#relcondset", container ).show();
 						jQuery( "fieldset#reltimeset", container ).hide();
 						var t = cond.relcond || "";
-						if ( 0 === jQuery( "select#relcond option[value='" + idSelector( t ) + "']", container ).length ) {
-							jQuery( "select#relcond", container )
-								.append( jQuery( '<option/>' ).val( t ).text( t + " (missing?)" ) );
-						}
-						jQuery( "#relcond", container ).val( t );
+						menuSelectDefaultInsert( jQuery( "select#relcond", container ), t );
 					} else {
 						/* Relative to time (default) */
 						if ( ! isEmpty( cond.basetime ) ) {
@@ -3336,9 +3325,11 @@ var ReactorSensor = (function(api, $) {
 					btn.addClass( 'attn' );
 				} else {
 					btn.removeClass( 'attn' );
+					delete cond.options;
 				}
 			} else {
 				btn.removeClass( 'attn' ).prop( 'disabled', true ).hide();
+				delete cond.options;
 			}
 		}
 
@@ -3687,11 +3678,7 @@ var ReactorSensor = (function(api, $) {
 				$el.closest( '.btn-group' ).find( '.checked' ).removeClass( 'checked' );
 				$el.addClass( 'checked' );
 			} else {
-				if ( $el.hasClass( "checked" ) ) {
-					$el.removeClass( "checked" );
-				} else {
-					$el.addClass( "checked" );
-				}
+				$el.toggleClass( "checked" );
 			}
 
 			switch (action) {
@@ -6461,12 +6448,8 @@ var ReactorSensor = (function(api, $) {
 						break;
 
 					case "runscene":
-						if ( 0 === jQuery( 'select#scene option[value="' + act.scene + '"]', newRow ).length ) {
-							/* Insert missing value (ref to non-existent scene) */
-							var el = jQuery( '<option/>' ).val( act.scene ).text( ( act.sceneName || "name?" ) + ' (#' + act.scene + ') (missing)' );
-							jQuery( 'select#scene', newRow ).prepend( el ).addClass( "tberror" );
-						}
-						jQuery( 'select#scene', newRow).val( act.scene );
+						menuSelectDefaultInsert( jQuery( 'select#scene', newRow), act.scene, 
+							( act.sceneName || "name?" ) + ' (#' + act.scene + ') (missing)' );
 						jQuery( 'select#method', newRow).val( act.usevera ? "V" : "" );
 						break;
 
