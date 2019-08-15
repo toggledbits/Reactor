@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.4develop-19226"
+local _PLUGIN_VERSION = "3.4develop-19227"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION	= 19226
@@ -125,7 +125,7 @@ local function L(msg, ...) -- luacheck: ignore 212
 		end
 	)
 	luup.log(str, math.max(1,level))
-	if level <= 2 then local f = io.open( "/etc/cmh-ludl/Reactor.log", "a" ) if f then f:write( str .. "\n" ) f:close() end end
+--[[ ???dev --]] if level <= 2 then local f = io.open( "/etc/cmh-ludl/Reactor.log", "a" ) if f then f:write( str .. "\n" ) f:close() end end
 	if level == 0 then if debug and debug.traceback then luup.log( debug.traceback(), 1 ) end error(str, 2) end
 end
 
@@ -160,7 +160,7 @@ local function getInstallPath()
 end
 
 local function split( str, sep )
-	if sep == nil then sep = "," end
+	sep = sep or ","
 	local arr = {}
 	if str == nil or #str == 0 then return arr, 0 end
 	local rest = string.gsub( str or "", "([^" .. sep .. "]*)" .. sep, function( m ) table.insert( arr, m ) return "" end )
@@ -259,8 +259,7 @@ end
 
 -- Initialize a variable if it does not already exist.
 local function initVar( name, dflt, dev, sid )
-	assert( dev ~= nil )
-	assert( sid ~= nil )
+	assert( dev ~= nil and sid ~= nil)
 	local currVal = luup.variable_get( sid, name, dev )
 	if currVal == nil then
 		luup.variable_set( sid, name, tostring(dflt), dev )
@@ -802,7 +801,7 @@ local function plugin_runOnce( pdev )
 		initVar( "DebugMode", 0, pdev, MYSID )
 		initVar( "MaxEvents", "", pdev, MYSID )
 		initVar( "StateCacheExpiry", 600, pdev, MYSID )
-		initVar( "UseACE", "", pdev, MYSID )
+		initVar( "UseACE", "1", pdev, MYSID )
 		initVar( "ACEURL", "", pdev, MYSID )
 		initVar( "NumChildren", 0, pdev, MYSID )
 		initVar( "NumRunning", 0, pdev, MYSID )
@@ -843,6 +842,9 @@ local function plugin_runOnce( pdev )
 	end
 
 	if s < 19226 then
+		if getReactorVar( "UseACE", "", pdev ) == "" then
+			setVar( MYSID, "UseACE", "1", pdev )
+		end
 		initVar( "MaxRestartCount", "", pdev, MYSID )
 		initVar( "MaxRestartPeriod", "", pdev, MYSID )
 		initVar( "rs", "", pdev, MYSID )
@@ -2623,14 +2625,8 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		elseif op == "notends" then
 			if string.find( vv, cv .. "$" ) then return vv,false end
 		elseif op == "in" or op == "notin" then
-			local lst = split( cv )
-			local found = false
-			for _,z in ipairs( lst ) do
-				if z == vv then
-					found = true
-					break
-				end
-			end
+			local lst = split( cv ) or {}
+			local found = isOnList( lst, vv )
 			if op == "notin" and found then return vv,false end
 			if op == "in" and not found then return vv,false end
 		elseif op == "istrue" then
