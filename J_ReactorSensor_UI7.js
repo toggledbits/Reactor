@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.4develop-19226';
+	var pluginVersion = '3.4develop-19227';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -32,7 +32,7 @@ var ReactorSensor = (function(api, $) {
 
 	var moduleReady = false;
 	var iData = [];
-	var roomsByName = [];
+	var roomsByName = false;
 	var actions = {};
 	var deviceActionData = {};
 	var deviceInfo = {};
@@ -590,50 +590,18 @@ var ReactorSensor = (function(api, $) {
 				}
 			}
 
-			/* Make our own list of devices, sorted by room, and alpha within room. */
-			var devices = api.cloneObject( api.getListOfDevices() );
-			var noroom = { "id": 0, "name": "No Room", "devices": [] };
-			var rooms = [ noroom ];
-			var roomIx = {};
-			roomIx[String(noroom.id)] = noroom;
-			var dd = devices.sort( function( a, b ) {
-				if ( a.id == myid ) return -1;
-				if ( b.id == myid ) return 1;
-				if ( a.name.toLowerCase() === b.name.toLowerCase() ) {
-					return a.id < b.id ? -1 : 1;
-				}
-				return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1;
-			});
-			for (var i=0; i<dd.length; i+=1) {
-				var devobj = api.cloneObject( dd[i] );
-				/* Detect openLuup while we're at it */
-				if ( "openLuup" === devobj.device_type ) {
+			/* Take a pass over devices and see what we discover */
+			var dl = api.getListOfDevices();
+			dl.forEach( function( i, devobj ) {
+				if ( devobj.device_type === "openLuup" && devobj.id_parent == 0 ) {
 					isOpenLuup = devobj.id;
-				} else if ( "urn:richardgreen:device:VeraAlert:1" === devobj.device_type ) {
+				} else if ( devobj.device_type === "urn:richardgreen:device:VeraAlert:1" && devobj.id_parent == 0 ) {
 					devVeraAlerts = devobj.id;
 				}
+			});
 
-				var roomid = devobj.room || 0;
-				var roomObj = roomIx[String(roomid)];
-				if ( undefined === roomObj ) {
-					roomObj = api.cloneObject( api.getRoomObject(roomid) );
-					roomObj.devices = [];
-					roomIx[String(roomid)] = roomObj;
-					rooms[rooms.length] = roomObj;
-				}
-				roomObj.devices.push( devobj );
-			}
-			roomsByName = rooms.sort(
-				/* Special sort for room name -- sorts "No Room" last */
-				function (a, b) {
-					if (a.id === 0) return 1;
-					if (b.id === 0) return -1;
-					if (a.name.toLowerCase() === b.name.toLowerCase()) return 0;
-					return a.name.toLowerCase() > b.name.toLowerCase() ? 1 : -1;
-				}
-			);
-
-			for ( ix=0; ix<(ud.users || []).length; ++ix ) {
+			/* User and geofence pre-processing */
+			for ( var ix=0; ix<(ud.users || []).length; ++ix ) {
 				userIx[ud.users[ix].id] = { name: ud.users[ix].Name || ud.users[ix].id };
 				userNameIx[ud.users[ix].Name || ud.users[ix].id] = ud.users[ix].id;
 			}
@@ -643,6 +611,7 @@ var ReactorSensor = (function(api, $) {
 					   doesn't exist in users[], but Vera says "hold my beer" apparently. */
 					if ( undefined === userIx[ fobj.iduser ] ) userIx[ fobj.iduser ] = { name: String(fobj.iduser) + '?' };
 					userIx[ fobj.iduser ].tags = {};
+					userNameIx[ fobj.iduser ] = fobj.iduser;
 					jQuery.each( fobj.geotags || [], function( iy, gobj ) {
 						userIx[ fobj.iduser ].tags[ gobj.id ] = {
 							id: gobj.id,
@@ -654,7 +623,7 @@ var ReactorSensor = (function(api, $) {
 			}
 			catch (e) {
 				console.log("Error applying usergeofences to userIx: " + String(e));
-				console.log( e.stack );
+				console.log( e );
 			}
 
 			/* Don't do this again. */
@@ -681,11 +650,8 @@ var ReactorSensor = (function(api, $) {
 			return false;
 		}
 
-		/* Load ACE. Since the jury is still out with LuaView on this, default is no
-		   ACE for now. As of 2019-01-06, one user has reported that ACE does not function
-		   on Chrome Mac (unknown version, but does function with Safari and Firefox on Mac).
-		   That's just one browser, but still... */
-		s = getParentState( "UseACE" ) || "";
+		/* Load ACE. */
+		s = getParentState( "UseACE" ) || "1";
 		if ( "1" === s && ! window.ace ) {
 			s = getParentState( "ACEURL" ) || "https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.2/ace.js";
 			jQuery( "head" ).append( '<script src="' + s + '"></script>' );
@@ -703,6 +669,51 @@ var ReactorSensor = (function(api, $) {
 		api.registerEventHandler('on_ui_cpanel_before_close', ReactorSensor, 'onBeforeCpanelClose');
 
 		return true;
+	}
+
+	/**
+	 * Return list of devices sorted alpha by room sorted alpha with "no room"
+	 * forced last. Store this for future returns; deferred effort/memory use.
+	 */
+	function getSortedDeviceList() {
+		if ( roomsByName ) return roomsByName;
+
+		var myid = api.getCpanelDeviceId();
+		var devices = api.cloneObject( api.getListOfDevices() );
+		var noroom = { "id": 0, "name": "No Room", "devices": [] };
+		var rooms = [ noroom ];
+		var roomIx = {};
+		roomIx[String(noroom.id)] = noroom;
+		var dd = devices.sort( function( a, b ) {
+			if ( a.id == myid ) return -1;
+			if ( b.id == myid ) return 1;
+			if ( a.name.toLowerCase() === b.name.toLowerCase() ) {
+				return a.id < b.id ? -1 : 1;
+			}
+			return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1;
+		});
+		for (var i=0; i<dd.length; i+=1) {
+			var devobj = api.cloneObject( dd[i] );
+			var roomid = devobj.room || 0;
+			var roomObj = roomIx[String(roomid)];
+			if ( undefined === roomObj ) {
+				roomObj = api.cloneObject( api.getRoomObject(roomid) );
+				roomObj.devices = [];
+				roomIx[String(roomid)] = roomObj;
+				rooms[rooms.length] = roomObj;
+			}
+			roomObj.devices.push( devobj );
+		}
+		roomsByName = rooms.sort(
+			/* Special sort for room name -- sorts "No Room" last */
+			function (a, b) {
+				if (a.id === 0) return 1;
+				if (b.id === 0) return -1;
+				if (a.name.toLowerCase() === b.name.toLowerCase()) return 0;
+				return a.name.toLowerCase() > b.name.toLowerCase() ? 1 : -1;
+			}
+		);
+		return roomsByName;
 	}
 
 	/* zero-fill */
@@ -1028,7 +1039,7 @@ var ReactorSensor = (function(api, $) {
 				}
 				break;
 
-			case 'grpstate':
+			case "grpstate":
 				t = getDeviceFriendlyName( cond.device );
 				str += t ? t : '#' + cond.device + ' ' + ( cond.devicename === undefined ? "name unknown" : cond.devicename ) + ' (missing)';
 				try {
@@ -1226,7 +1237,7 @@ var ReactorSensor = (function(api, $) {
 	function makeDeviceMenu( val, name, filter ) {
 		val = val || "";
 		var el = jQuery('<select class="devicemenu form-control form-control-sm"></select>');
-		roomsByName.forEach( function( roomObj ) {
+		getSortedDeviceList().forEach( function( roomObj ) {
 			var haveItem = false;
 			var xg = jQuery( '<optgroup />' ).attr( 'label', roomObj.name );
 			for ( var j=0; j<roomObj.devices.length; j++ ) {
@@ -1416,10 +1427,9 @@ var ReactorSensor = (function(api, $) {
 
 				var condType = condTypeName[ cond.type ] !== undefined ? condTypeName[ cond.type ] : cond.type;
 				var condDesc = makeConditionDescription( cond );
-				var condOpts = cond.options || {};
 				switch ( cond.type ) {
 					case 'service':
-					case 'grpstate':
+					case "grpstate":
 						break;
 
 					case 'weekday':
@@ -1808,9 +1818,11 @@ var ReactorSensor = (function(api, $) {
 			return el;
 		}
 
-		/* Make a menu of groups in a ReactorSensor */
+		/* Make a menu of eligible groups in a ReactorSensor */
 		function makeRSGroupMenu( cond ) {
-			var mm = jQuery( '<select id="grpmenu" class="form-control form-control-sm tberror" />' );
+			var mm = jQuery( '<select id="grpmenu" class="form-control form-control-sm" />' );
+			mm.empty();
+			jQuery( '<option/>' ).val( "" ).text("--choose--").appendTo( mm );
 			try {
 				var dc;
 				var myid = api.getCpanelDeviceId();
@@ -1831,7 +1843,7 @@ var ReactorSensor = (function(api, $) {
 				if ( dc ) {
 					var appendgrp = function ( grp, sel, pg ) {
 						/* Don't add ancestors in same RS */
-						if ( ! ( myself && isAncestor( grp.id, cond.id, myid ) ) ) {
+						if ( "nul" !== grp.operator && ! ( myself && isAncestor( grp.id, cond.id, myid ) ) ) {
 							sel.append(
 								jQuery( '<option/>' ).val( grp.id )
 									.text( "root"===grp.id ? "Tripped/Untripped (root)" : ( grp.name || grp.id ) )
@@ -1853,24 +1865,7 @@ var ReactorSensor = (function(api, $) {
 				console.log( "makeRSGroupMenu: " + String(e) );
 			}
 			/* Default-select the current value, or root if none. */
-			if ( !isEmpty( cond.groupid ) ) {
-				var gid = cond.groupid || "?";
-				var el = jQuery( 'option[value="' + gid + '"]', mm );
-				if ( el.length == 0 ) {
-					/* Current value not in menu, may refer to deleted group! */
-					el = jQuery( '<option/>' ).val( gid ).text( gid + " (missing?)" );
-					mm.append( el );
-				} else {
-					mm.removeClass( 'tberror' );
-				}
-				mm.val( gid );
-				if ( cond.groupname !== el.text() ) {
-					cond.groupname = el.text();
-					configModified = true;
-				}
-			} else {
-				mm.val( 'root' );
-			}
+			menuSelectDefaultInsert( mm, cond.groupid || "", cond.groupname || cond.groupid + "?" );
 			return mm;
 		}
 
@@ -1952,10 +1947,11 @@ var ReactorSensor = (function(api, $) {
 					}
 					break;
 
-				case 'grpstate':
+				case "grpstate":
 					removeConditionProperties( cond, "device,devicename,groupid,groupname,operator,options" );
 					cond.device = parseInt( jQuery( 'div.params select.devicemenu', $row ).val(), $row );
-					cond.groupid = jQuery( 'div.params select#grpmenu', $row ).val() || "root";
+					cond.groupid = jQuery( 'div.params select#grpmenu', $row ).val() || "";
+					jQuery( "div.params select#grpmenu", $row ).toggleClass( 'tberror', isEmpty( cond.groupid ) );
 					cond.groupname = jQuery( 'div.params select#grpmenu option:selected', $row ).text();
 					cond.operator = jQuery( 'div.params select.opmenu', $row ).val() || "istrue";
 					break;
@@ -2942,9 +2938,9 @@ var ReactorSensor = (function(api, $) {
 					updateCurrentServiceValue( container );
 					break;
 
-				case 'grpstate':
+				case "grpstate":
 					/* Default device to current RS */
-					cond.device = coalesce( cond.device, api.getCpanelDeviceId() );
+					cond.device = coalesce( cond.device, -1 );
 					/* Make a device menu that shows ReactorSensors only. */
 					container.append( makeDeviceMenu( cond.device, cond.devicename || "unknown device", function( dev ) {
 						return "urn:schemas-toggledbits-com:device:ReactorSensor:1" === dev.device_type;
@@ -4655,11 +4651,10 @@ var ReactorSensor = (function(api, $) {
 				break;
 
 			case "runscene":
-				var sc = jQuery( 'select#scene', row ).val();
-				if ( isEmpty( sc ) ) {
-					jQuery( 'select#scene', row ).addClass( "tberror" );
+				dev = jQuery( 'select#scene', row );
+				if ( isEmpty( dev.val() ) ) {
+					dev.addClass( "tberror" );
 				}
-				/* don't need to validate method */
 				break;
 
 			case "runlua":
@@ -4673,22 +4668,21 @@ var ReactorSensor = (function(api, $) {
 				break;
 
 			case "rungsa":
-				dev = jQuery( 'select.devicemenu', row ).val() || "";
-				if ( "" === dev ) {
-					jQuery( 'select#device' ).addClass( 'tberror' );
+				dev = jQuery( 'select.devicemenu', row );
+				if ( isEmpty( dev.val() ) ) {
+					dev.addClass( 'tberror' );
 				}
-				var activity = jQuery( 'select#activity', row ).val() || "";
-				if ( "" === activity ) {
-					jQuery( 'select#activity' ).addClass( 'tberror' );
+				dev = jQuery( 'select#activity', row );
+				if ( isEmpty( dev.val() ) ) {
+					dev.addClass( 'tberror' );
 				}
 				break;
 
 			case "resetlatch":
-				dev = jQuery( 'select.devicemenu', row ).val() || "";
-				if ( "" === dev ) {
-					jQuery( 'select#device' ).addClass( 'tberror' );
+				dev = jQuery( 'select.devicemenu', row );
+				if ( isEmpty( dev.val() ) ) {
+					dev.addClass( 'tberror' );
 				}
-				var group = jQuery( 'select#group', row ).val() || "";
 				break;
 
 			case "notify":
@@ -4795,7 +4789,7 @@ var ReactorSensor = (function(api, $) {
 									if ( userNameIx[r[k]] )
 										uu.push( userNameIx[r[k]] );
 									else
-										console.log("*** Did not find user ID for VeraAlerts username " + String(r[u]) + "; skipping.");
+										console.log("*** Did not find user ID for VeraAlerts username " + String(r[k]) + "; skipping.");
 								}
 							}
 							nn.users = uu.join( ',' );
@@ -5380,7 +5374,8 @@ var ReactorSensor = (function(api, $) {
 		}
 		var action = actions[newVal];
 		/* Check for device override to service/action */
-		var devNum = parseInt( jQuery( 'select.devicemenu', ct ).val() );
+		var devNum = parseInt( jQuery( 'select.devicemenu', ct ).val() || "-1" );
+		if ( devNum === -1 ) devNum = api.getCpanelDevice();
 		if ( !isNaN(devNum) && action && action.deviceOverride && action.deviceOverride[devNum] ) {
 			console.log("changeActionAction: using device override for " + String(devNum));
 			action = action.deviceOverride[devNum];
