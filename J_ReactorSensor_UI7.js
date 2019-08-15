@@ -5362,7 +5362,7 @@ var ReactorSensor = (function(api, $) {
 		var action = actions[newVal];
 		/* Check for device override to service/action */
 		var devNum = parseInt( jQuery( 'select.devicemenu', ct ).val() || "-1" );
-		if ( devNum === -1 ) devNum = api.getCpanelDevice();
+		if ( devNum === -1 ) devNum = api.getCpanelDeviceId();
 		if ( !isNaN(devNum) && action && action.deviceOverride && action.deviceOverride[devNum] ) {
 			console.log("changeActionAction: using device override for " + String(devNum));
 			action = action.deviceOverride[devNum];
