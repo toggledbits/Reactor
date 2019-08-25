@@ -2,7 +2,7 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
-## Version 3.4 (development)
+## Version 3.4 (released)
 
 * Enhancement: new *Notify* action will send a notification to the selected users with a custom message. See [the Wiki](https://github.com/toggledbits/Reactor/wiki/Notify-Action).
 * Enhancement: Add new device condition operators "between" and "not between", an additional numeric comparison. Seems obvious, yet I never thought to add it, and somebody finally asked.
