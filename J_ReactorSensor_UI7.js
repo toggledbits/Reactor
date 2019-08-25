@@ -17,11 +17,11 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.4develop-19227';
+	var pluginVersion = '3.4';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
-	var _UIVERSION = 19227;     /* must coincide with Lua core */
+	var _UIVERSION = 19237;     /* must coincide with Lua core */
 
 	var _CDATAVERSION = 19082;  /* must coincide with Lua core */
 
@@ -98,8 +98,8 @@ var ReactorSensor = (function(api, $) {
 		{ op: 'notcontains', desc: 'does not contain', args: 1,  },
 		{ op: 'in', desc: 'in', args: 1 },
 		{ op: 'notin', desc: 'not in', args: 1 },
-		{ op: 'istrue', desc: 'is TRUE', args: 0 },
-		{ op: 'isfalse', desc: 'is FALSE', args: 0 },
+		{ op: 'istrue', desc: 'is TRUE', args: 0, nocase: false },
+		{ op: 'isfalse', desc: 'is FALSE', args: 0, nocase: false },
 		{ op: 'change', desc: 'changes', args: 2, format: "from %1 to %2", optional: 2 },
 		{ op: 'update', desc: 'updates', args: 0 }
 	];
@@ -1897,7 +1897,7 @@ var ReactorSensor = (function(api, $) {
 					cond.service = cond.service.replace( /\/.*$/, "" );
 					cond.operator = jQuery("div.params select.opmenu", $row).val() || "=";
 					var op = arrayFindValue( serviceOps, function( v ) { return v.op === cond.operator; } ) || serviceOps[0];
-					if ( 0 === ( op.numeric || 0 ) ) {
+					if ( 0 === ( op.numeric || 0 ) && false !== op.nocase ) {
 						/* Case-insensitive (nocase==1) is the default */
 						val = ( jQuery( 'input.nocase', $row ).prop( 'checked' ) || false ) ? 1 : 0;
 						if ( val !== cond.nocase ) {
@@ -2512,7 +2512,7 @@ var ReactorSensor = (function(api, $) {
 					}
 				}
 				var $opt = jQuery( 'fieldset#nocaseopt', $row );
-				if ( 0 === ( op.numeric || 0 ) ) {
+				if ( 0 === ( op.numeric || 0 ) && false !== op.nocase ) {
 					$opt.show();
 					jQuery( 'input.nocase', $opt ).prop( 'checked', coalesce( cond.nocase, 1 ) !== 0 );
 				} else {
