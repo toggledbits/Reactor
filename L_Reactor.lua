@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.4"
+local _PLUGIN_VERSION = "3.5develop-19239"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION	= 19226
@@ -2196,7 +2196,7 @@ local function execSceneGroups( tdev, taskid, scd )
 								local from = getReactorVar( "SMTPSender", "unconfigured@localhost" )
 								local to = action.recipient or getReactorVar( "SMTPDefaultRecipient", "unconfigured@localhost" )
 								local subj = action.subject or getReactorVar( "SMTPDefaultSubject", luup.devices[tdev].description .. " Notification" )
-								local sendt = { from = from:gsub( "^[^<]+<([^>]+)>.*$", "%1" ), rcpt = {}, server = server }
+								local sendt = { from = "<"..from:gsub( "^[^<]+<([^>]+)>.*$", "%1" )..">", rcpt = {}, server = server }
 								local msgt = { headers = { From=from, To={}, Subject=subj }, body = msg }
 								to = split( to ) or { from }
 								for _,rr in ipairs( to ) do
@@ -2236,7 +2236,7 @@ local function execSceneGroups( tdev, taskid, scd )
 								local r,e = smtp.send( sendt )
 								D("execSceneGroups() SMTP send returned %1, %2", r, e)
 								if r == nil then
-									L({level=2,msg="SMTP Send failed, %1; package %2"}, e, sendt)
+									L({level=2,msg="SMTP Send failed, %1; package %2; message %3"}, e, sendt, msgt)
 								end
 							end
 						elseif action.method == "PR" then -- Prowl

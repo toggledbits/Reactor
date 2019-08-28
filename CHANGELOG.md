@@ -2,6 +2,10 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
+## Version 3.5 (development)
+
+* Fix: Google SMTP service requires specific wrapping of the from address.
+
 ## Version 3.4 (released)
 
 * Enhancement: new *Notify* action will send a notification to the selected users with a custom message. See [the Wiki](https://github.com/toggledbits/Reactor/wiki/Notify-Action).
