@@ -133,14 +133,14 @@ local function D(msg, ...)
 	if debugMode then
 		local inf = debug and debug.getinfo(2, "Snl") or {}
 		L( { msg=msg,
-			prefix=(_PLUGIN_NAME .. "(" .. 
+			prefix=(_PLUGIN_NAME .. "(" ..
 				(inf.name or string.format("<func@%s>", tostring(inf.linedefined or "?"))) ..
 				 ":" .. tostring(inf.currentline or "?") .. ")") }, ... )
 	end
 end
 
 -- An assert() that only functions in debug mode
-local function DA(cond, m, ...) 
+local function DA(cond, m, ...)
 	if cond or not debugMode then return end
 	L({level=0,msg=m or "Assertion failed!"}, ...)
 	error("assertion failed") -- should be unreachable
@@ -2204,10 +2204,10 @@ local function execSceneGroups( tdev, taskid, scd )
 									table.insert( sendt.rcpt, "<" .. rc .. ">" )
 									table.insert( msgt.headers.To, rr )
 								end
-								if port > 0 then 
-									sendt.port = port 
+								if port > 0 then
+									sendt.port = port
 									if port == 465 or getVarNumeric( "SMTPConnectSSLTLS", 0, pluginDevice, MYSID ) ~= 0 then
-										sendt.create = function() 
+										sendt.create = function()
 											local socket = require "socket"
 											local sock = socket.tcp()
 											return setmetatable({
@@ -2215,7 +2215,9 @@ local function execSceneGroups( tdev, taskid, scd )
 													local r, e = sock:connect( hh, pp )
 													if not r then return r, e end
 													local ssl = require "ssl"
-													sock = ssl.wrap( sock, { mode='client', protocol='tlsv1', verify='none' } )
+													sock = ssl.wrap( sock, { mode='client',
+														protocol=getReactorVar( "SMTPSSLProtocol", 'tlsv1' ),
+														verify=getReactorVar( "SMTPSSLVerify", 'none' ) } )
 													return sock:dohandshake()
 												end
 											}, {
@@ -2231,11 +2233,14 @@ local function execSceneGroups( tdev, taskid, scd )
 								if authuser ~= "" then sendt.user = authuser end
 								if authpass ~= "" then sendt.password = authpass end
 								msgt.headers.To = table.concat( msgt.headers.To, ", " )
+								D("execSceneGroups() msgt=%1", msgt)
 								sendt.source = smtp.message( msgt )
-								D("execSceneGroups() SMTP mail sending %1", sendt)
+								D("execSceneGroups() sendt=%1", sendt)
 								local r,e = smtp.send( sendt )
 								D("execSceneGroups() SMTP send returned %1, %2", r, e)
 								if r == nil then
+									if sendt.user then sendt.user = "****" end
+									if sendt.password then sendt.password = "****" end
 									L({level=2,msg="SMTP Send failed, %1; package %2; message %3"}, e, sendt, msgt)
 								end
 							end
@@ -4853,7 +4858,7 @@ function watch( dev, sid, var, oldVal, newVal )
 			D("watch() ignoring config change on disabled RS %1 (#%2)", luup.devices[dev].description, dev)
 		end
 	elseif luup.devices[dev].device_num_parent == pluginDevice and
-			luup.devices[dev].id == "hmt" and sid == SENSOR_SID and 
+			luup.devices[dev].id == "hmt" and sid == SENSOR_SID and
 			var == "Armed" then
 		-- Arming state changed on HMT, update house mode.
 		D("watch() HMT device %1 arming state changed", dev)
