@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.5develop-19239"
+local _PLUGIN_VERSION = "3.5develop-19240"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION	= 19226
@@ -316,6 +316,34 @@ local function getVarJSON( name, dflt, dev, sid )
 	local data,pos,err = json.decode( s )
 	if data == nil then return dflt,err,pos,s end
 	return data,false
+end
+
+-- SSL param can be string or CSV; return string or array
+local function getSSLListParam( s )
+	if s:match(",") then return split(s) end
+	return s ~= "" and s or nil
+end
+
+-- Build SSL params table from settings
+local function getSSLParams( prefix, pdev, sid )
+	pdev = pdev or pluginDevice
+	sid = sid or MYSID
+	-- Max flexibility: SSLParams may contain a JSON string for the entire params table
+	local params = getVarJSON( prefix.."SSLParams", false, pdev, sid )
+	if params ~= false then D("getSSLParams() %1", params) return params end
+	-- Old school: individual config vars for various settings
+	params = {}
+	-- Repititious, but expeditous. If more in future, go table-driven.
+	local s = getVar( prefix.."SSLProtocol", "", pdev, sid )
+	params.protocol = s ~= "" and s or nil
+	s = getVar( prefix.."SSLMode", "client", pdev, sid )
+	params.mode = s ~= "" and s or nil
+	s = getVar( prefix.."SSLVerify", "", pdev, sid )
+	params.verify = getSSLListParam(s)
+	s = getVar( prefix.."SSLOptions", "", pdev, sid )
+	params.options = getSSLListParam(s)
+	D("getSSLParams() %1", params)
+	return params
 end
 
 -- Check system battery (VeraSecure)
@@ -2215,9 +2243,7 @@ local function execSceneGroups( tdev, taskid, scd )
 													local r, e = sock:connect( hh, pp )
 													if not r then return r, e end
 													local ssl = require "ssl"
-													sock = ssl.wrap( sock, { mode='client',
-														protocol=getReactorVar( "SMTPSSLProtocol", 'tlsv1' ),
-														verify=getReactorVar( "SMTPSSLVerify", 'none' ) } )
+													sock = ssl.wrap( sock, getSSLParams( "SMTP" ) )
 													return sock:dohandshake()
 												end
 											}, {
@@ -5534,7 +5560,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			source = ltn12.source.string( body ),
 			sink = ltn12.sink.table(resp),
 			verify = getReactorVar( "SSLVerify", "none" ),
-			protocol = getReactorVar( "SSLProtocol", "tlsv1" ),
+			protocol = getReactorVar( "SSLProtocol", "tlsv1_2" ),
 			options = getReactorVar( "SSLOptions", "all" )
 		}
 		http.TIMEOUT = 30
