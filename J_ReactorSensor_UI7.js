@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.4';
+	var pluginVersion = '3.5develop-19240';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -6626,8 +6626,11 @@ var ReactorSensor = (function(api, $) {
 		var cd = getConfiguration();
 		var ac = cd.activities || {};
 		var decide = function( id ) {
-			if ( "inuse" === vis && isEmptyActivity( ac[id] ) ) {
-				jQuery( 'div#' + idSelector( id ) + ".actionlist" ).slideUp();
+			var target = jQuery( 'div#' + idSelector( id ) + ".actionlist" );
+			if ( ( "inuse" === vis && isEmptyActivity( ac[id] ) ) ||
+				( "true" === vis && ! id.match( /\.true$/ ) ) ||
+				( "false" === vis && ! id.match( /\.false$/ ) ) ){
+				target.slideUp();
 			} else {
 				jQuery( 'div#' + idSelector( id ) + ".actionlist" ).slideDown();
 			}
@@ -6655,6 +6658,8 @@ var ReactorSensor = (function(api, $) {
 				.append( jQuery( '<select id="whatshow" class="form-control form-control-sm" />' )
 					.append( jQuery( '<option value="">All</option>' ) )
 					.append( jQuery( '<option value="inuse">In Use</option>' ) )
+					.append( jQuery( '<option value="true">True Only</option>' ) )
+					.append( jQuery( '<option value="false">False Only</option>' ) )
 				)
 			);
 		container.append( el );
