@@ -4,7 +4,9 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 3.5 (development)
 
-* Fix: Google SMTP service requires specific wrapping of the from address.
+* Enhancement: The Activities tab now can filter the display by "true" and "false" activities (suggestion by tunnus).
+* Internal: Clean up mechanism for determining SSL parameters for SMTP connections.
+* Hotfix-19240-01: Google SMTP service requires specific wrapping of the from address.
 
 ## Version 3.4 (released)
 
