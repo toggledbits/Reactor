@@ -1962,6 +1962,163 @@ local function resolveVarRef( v, tdev, depth )
 	return resolveVarRef( getVar( var, "", tdev, VARSID ), tdev, depth+1 )
 end
 
+-- Perform notify action
+local function doActionNotify( action, scid, tdev )
+	local nid = action.notifyid
+	local cf = getSensorConfig( tdev )
+	if ( cf.notifications or {} )[nid] then
+		local host = "Vera-" .. (luup.pk_accesspoint or "?")
+		local msg = cf.notifications[nid].message or ""
+		msg = msg:gsub( "%{([^}]+)%}", function( vname )
+			if (cf.variables or {})[vname] then
+				return (getSensorState( tdev ).ctx or {})[vname] or ""
+			end
+		end )
+		if action.method == "VA" then -- VeraAlerts
+			if devVeraAlerts then
+				luup.call_action( "urn:richardgreen:serviceId:VeraAlert1", "SendAlert",
+					{ Message=msg, Recipients=cf.notifications[nid].usernames or "" },
+					devVeraAlerts )
+			else
+				return false, "VeraAlerts is not available"
+			end
+		elseif action.method == "SM" then -- SMTP Mail
+			local ok,smtp = pcall( require, "socket.smtp" )
+			if not ok or type(smtp) ~= "table" then
+				return false, "socket.smtp is not installed"
+			else
+				local server = getReactorVar( "SMTPServer", "localhost" )
+				local port = getVarNumeric( "SMTPPort", 0, pluginDevice, MYSID )
+				local authuser = getReactorVar( "SMTPUsername", "" )
+				local authpass = getReactorVar( "SMTPPassword", "" )
+				local from = getReactorVar( "SMTPSender", "unconfigured@localhost" )
+				local to = action.recipient or getReactorVar( "SMTPDefaultRecipient", "unconfigured@localhost" )
+				local subj = action.subject or getReactorVar( "SMTPDefaultSubject", luup.devices[tdev].description .. " Notification" )
+				local sendt = { from = "<"..from:gsub( "^[^<]+<([^>]+)>.*$", "%1" )..">", rcpt = {}, server = server }
+				local msgt = { headers = { From=from, To={}, Subject=subj }, body = msg }
+				to = split( to ) or { from }
+				for _,rr in ipairs( to ) do
+					local rc = rr:gsub( "^[^<]+<([^>]+)>.*$", "%1" ) -- remove human readables, if present
+					table.insert( sendt.rcpt, "<" .. rc .. ">" )
+					table.insert( msgt.headers.To, rr )
+				end
+				if port > 0 then
+					sendt.port = port
+					if port == 465 or getVarNumeric( "SMTPConnectSSLTLS", 0, pluginDevice, MYSID ) ~= 0 then
+						sendt.create = function()
+							local socket = require "socket"
+							local sock = socket.tcp()
+							return setmetatable({
+								connect = function(_, hh, pp)
+									local r, e = sock:connect( hh, pp )
+									if not r then return r, e end
+									local ssl = require "ssl"
+									sock = ssl.wrap( sock, getSSLParams( "SMTP" ) )
+									return sock:dohandshake()
+								end
+							}, {
+								__index = function( t, n ) -- luacheck: ignore 212
+									return function( _, ... )
+										return sock[n](sock, ...)
+									end
+								end
+							})
+						end
+					end
+				end
+				if authuser ~= "" then sendt.user = authuser end
+				if authpass ~= "" then sendt.password = authpass end
+				msgt.headers.To = table.concat( msgt.headers.To, ", " )
+				D("execSceneGroups() msgt=%1", msgt)
+				sendt.source = smtp.message( msgt )
+				D("execSceneGroups() sendt=%1", sendt)
+				local r,e = smtp.send( sendt )
+				D("execSceneGroups() SMTP send returned %1, %2", r, e)
+				if r == nil then
+					if sendt.user then sendt.user = "****" end
+					if sendt.password then sendt.password = "****" end
+					L({level=2,msg="SMTP Send failed, %1; package %2; message %3"}, e, sendt, msgt)
+					return false, "SMTP send failed, " .. tostring(e)
+				end
+			end
+		elseif action.method == "PR" then -- Prowl
+			local apikey = getReactorVar( "ProwlAPIKey", "" )
+			if apikey == "" or apikey == "X" then
+				return false, "Prowl API Key not set"
+			else
+				local provider = getReactorVar( "ProwlProvider", "" )
+				local subject = getReactorVar( "ProwlSubject", luup.devices[tdev].description )
+				local baseurl = getReactorVar( "ProwlURL", "https://api.prowlapp.com/publicapi/add" )
+				local st,ht
+				-- Prefer request because we need POST, but some firmware doesn't support it,
+				-- and prowl servers don't really seem to care.
+				if not luup.inet.request then
+					baseurl = baseurl .. urlencode( apikey )
+					if provider ~= "" then baseurl = baseurl .. urlencode( provider ) end
+					baseurl = baseurl .. "&application=" .. urlencode( host )
+					if action.priority then baseurl = baseurl .. "&priority=" .. urlencode( action.priority ) end
+					baseurl = baseurl .. "&event=" .. urlencode( subject )
+					baseurl = baseurl .. "&description=" .. urlencode( msg )
+					st,_,ht = luup.inet.wget( baseurl )
+					D("execSceneGroup() Prowl wget returned %1,%2 [%3]", st, ht, baseurl)
+				else
+					local data = { apikey=apikey, application=host, event=subject, description=msg }
+					if provider ~= "" then data.provider = provider end
+					if action.priority then data.priority = action.priority end
+					st,_,ht = luup.inet.request{ url=baseurl, data=data, follow=false, timeout=5 }
+					D("execSceneGroup() Prowl request returned %1,%2", st, ht)
+				end
+				if st ~= 0 or ht ~= 200 then
+					L({level=2,msg="Prowl send returned %1 httpStatus=%2 [%3]"}, st, ht, baseurl)
+					return false, "Prowl send request failed (" .. tostring(st) .. ", " .. tostring(ht) .. ")"
+				end
+			end
+		elseif action.method == "SD" then -- Syslog Datagram
+			-- See https://tools.ietf.org/html/rfc5424#page-9
+			local pri = 8 * (tonumber(action.facility) or 23) + (tonumber(action.severity) or 5)
+			local datagram = string.format( "<%s>1 %s %s %s %s - - %s",
+				pri, -- priority
+				os.date("!%Y-%m-%dT%H:%M:%SZ"), -- timestamp
+				host:gsub("%s+", "_"), -- hostname
+				luup.devices[tdev].description:gsub( "%s+", "_" ), -- application
+				scid:gsub( "%s+", "_" ), -- process id
+				msg ):sub( 1, 1023 )
+			local socket = require "socket"
+			local udp = socket.udp()
+			if udp then
+				udp:setsockname("*", 0)
+				local stat,err = udp:sendto( datagram, action.hostip, 514 )
+				udp:close()
+				if stat == nil then
+					L({level=2,msg="Failed to send SYSLOG message to %1: %2"}, action.hostip, err)
+					return false, "Syslog notification to " .. tostring(action.hostip) .. " failed, " .. tostring(err)
+				end
+			end
+		elseif action.method == "AA" then -- AddAlert (Vera action) (undocumented)
+			local baseurl = "http://localhost/port_3480/data_request?id=add_alert&device=0&type=3&source=3"
+			baseurl = baseurl .. "&users=" .. urlencode( cf.notifications[nid].users )
+			baseurl = baseurl .. "&description=" .. urlencode( msg )
+			--[[ local st,_,ht = --]]
+			luup.inet.wget( baseurl )
+		elseif action.method == "UU" then -- User URL
+			local baseurl = action.url or ""
+			baseurl = baseurl:gsub( "%{message%}", urlencode( msg ):gsub("%%", "%%%%") )
+			local st,_,ht = luup.inet.wget( baseurl )
+			D("execSceneGroups() User URL notification returned %1,%2 [%3]", st, ht, baseurl)
+			if st ~= 0 or ht ~= 200 then
+				L({level=2,msg="User URL notification returned %1 httpStatus=%2 [%3]"}, st, ht, baseurl)
+				return false, "User HTTP notification failed (" .. tostring(st) .. ", " .. tostring(ht) .. ")"
+			end
+		else
+			-- The "standard" Vera way, via hidden scene.
+			queueNotification( nid, tdev )
+		end
+	else
+		return false, "Unable to find notification config #" .. tostring(nid)
+	end
+	return true
+end
+
 -- Run the next scene group(s), until we run out of groups or a group delay
 -- restriction hasn't been met. Across reloads, scenes will "catch up," running
 -- groups that are now past-due (native Luup scenes don't do this).
@@ -2187,166 +2344,13 @@ local function execSceneGroups( tdev, taskid, scd )
 						luup.call_action( RSSID, "ClearLatched", { Group=group }, device )
 					end
 				elseif action.type == "notify" then
-					local nid = action.notifyid
-					local host = "Vera-" .. (luup.pk_accesspoint or "?")
-					local cf = getSensorConfig( tdev )
-					if ( cf.notifications or {} )[nid] then
-						local msg = cf.notifications[nid].message or ""
-						msg = msg:gsub( "%{([^}]+)%}", function( vname )
-							if (cf.variables or {})[vname] then
-								return (getSensorState( tdev ).ctx or {})[vname] or ""
-							end
-						end )
-						if action.method == "VA" then -- VeraAlerts
-							if devVeraAlerts then
-								luup.call_action( "urn:richardgreen:serviceId:VeraAlert1", "SendAlert",
-									{ Message=msg, Recipients=cf.notifications[nid].usernames or "" },
-									devVeraAlerts )
-							else
-								L({level=2,msg="Notification via VeraAlerts impossible because the plugin device was not found or did not start (%1 group %2)"},
-									scd.id, nextGroup)
-								addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup,
-									warning="TROUBLE: VeraAlerts unavailable to send notification, skipped." }
-								getSensorState( tdev ).trouble = true
-							end
-						elseif action.method == "SM" then -- SMTP Mail
-							local ok,smtp = pcall( require, "socket.smtp" )
-							if not ok or type(smtp) ~= "table" then
-								L({level=1,msg="Unable to send SMTP notification: socket.smtp is not installed"})
-								addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup,
-									warning="TROUBLE: SMTP Mail unavailable; socket.smtp is not installed. Skipped." }
-								getSensorState( tdev ).trouble = true
-							else
-								local server = getReactorVar( "SMTPServer", "localhost" )
-								local port = getVarNumeric( "SMTPPort", 0, pluginDevice, MYSID )
-								local authuser = getReactorVar( "SMTPUsername", "" )
-								local authpass = getReactorVar( "SMTPPassword", "" )
-								local from = getReactorVar( "SMTPSender", "unconfigured@localhost" )
-								local to = action.recipient or getReactorVar( "SMTPDefaultRecipient", "unconfigured@localhost" )
-								local subj = action.subject or getReactorVar( "SMTPDefaultSubject", luup.devices[tdev].description .. " Notification" )
-								local sendt = { from = "<"..from:gsub( "^[^<]+<([^>]+)>.*$", "%1" )..">", rcpt = {}, server = server }
-								local msgt = { headers = { From=from, To={}, Subject=subj }, body = msg }
-								to = split( to ) or { from }
-								for _,rr in ipairs( to ) do
-									local rc = rr:gsub( "^[^<]+<([^>]+)>.*$", "%1" ) -- remove human readables, if present
-									table.insert( sendt.rcpt, "<" .. rc .. ">" )
-									table.insert( msgt.headers.To, rr )
-								end
-								if port > 0 then
-									sendt.port = port
-									if port == 465 or getVarNumeric( "SMTPConnectSSLTLS", 0, pluginDevice, MYSID ) ~= 0 then
-										sendt.create = function()
-											local socket = require "socket"
-											local sock = socket.tcp()
-											return setmetatable({
-												connect = function(_, hh, pp)
-													local r, e = sock:connect( hh, pp )
-													if not r then return r, e end
-													local ssl = require "ssl"
-													sock = ssl.wrap( sock, getSSLParams( "SMTP" ) )
-													return sock:dohandshake()
-												end
-											}, {
-												__index = function( t, n ) -- luacheck: ignore 212
-													return function( _, ... )
-														return sock[n](sock, ...)
-													end
-												end
-											})
-										end
-									end
-								end
-								if authuser ~= "" then sendt.user = authuser end
-								if authpass ~= "" then sendt.password = authpass end
-								msgt.headers.To = table.concat( msgt.headers.To, ", " )
-								D("execSceneGroups() msgt=%1", msgt)
-								sendt.source = smtp.message( msgt )
-								D("execSceneGroups() sendt=%1", sendt)
-								local r,e = smtp.send( sendt )
-								D("execSceneGroups() SMTP send returned %1, %2", r, e)
-								if r == nil then
-									if sendt.user then sendt.user = "****" end
-									if sendt.password then sendt.password = "****" end
-									L({level=2,msg="SMTP Send failed, %1; package %2; message %3"}, e, sendt, msgt)
-								end
-							end
-						elseif action.method == "PR" then -- Prowl
-							local apikey = getReactorVar( "ProwlAPIKey", "" )
-							if apikey == "" or apikey == "X" then
-								L({level=2,msg="Notification via Prowl can't be completed because the Prowl API Key has not been set"})
-								addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup,
-									warning="TROUBLE: Prowl API key not set, notification skipped." }
-								getSensorState( tdev ).trouble = true
-							else
-								local provider = getReactorVar( "ProwlProvider", "" )
-								local subject = getReactorVar( "ProwlSubject", luup.devices[tdev].description )
-								local baseurl = getReactorVar( "ProwlURL", "https://api.prowlapp.com/publicapi/add" )
-								local st,ht
-								-- Prefer request because we need POST, but some firmware doesn't support it,
-								-- and prowl servers don't really seem to care.
-								if not luup.inet.request then
-									baseurl = baseurl .. urlencode( apikey )
-									if provider ~= "" then baseurl = baseurl .. urlencode( provider ) end
-									baseurl = baseurl .. "&application=" .. urlencode( host )
-									if action.priority then baseurl = baseurl .. "&priority=" .. urlencode( action.priority ) end
-									baseurl = baseurl .. "&event=" .. urlencode( subject )
-									baseurl = baseurl .. "&description=" .. urlencode( msg )
-									st,_,ht = luup.inet.wget( baseurl )
-									D("execSceneGroup() Prowl wget returned %1,%2 [%3]", st, ht, baseurl)
-								else
-									local data = { apikey=apikey, application=host, event=subject, description=msg }
-									if provider ~= "" then data.provider = provider end
-									if action.priority then data.priority = action.priority end
-									st,_,ht = luup.inet.request{ url=baseurl, data=data, follow=false, timeout=5 }
-									D("execSceneGroup() Prowl request returned %1,%2", st, ht)
-								end
-								if st ~= 0 or ht ~= 200 then
-									L({level=2,msg="Prowl send returned %1 httpStatus=%2 [%3]"}, st, ht, baseurl)
-								end
-							end
-						elseif action.method == "SD" then -- Syslog Datagram
-							-- See https://tools.ietf.org/html/rfc5424#page-9
-							local pri = 8 * (tonumber(action.facility) or 23) + (tonumber(action.severity) or 5)
-							local datagram = string.format( "<%s>1 %s %s %s %s - - %s",
-								pri, -- priority
-								os.date("!%Y-%m-%dT%H:%M:%SZ"), -- timestamp
-								host:gsub("%s+", "_"), -- hostname
-								luup.devices[tdev].description:gsub( "%s+", "_" ), -- application
-								scd.id:gsub( "%s+", "_" ), -- process id
-								msg ):sub( 1, 1023 )
-							local socket = require "socket"
-							local udp = socket.udp()
-							if udp then
-								udp:setsockname("*", 0)
-								local stat,err = udp:sendto( datagram, action.hostip, 514 )
-								if stat == nil then
-									L({level=2,msg="Failed to send SYSLOG message to %1: %2"}, action.hostip, err)
-								end
-								udp:close()
-							end
-						elseif action.method == "AA" then -- AddAlert (Vera action) (undocumented)
-							local baseurl = "http://localhost/port_3480/data_request?id=add_alert&device=0&type=3&source=3"
-							baseurl = baseurl .. "&users=" .. urlencode( cf.notifications[nid].users )
-							baseurl = baseurl .. "&description=" .. urlencode( msg )
-							--[[ local st,_,ht = --]]
-							luup.inet.wget( baseurl )
-						elseif action.method == "UU" then -- User URL
-							local baseurl = action.url or ""
-							baseurl = baseurl:gsub( "%{message%}", urlencode( msg ):gsub("%%", "%%%%") )
-							local st,_,ht = luup.inet.wget( baseurl )
-							D("execSceneGroups() User URL notification returned %1,%2 [%3]", st, ht, baseurl)
-							if st ~= 0 or ht ~= 200 then
-								L({level=2,msg="User URL notification returned %1 httpStatus=%2 [%3]"}, st, ht, baseurl)
-							end
-						else
-							-- The "standard" Vera way, via hidden scene.
-							queueNotification( nid, tdev )
-						end
-					else
-						L({level=2,msg="Unable to find notification configuration for nid=%1, scene=%2, group=%3"},
-							nid, scd.id, nextGroup)
-						addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup,
-							warning="TROUBLE: action #" .. tostring(ix) .. " missing notification config for " .. tostring(nid) .. ", skipped." }
+					local success,err = doActionNotify( action, scd.id, tdev )
+					if not success then
+						L({level=2,msg="Notify action failed: " ..err .. " (%1 group %2 action %3)"},
+							scd.id, nextGroup, ix)
+						local ev = { dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, index=ix }
+						ev.warning = err
+						addEvent(ev)
 						getSensorState( tdev ).trouble = true
 					end
 				else
@@ -4776,17 +4780,13 @@ local functions = { [tostring(masterTick)]="masterTick", [tostring(sensorTick)]=
 	[tostring(loadWaitingScenes)]="loadWaitingScenes", [tostring(execSceneGroups)]="execSceneGroups" }
 function tick(p)
 	D("tick(%1) pluginDevice=%2", p, pluginDevice)
-	local stepStamp = tonumber(p,10)
-	assert(stepStamp ~= nil)
-	if stepStamp ~= runStamp then
-		D( "tick() stamp mismatch (got %1, expecting %2), newer thread running. Bye!",
-			stepStamp, runStamp )
+	if tonumber(p) ~= runStamp then
+		D("tick() stamp mismatch (got %1, expecting %2), newer thread running. Bye!", p, runStamp)
 		return
 	end
 
 	local now = os.time()
-	local nextTick = nil
-	tickTasks._plugin.when = 0 -- marker
+	tickTasks._plugin.when = 0 -- mark executive running
 
 	-- Since the tasks can manipulate the tickTasks table (via calls to
 	-- scheduleTick()), the iterator is likely to be disrupted, so make a
@@ -4794,32 +4794,26 @@ function tick(p)
 	local todo = {}
 	for t,v in pairs(tickTasks) do
 		if t ~= "_plugin" and v.when ~= nil and v.when <= now then
-			-- Task is due or past due
-			D("tick() inserting eligible task %1 when %2 now %3", v.id, v.when, now)
-			v.when = nil -- clear time; timer function will need to reschedule
 			table.insert( todo, v )
 		end
 	end
+	table.sort( todo, function( a, b ) return (a.when or now) < (b.when or now) end )
 
 	-- Run the to-do list tasks.
 	D("tick() to-do list is %1", todo)
 	for _,v in ipairs(todo) do
-		local fname = functions[tostring(v.func)] or tostring(v.func)
-		D("tick() calling %3(%4,%5) for %1 (task %2 %3)", v.owner,
-			(luup.devices[v.owner] or {}).description, fname, v.owner, v.id,
-			v.info)
-		-- Call timer function with arguments ownerdevicenum,taskid[,args]
-		-- The extra arguments are set up when the task is set/updated.
+		v.when = nil -- task needs to reschedule itself (also marks running)
+		D("tick() running eligible task %1", v.id)
 		local success, err = pcall( v.func, v.owner, v.id, unpack(v.args or {}) )
+		D("tick() return %2 from task %1, err=%3", v.id, success, err)
 		if not success then
 			L({level=1,msg="Reactor device %1 (%2) tick failed: %3"}, v.owner, (luup.devices[v.owner] or {}).description, err)
 			addEvent{ dev=v.owner, event="error", message="tick failed", reason=err }
-		else
-			D("tick() successful return from %2(%1)", v.owner, fname)
 		end
 	end
 
 	-- Things change while we work. Take another pass to find next task.
+	local nextTick = nil
 	for t,v in pairs(tickTasks) do
 		if t ~= "_plugin" and v.when ~= nil then
 			if nextTick == nil or v.when < nextTick then
@@ -4829,11 +4823,10 @@ function tick(p)
 	end
 
 	-- Figure out next master tick, or don't resched if no tasks waiting.
+	D("tick() finished, next eligible task at %1", nextTick)
 	if nextTick ~= nil then
-		D("tick() finished, next eligible task at %1", os.date("%x %X", nextTick))
 		now = os.time() -- Get the actual time now; above tasks can take a while.
-		local delay = nextTick - now
-		if delay < 0 then delay = 0 end
+		local delay = math.max( 0, nextTick - now )
 		tickTasks._plugin.when = now + delay
 		D("tick() scheduling next tick(%3) for %1 (%2)", delay, tickTasks._plugin.when, p)
 		luup.call_delay( "reactorTick", delay, p )
