@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.5develop-19240';
+	var pluginVersion = '3.5develop-19243';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -101,7 +101,7 @@ var ReactorSensor = (function(api, $) {
 		{ op: 'istrue', desc: 'is TRUE', args: 0, nocase: false },
 		{ op: 'isfalse', desc: 'is FALSE', args: 0, nocase: false },
 		{ op: 'change', desc: 'changes', args: 2, format: "from %1 to %2", optional: 2 },
-		{ op: 'update', desc: 'updates', args: 0 }
+		{ op: 'update', desc: 'updates', args: 0, nocase: false }
 	];
 
 	var varRefPattern = /^\{([^}]+)\}\s*$/;
@@ -1744,7 +1744,7 @@ var ReactorSensor = (function(api, $) {
 						/* Never allow group states, as these should be done using a grpstate cond */
 						if ( st.service === "urn:toggledbits-com:serviceId:ReactorGroup" ) continue;
 						/* If own RS, very limited list of variables allowed */
-						if ( device == myid && st.service !== "urn:toggledbits-com:serviceId:ReactorValues" && 
+						if ( device == myid && st.service !== "urn:toggledbits-com:serviceId:ReactorValues" &&
 							!st.variable.match( /^(TripCount|Runtime|Armed|LastTrip)$/ ) ) continue;
 					}
 					var vnm = st.variable.toLowerCase();
@@ -4505,6 +4505,7 @@ var ReactorSensor = (function(api, $) {
 					}
 					xg = jQuery( '<optgroup />' )
 						.attr( 'label', ( rid[r] || {} ).name || ( "Room " + String(r) ) );
+					lastRoom = r;
 				}
 				xg.append( jQuery( '<option/>' ).val( scenes[i].id )
 					.text( String(scenes[i].name) + ' (#' + String(scenes[i].id) + ')' ) );
@@ -6448,7 +6449,7 @@ var ReactorSensor = (function(api, $) {
 						break;
 
 					case "runscene":
-						menuSelectDefaultInsert( jQuery( 'select#scene', newRow), act.scene, 
+						menuSelectDefaultInsert( jQuery( 'select#scene', newRow), act.scene,
 							( act.sceneName || "name?" ) + ' (#' + act.scene + ') (missing)' );
 						jQuery( 'select#method', newRow).val( act.usevera ? "V" : "" );
 						break;

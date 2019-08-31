@@ -6,6 +6,8 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 * Enhancement: The Activities tab now can filter the display by "true" and "false" activities (suggestion by tunnus).
 * Internal: Clean up mechanism for determining SSL parameters for SMTP connections.
+* Fix: Cosmetic bug in the appearance of scene list for Run Scene activity.
+* Fix: Cosmetic bug--"updates" action does not need "ignore case" checkbox.
 * Hotfix-19240-01: Google SMTP service requires specific wrapping of the from address.
 
 ## Version 3.4 (released)
