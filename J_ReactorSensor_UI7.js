@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.5develop-19243';
+	var pluginVersion = '3.5develop-19250';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -2904,7 +2904,7 @@ var ReactorSensor = (function(api, $) {
 						dobj = api.getDeviceObject( cond.device );
 						v = (dobj || {}).name; /* may be undefined, that's OK */
 					}
-					if ( cond.devicename !== v ) {
+					if ( v && cond.devicename !== v ) {
 						cond.devicename = v;
 						configModified = true;
 					}
