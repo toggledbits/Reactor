@@ -331,7 +331,7 @@ var ReactorSensor = (function(api, $) {
 		return $div;
 	}
 
-	/* Load configuration data. */
+	/* Load configuration data. As of 3.5, we do not do any updates here. */
 	function loadConfigData( myid ) {
 		var upgraded = false;
 		var me = api.getDeviceObject( myid );
@@ -339,137 +339,49 @@ var ReactorSensor = (function(api, $) {
 			throw "Device " + String(myid) + " not found or incorrect type";
 		}
 		var s = api.getDeviceState( myid, serviceId, "cdata" ) || "";
+		if ( isEmpty( s ) ) {
+			console.log("Empty cdata; restart ReactorSensor");
+			throw "Unable to parse configuration. Please restart the ReactorSensor and try again.";
+		}
 		var cdata;
-		if ( ! isEmpty( s ) ) {
-			try {
-				cdata = JSON.parse( s );
-				/* Luup's json library doesn't seem to support __jsontype metadata,
-				   so fixup empty objects, which it renders as empty arrays. */
-				if ( cdata.variables && Array.isArray( cdata.variables ) && cdata.variables.length == 0 ) {
-					console.log("Fixing cdata.variables from array to object");
-					cdata.variables = {};
-				}
-				if ( cdata.activities && Array.isArray( cdata.activities ) && cdata.activities.length == 0 ) {
-					console.log("Fixing cdata.activities from array to object");
-					cdata.activities = {};
-				}
-			} catch (e) {
-				console.log("Unable to parse cdata: " + String(e));
-				throw e;
+		try {
+			cdata = JSON.parse( s );
+			/* Luup's json library doesn't seem to support __jsontype metadata,
+			   so fixup empty objects, which it renders as empty arrays. */
+			if ( cdata.variables && Array.isArray( cdata.variables ) && cdata.variables.length == 0 ) {
+				console.log("Fixing cdata.variables from array to object");
+				cdata.variables = {};
 			}
+			if ( cdata.activities && Array.isArray( cdata.activities ) && cdata.activities.length == 0 ) {
+				console.log("Fixing cdata.activities from array to object");
+				cdata.activities = {};
+			}
+		} catch (e) {
+			console.log("Unable to parse cdata: " + String(e));
+			throw e;
 		}
-		if ( cdata === undefined || typeof cdata !== "object" ||
-				cdata.conditions === undefined || typeof cdata.conditions !== "object" ) {
-			console.log("Initializing new config for " + String(myid));
-			cdata = {
-				version: _CDATAVERSION,
-				variables: {},
-				conditions: {
-					root: {
-						id: "root",
-						name: api.getDeviceObject( myid ).name,
-						type: "group",
-						operator: "and",
-						conditions: []
-					}
-				},
-				activities: {}
-			};
-			upgraded = true;
-		}
-
 		/* Special version check */
 		if ( ( cdata.version || 0 ) > _CDATAVERSION ) {
 			console.log("The configuration for this ReactorSensor is an unsupported format/version (" +
 				String( cdata.version ) + "). Upgrade Reactor or restore an older config from backup.");
 			throw "Incompatible configuration format/version";
 		}
-
 		/* Check for upgrade tasks from prior versions */
 		delete cdata.undefined;
 		if ( undefined === cdata.variables ) {
 			/* Fixup v2 */
 			cdata.variables = {};
-			upgraded = true;
 		}
 		if ( undefined === cdata.activities ) {
-			/* Fixup pre 19051 to 19052 */
 			cdata.activities = {};
-			if ( undefined !== cdata.tripactions ) {
-				cdata.activities['root.true'] = cdata.tripactions;
-				cdata.activities['root.true'].id = 'root.true';
-				delete cdata.tripactions;
-			}
-			if ( undefined !== cdata.untripactions ) {
-				cdata.activities['root.false'] = cdata.untripactions;
-				cdata.activities['root.false'].id = 'root.false';
-				delete cdata.untripactions;
-			}
-			upgraded = true;
-		}
-		if ( cdata.activities.__trip ) {
-			/* Fixup 19051 to 19052 -- development only, should not be seen in wild */
-			cdata.activities['root.true'] = cdata.activities.__trip;
-			cdata.activities['root.true'].id = 'root.true';
-			delete cdata.activities.__trip;
-			upgraded = true;
-		}
-		if ( cdata.activities.__untrip ) {
-			/* Fixup 19051 to 19052 -- development only, should not be seen in wild */
-			cdata.activities['root.false'] = cdata.activities.__untrip;
-			cdata.activities['root.false'].id = 'root.false';
-			delete cdata.activities.__untrip;
-			upgraded = true;
 		}
 		if ( undefined === cdata.conditions.root ) {
-			/* Fixup any pre to 19052 */
-			var ix;
 			var root = { id: "root", name: api.getDeviceObject( myid ).name, type: "group", operator: "and", conditions: [] };
-			var ng = (cdata.conditions || []).length;
-			if ( ng == 0 || ( ng == 1 && ( cdata.conditions[0].groupconditions || [] ).length == 0 ) ) {
-				/* No conditions here. Leave empty root. */
-			} else if ( ng == 1 ) {
-				/* Single group. Just add all conditions to root group. */
-				root.name = cdata.conditions[0].name || cdata.conditions[0].id || root.name;
-				root.operator = 'and';
-				root.conditions = cdata.conditions[0].groupconditions || [];
-			} else {
-				/* Multiple groups. */
-				root.operator = "or"; /* OR between groups */
-				for ( ix=0; ix<cdata.conditions.length; ix++ ) {
-					var grp = cdata.conditions[ix];
-					root.conditions[ix] = { id: grp.groupid || ix, name: grp.name || grp.groupid, operator: "and" }; /* AND within groups */
-					root.conditions[ix].conditions = grp.groupconditions || [];
-				}
-			}
 			cdata.conditions = { root: root };
-
-			/* Handle cdata.variables indexing upgrade. */
-			ix = 0;
-			for ( var vn in ( cdata.variables || {} ) ) {
-				if ( cdata.variables.hasOwnProperty( vn ) ) {
-					cdata.variables[vn].index = ix++;
-				}
-			}
-
-			upgraded = true;
 		}
 
-		/* Keep version on config as highest that has edited it. */
-		if ( ( cdata.version || 0 ) < _CDATAVERSION ) {
-			cdata.version = _CDATAVERSION;
-		}
+		/* Update device */
 		cdata.device = myid;
-		if ( upgraded ) {
-			/* Write updated config. We don't care if it fails, as nothing we can't redo would be lost. */
-			console.log('Re-writing upgraded config data');
-			cdata.timestamp = Math.floor( Date.now() / 1000 );
-			cdata.serial = ( cdata.serial || 0 ) + 1;
-			console.log("loadConfigData(): saving upgraded config serial " + String(cdata.serial) + ", timestamp " + String(cdata.timestamp));
-			api.setDeviceStateVariablePersistent( myid, serviceId, "cdata",
-				JSON.stringify( cdata, function( k, v ) { return k.match( /^__/ ) ? undefined : v; } )
-			);
-		}
 
 		/* Store config on instance data */
 		var d = getInstanceData( myid );
@@ -931,7 +843,7 @@ var ReactorSensor = (function(api, $) {
 						if ( cdata.__reloadneeded ) {
 							delete cdata.__reloadneeded;
 							api.performActionOnDevice( 0, "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "Reload",
-								{ actionArguments: {} } );
+								{ actionArguments: { Reason: "Reactor saved config needs reload" } } );
 							api.showCustomPopup( "Reloading Luup...", { autoHide: false, category: 3 } );
 							setTimeout( function() {
 								waitForReloadComplete().then( function() {

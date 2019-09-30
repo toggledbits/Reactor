@@ -972,6 +972,7 @@ local function loadSensorConfig( tdev )
 	local s = getVar( "cdata", "", tdev )
 	local cdata, pos, err
 	if "" ~= s then
+		-- Unparseable non-empty config is a hard error, so we have a chance to go in and correct.
 		cdata, pos, err = json.decode( s )
 		if cdata == nil or type(cdata) ~= "table" then
 			L("Unable to parse JSON data at %2, %1 in %3", pos, err, s)
@@ -982,16 +983,17 @@ local function loadSensorConfig( tdev )
 	if cdata == nil then
 		L("Initializing new configuration")
 		cdata = {
+			serial=0,
 			version=_CDATAVERSION,
-			variables={},
-			activities={},
 			conditions={
 				root={ id="root", name=luup.devices[tdev].description, ['type']="group", operator="and",
 					conditions={
 						{ id="cond0", ['type']="comment", comment="Welcome to your new ReactorSensor!" }
 					}
 				}
-			}
+			},
+			variables={},
+			activities={}
 		}
 		upgraded = true
 	elseif ( cdata.version or 0 ) < _CDATAVERSION then
@@ -1045,6 +1047,9 @@ local function loadSensorConfig( tdev )
 		end
 		upgraded = true
 	end
+
+	cdata.variables = cdata.variables or {}
+
 	cdata.activities = cdata.activities or {}
 	if cdata.tripactions then
 		L("Upgrading activities in configuration")
@@ -1083,7 +1088,7 @@ local function loadSensorConfig( tdev )
 	end
 
 	-- Backport/downgrade attempt from future version?
-	if cdata.version and cdata.version > _CDATAVERSION then
+	if ( cdata.version or 0 ) > _CDATAVERSION then
 		L({level=1,msg="Configuration loaded is format v%1, max compatible with this version of Reactor is %2; upgrade Reactor or restore older config from backup."},
 			cdata.version, _CDATAVERSION)
 		error("Incompatible config format version. Upgrade Reactor or restore older config from backup.")
@@ -1097,18 +1102,19 @@ local function loadSensorConfig( tdev )
 	end
 	setmetatable( cdata, mt )
 
-	-- Rewrite if we upgraded.
+	-- Rewrite if we upgraded. Note version is only updated when we write.
 	if upgraded then
-		D("loadSensorConfig() writing updated sensor config")
+		L("ReactorSensor %1 (#%2) configuration updated to %3", luup.devices[tdev].description, tdev, _CDATAVERSION)
 		cdata.version = _CDATAVERSION -- MUST COINCIDE WITH J_ReactorSensor_UI7.js
 		cdata.timestamp = os.time()
-		cdata.serial = 1 + ( tonumber(cdata.serial or 0) or 0 )
+		cdata.serial = 1 + ( tonumber(cdata.serial) or 0 )
 		-- NOTA BENE: startup=true passed here! Don't fire watch for this rewrite.
 		luup.variable_set( RSSID, "cdata", json.encode( cdata ), tdev, false )
 	end
 
 	-- Save to cache.
 	getSensorState( tdev ).configData = cdata
+
 	-- When loading sensor config, dump luaFunc so that any changes to code
 	-- in actions or scenes are honored immediately. This empties without
 	-- changing metatable (which defines mode).
@@ -2102,7 +2108,9 @@ local function doActionNotify( action, scid, tdev )
 									local r, e = sock:connect( hh, pp )
 									if not r then return r, e end
 									local ssl = require "ssl"
+									D("SMTP send wrapping %s", tostring(sock))
 									sock = ssl.wrap( sock, getSSLParams( "SMTP" ) )
+									D("SMTP after wrapping, sock is %s", tostring(sock))
 									return sock:dohandshake()
 								end
 							}, {
@@ -5543,8 +5551,9 @@ function request( lul_request, lul_parameters, lul_outputformat )
 				r = r .. " on " .. tostring(v)
 			end
 		else
-			r = r .. "Vera version " .. tostring(luup.version) .. " on "..
-				tostring(luup.attr_get("model",0))
+			r = r .. "Vera version " .. tostring(luup.version) .. " (" .. 
+				(luup.short_version or "pre-7.30") .. 
+				") on ".. tostring(luup.attr_get("model",0))
 		end
 		r = r .. "; loadtime " .. tostring( luup.attr_get('LoadTime',0) or "" )
 		r = r .. "; systemReady " .. tostring( systemReady )
