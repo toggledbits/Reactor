@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.4hotfix-19240"
+local _PLUGIN_VERSION = "3.4hotfix-19273"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION	= 19226
@@ -1992,7 +1992,7 @@ local function execSceneGroups( tdev, taskid, scd )
 		-- If scene group has a delay, see if we're there yet.
 		local now = os.time() -- update time, as scene groups can take a long time to execute
 		local delay = scd.groups[nextGroup].delay or 0
-		if type(delay) == "string" then delay = resolveVarRef( delay, tdev ) end
+		if type(delay) == "string" then _,delay = resolveVarRef( delay, tdev ) end
 		if type(delay) ~= "number" then
 			L({level=1,msg="%1 (%2) delay at group %3 did not resolve to number; no delay!"},
 				luup.devices[tdev].description, tdev, nextGroup)
