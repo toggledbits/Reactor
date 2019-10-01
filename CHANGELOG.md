@@ -7,8 +7,10 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 * Enhancement: Do not check firmware version in debug mode, specifically for allowing testing on any firmware, including alpha/unblessed.
 * Enhancement: The Activities tab now can filter the display by "true" and "false" activities (suggestion by tunnus).
 * Internal: Clean up mechanism for determining SSL parameters for SMTP connections.
+* Internal: Upgrade of configuration is only done by core now; no duplication of effort on the JS side.
 * Fix: Cosmetic bug in the appearance of scene list for Run Scene activity.
 * Fix: Cosmetic bug--"updates" action does not need "ignore case" checkbox.
+* Hotfix-19273-01: Delay action with variable ref doesn't work (fixed).
 * Hotfix-19240-01: Google SMTP service requires specific wrapping of the from address.
 
 ## Version 3.4 (released)

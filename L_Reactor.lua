@@ -1836,17 +1836,19 @@ end
 -- Returns result as string and number
 local function getValue( val, ctx, tdev )
 	D("getValue(%1,%2,%3)", val, ctx, tdev)
-	ctx = ctx or getSensorState( tdev ).ctx or getExpressionContext( getSensorConfig( tdev ), tdev )
 	if type(val) == "number" then return tostring(val), val end
 	val = tostring(val) or ""
-	if #val >=2 and val:byte(1) == 34 and val:byte(-1) == 34 then
+	if #val >= 2 and val:byte(1) == 34 and val:byte(-1) == 34 then
 		-- Dequote quoted string and return
 		return val:sub( 2, -2 ), nil
 	end
 	if #val >= 2 and val:byte(1) == 123 and val:byte(-1) == 125 then
+		ctx = ctx or getSensorState( tdev ).ctx or getExpressionContext( getSensorConfig( tdev ), tdev )
 		-- Expression wrapped in {}
 		local mp = val:sub( 2, -2 )
+		D("getValue() evaluating %1", mp)
 		local result,err = luaxp.evaluate( mp, ctx )
+		D("getValue() result is %1, %2", result, err)
 		if err then
 			L({level=2,msg="%1 (%2) Error evaluating %3: %4"}, luup.devices[tdev].description,
 				tdev, mp, err)
@@ -2126,11 +2128,11 @@ local function doActionNotify( action, scid, tdev )
 				if authuser ~= "" then sendt.user = authuser end
 				if authpass ~= "" then sendt.password = authpass end
 				msgt.headers.To = table.concat( msgt.headers.To, ", " )
-				D("execSceneGroups() msgt=%1", msgt)
+				D("doActionNotify msgt=%1", msgt)
 				sendt.source = smtp.message( msgt )
-				D("execSceneGroups() sendt=%1", sendt)
+				D("doActionNotify sendt=%1", sendt)
 				local r,e = smtp.send( sendt )
-				D("execSceneGroups() SMTP send returned %1, %2", r, e)
+				D("doActionNotify SMTP send returned %1, %2", r, e)
 				if r == nil then
 					if sendt.user then sendt.user = "****" end
 					if sendt.password then sendt.password = "****" end
@@ -2201,7 +2203,7 @@ local function doActionNotify( action, scid, tdev )
 			local baseurl = action.url or ""
 			baseurl = baseurl:gsub( "%{message%}", urlencode( msg ):gsub("%%", "%%%%") )
 			local st,_,ht = luup.inet.wget( baseurl )
-			D("execSceneGroups() User URL notification returned %1,%2 [%3]", st, ht, baseurl)
+			D("doActionNotify User URL notification returned %1,%2 [%3]", st, ht, baseurl)
 			if st ~= 0 or ht ~= 200 then
 				L({level=2,msg="User URL notification returned %1 httpStatus=%2 [%3]"}, st, ht, baseurl)
 				return false, "User HTTP notification failed (" .. tostring(st) .. ", " .. tostring(ht) .. ")"
@@ -2276,7 +2278,7 @@ local function execSceneGroups( tdev, taskid, scd )
 		-- If scene group has a delay, see if we're there yet.
 		local now = os.time() -- update time, as scene groups can take a long time to execute
 		local delay = scd.groups[nextGroup].delay or 0
-		if type(delay) == "string" then delay = resolveVarRef( delay, tdev ) end
+		if type(delay) == "string" then _,delay = resolveVarRef( delay, tdev ) end
 		if type(delay) ~= "number" then
 			L({level=1,msg="%1 (%2) delay at group %3 did not resolve to number; no delay!"},
 				luup.devices[tdev].description, tdev, nextGroup)
