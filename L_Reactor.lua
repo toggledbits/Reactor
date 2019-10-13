@@ -4799,7 +4799,7 @@ local function findSceneOrActivity( scene, dev )
 					for grp in conditionGroups( cd.conditions.root or {} ) do
 						if (grp.name or ""):lower() == name or (grp.id or ""):lower() == name then
 							ln = grp.id .. state;
-							break;
+							break
 						end
 					end
 					if not ln then
