@@ -5361,29 +5361,53 @@ var ReactorSensor = (function(api, $) {
 					}
 				} else if ( parm.type == "scene" ) {
 					inp = makeSceneMenu();
-					if ( parm.optional ) {
-						inp.append( '<option value="" selected>(unspecified)</option>' );
-					} else {
-						inp.append( '<option value="" selected>--choose--</option>' );
+					var topItem = jQuery( '<option value="" />' );
+					topItem.text( parm.optional ? "(unspecified)" : "--choose--" );
+					inp.prepend( topItem );
+					if ( 0 !== ( parm._reactor_with_activities || 0 ) ) {
+						/* Show activities in traversal order */
+						var cd = getConfiguration( devNum );
+						var grp = jQuery('<optgroup>').attr('label', 'ReactorSensor Activities');
+						DOtraverse( cd.conditions.root,
+							function( node ) {
+								var opt;
+								if ( cd.activities[node.id + ".true"] ) {
+									jQuery( '<option/>' ).val( node.id + ".true" )
+										.text( node.name + " is TRUE" )
+										.appendTo( grp );
+								}
+								if ( cd.activities[node.id + ".false"] ) {
+									jQuery( '<option/>' ).val( node.id + ".false" )
+										.text( node.name + " is FALSE" )
+										.appendTo( grp );
+								}
+							},
+							false,
+							function( node ) {
+								return "group" === (node.type || "group");
+							}
+						);
+						if ( jQuery('option', grp).length > 0 ) {
+							grp.insertAfter( topItem );
+						}
 					}
 					if ( undefined !== parm.extraValues ) {
 						if ( Array.isArray( parm.extraValues ) ) {
 							for ( j=0; j<parm.extraValues.length; j++ ) {
 								opt = jQuery( '<option/>' ).val( parm.extraValues[j] ).text( parm.extraValues[j] );
-								//inp.append( opt );
-								opt.insertAfter( jQuery( 'option[value=""]:first', inp ) );
+								opt.insertAfter( topItem );
 							}
 						} else {
 							for ( var key in parm.extraValues ) {
 								if ( parm.extraValues.hasOwnProperty( key ) ) {
 									opt = jQuery( '<option/>' ).val( key ).text( parm.extraValues[key] );
-									opt.insertAfter( jQuery( 'option[value=""]:first', inp ) );
-									//inp.append( opt );
+									opt.insertAfter( topItem );
 								}
 							}
 						}
 					}
 					/* Add variables */
+					inp.val( "" );
 					appendVariables( inp );
 				} else if ( parm.type == "boolean" ) {
 					/* Menu */
