@@ -4681,8 +4681,14 @@ function actionSetGroupEnabled( grpid, enab, dev )
 		-- No need to call updateSensor here, modifying cdata does it
 		cdata.timestamp = os.time()
 		cdata.serial = 1 + ( tonumber( cdata.serial or 0 ) or 0 )
-		luup.variable_set( RSSID, "cdata", json.encode( cdata ), dev )
-		return 4,0
+		local rawConfig,err = json.encode( cdata )
+		if rawConfig and #rawConfig > 0 then
+			luup.variable_set( RSSID, "cdata", rawConfig, dev )
+		else
+			L({level=1,msg="Can't save configuration! The JSON library (%1) can't encode it: %2"}, json.version, err)
+			L("%1", cdata)
+			return 2,0
+		end
 	end
 	L({level=1,msg="%1 (%2) action SetGroupEnabled %3 failed, group not found in config"},
 		luup.devices[dev].description, dev, grpid)
