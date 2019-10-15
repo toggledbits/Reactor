@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.5develop-19250';
+	var pluginVersion = '3.5develop-19288';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -207,6 +207,15 @@ var ReactorSensor = (function(api, $) {
 
 	function quot( s ) {
 		return JSON.stringify( s );
+	}
+
+	/* Remove special characters that disrupt JSON processing on Vera (dkjson 1.2 in particular */
+	/* Ref http://dkolf.de/src/dkjson-lua.fsl/home (see 1.2 comments) */
+	/* Ref https://docs.microsoft.com/en-us/openspecs/ie_standards/ms-es3/def92c0a-e69f-4e5e-8c5e-9f6c9e58e28b */
+	function purify( s ) {
+		return "string" !== typeof(s) ? s :
+			s.replace(/[\x00-\x1f\x7f-\x9f\u2028\u2029]/g, "");
+			/* or... s.replace( /[\u007F-\uFFFF]/g, function(ch) { return "\\u" + ("0000"+ch.charCodeAt(0).toString(16)).substr(-4); } ) */
 	}
 
 	function hasAnyProperty( obj ) {
@@ -833,7 +842,7 @@ var ReactorSensor = (function(api, $) {
 		console.log("handleSaveClick(): saving config serial " + String(cdata.serial) + ", timestamp " + String(cdata.timestamp));
 		waitForReloadComplete( "Waiting for system ready before saving configuration..." ).then( function() {
 			api.setDeviceStateVariablePersistent( myid, serviceId, "cdata",
-				JSON.stringify( cdata, function( k, v ) { return k.match( /^__/ ) ? undefined : v; } ),
+				JSON.stringify( cdata, function( k, v ) { return ( k.match( /^__/ ) || v === null ) ? undefined : purify(v); } ),
 				{
 					'onSuccess' : function() {
 						configModified = false;
@@ -842,16 +851,18 @@ var ReactorSensor = (function(api, $) {
 						if ( "function" === typeof(fnext) ) fnext.apply( null, fargs );
 						if ( cdata.__reloadneeded ) {
 							delete cdata.__reloadneeded;
-							api.performActionOnDevice( 0, "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "Reload",
-								{ actionArguments: { Reason: "Reactor saved config needs reload" } } );
 							api.showCustomPopup( "Reloading Luup...", { autoHide: false, category: 3 } );
 							setTimeout( function() {
-								waitForReloadComplete().then( function() {
-									$("#myModal").modal("hide");
-								}).catch( function(reason) {
-									$("#myModal").modal("hide");
-								});
-							}, 5000 );
+								api.performActionOnDevice( 0, "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "Reload",
+									{ actionArguments: { Reason: "Reactor saved config needs reload" } } );
+								setTimeout( function() {
+									waitForReloadComplete().then( function() {
+										$("#myModal").modal("hide");
+									}).catch( function(reason) {
+										$("#myModal").modal("hide");
+									});
+								}, 5000 );
+							}, 2000 );
 						} else {
 							clearUnusedStateVariables( myid, cdata );
 						}
@@ -1813,7 +1824,11 @@ var ReactorSensor = (function(api, $) {
 						/* Case-insensitive (nocase==1) is the default */
 						val = ( jQuery( 'input.nocase', $row ).prop( 'checked' ) || false ) ? 1 : 0;
 						if ( val !== cond.nocase ) {
-							cond.nocase = ( 0 === val ) ? 0 : undefined;
+							if ( 0 === val ) {
+								cond.nocase = 0;
+							} else {
+								delete cond.nocase;
+							}
 							configModified = true;
 						}
 					} else if ( undefined !== cond.nocase ) {
