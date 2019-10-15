@@ -878,12 +878,12 @@ end
 local function loadSensorConfig( tdev )
 	D("loadSensorConfig(%1)", tdev)
 	local upgraded = false
-	local s = getVar( "cdata", "", tdev )
+	local rawConfig = getVar( "cdata", "", tdev )
 	local cdata, pos, err
-	if "" ~= s then
-		cdata, pos, err = json.decode( s )
+	if "" ~= rawConfig then
+		cdata, pos, err = json.decode( rawConfig )
 		if type(cdata) ~= "table" then
-			L("Unable to parse JSON data at %2, %1 in %3", pos, err, s)
+			L("Unable to parse JSON data at %2, %1 in %3", pos, err, rawConfig)
 			return error("Unable to load configuration")
 		end
 		D("loadSensorConfig() loaded configuration version %1", cdata.version)
@@ -917,7 +917,7 @@ local function loadSensorConfig( tdev )
 				d[tostring(tdev)] = { devnum=tdev, name=luup.devices[tdev].description, config=cdata }
 				local mt = { __jsontype="object" } -- empty tables render as object
 				setmetatable( d, mt )
-				f:write( json.encode(d) )
+				f:write( rawConfig )
 				f:close()
 			end
 		else
@@ -1013,7 +1013,14 @@ local function loadSensorConfig( tdev )
 		cdata.timestamp = os.time()
 		cdata.serial = 1 + ( tonumber(cdata.serial or 0) or 0 )
 		-- NOTA BENE: startup=true passed here! Don't fire watch for this rewrite.
-		luup.variable_set( RSSID, "cdata", json.encode( cdata ), tdev, false )
+		rawConfig,err = json.encode( cdata )
+		if rawConfig and #rawConfig > 0 then
+			luup.variable_set( RSSID, "cdata", json.encode( cdata ), tdev, false )
+		else
+			L({level=1,msg="Can't save! The JSON library (%1) can't encode updated config: %2"}, json.version, err)
+			L("%1", cdata)
+			error("Unable to encode updated config; not saved.")
+		end
 	end
 
 	-- Save to cache.
