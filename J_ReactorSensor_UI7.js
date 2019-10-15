@@ -209,6 +209,15 @@ var ReactorSensor = (function(api, $) {
 		return JSON.stringify( s );
 	}
 
+	/* Remove special characters that disrupt JSON processing on Vera (dkjson 1.2 in particular */
+	/* Ref http://dkolf.de/src/dkjson-lua.fsl/home (see 1.2 comments) */
+	/* Ref https://docs.microsoft.com/en-us/openspecs/ie_standards/ms-es3/def92c0a-e69f-4e5e-8c5e-9f6c9e58e28b */
+	function purify( s ) {
+		return "string" !== typeof(s) ? s : 
+			s.replace(/[\x00-\x1f\x7f-\x9f\u2028\u2029]/g, "");
+			/* or... s.replace( /[\u007F-\uFFFF]/g, function(ch) { return "\\u" + ("0000"+ch.charCodeAt(0).toString(16)).substr(-4); } ) */
+	}
+
 	function hasAnyProperty( obj ) {
 		// assert( "object" === typeof( obj );
 		if ( "object" === typeof( obj ) ) {
@@ -382,107 +391,6 @@ var ReactorSensor = (function(api, $) {
 
 		/* Update device */
 		cdata.device = myid;
-
-		/* Store config on instance data */
-		var d = getInstanceData( myid );
-		d.cdata = cdata;
-		delete d.ixCond; /* Remove until needed/rebuilt */
-
-		configModified = false;
-		return cdata;
-	}
-		/* Special version check */
-		if ( ( cdata.version || 0 ) > _CDATAVERSION ) {
-			console.log("The configuration for this ReactorSensor is an unsupported format/version (" +
-				String( cdata.version ) + "). Upgrade Reactor or restore an older config from backup.");
-			throw "Incompatible configuration format/version";
-		}
-
-		/* Check for upgrade tasks from prior versions */
-		delete cdata.undefined;
-		if ( undefined === cdata.variables ) {
-			/* Fixup v2 */
-			cdata.variables = {};
-			upgraded = true;
-		}
-		if ( undefined === cdata.activities ) {
-			/* Fixup pre 19051 to 19052 */
-			cdata.activities = {};
-			if ( undefined !== cdata.tripactions ) {
-				cdata.activities['root.true'] = cdata.tripactions;
-				cdata.activities['root.true'].id = 'root.true';
-				delete cdata.tripactions;
-			}
-			if ( undefined !== cdata.untripactions ) {
-				cdata.activities['root.false'] = cdata.untripactions;
-				cdata.activities['root.false'].id = 'root.false';
-				delete cdata.untripactions;
-			}
-			upgraded = true;
-		}
-		if ( cdata.activities.__trip ) {
-			/* Fixup 19051 to 19052 -- development only, should not be seen in wild */
-			cdata.activities['root.true'] = cdata.activities.__trip;
-			cdata.activities['root.true'].id = 'root.true';
-			delete cdata.activities.__trip;
-			upgraded = true;
-		}
-		if ( cdata.activities.__untrip ) {
-			/* Fixup 19051 to 19052 -- development only, should not be seen in wild */
-			cdata.activities['root.false'] = cdata.activities.__untrip;
-			cdata.activities['root.false'].id = 'root.false';
-			delete cdata.activities.__untrip;
-			upgraded = true;
-		}
-		if ( undefined === cdata.conditions.root ) {
-			/* Fixup any pre to 19052 */
-			var ix;
-			var root = { id: "root", name: api.getDeviceObject( myid ).name, type: "group", operator: "and", conditions: [] };
-			var ng = (cdata.conditions || []).length;
-			if ( ng == 0 || ( ng == 1 && ( cdata.conditions[0].groupconditions || [] ).length == 0 ) ) {
-				/* No conditions here. Leave empty root. */
-			} else if ( ng == 1 ) {
-				/* Single group. Just add all conditions to root group. */
-				root.name = cdata.conditions[0].name || cdata.conditions[0].id || root.name;
-				root.operator = 'and';
-				root.conditions = cdata.conditions[0].groupconditions || [];
-			} else {
-				/* Multiple groups. */
-				root.operator = "or"; /* OR between groups */
-				for ( ix=0; ix<cdata.conditions.length; ix++ ) {
-					var grp = cdata.conditions[ix];
-					root.conditions[ix] = { id: grp.groupid || ix, name: grp.name || grp.groupid, operator: "and" }; /* AND within groups */
-					root.conditions[ix].conditions = grp.groupconditions || [];
-				}
-			}
-			cdata.conditions = { root: root };
-
-			/* Handle cdata.variables indexing upgrade. */
-			ix = 0;
-			for ( var vn in ( cdata.variables || {} ) ) {
-				if ( cdata.variables.hasOwnProperty( vn ) ) {
-					cdata.variables[vn].index = ix++;
-				}
-			}
-
-			upgraded = true;
-		}
-
-		/* Keep version on config as highest that has edited it. */
-		if ( ( cdata.version || 0 ) < _CDATAVERSION ) {
-			cdata.version = _CDATAVERSION;
-		}
-		cdata.device = myid;
-		if ( upgraded ) {
-			/* Write updated config. We don't care if it fails, as nothing we can't redo would be lost. */
-			console.log('Re-writing upgraded config data');
-			cdata.timestamp = Math.floor( Date.now() / 1000 );
-			cdata.serial = ( cdata.serial || 0 ) + 1;
-			console.log("loadConfigData(): saving upgraded config serial " + String(cdata.serial) + ", timestamp " + String(cdata.timestamp));
-			api.setDeviceStateVariablePersistent( myid, serviceId, "cdata",
-				JSON.stringify( cdata, function( k, v ) { return k.match( /^__/ ) ? undefined : v; } )
-			);
-		}
 
 		/* Store config on instance data */
 		var d = getInstanceData( myid );
@@ -934,7 +842,7 @@ var ReactorSensor = (function(api, $) {
 		console.log("handleSaveClick(): saving config serial " + String(cdata.serial) + ", timestamp " + String(cdata.timestamp));
 		waitForReloadComplete( "Waiting for system ready before saving configuration..." ).then( function() {
 			api.setDeviceStateVariablePersistent( myid, serviceId, "cdata",
-				JSON.stringify( cdata, function( k, v ) { return k.match( /^__/ ) ? undefined : v; } ),
+				JSON.stringify( cdata, function( k, v ) { return ( k.match( /^__/ ) || v === null ) ? undefined : purify( v ); } ),
 				{
 					'onSuccess' : function() {
 						configModified = false;
@@ -943,15 +851,17 @@ var ReactorSensor = (function(api, $) {
 						if ( "function" === typeof(fnext) ) fnext.apply( null, fargs );
 						if ( cdata.__reloadneeded ) {
 							delete cdata.__reloadneeded;
-							api.performActionOnDevice( 0, "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "Reload",
-								{ actionArguments: {} } );
 							api.showCustomPopup( "Reloading Luup...", { autoHide: false, category: 3 } );
 							setTimeout( function() {
-								waitForReloadComplete().then( function() {
-									$("#myModal").modal("hide");
-								}).catch( function(reason) {
-									$("#myModal").modal("hide");
-								});
+								api.performActionOnDevice( 0, "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "Reload",
+									{ actionArguments: {} } );
+								setTimeout( function() {
+									waitForReloadComplete().then( function() {
+										$("#myModal").modal("hide");
+									}).catch( function(reason) {
+										$("#myModal").modal("hide");
+									});
+								}, 5000 );
 							}, 5000 );
 						} else {
 							clearUnusedStateVariables( myid, cdata );
@@ -1914,7 +1824,11 @@ var ReactorSensor = (function(api, $) {
 						/* Case-insensitive (nocase==1) is the default */
 						val = ( jQuery( 'input.nocase', $row ).prop( 'checked' ) || false ) ? 1 : 0;
 						if ( val !== cond.nocase ) {
-							cond.nocase = ( 0 === val ) ? 0 : undefined;
+							if ( 0 === val ) {
+								cond.nocase = 0;
+							} else {
+								delete cond.nocase;
+							}
 							configModified = true;
 						}
 					} else if ( undefined !== cond.nocase ) {
@@ -2917,7 +2831,7 @@ var ReactorSensor = (function(api, $) {
 						dobj = api.getDeviceObject( cond.device );
 						v = (dobj || {}).name; /* may be undefined, that's OK */
 					}
-					if ( cond.devicename !== v ) {
+					if ( v && cond.devicename !== v ) {
 						cond.devicename = v;
 						configModified = true;
 					}
