@@ -944,7 +944,7 @@ local function plugin_runOnce( pdev )
 		initVar( "ProwlAPIKey", "", pdev, MYSID )
 		initVar( "ProwlProvider", "", pdev, MYSID )
 	end
-	
+
 	if s < 19245 then
 		os.execute("rm -f /etc/cmh-ludl/Reactor.log")
 	end
@@ -1526,7 +1526,7 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
 			if (err or {}).location ~= nil then errmsg = errmsg .. " at " .. tostring(err.location) end
 			L({level=2,msg="%2 (#%1) failed evaluation of %3: %4"}, tdev, luup.devices[tdev].description,
 				vdef.expression, errmsg)
-			addEvent{ dev=tdev, 
+			addEvent{ dev=tdev,
 				msg="TROUBLE: Evaluation error in variable %(vname)s: %(error)s",
 				event="expression", variable=vname, ['error']=errmsg }
 			getSensorState( tdev ).trouble = true
@@ -1547,8 +1547,8 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
 		D("evaluateVariable() creating new state for expr/var %1", vname)
 		vs = { name=vname, lastvalue=result, valuestamp=getSensorState( tdev ).timebase, changed=1 }
 		cstate.vars[vname] = vs
-		addEvent{ dev=tdev, 
-			msg="Variable %(variable)s value set to %(newval)q", 
+		addEvent{ dev=tdev,
+			msg="Variable %(variable)s value set to %(newval)q",
 			event="variable", variable=vname, newval=result }
 	else
 		local changed
@@ -1563,7 +1563,7 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
 		end
 		if changed then
 			D("evaluateVariable() updating value for %1 from %2 to %3", vname, cstate.vars[vname].lastvalue, result)
-			addEvent{ dev=tdev, 
+			addEvent{ dev=tdev,
 				msg="Variable %(variable)s value changed from %(oldval)q to %(newval)q",
 				event="variable", variable=vname, oldval=cstate.vars[vname].lastvalue, newval=result }
 			vs.lastvalue = result
@@ -1801,7 +1801,7 @@ local function getExpressionContext( cdata, tdev )
 	end
 	ctx.__functions.trouble = function( args )
 		local msg, title = unpack( args )
-		addEvent{ dev=tdev, 
+		addEvent{ dev=tdev,
 			msg="TROUBLE: Expression called trouble(): %(message)s",
 			event="evaluate", trouble=title or "trouble()", message=msg or "" }
 		getSensorState( tdev ).trouble = true
@@ -1859,7 +1859,7 @@ local function getValue( val, ctx, tdev )
 		if err then
 			L({level=2,msg="%1 (%2) Error evaluating %3: %4"}, luup.devices[tdev].description,
 				tdev, mp, err)
-			addEvent{ dev=tdev, 
+			addEvent{ dev=tdev,
 				msg="TROUBLE: Evaluation error in %(expression)q: %(error)s",
 				event="evaluate", expression=val, ['error']=err }
 			getSensorState( tdev ).trouble = true
@@ -1886,7 +1886,7 @@ local function execLua( fname, luafragment, extarg, tdev )
 		if fnc == nil or err then
 			L({level=1,msg="%1 %(2) [%3] Lua load failed"},
 				luup.devices[tdev].description, tdev, fname)
-			addEvent{ dev=tdev, 
+			addEvent{ dev=tdev,
 				msg="TROUBLE: Failed to load Lua (%(name)q): %(error)s",
 				event="runlua", name=fname, ['error']=tostring(err) }
 			getSensorState( tdev ).trouble = true
@@ -1924,7 +1924,7 @@ local function execLua( fname, luafragment, extarg, tdev )
 							luup.log( ((luup.devices[dev] or {}).description or "?") ..
 								" (" .. tostring(dev) .. ") [" .. tostring(luaEnv.__reactor_getscript() or "?") ..
 								"] " .. msg)
-							addEvent{ dev=dev, 
+							addEvent{ dev=dev,
 								msg="(%(script)s) %(message)",
 								event="lua", script=luaEnv.__reactor_getscript(), message=msg }
 						end
@@ -1952,7 +1952,7 @@ local function execLua( fname, luafragment, extarg, tdev )
 					the sandbox) for Luup to find them by name later.
 				--]]
 				if t._RG[n] and t._RG[n] ~= v then
-					addEvent{ dev=dev, 
+					addEvent{ dev=dev,
 						msg="WARNING: Declaraction of non-local function %(name)s in %(script)s overwrites previous definition.",
 						event="lua", script=fn, name=n, warning="Redefinition of non-local function" }
 				end
@@ -1961,7 +1961,7 @@ local function execLua( fname, luafragment, extarg, tdev )
 			if what.what ~= "C" and getVarNumeric( "SuppressLuaGlobalWarnings", 0, pluginDevice, MYSID ) == 0 then
 				L({level=2,msg="%1 (%2) runLua action: %3 makes assignment to global %4 (missing 'local' declaration?) at %5"},
 					( luup.devices[dev] or {}).description, dev, fn, n, what)
-				addEvent{ event="lua", 
+				addEvent{ event="lua",
 					msg="WARNING: Assignment to global %(name)s (missing 'local' declaration?)",
 					dev=dev, script=fn, name=n, warning="Assignment to global" }
 			end
@@ -1977,7 +1977,7 @@ local function execLua( fname, luafragment, extarg, tdev )
 				local fn = t.__reactor_getscript() or tostring(what.source)
 				L({level=1,msg="%1 (%2) runLua action: %3 accesses undeclared/uninitialized global %4"},
 					( luup.devices[dev] or {} ).description, dev, fn, n)
-				addEvent{ event="lua", 
+				addEvent{ event="lua",
 					msg="ERROR: Using uninitialized global variable %(name)s",
 					dev=dev, script=fn, message="Undefined global" }
 			end
@@ -2010,7 +2010,7 @@ local function execLua( fname, luafragment, extarg, tdev )
 	-- iterator.
 	local rmt = {}
 	rmt.__newindex = function(t, n, v) -- luacheck: ignore 212
-						 addEvent{ dev=tdev, 
+						 addEvent{ dev=tdev,
 							msg="WARNING: Reactor.variables is read-only; attempt to modify %(name)s will be ignored",
 							event="lua", script=fname, name=n, message="Can't modify Reactor.variables" }
 					 end
@@ -2020,7 +2020,7 @@ local function execLua( fname, luafragment, extarg, tdev )
 						if v == nil then
 							L({level=1,msg="%1 (%2) Run Lua action: your code attempts to access undefined Reactor variable "..tostring(n)},
 								luup.devices[tdev].description, tdev, n)
-							addEvent{ dev=tdev, 
+							addEvent{ dev=tdev,
 								msg="WARNING: Attempt to access undefined value in Reactor.variables: %(name)s",
 								event="lua", script=fname, message="Undefined in Reactor.variables" }
 							return nil
@@ -2261,7 +2261,7 @@ local function execSceneGroups( tdev, taskid, scd )
 	if not systemReady then
 		L("%1 (#%2) attempting to run actions %3 (%4) but system is not yet ready; deferring 5 seconds.",
 			luup.devices[tdev].description, tdev, (scd or {}).name or sst.scene, sst.scene)
-		addEvent{ dev=tdev, 
+		addEvent{ dev=tdev,
 			message="Deferring scene execution, system not ready (%(sceneName)s)",
 			event="runscene", scene=sst.scene, sceneName=(scd or {}).name or sst.scene, notice="Not ready" }
 		scheduleDelay( { id=sst.taskid, owner=sst.owner, func=execSceneGroups, args={ scd } }, 5 )
@@ -2289,7 +2289,7 @@ local function execSceneGroups( tdev, taskid, scd )
 		if type(delay) ~= "number" then
 			L({level=1,msg="%1 (%2) delay at group %3 did not resolve to number; no delay!"},
 				luup.devices[tdev].description, tdev, nextGroup)
-			addEvent{ dev=tdev, 
+			addEvent{ dev=tdev,
 				msg="TROUBLE: Invalid delay in scene group %(group)s of %(sceneName)s: %(delay)q",
 				event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, delay=delay or "nil", ['error']="TROUBLE: invalid delay in scene group" }
 			getSensorState( tdev ).trouble = true
@@ -2308,7 +2308,7 @@ local function execSceneGroups( tdev, taskid, scd )
 			if tt > now then
 				-- It's not time yet. Schedule task to continue.
 				D("execSceneGroups() scene group %1 must delay to %2", nextGroup, tt)
-				addEvent{ dev=tdev, 
+				addEvent{ dev=tdev,
 					msg="Delaying scene %(sceneName)s group %(group)s actions until %(when)",
 					event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, when=os.date("%X", tt), notice="Scene delay" }
 				scheduleTick( { id=sst.taskid, owner=sst.owner, func=execSceneGroups, args={ scd } }, tt )
@@ -2356,7 +2356,7 @@ local function execSceneGroups( tdev, taskid, scd )
 					if ( action.comment or ""):byte(1) == 42 then
 						L("%2 (%1) %3 [%4:%5]", tdev, luup.devices[tdev].description,
 							action.comment, scd.id, ix)
-						addEvent{ dev=tdev, 
+						addEvent{ dev=tdev,
 							msg="(%(sceneName)s group %(group)s) %(message)s",
 							event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, message=action.comment or "" }
 					end
@@ -2364,7 +2364,7 @@ local function execSceneGroups( tdev, taskid, scd )
 					local devnum = tonumber( action.device )
 					if devnum == -1 then devnum = tdev end
 					if devnum == nil or luup.devices[devnum] == nil then
-						addEvent{ dev=tdev, 
+						addEvent{ dev=tdev,
 							msg="TROUBLE: Device %(xdev)q invalid or does not exist; reference in scene %(sceneName)s group %(group)s step %(step)s",
 							event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, step=ix, xdev=action.device, warning="Invalid device" }
 						L({level=1,msg="%5 (%6): invalid device (%4) in scene %1 (%2) group %3; skipping action."},
@@ -2414,7 +2414,7 @@ local function execSceneGroups( tdev, taskid, scd )
 					if ( action.encoded_lua or 0 ) ~= 0 then
 						lua = mime.unb64( lua )
 						if lua == nil then
-							addEvent{ dev=tdev, 
+							addEvent{ dev=tdev,
 								msg="TROUBLE: Can't decode Lua for activity %(sceneName)s group %(group)s step %(step)s",
 								event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, step=ix, ['error']="Can't decode Lua" }
 							L({level=1,msg="Aborting scene %1 (%2) run, unable to decode scene Lua"}, scd.id, scd.name)
@@ -2428,7 +2428,7 @@ local function execSceneGroups( tdev, taskid, scd )
 						L({level=1,msg="%1 (%2) aborting scene %3 Lua execution at group step %4, Lua run failed: %5"},
 							luup.devices[tdev].description, tdev, scd.id, ix, err)
 						L{level=2,msg="Lua:\n"..lua} -- concat to avoid formatting
-						addEvent{ dev=tdev, 
+						addEvent{ dev=tdev,
 							msg="TROUBLE: Lua error in activity %(sceneName)s group %(group)s step %(step)s: %(error)s",
 							event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, step=ix, ['error']=err }
 						getSensorState( tdev ).trouble = true
@@ -2438,7 +2438,7 @@ local function execSceneGroups( tdev, taskid, scd )
 					elseif more == false then -- N.B. specific test to match exactly boolean type false (but not nil)
 						L("%1 (%2) scene %3 Lua at step %4 returned (%5)%6, stopping actions.",
 							luup.devices[tdev].description, tdev, scd.id, ix, type(more), more)
-						addEvent{ dev=tdev, 
+						addEvent{ dev=tdev,
 							msg="Aborting activity %(sceneName)s; group %(group)s step %(step)s Lua returned %(retval)q",
 							event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, step=ix, retval=more }
 						stopScene( nil, taskid, tdev ) -- stop just this scene.
@@ -2512,7 +2512,7 @@ local function execScene( scd, tdev, options )
 	end
 
 	-- And here ve go...
-	addEvent{ dev=tdev, 
+	addEvent{ dev=tdev,
 		msg="Launching scene/activity %(sceneName)s",
 		event="startscene", scene=scd.id, sceneName=scd.name or scd.id}
 
@@ -2538,7 +2538,7 @@ local function execScene( scd, tdev, options )
 		local fname = string.format("scene%s_start", tostring(scd.id))
 		local more,err = execLua( fname, luafragment, options.externalArgument, tdev )
 		if err then
-			addEvent{ dev=tdev, 
+			addEvent{ dev=tdev,
 				msg="TROUBLE: Aborting, error in scene Lua: %(error)s",
 				event="runscene", scene=scd.id, sceneName=scd.name or scd.id, ['error']=err }
 			L({level=1,msg="%1 (%2) scene %3 scene Lua run failed: %4"},
@@ -2547,7 +2547,7 @@ local function execScene( scd, tdev, options )
 			return
 		end
 		if more == false then -- N.B. specific test to match exactly boolean type false (but not nil)
-			addEvent{ dev=tdev, 
+			addEvent{ dev=tdev,
 				msg="Stopping scene, Lua returned %(return)q",
 				event="runscene", scene=scd.id, sceneName=scd.name or scd.id, ['return']=more }
 			L("%1 (%2) scene %3 Lua returned (%4)%5, scene run aborted.",
@@ -2586,7 +2586,7 @@ local function resumeScenes()
 	end
 	sceneState = d or {}
 	for _,data in pairs( sceneState ) do
-		addEvent{ dev=data.owner, 
+		addEvent{ dev=data.owner,
 			msg="Resuming run after reload (%(scene)s)",
 			event="runscene", scene=data.scene, notice="Queing scene resume after reload" }
 		scheduleDelay( { id=data.taskid, owner=data.owner, func=execSceneGroups, args={} }, 1 )
@@ -3485,7 +3485,7 @@ local function processCondition( cond, grp, cdata, tdev )
 			if not state then
 				local age = (cs.stateedge.f or now) - (cs.stateedge.t or 0)
 				state = age < condopt.duration
-				addEvent{ dev=tdev, 
+				addEvent{ dev=tdev,
 					msg="%(cname)s was true for %(age)s seconds, did%(not)s meet < %(dur)s second restriction",
 					cname=(cond.type or "group")=="group" and ("Group "..(cond.name or cond.id)) or ("Condition "..cond.id),
 					cond=cond.id, age=age, dur=condopt.duration, ['not']=state and "" or " not" }
@@ -3510,12 +3510,12 @@ local function processCondition( cond, grp, cdata, tdev )
 				cs.waituntil = cs.statestamp + condopt.duration
 				local rem = math.max( 1, condopt.duration - age )
 				scheduleDelay( tostring(tdev), rem )
-				addEvent{ dev=tdev, 
+				addEvent{ dev=tdev,
 					msg="%(cname)s holding evaluation state for check that duration >= %(dur)s (%(rem)s to go)",
 					cname=(cond.type or "group")=="group" and ("Group "..(cond.name or cond.id)) or ("Condition "..cond.id),
 					cond=cond.id, dur=condopt.duration, rem=rem }
 			else
-				addEvent{ dev=tdev, 
+				addEvent{ dev=tdev,
 					msg="%(cname)s successfully sustained for at least %(dur) seconds (actual %(age)s)",
 					cname=(cond.type or "group")=="group" and ("Group "..(cond.name or cond.id)) or ("Condition "..cond.id),
 					cond=cond.id, dur=condopt.duration, age=age }
@@ -3546,7 +3546,7 @@ local function processCondition( cond, grp, cdata, tdev )
 			state = true -- hold up unconditionally
 			cs.pulseuntil = pulseend
 			scheduleDelay( tostring(tdev), pulseend - now )
-			addEvent{ dev=tdev, 
+			addEvent{ dev=tdev,
 				msg="%(cname)s setting timing for output pulse %(delay)s seconds",
 				cname=(cond.type or "group")=="group" and ("Group "..(cond.name or cond.id)) or ("Condition "..cond.id),
 				cond=cond.id, delay=pulseend-now }
@@ -3555,8 +3555,8 @@ local function processCondition( cond, grp, cdata, tdev )
 			D("processCondition() pulse off phase (%1)", state)
 			cs.pulseuntil = state and pulseend or nil
 			state = false -- override
-			addEvent{ dev=tdev, 
-				msg="%(cname)s end of pulse", 
+			addEvent{ dev=tdev,
+				msg="%(cname)s end of pulse",
 				cname=(cond.type or "group")=="group" and ("Group "..(cond.name or cond.id)) or ("Condition "..cond.id),
 				cond=cond.id }
 		end
@@ -3586,8 +3586,8 @@ local function processCondition( cond, grp, cdata, tdev )
 			else
 				-- OK to reset
 				D("processCondition() OK to reset, after %1", cs.holduntil)
-				addEvent{ dev=tdev, 
-					msg="%(cname)s reset delay has now expired", 
+				addEvent{ dev=tdev,
+					msg="%(cname)s reset delay has now expired",
 					cname=(cond.type or "group")=="group" and ("Group "..(cond.name or cond.id)) or ("Condition "..cond.id),
 					cond=cond.id }
 				cs.holduntil = nil
@@ -3608,7 +3608,7 @@ local function processCondition( cond, grp, cdata, tdev )
 		if not state then
 			if cs.latched then
 				-- Attempting to transition from true to false while latched. Override.
-				addEvent{ dev=tdev, 
+				addEvent{ dev=tdev,
 					msg="%(cname)s latched true; no change to evalstate",
 					cname=(cond.type or "group")=="group" and ("Group "..(cond.name or cond.id)) or ("Condition "..cond.id),
 					cond=cond.id }
@@ -4683,7 +4683,7 @@ function actionSetEnabled( enabled, tdev )
 	local wasEnabled = isEnabled( tdev )
 	if wasEnabled ~= enabled then
 		-- changing
-		addEvent{ dev=tdev, 
+		addEvent{ dev=tdev,
 			msg="SetEnabled action invoked, new enabled state is %(state)q",
 			event="action", action="SetEnabled", state=enabled }
 		luup.variable_set( RSSID, "Enabled", enabled and "1" or "0", tdev )
@@ -4772,7 +4772,7 @@ function actionClearLatched( dev, group )
 			D("actionClearLatched() found group id %1 for name %2", grpid, group)
 		end
 	end
-	addEvent{ dev=dev, 
+	addEvent{ dev=dev,
 		msg="ResetLatched action invoked for group %(group)s",
 		event="action", action="ClearLatched", group=group and group or "any", groupid=grpid and grpid or "any" }
 	if resetLatched( grpid, dev ) then
@@ -4899,7 +4899,7 @@ function actionStopScene( ctx, scene, dev )
 			return false
 		end
 	end
-	addEvent{ dev=dev, 
+	addEvent{ dev=dev,
 		event="action", action="StopScene", contextDevice=ctx or "(all)", scene=scene or "", sceneId=tostring(scid) }
 	stopScene( ctx, nil, dev, scid )
 	return true
@@ -4923,15 +4923,21 @@ function actionSetGroupEnabled( grpid, enab, dev )
 		grp.enabled = nil
 		L("%1 (%2) SetGroupEnabled %3 now %4", luup.devices[dev].description,
 			dev, grp.id, grp.disabled and "disabled" or "enabled")
-		addEvent{ dev=dev, 
+		addEvent{ dev=dev,
 			msg="SetGroupEnabled action invoked, %(name)s now %(enabled)sabled",
-			event="action", action="SetGroupEnabled", group=grpid, name=grp.name or grp.id, 
+			event="action", action="SetGroupEnabled", group=grpid, name=grp.name or grp.id,
 			enabled=enab and "en" or "dis" }
 		-- No need to call updateSensor here, modifying cdata does it
 		cdata.timestamp = os.time()
 		cdata.serial = 1 + ( tonumber( cdata.serial or 0 ) or 0 )
-		luup.variable_set( RSSID, "cdata", json.encode( cdata ), dev )
-		return 4,0
+		local rawConfig,err = json.encode( cdata )
+		if rawConfig and #rawConfig > 0 then
+			luup.variable_set( RSSID, "cdata", rawConfig, dev )
+		else
+			L({level=1,msg="Can't save configuration! The JSON library (%1) can't encode it: %2"}, json.version, err)
+			L("%1", cdata)
+			return 2,0
+		end
 	end
 	L({level=1,msg="%1 (%2) action SetGroupEnabled %3 failed, group not found in config"},
 		luup.devices[dev].description, dev, grpid)
@@ -4960,7 +4966,7 @@ function actionSetVariable( opt, tdev )
 	end
 	-- Value is handled as string because that's how Luup actions roll.
 	local vv = tostring( opt.NewValue == nil and "" or opt.NewValue )
-	addEvent{ dev=tdev, 
+	addEvent{ dev=tdev,
 		msg="SetVariable action invoked, %(variable)s was %(oldValue)q now %(newValue)q",
 		event="action", action="SetVariable", variable=opt.VariableName, oldValue=vs.lastvalue, newValue=vv }
 	D("actionSetVariable() %1=%2, last=%3", opt.VariableName, vv, vs)
@@ -5560,8 +5566,8 @@ function request( lul_request, lul_parameters, lul_outputformat )
 				r = r .. " on " .. tostring(v)
 			end
 		else
-			r = r .. "Vera version " .. tostring(luup.version) .. " (" .. 
-				(luup.short_version or "pre-7.30") .. 
+			r = r .. "Vera version " .. tostring(luup.version) .. " (" ..
+				(luup.short_version or "pre-7.30") ..
 				") on ".. tostring(luup.attr_get("model",0))
 		end
 		r = r .. "; loadtime " .. tostring( luup.attr_get('LoadTime',0) or "" )
