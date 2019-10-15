@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.4';
+	var pluginVersion = '3.4hotfix-19288';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -331,7 +331,7 @@ var ReactorSensor = (function(api, $) {
 		return $div;
 	}
 
-	/* Load configuration data. */
+	/* Load configuration data. As of 3.5, we do not do any updates here. */
 	function loadConfigData( myid ) {
 		var upgraded = false;
 		var me = api.getDeviceObject( myid );
@@ -339,45 +339,58 @@ var ReactorSensor = (function(api, $) {
 			throw "Device " + String(myid) + " not found or incorrect type";
 		}
 		var s = api.getDeviceState( myid, serviceId, "cdata" ) || "";
-		var cdata;
-		if ( ! isEmpty( s ) ) {
-			try {
-				cdata = JSON.parse( s );
-				/* Luup's json library doesn't seem to support __jsontype metadata,
-				   so fixup empty objects, which it renders as empty arrays. */
-				if ( cdata.variables && Array.isArray( cdata.variables ) && cdata.variables.length == 0 ) {
-					console.log("Fixing cdata.variables from array to object");
-					cdata.variables = {};
-				}
-				if ( cdata.activities && Array.isArray( cdata.activities ) && cdata.activities.length == 0 ) {
-					console.log("Fixing cdata.activities from array to object");
-					cdata.activities = {};
-				}
-			} catch (e) {
-				console.log("Unable to parse cdata: " + String(e));
-				throw e;
-			}
+		if ( isEmpty( s ) ) {
+			console.log("Empty cdata; restart ReactorSensor");
+			throw "Unable to parse configuration. Please restart the ReactorSensor and try again.";
 		}
-		if ( cdata === undefined || typeof cdata !== "object" ||
-				cdata.conditions === undefined || typeof cdata.conditions !== "object" ) {
-			console.log("Initializing new config for " + String(myid));
-			cdata = {
-				version: _CDATAVERSION,
-				variables: {},
-				conditions: {
-					root: {
-						id: "root",
-						name: api.getDeviceObject( myid ).name,
-						type: "group",
-						operator: "and",
-						conditions: []
-					}
-				},
-				activities: {}
-			};
-			upgraded = true;
+		var cdata;
+		try {
+			cdata = JSON.parse( s );
+			/* Luup's json library doesn't seem to support __jsontype metadata,
+			   so fixup empty objects, which it renders as empty arrays. */
+			if ( cdata.variables && Array.isArray( cdata.variables ) && cdata.variables.length == 0 ) {
+				console.log("Fixing cdata.variables from array to object");
+				cdata.variables = {};
+			}
+			if ( cdata.activities && Array.isArray( cdata.activities ) && cdata.activities.length == 0 ) {
+				console.log("Fixing cdata.activities from array to object");
+				cdata.activities = {};
+			}
+		} catch (e) {
+			console.log("Unable to parse cdata: " + String(e));
+			throw e;
+		}
+		/* Special version check */
+		if ( ( cdata.version || 0 ) > _CDATAVERSION ) {
+			console.log("The configuration for this ReactorSensor is an unsupported format/version (" +
+				String( cdata.version ) + "). Upgrade Reactor or restore an older config from backup.");
+			throw "Incompatible configuration format/version";
+		}
+		/* Check for upgrade tasks from prior versions */
+		delete cdata.undefined;
+		if ( undefined === cdata.variables ) {
+			/* Fixup v2 */
+			cdata.variables = {};
+		}
+		if ( undefined === cdata.activities ) {
+			cdata.activities = {};
+		}
+		if ( undefined === cdata.conditions.root ) {
+			var root = { id: "root", name: api.getDeviceObject( myid ).name, type: "group", operator: "and", conditions: [] };
+			cdata.conditions = { root: root };
 		}
 
+		/* Update device */
+		cdata.device = myid;
+
+		/* Store config on instance data */
+		var d = getInstanceData( myid );
+		d.cdata = cdata;
+		delete d.ixCond; /* Remove until needed/rebuilt */
+
+		configModified = false;
+		return cdata;
+	}
 		/* Special version check */
 		if ( ( cdata.version || 0 ) > _CDATAVERSION ) {
 			console.log("The configuration for this ReactorSensor is an unsupported format/version (" +
