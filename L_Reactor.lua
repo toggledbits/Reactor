@@ -1102,14 +1102,21 @@ local function loadSensorConfig( tdev )
 	end
 	setmetatable( cdata, mt )
 
-	-- Rewrite if we upgraded. Note version is only updated when we write.
+	-- Rewrite if we upgraded.
 	if upgraded then
-		L("ReactorSensor %1 (#%2) configuration updated to %3", luup.devices[tdev].description, tdev, _CDATAVERSION)
+		D("loadSensorConfig() writing updated sensor config")
 		cdata.version = _CDATAVERSION -- MUST COINCIDE WITH J_ReactorSensor_UI7.js
 		cdata.timestamp = os.time()
-		cdata.serial = 1 + ( tonumber(cdata.serial) or 0 )
+		cdata.serial = 1 + ( tonumber(cdata.serial or 0) or 0 )
 		-- NOTA BENE: startup=true passed here! Don't fire watch for this rewrite.
-		luup.variable_set( RSSID, "cdata", json.encode( cdata ), tdev, false )
+		rawConfig,err = json.encode( cdata )
+		if rawConfig and #rawConfig > 0 then
+			luup.variable_set( RSSID, "cdata", json.encode( cdata ), tdev, false )
+		else
+			L({level=1,msg="Can't save! The JSON library (%1) can't encode updated config: %2"}, json.version, err)
+			L("%1", cdata)
+			error("Unable to encode updated config; not saved.")
+		end
 	end
 
 	-- Save to cache.
