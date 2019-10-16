@@ -5571,19 +5571,24 @@ function request( lul_request, lul_parameters, lul_outputformat )
 	elseif action == "summary" then
 		local r = [[
 INSTRUCTIONS FOR POSTING TO VERA COMMUNITY FORUMS:
-        * COPY/PASTE ALL lines after the ===== separator below, including the ``` lines.
+        * COPY/PASTE ALL lines AFTER the ===== separator below, INCLUDING the ``` lines.
         * DO NOT omit the ``` lines! They must be included to preserve report formatting!
-        * DO NOT edit or redact this report. If you have privacy concerns about posting to the forums, send via email, below.
+        * DO NOT edit or redact this report. If you have privacy concerns about posting it to the forums, send via email, below.
+
 INSTRUCTIONS FOR EMAILING:
         > Use this method if you have concerns about posting the report contents publicly.
         * Right-click in this pane and choose "Save as..." to save this entire report to a file.
-        * ATTACH the file in an email to reactor@toggledbits.com -- DO NOT copy/paste the report text into the email body!
+        * ATTACH the file in an email to: reactor@toggledbits.com
+        * DO NOT copy/paste the report text into the email body! Attachments only please.
         * Include your forum name in the body of the email, so I know who you are.
         * Please let me know via the community forums that you've emailed the report.
-        * DO NOT use this email address for any other communication. It's for report attachments only.
+        * Please do not use this email address for any other communication. It's for report attachments only.
+
 THANK YOU IN ADVANCE FOR READING AND FOLLOWING THESE INSTRUCTIONS! ALTHOUGH MY TIME IS FREE, I DON'T ALWAYS HAVE A LOT OF IT, SO
 YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
-===================================================================================================================================
+
+=====
+
 ]]
 		r = r .. "```" .. EOL
 		r = r .. string.rep("*", 51) .. " REACTOR LOGIC SUMMARY REPORT " .. string.rep("*", 51) .. EOL
