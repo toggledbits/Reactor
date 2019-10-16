@@ -4,10 +4,12 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 3.5 (development)
 
+* Enhancement: Make event log entries more human-readable.
 * Enhancement: Do not check firmware version in debug mode, specifically for allowing testing on any firmware, including alpha/unblessed.
 * Enhancement: The Activities tab now can filter the display by "true" and "false" activities (suggestion by tunnus).
 * Internal: Clean up mechanism for determining SSL parameters for SMTP connections.
 * Internal: Upgrade of configuration is only done by core now; no duplication of effort on the JS side.
+* Fix: After clearing condition state, make sure initial update/restart runs all activities eligible (esp. root).
 * Fix: Cosmetic bug in the appearance of scene list for Run Scene activity.
 * Fix: Cosmetic bug--"updates" action does not need "ignore case" checkbox.
 * Hotfix-19288-01: Attempt to prevent special characters that seem to disrupt dkjson; handle config very defensively, essentially bailing out more readily when things don't smell right--we can fix it manually--so that any disruption of the JSON doesn't result in a total loss of the config.

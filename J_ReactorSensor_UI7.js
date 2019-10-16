@@ -17,11 +17,11 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.5develop-19288';
+	var pluginVersion = '3.5develop-19289';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
-	var _UIVERSION = 19237;     /* must coincide with Lua core */
+	var _UIVERSION = 19289;     /* must coincide with Lua core */
 
 	var _CDATAVERSION = 19082;  /* must coincide with Lua core */
 
@@ -841,6 +841,19 @@ var ReactorSensor = (function(api, $) {
 		cdata.device = myid;
 		console.log("handleSaveClick(): saving config serial " + String(cdata.serial) + ", timestamp " + String(cdata.timestamp));
 		waitForReloadComplete( "Waiting for system ready before saving configuration..." ).then( function() {
+			jQuery.ajax({
+				url: api.getDataRequestURL(),
+				data: {
+					id: "lr_Reactor",
+					action: "clearconditionstate",
+					device: myid
+				},
+				dataType: "json",
+				timeout: 5000
+			}).fail( function( jqXHR, textStatus, errorThrown ) {
+				console.log("Failed to clear condition state on " + myid + ": " + textStatus + " " + String(errorThrown));
+				console.log(jqXHR.responseText);
+			});
 			api.setDeviceStateVariablePersistent( myid, serviceId, "cdata",
 				JSON.stringify( cdata, function( k, v ) { return ( k.match( /^__/ ) || v === null ) ? undefined : purify(v); } ),
 				{
@@ -862,7 +875,7 @@ var ReactorSensor = (function(api, $) {
 										$("#myModal").modal("hide");
 									});
 								}, 5000 );
-							}, 2000 );
+							}, 5000 );
 						} else {
 							clearUnusedStateVariables( myid, cdata );
 						}

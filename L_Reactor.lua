@@ -11,12 +11,12 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.5develop-19250"
+local _PLUGIN_VERSION = "3.5develop-19289"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION	= 19226
 local _CDATAVERSION		= 19082	-- must coincide with JS
-local _UIVERSION		= 19237	-- must coincide with JS
+local _UIVERSION		= 19289	-- must coincide with JS
       _SVCVERSION		= 19202	-- must coincide with impl file (not local)
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
@@ -1254,7 +1254,7 @@ local function queueNotification( nid, tdev )
 	scheduleDelay( 'notifier', 5 )
 end
 
--- Clear conditions state entirely; returns empty cstate
+-- Clear condition state entirely; returns empty cstate
 local function clearConditionState( tdev )
 	D("clearConditionState(%1)", tdev)
 	luup.variable_set( RSSID, "cstate", "", tdev )
@@ -1413,7 +1413,7 @@ local function getSceneData( sceneId, tdev )
 		-- Nope.
 		L({level=1,msg="Scene %1 in configuration for %3 (%2) is no longer available!"}, sceneId,
 			tdev, luup.devices[tdev].description)
-		addEvent{ dev=tdev, msg="TROUBLE: Attempt to run scene %(scene)s, %(error)", event="runscene", scene=tostring(sceneId), sceneName="", ['error']="scene not found" }
+		addEvent{ dev=tdev, msg="TROUBLE: Attempt to run scene %(scene)s, %(error)s", event="runscene", scene=tostring(sceneId), sceneName="", ['error']="scene not found" }
 		getSensorState( tdev ).trouble = true
 		sceneData[skey] = nil
 		return nil
@@ -2317,7 +2317,8 @@ local function execSceneGroups( tdev, taskid, scd )
 		end
 
 		-- Run this group.
-		addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, notice="Starting scene group "..nextGroup }
+		addEvent{ dev=tdev, msg="Starting %(sceneName)q group %(group)s",
+			event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup }
 		for ix,action in ipairs( scd.groups[nextGroup].actions or {} ) do
 			if not scd.isReactorScene then
 				-- Genuine Vera/Luup scene (just has device actions)
@@ -2357,8 +2358,9 @@ local function execSceneGroups( tdev, taskid, scd )
 						L("%2 (%1) %3 [%4:%5]", tdev, luup.devices[tdev].description,
 							action.comment, scd.id, ix)
 						addEvent{ dev=tdev,
-							msg="(%(sceneName)s group %(group)s) %(message)s",
-							event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, message=action.comment or "" }
+							msg="<%(sceneName)s:%(group)s:%(index)s> %(message)s",
+							event="runscene", scene=scd.id, sceneName=scd.name or scd.id,
+							group=nextGroup, index=ix, message=action.comment or "" }
 					end
 				elseif action.type == "device" then
 					local devnum = tonumber( action.device )
@@ -2642,6 +2644,7 @@ local function trip( state, tdev )
 		local scd = getSceneData( 'root.false', tdev )
 		if not isSceneEmpty( scd ) then
 			-- Note we only stop trip actions if there are untrip actions.
+			addEvent{ dev=tdev, msg="Launching root.false activity" }
 			stopScene( tdev, nil, tdev, 'root.true' ) -- stop contra-activity
 			execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } )
 		end
@@ -2652,6 +2655,7 @@ local function trip( state, tdev )
 		local scd = getSceneData( 'root.true', tdev )
 		if not isSceneEmpty( scd ) then
 			-- Note we only stop untrip actions if there are trip actions.
+			addEvent{ dev=tdev, msg="Launching root.true activity" }
 			stopScene( tdev, nil, tdev, 'root.false' ) -- stop contra-activity
 			execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } )
 		end
@@ -3771,9 +3775,10 @@ local function processSensorUpdate( tdev, sst )
 		-- Pass through groups again, and run activities for any changed groups,
 		-- except root, which is handled by trip() below.
 		D("processSensorUpdate() checking groups for state changes")
+		local gs
 		for grp in conditionGroups( cdata.conditions.root ) do
 			D("processSensorUpdate() checking group %1 for state change", grp.id)
-			local gs = sst.condState[ grp.id ] or {}
+			gs = sst.condState[ grp.id ] or {}
 			if grp.id ~= "root" and 0 == (grp.disabled or 0) and gs.changed then
 				local activity = grp.id .. ( gs.evalstate and ".true" or ".false" )
 				D("processSensorUpdate() group %1 <%2> state changed to %3, looking for activity %4",
@@ -3782,6 +3787,9 @@ local function processSensorUpdate( tdev, sst )
 				if not isSceneEmpty( scd ) then
 					-- Note we only stop contra-actions if we have actions to perform.
 					D("processSensorUpdate() running %1 activities", activity)
+					addEvent{ dev=tdev, msg="Launching " .. tostring(grp.name or grp.id) ..
+						( gs.evalstate and ".true" or ".false" ) .. " activity",
+						activity=activity }
 					local contra = grp.id .. ( gs.evalstate and ".false" or ".true" )
 					stopScene( tdev, nil, tdev, contra )
 					execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } )
@@ -3793,7 +3801,8 @@ local function processSensorUpdate( tdev, sst )
 
 		-- Set tripped state based on change in status.
 		D("processSensorUpdate() evaluating RS trip state")
-		if currTrip ~= newTrip or ( newTrip and retrig ) then
+		gs = sst.condState.root or {}
+		if gs.changed or currTrip ~= newTrip or ( newTrip and retrig ) then
 			-- Changed, or retriggerable.
 			local maxTrip = getVarNumeric( "MaxChangeRate", 10, tdev, RSSID )
 			_, _, rate60 = rateLimit( sst.changeRate, maxTrip, false )
@@ -4348,7 +4357,7 @@ function startPlugin( pdev )
 			L("Detected VeraAlerts (%1)", k)
 		elseif v.device_type == RSTYPE then
 			luup.variable_set( RSSID, "Message", "Stopped", k )
-			addEvent{ dev=k, event="reload", notice="Luup reload" }
+			addEvent{ dev=k, msg="Reactor startup (Luup reload)" }
 		end
 	end
 	if failmsg then
@@ -4691,7 +4700,6 @@ function actionSetEnabled( enabled, tdev )
 		if enabled then
 			L("Enabling %1 (#%2)", luup.devices[tdev].description, tdev)
 			setMessage( "Enabling...", tdev )
-			clearConditionState( tdev )
 			luup.call_action( RSSID, "Restart", {}, tdev )
 		else
 			L("Disabling %1 (#%2)", luup.devices[tdev].description, tdev)
@@ -4732,9 +4740,11 @@ function actionRestart( dev )
 	if (luup.devices[ dev ] or {}).device_type ~= RSTYPE then error("Invalid device type") end
 	assertEnabled( dev )
 	L("Restarting %2 (#%1)", dev, luup.devices[dev].description)
-	addEvent{ dev=dev, msg="Restart action invoked; restarting ReactorSensor", event="action", action="Restart" }
+	addEvent{ dev=dev, msg="Restart action invoked; clearing state and restarting ReactorSensor", event="action", action="Restart" }
 	stopScene( dev, nil, dev ) -- stop all scenes in device context
 	clearOwnerTasks( dev )
+	clearConditionState( dev ) -- clear state
+	getSensorConfig( dev, true ) -- force reload config
 	local success, err = pcall( startSensor, dev, luup.devices[dev].device_num_parent )
 	if not success then
 		L({level=2,msg="Failed to start %1 (%2): %3"}, dev, luup.devices[dev].description, err)
@@ -5521,7 +5531,20 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		local status, msg = pcall( loadScene, tonumber(lul_parameters.scene or 0), pluginDevice )
 		return json.encode( { status=status,message=msg } ), "application/json"
 
-	elseif action == "clearstate" then
+	elseif action == "purge" then
+		-- Purge scene data
+		luup.variable_set( MYSID, "scenedata", "{}", pluginDevice )
+		scheduleDelay( { id="reload", func=luup.reload, owner=pluginDevice }, 2 )
+		return  "Purged; reloading Luup.", "text/plain"
+
+	elseif action == "clearconditionstate" then
+		if luup.devices[deviceNum] and luup.devices[deviceNum].device_type == RSTYPE then
+			clearConditionState( deviceNum )
+			return '{"status":true}', "application/json"
+		end
+		return "ERROR\nInvalid device in request", "text/plain"
+
+	elseif action == "clearpluginstate" then
 		L({level=2,msg="Request to clear plugin state... here we go..."})
 		local children = {}
 		for n,d in pairs( luup.devices ) do
@@ -5530,9 +5553,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 				setVar( RSSID, "Message", "Stopped", n )
 				stopScene( nil, nil, n ) -- stop all scenes for this device
 				clearOwnerTasks( n )
-				getSensorState( n ).condState = nil
-				luup.variable_set( RSSID, "cstate", "{}", n )
-				loadCleanState( n )
+				clearConditionState( n )
 			end
 		end
 		sceneState = {}
@@ -5540,6 +5561,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		sceneData = {}
 		luup.variable_set( MYSID, "scenedata", "{}", pluginDevice )
 		luup.variable_set( MYSID, "isHome", "{}", pluginDevice )
+		luaFunc = {}
 		L"Plugin state cleared; restarting sensors."
 		for _,n in ipairs( children ) do
 			pcall( actionRestart, n )
@@ -5547,8 +5569,23 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		return '{"status":true,"message":"Plugin state cleared"}', "application/json"
 
 	elseif action == "summary" then
-		local r = "INSTRUCTIONS: When pasting this report into the Vera Community forums, please include ALL lines below this one. The next and last lines will ensure proper formatting and must not be removed!" ..
-			EOL .. "```" .. EOL
+		local r = [[
+INSTRUCTIONS FOR POSTING TO VERA COMMUNITY FORUMS:
+        * COPY/PASTE ALL lines after the ===== separator below, including the ``` lines.
+        * DO NOT omit the ``` lines! They must be included to preserve report formatting!
+        * DO NOT edit or redact this report. If you have privacy concerns about posting to the forums, send via email, below.
+INSTRUCTIONS FOR EMAILING:
+        > Use this method if you have concerns about posting the report contents publicly.
+        * Right-click in this pane and choose "Save as..." to save this entire report to a file.
+        * ATTACH the file in an email to reactor@toggledbits.com -- DO NOT copy/paste the report text into the email body!
+        * Include your forum name in the body of the email, so I know who you are.
+        * Please let me know via the community forums that you've emailed the report.
+        * DO NOT use this email address for any other communication. It's for report attachments only.
+THANK YOU IN ADVANCE FOR READING AND FOLLOWING THESE INSTRUCTIONS! ALTHOUGH MY TIME IS FREE, I DON'T ALWAYS HAVE A LOT OF IT, SO
+YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
+===================================================================================================================================
+]]
+		r = r .. "```" .. EOL
 		r = r .. string.rep("*", 51) .. " REACTOR LOGIC SUMMARY REPORT " .. string.rep("*", 51) .. EOL
 		r = r .. "   Version: " .. tostring(_PLUGIN_VERSION) ..
 			" config " .. tostring(_CONFIGVERSION) ..
@@ -5587,6 +5624,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			"; " .. tostring(luup.attr_get("City_description",0)) ..
 			", " .. tostring(luup.attr_get("Region_description",0)) ..
 			" " .. tostring(luup.attr_get("Country_description",0)) ..
+			"; formats " .. tostring(dateFormat) .. " " .. tostring(timeFormat) ..
 			EOL
 		r = r .. "House mode: plugin " .. getReactorVar( "HouseMode", "?") ..
 			"; system " .. tostring( luup.attr_get('Mode',0) or "" ) ..
@@ -5666,12 +5704,16 @@ function request( lul_request, lul_parameters, lul_outputformat )
 							r = r .. string.format( "        *** UNKNOWN DEVICE #%s%s", kd, EOL )
 						else
 							local pn = luup.attr_get( 'plugin', nd ) or ""
-							r = r .. string.format( "        %s (%d) %s (%s/%s); parent %d; plugin %s%s",
+							r = r .. string.format( "        %s (%d) %s (%s/%s); parent %d; plugin %s; mfg %s model %s; dev %s impl %s%s",
 								sd.description or "?", nd,
 								sd.device_type or "?",
 								sd.category_num or "?", sd.subcategory_num or "?",
 								sd.device_num_parent or -1,
 								(pn == "") and "-" or pn,
+								luup.attr_get( 'manufacturer', nd ) or "-",
+								luup.attr_get( 'model', nd ) or "-",
+								luup.attr_get( 'device_file', nd ) or "-",
+								luup.attr_get( 'impl_file', nd ) or "-",
 								EOL )
 						end
 					end
@@ -5692,7 +5734,6 @@ function request( lul_request, lul_parameters, lul_outputformat )
 				end
 			end
 		end
-
 		r = r .. "```" .. EOL
 		return r, "text/plain"
 
@@ -5831,11 +5872,6 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			return json.encode( { status=true, message="Done!", file=bfile } ), "application/json"
 		end
 		return bdata, "application/json"
-
-	elseif action == "purge" then
-		luup.variable_set( MYSID, "scenedata", "{}", pluginDevice )
-		scheduleDelay( { id="reload", func=luup.reload, owner=pluginDevice }, 2 )
-		return  "Purged; reloading Luup.", "text/plain"
 
 	elseif action == "status" then
 		local st = {

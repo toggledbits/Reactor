@@ -19,7 +19,7 @@ var Reactor = (function(api, $) {
 
 	var pluginVersion = '3.5develop-19250';
 
-	var _UIVERSION = 19237;     /* must coincide with Lua core */
+	var _UIVERSION = 19289;     /* must coincide with Lua core */
 
 	var myModule = {};
 
