@@ -4506,6 +4506,9 @@ function startPlugin( pdev )
 	-- Save required UI version for collision detection.
 	setVar( MYSID, "_UIV", _UIVERSION, pdev )
 
+	-- System type (id 35=Edge, 36=Plus, 37=Secure)
+	hasBattery = luup.modelID == nil or luup.modelID == 37
+
 	-- Check for ALTUI and OpenLuup
 	local failmsg = false
 	for k,v in pairs(luup.devices) do
@@ -5621,7 +5624,9 @@ YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 		else
 			r = r .. "Vera version " .. tostring(luup.version) .. " (" ..
 				(luup.short_version or "pre-7.30") ..
-				") on ".. tostring(luup.attr_get("model",0))
+				") on ".. tostring(luup.attr_get("model",0)) ..
+				" ID " .. tostring(luup.modelID) ..
+				" (" .. ( ({["35"]="Vera Edge", ["36"]="Vera Plus", ["37"]="Vera Secure"})[tostring(luup.modelID or "X")] or "unknown" ) .. ")"
 		end
 		r = r .. "; loadtime " .. tostring( luup.attr_get('LoadTime',0) or "" )
 		r = r .. "; systemReady " .. tostring( systemReady )
