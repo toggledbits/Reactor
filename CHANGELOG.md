@@ -5,6 +5,8 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 ## Version 3.5 (development)
 
 * Enhancement: Make event log entries more human-readable.
+* Enhancement: `Reactor` table in "Run Lua" actions now publishes state for all conditions (in table `Reactor.conditions`; keys are condition IDs). This makes the current condition states and values accessible directly in Lua without additional "gets".
+* Enhancement: `Reactor` table in "Run Lua" actions now publishes group states (in `Reactor.groups`) by name as well as by ID. Previously the keys were group IDs. Now you can use either in "Run Lua" actions.
 * Enhancement: Do not check firmware version in debug mode, specifically for allowing testing on any firmware, including alpha/unblessed.
 * Enhancement: The Activities tab now can filter the display by "true" and "false" activities (suggestion by tunnus).
 * Internal: Clean up mechanism for determining SSL parameters for SMTP connections.
