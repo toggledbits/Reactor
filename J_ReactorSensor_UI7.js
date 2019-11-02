@@ -17,13 +17,13 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.5develop-19294';
+	var pluginVersion = '3.5develop-19305';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
-	var _UIVERSION = 19289;     /* must coincide with Lua core */
+	var _UIVERSION = 19305;     /* must coincide with Lua core */
 
-	var _CDATAVERSION = 19082;  /* must coincide with Lua core */
+	var _CDATAVERSION = 19305;  /* must coincide with Lua core */
 
 	var myModule = {};
 
@@ -56,7 +56,8 @@ var ReactorSensor = (function(api, $) {
 		"interval": "Interval",
 		"ishome": "Geofence",
 		"reload": "Luup Reloaded",
-		"grpstate": "Group State"
+		"grpstate": "Group State",
+		"var": "Expression Variable"
 	};
 	/* Note: default true for the following: hold, pulse, latch */
 	var condOptions = {
@@ -69,7 +70,8 @@ var ReactorSensor = (function(api, $) {
 		"interval": { latch: false },
 		"ishome": { sequence: true, duration: true },
 		"reload": { },
-		"grpstate": { sequence: true, duration: true, repeat: true }
+		"grpstate": { sequence: true, duration: true, repeat: true },
+		"var": { sequence: true, duration: true, repeat: true }
 	};
 	var weekDayName = [ '?', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat' ];
 	var monthName = [ '?', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec' ];
@@ -949,9 +951,14 @@ var ReactorSensor = (function(api, $) {
 				break;
 
 			case 'service':
-				t = getDeviceFriendlyName( cond.device );
-				str += t ? t : '#' + cond.device + ' ' + ( cond.devicename === undefined ? "name unknown" : cond.devicename ) + ' (missing)';
-				str += ' ' + ( cond.variable || "?" );
+			case 'var':
+				if ( "var" === cond.type ) {
+					str += cond.var || "(undefined)";
+				} else {
+					t = getDeviceFriendlyName( cond.device );
+					str += t ? t : '#' + cond.device + ' ' + ( cond.devicename === undefined ? "name unknown" : cond.devicename ) + ' (missing)';
+					str += ' ' + ( cond.variable || "?" );
+				}
 				t = arrayFindValue( serviceOps, function( v ) { return v.op === cond.operator; } );
 				if ( !t ) {
 					str += ' ' + cond.operator + '? ' + conditionValueText( cond.value );
@@ -1357,7 +1364,8 @@ var ReactorSensor = (function(api, $) {
 				var condDesc = makeConditionDescription( cond );
 				switch ( cond.type ) {
 					case 'service':
-					case "grpstate":
+					case 'grpstate':
+					case 'var':
 						break;
 
 					case 'weekday':
@@ -1660,6 +1668,39 @@ var ReactorSensor = (function(api, $) {
 		}
 
 		/**
+		 * Make a menu of defined expressions
+		 */
+		function makeExprMenu( currExpr ) {
+			var $el = jQuery( '<select class="exprmenu form-control form-control-sm" />' );
+			/* Create a list of variables by index, sorted. cdata.variables is a map/hash,
+			   not an array */
+			var cdata = getConfiguration();
+			var vix = [];
+			for ( var vn in ( cdata.variables || {} ) ) {
+				if ( cdata.variables.hasOwnProperty( vn ) ) {
+					var v = cdata.variables[vn];
+					vix.push( v );
+				}
+			}
+			vix.sort( function( a, b ) {
+				var i1 = a.index || -1;
+				var i2 = b.index || -1;
+				if ( i1 === i2 ) return 0;
+				return ( i1 < i2 ) ? -1 : 1;
+			});
+			for ( var ix=0; ix<vix.length; ix++ ) {
+				jQuery( '<option/>' ).val( vix[ix].name ).text( vix[ix].name ).appendTo( $el );
+			}
+			if ( currExpr && 0 === jQuery( "option[value=" + JSON.stringify( currExpr ) + "]", $el ) ) {
+				jQuery( '<option/>' ).val( currExpr ).text( currExpr + " (undefined)" )
+					.prependTo( $el );
+			}
+			jQuery( '<option/>' ).val( "" ).text( '--choose--' ).prependTo( $el );
+			$el.val( currExpr || "" );
+			return $el;
+		}
+
+		/**
 		 * Make a service/variable menu of all state defined for the device. Be
 		 * brief, using only the variable name in the menu, unless that name is
 		 * used by multiple services, in which case the last component of the
@@ -1807,7 +1848,7 @@ var ReactorSensor = (function(api, $) {
 			cond.type = typ;
 			jQuery('.tberror', $row).removeClass('tberror');
 			$row.removeClass('tberror');
-			var val, res;
+			var val, res, $el;
 			switch (typ) {
 				case "":
 					jQuery( 'select#condtype', $row ).addClass( 'tberror' );
@@ -1826,11 +1867,34 @@ var ReactorSensor = (function(api, $) {
 					break;
 
 				case 'service':
-					removeConditionProperties( cond, "device,devicename,service,variable,operator,value,nocase,options" );
-					cond.device = parseInt( jQuery("div.params select.devicemenu", $row).val() );
-					cond.service = jQuery("div.params select.varmenu", $row).val() || "";
-					cond.variable = cond.service.replace( /^[^\/]+\//, "" );
-					cond.service = cond.service.replace( /\/.*$/, "" );
+				case 'var':
+					if ( 'var' === cond.type ) {
+						removeConditionProperties( cond, "var,operator,value,nocase,options" );
+						$el = jQuery( "div.params select.exprmenu", $row );
+						cond['var'] = $el.val() || "";
+						$el.toggleClass( 'tberror', isEmpty( cond['var'] ) );
+					} else {
+						removeConditionProperties( cond, "device,devicename,service,variable,operator,value,nocase,options" );
+						$el = jQuery( "div.params select.devicemenu", $row );
+						cond.device = parseInt( $el.val() );
+						delete cond.devicename;
+						if ( isNaN( cond.device ) ) {
+							cond.device = "";
+						} else {
+							res = api.getDeviceObject( cond.device );
+							if ( res ) {
+								cond.devicename = res.name;
+							}
+						}
+						$el.toggleClass( 'tberror', isEmpty( cond.device ) );
+
+						$el = jQuery( "div.params select.varmenu", $row );
+						cond.service = $el.val() || "";
+						cond.variable = cond.service.replace( /^[^\/]+\//, "" );
+						cond.service = cond.service.replace( /\/.*$/, "" );
+						$el.toggleClass( 'tberror', isEmpty( cond.service ) || isEmpty( cond.variable ) );
+					}
+
 					cond.operator = jQuery("div.params select.opmenu", $row).val() || "=";
 					var op = arrayFindValue( serviceOps, function( v ) { return v.op === cond.operator; } ) || serviceOps[0];
 					if ( 0 === ( op.numeric || 0 ) && false !== op.nocase ) {
@@ -2398,7 +2462,7 @@ var ReactorSensor = (function(api, $) {
 						jQuery('input#' + idSelector( cond.id + '-mode-' + ov ), $row).prop('checked', true);
 					});
 				}
-			} else if ( "service" === cond.type ) {
+			} else if ( "service" === cond.type || "var" === cond.type ) {
 				var op = arrayFindValue( serviceOps, function( v ) { return v.op === cond.operator; } ) || serviceOps[0];
 				var $inp = jQuery( 'input#value', $row );
 				if ( op.args > 1 ) {
@@ -2832,29 +2896,42 @@ var ReactorSensor = (function(api, $) {
 					break;
 
 				case 'service':
-					if ( isEmpty( cond.operator ) ) cond.operator = "=";
-					container.append( makeDeviceMenu( cond.device, cond.devicename || "unknown device" ) );
-					/* Fix-up: makeDeviceMenu will display current userdata name
-							   for device, but if that's changed from what we've stored,
-							   we need to update our store. */
-					v = cond.devicename;
-					if ( -1 === cond.device ) {
-						v = "(self)";
+				case 'var':
+					if ( "var" === cond.type ) {
+						var $mm = makeExprMenu( cond['var'] );
+						container.append( $mm );
+						$mm.on( "change.reactor", handleConditionRowChange );
 					} else {
-						dobj = api.getDeviceObject( cond.device );
-						v = (dobj || {}).name; /* may be undefined, that's OK */
+						container.append( makeDeviceMenu( cond.device, cond.devicename || "unknown device" ) );
+						/* Fix-up: makeDeviceMenu will display current userdata name
+								   for device, but if that's changed from what we've stored,
+								   we need to update our store. */
+						v = cond.devicename;
+						if ( -1 === cond.device ) {
+							v = "(self)";
+						} else {
+							dobj = api.getDeviceObject( cond.device );
+							v = (dobj || {}).name; /* may be undefined, that's OK */
+						}
+						if ( v && cond.devicename !== v ) {
+							cond.devicename = v;
+							configModified = true;
+						}
+						try {
+							container.append( makeEventMenu( cond, row ) );
+						} catch( e ) {
+							console.log("Error while attempting to handle device JSON: " + String(e));
+						}
+						container.append( makeVariableMenu( cond.device, cond.service, cond.variable ) );
+						jQuery("select.varmenu", container).on( 'change.reactor', handleConditionVarChange );
+						jQuery("select.devicemenu", container).on( 'change.reactor', handleDeviceChange );
 					}
-					if ( v && cond.devicename !== v ) {
-						cond.devicename = v;
+
+					if ( isEmpty( cond.operator ) ) {
+						cond.operator = "=";
 						configModified = true;
 					}
-					try {
-						container.append( makeEventMenu( cond, row ) );
-					} catch( e ) {
-						console.log("Error while attempting to handle device JSON: " + String(e));
-					}
-					container.append( makeVariableMenu( cond.device, cond.service, cond.variable ) );
-					container.append( makeServiceOpMenu( cond.operator || "=" ) );
+					container.append( makeServiceOpMenu( cond.operator ) );
 					container.append('<input type="text" id="value" class="form-control form-control-sm" autocomplete="off" list="reactorvarlist">');
 					v = jQuery( '<fieldset id="nocaseopt" />' ).appendTo( container );
 					getCheckbox( cond.id + "-nocase", "1", "Ignore&nbsp;case", "nocase" )
@@ -2865,13 +2942,16 @@ var ReactorSensor = (function(api, $) {
 					jQuery("input#value", container).on( 'change.reactor', handleConditionRowChange );
 					jQuery('input.nocase', container).on( 'change.reactor', handleConditionRowChange );
 					jQuery("select.opmenu", container).on( 'change.reactor', handleConditionOperatorChange );
-					jQuery("select.varmenu", container).on( 'change.reactor', handleConditionVarChange );
-					jQuery("select.devicemenu", container).on( 'change.reactor', handleDeviceChange );
 
-					updateCurrentServiceValue( container );
+					if ( "var" === cond.type ) {
+						jQuery( "select.opmenu option[value='update']", container ).remove();
+						jQuery( "div#currval", container ).text("");
+					} else {
+						updateCurrentServiceValue( container );
+					}
 					break;
 
-				case "grpstate":
+				case 'grpstate':
 					/* Default device to current RS */
 					cond.device = coalesce( cond.device, -1 );
 					/* Make a device menu that shows ReactorSensors only. */
@@ -3677,7 +3757,7 @@ var ReactorSensor = (function(api, $) {
   </div> \
 </div>' );
 
-			[ "comment", "service", "grpstate", "housemode", "sun", "weekday", "trange", "interval", "ishome", "reload" ].forEach( function( k ) {
+			[ "comment", "service", "grpstate", "var", "housemode", "sun", "weekday", "trange", "interval", "ishome", "reload" ].forEach( function( k ) {
 				if ( ! ( isOpenLuup && k == "ishome" ) ) {
 					jQuery( "select#condtype", el ).append( jQuery( "<option/>" ).val( k ).text( condTypeName[k] ) );
 				}
@@ -4729,6 +4809,9 @@ var ReactorSensor = (function(api, $) {
 					console.log("Failed to decode/handle VA scene lua for #" + scene.id);
 					console.log(e);
 				}
+			} else {
+				/* If VeraAlerts is removed, remove the flag as well to make the scene editable again */
+				delete nn.veraalerts;
 			}
 			/* Maybe update existing scene */
 			nn.scene = scene.id;

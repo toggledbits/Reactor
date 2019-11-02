@@ -11,12 +11,12 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.5develop-19294"
+local _PLUGIN_VERSION = "3.5develop-19305"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
-local _CONFIGVERSION	= 19226
-local _CDATAVERSION		= 19082	-- must coincide with JS
-local _UIVERSION		= 19289	-- must coincide with JS
+local _CONFIGVERSION	= 19295
+local _CDATAVERSION		= 19305	-- must coincide with JS
+local _UIVERSION		= 19305	-- must coincide with JS
       _SVCVERSION		= 19202	-- must coincide with impl file (not local)
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
@@ -70,8 +70,8 @@ local dfMap = {
 	["urn:schemas-micasaverde-com:device:DoorSensor:1"] = { device_file="D_DoorSensor1.xml" }
 }
 
-local json = require("dkjson")
-local mime = require("mime")
+local json = require "dkjson"
+local mime = require "mime"
 local luaxp -- will only be loaded if needed
 
 local function dump(t, seen)
@@ -861,8 +861,7 @@ local function sensor_runOnce( tdev )
 		initVar( "WatchResponseHoldOff", "-1", tdev, RSSID )
 	end
 
-	if s >= 19296 then
-		-- 19296 is 2019-10-23
+	if s < 19295 then
 		deleteVar( RSSID, "ValueChangeHoldTime", tdev )
 		deleteVar( RSSID, "ReloadConditionHoldTime", tdev )
 	end
@@ -1853,6 +1852,26 @@ local function getValue( val, ctx, tdev )
 		ctx = ctx or getSensorState( tdev ).ctx or getExpressionContext( getSensorConfig( tdev ), tdev )
 		-- Expression wrapped in {}
 		local mp = val:sub( 2, -2 )
+		if mp:match("^%w+:%w+$") then
+			D("getValue() fetch condition/subtype %1", mp)
+			local cond,subtype = mp:match("%w+:%w+")
+			local cs = (getSensorState( tdev ).condState or {})[cond]
+			if not cs then
+				getSensorState( tdev ).trouble = true
+				addEvent{ dev=tdev,
+					msg="TROUBLE: Evaluation of reference %{expression}q failed, no state data for condition ${cond}s",
+					expression=val, cond=cond }
+			elseif subtype == "n" then
+				return cs.matchcount or 0
+			elseif subtype == "t" then
+				return cs.evalstamp
+			else
+				if subtype ~= "v" then L({level=2,msg="%1 (#%2) unsupported subtype ref in %3; returning last value"},
+					luup.devices[tdev].description, tdev, mp)
+				end
+				return cs.lastvalue
+			end
+		end
 		D("getValue() evaluating %1", mp)
 		local result,err = luaxp.evaluate( mp, ctx )
 		D("getValue() result is %1, %2", result, err)
@@ -2255,8 +2274,8 @@ local function execSceneGroups( tdev, taskid, scd )
 		L("%1 (#%2) attempting to run actions %3 (%4) but system is not yet ready; deferring 5 seconds.",
 			luup.devices[tdev].description, tdev, (scd or {}).name or sst.scene, sst.scene)
 		addEvent{ dev=tdev,
-			message="Deferring scene execution, system not ready (%(sceneName)s)",
-			event="runscene", scene=sst.scene, sceneName=(scd or {}).name or sst.scene, notice="Not ready" }
+			msg="Deferring scene execution, system not ready (%(sceneName)s:%(group)s)",
+			event="runscene", scene=sst.scene, sceneName=(scd or {}).name or sst.scene, group=sst.lastgroup+1 }
 		scheduleDelay( { id=sst.taskid, owner=sst.owner, func=execSceneGroups, args={ scd } }, 5 )
 		return taskid
 	end
@@ -2302,7 +2321,7 @@ local function execSceneGroups( tdev, taskid, scd )
 				-- It's not time yet. Schedule task to continue.
 				D("execSceneGroups() scene group %1 must delay to %2", nextGroup, tt)
 				addEvent{ dev=tdev,
-					msg="Delaying scene %(sceneName)s group %(group)s actions until %(when)",
+					msg="Delaying scene %(sceneName)s group %(group)s actions until %(when)s",
 					event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, when=os.date("%X", tt), notice="Scene delay" }
 				scheduleTick( { id=sst.taskid, owner=sst.owner, func=execSceneGroups, args={ scd } }, tt )
 				return taskid
@@ -2488,7 +2507,7 @@ local function execSceneGroups( tdev, taskid, scd )
 	end
 
 	-- We've run out of groups!
-	addEvent{ dev=tdev, msg="Activity %(sceneName)s finished", event="endscene", scene=scd.id, sceneName=scd.name or scd.id }
+	addEvent{ dev=tdev, msg="Activity %(sceneName)q finished", event="endscene", scene=scd.id, sceneName=scd.name or scd.id }
 	D("execSceneGroups(%3) reached end of scene %1 (%2)", scd.id, scd.name, taskid)
 	stopScene( nil, taskid, tdev )
 	return nil
@@ -2709,6 +2728,97 @@ local function getNextInterval( lastTrue, interval, baseTime)
 	return nextTrue
 end
 
+-- Perform comparison between condition value (whatever it may be) and operand.
+-- This supports the common/generic operators. Each condition type may separately
+-- handle its special cases.
+local function doComparison( cond, op, vv, vn, cv, cn, tdev )
+	D("doComparison(%1,%2,%3,%4,%5,%6, %7)", cond, op, vv, vn, cv, cn, tdev )
+	local now = os.time()
+	if op == "=" then
+		if vv ~= cv then return vv,false end
+	elseif op == "<>" then
+		if vv == cv then return vv,false end
+	elseif op == ">" then
+		if vn == nil or cn == nil or vn <= cn then return vv,false end
+	elseif op == "<" then
+		if vn == nil or cn == nil or vn >= cn then return vv,false end
+	elseif op == ">=" then
+		if vn == nil or cn == nil or vn < cn then return vv,false end
+	elseif op == "<=" then
+		if vn == nil or cn == nil or vn > cn then return vv,false end
+	elseif op == "bet" or op == "nob" then
+		local vs = split( cv or "", "," )
+		local lo = tonumber( #vs > 0 and vs[1] or "?" )
+		local hi = tonumber( #vs > 1 and vs[2] or "?" )
+		if vn ==  nil or lo == nil or hi == nil then return vv,false end
+		local between = vn >= lo and vn <= hi
+		if ( op == "bet" and not between ) or ( op == "nob" and between ) then
+			return vv,false
+		end
+	elseif op == "contains" then
+		if not string.find( vv, cv ) then return vv,false end
+	elseif op == "notcontains" then
+		if string.find( vv, cv ) then return vv,false end
+	elseif op == "starts" then
+		if not string.find( vv, "^" .. cv ) then return vv,false end
+	elseif op == "notstarts" then
+		if string.find( vv, "^" .. cv ) then return vv,false end
+	elseif op == "ends" then
+		if not string.find( vv, cv .. "$" ) then return vv,false end
+	elseif op == "notends" then
+		if string.find( vv, cv .. "$" ) then return vv,false end
+	elseif op == "in" or op == "notin" then
+		local lst = split( cv ) or {}
+		local found = isOnList( lst, vv )
+		if op == "notin" and found then return vv,false end
+		if op == "in" and not found then return vv,false end
+	elseif op == "istrue" then
+		if (vn or 0) == 0 and not TRUESTRINGS:find( ":" .. vv:lower() .. ":" ) then return vv,false end
+	elseif op == "isfalse" then
+		if (vn or 0) ~= 0 or TRUESTRINGS:find( ":" .. vv:lower() .. ":" ) then return vv,false end
+	elseif op == "change" then
+		local cs = getSensorState( tdev ).condState[ cond.id ]
+		if cv ~= "" and cv ~= "," then
+			local ar = split( cv, "," )
+			-- With terminal values. If value hasn't changed, consider as
+			-- re-eval, go back further in history for prior value.
+			local prior = ( cs.lastvalue == vv ) and
+				cs.priorvalue or cs.lastvalue
+			D("doComparison() service change op with terms, currval=%1, prior=%2, term=%3", vv, prior, ar)
+			if #ar > 0 and ar[1] ~= "" then
+				cv = getValue( ar[1], nil, tdev )
+				if prior ~= cv then return vv,false end
+			end
+			if #ar > 1 and ar[2] ~= "" then
+				cv = getValue( ar[2], nil, tdev )
+				if vv ~= cv then return vv,false end
+			end
+			return vv,true
+		end
+		D("doComparison() service change op without terms, currval=%1, prior=%2, term=%3",
+			vv, cs.lastvalue, cv)
+		local hold = getVarNumeric( "ValueChangeHoldTime", 0, tdev, RSSID ) -- DEPRECATED REMOVE AFTER >19296
+		if vv == cs.lastvalue then
+			-- No change. If we haven't yet met the hold time, continue delay.
+			local later = ( cs.valuestamp or 0 ) + hold
+			if now >= later then
+				return vv,false -- time to reset
+			end
+			hold = math.min( hold, later - now )
+			D("evaluationCondition() no change, but hold time from prior change not yet met, continuing delay for %1 more...", hold)
+		end
+		-- Changed without terminal values, pulse.
+		scheduleDelay( { id=tdev, info="change "..cond.id }, hold )
+	else
+		L({level=1,msg="doComparison() unknown op %1 in cond %2"}, op, cv)
+		addEvent{ dev=tdev, event="condition", condition=cond.id, ['error']="TROUBLE: unrecognized operator "..tostring(op or "nil") }
+		getSensorState( tdev ).trouble = true
+		return vv,nil
+	end
+	D("doComparison() default true exit for cond %1, new value=%2", cond.id, vv)
+	return vv,true
+end
+
 local evaluateGroup -- Forward decl
 local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 212
 	D("evaluateCondition(%1,%2,cdata,%3)", cond.id, (grp or {}).id, tdev)
@@ -2755,81 +2865,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		-- Evaluate conditions. Any failure is a bail-out.'
 		local op = cond.operator
 		D("evaluateCondition() %1: %2/%3 %4%5%6?", cond.type, cond.service, cond.variable, vv, op, cv)
-		if op == "=" then
-			if vv ~= cv then return vv,false end
-		elseif op == "<>" then
-			if vv == cv then return vv,false end
-		elseif op == ">" then
-			if vn == nil or cn == nil or vn <= cn then return vv,false end
-		elseif op == "<" then
-			if vn == nil or cn == nil or vn >= cn then return vv,false end
-		elseif op == ">=" then
-			if vn == nil or cn == nil or vn < cn then return vv,false end
-		elseif op == "<=" then
-			if vn == nil or cn == nil or vn > cn then return vv,false end
-		elseif op == "bet" or op == "nob" then
-			local vs = split( cond.value or "", "," )
-			local lo = tonumber( #vs > 0 and vs[1] or "?" )
-			local hi = tonumber( #vs > 1 and vs[2] or "?" )
-			if vn ==  nil or lo == nil or hi == nil then return vv,false end
-			local between = vn >= lo and vn <= hi
-			if ( op == "bet" and not between ) or ( op == "nob" and between ) then
-				return vv,false
-			end
-		elseif op == "contains" then
-			if not string.find( vv, cv ) then return vv,false end
-		elseif op == "notcontains" then
-			if string.find( vv, cv ) then return vv,false end
-		elseif op == "starts" then
-			if not string.find( vv, "^" .. cv ) then return vv,false end
-		elseif op == "notstarts" then
-			if string.find( vv, "^" .. cv ) then return vv,false end
-		elseif op == "ends" then
-			if not string.find( vv, cv .. "$" ) then return vv,false end
-		elseif op == "notends" then
-			if string.find( vv, cv .. "$" ) then return vv,false end
-		elseif op == "in" or op == "notin" then
-			local lst = split( cv ) or {}
-			local found = isOnList( lst, vv )
-			if op == "notin" and found then return vv,false end
-			if op == "in" and not found then return vv,false end
-		elseif op == "istrue" then
-			if (vn or 0) == 0 and not TRUESTRINGS:find( ":" .. vv:lower() .. ":" ) then return vv,false end
-		elseif op == "isfalse" then
-			if (vn or 0) ~= 0 or TRUESTRINGS:find( ":" .. vv:lower() .. ":" ) then return vv,false end
-		elseif op == "change" then
-			if cv ~= "" and cv ~= "," then
-				local ar = split( cv, "," )
-				-- With terminal values. If value hasn't changed, consider as
-				-- re-eval, go back further in history for prior value.
-				local prior = ( cs.lastvalue == vv ) and
-					cs.priorvalue or cs.lastvalue
-				D("evaluateCondition() service change op with terms, currval=%1, prior=%2, term=%3", vv, prior, ar)
-				if #ar > 0 and ar[1] ~= "" then
-					cv = getValue( ar[1], nil, tdev )
-					if prior ~= cv then return vv,false end
-				end
-				if #ar > 1 and ar[2] ~= "" then
-					cv = getValue( ar[2], nil, tdev )
-					if vv ~= cv then return vv,false end
-				end
-				return vv,true
-			end
-			D("evaluateCondition() service change op without terms, currval=%1, prior=%2, term=%3",
-				vv, cs.lastvalue, cv)
-			local hold = getVarNumeric( "ValueChangeHoldTime", 0, tdev, RSSID ) -- DEPRECATED REMOVE AFTER >19296
-			if vv == cs.lastvalue then
-				-- No change. If we haven't yet met the hold time, continue delay.
-				local later = ( cs.valuestamp or 0 ) + hold
-				if now >= later then
-					return vv,false -- time to reset
-				end
-				hold = math.min( hold, later - now )
-				D("evaluationCondition() no change, but hold time from prior change not yet met, continuing delay for %1 more...", hold)
-			end
-			-- Changed without terminal values, pulse.
-			scheduleDelay( { id=tdev, info="change "..cond.id }, hold )
-		elseif op == "update" then
+		if op == "update" then
 			-- State variable written, possibly same value, watch has been called.
 			-- Refetch value to get timestamp
 			_,vv = luup.variable_get( cond.service or "", cond.variable or "", devnum )
@@ -2852,10 +2888,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 			end
 			scheduleDelay( { id=tdev, info="update "..cond.id }, hold )
 		else
-			L({level=1,msg="evaluateCondition() unknown op %1 in cond %2"}, op, cv)
-			addEvent{ dev=tdev, event="condition", condition=cond.id, ['error']="TROUBLE: unrecognized operator "..tostring(op or "nil") }
-			sst.trouble = true
-			return vv,nil
+			return doComparison( cond, op, vv, vn, cv, cn, tdev )
 		end
 		D("evaluateCondition() default true exit for cond %1, new value=%2", cond.id, vv)
 		return vv,true
@@ -2922,6 +2955,16 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 			return vv,vv
 		end
 		return vv,true -- default exit always true
+
+	elseif cond.type == "var" then
+		D("evaluationCondition() variable %1", cond.var)
+		local vv,vn = getValue( "{"..tostring(cond.var or "").."}", nil, tdev ) -- ??? FIXME
+		local cv,cn = getValue( cond.value, nil, tdev )
+		if ( cond.nocase or 1 ) ~= 0 then
+			vv = tostring(vv or ""):lower()
+			cv = tostring(cv or ""):lower()
+		end
+		return doComparison( cond, cond.operator or "=", vv, vn, cv, cn, tdev )
 
 	elseif cond.type == "housemode" then
 		-- Add watch on parent if we don't already have one.
@@ -3634,6 +3677,7 @@ local function processCondition( cond, grp, cdata, tdev )
 		cs.evalstamp = now
 		cs.evaledge[ state and "t" or "f" ] = now
 		cs.changed = true
+		if state then cs.matchcount = (cs.matchcount or 0) + 1 end
 	else
 		cs.evaledge[ state and "t" or "f" ] = cs.evalstamp -- force
 		cs.changed = nil
