@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.5develop-19305"
+local _PLUGIN_VERSION = "3.5develop-19307"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION	= 19295
@@ -1843,13 +1843,12 @@ end
 local function getValue( val, ctx, tdev )
 	D("getValue(%1,%2,%3)", val, ctx, tdev)
 	if type(val) == "number" then return tostring(val), val end
-	val = tostring(val) or ""
+	val = tostring(val or "")
 	if #val >= 2 and val:byte(1) == 34 and val:byte(-1) == 34 then
 		-- Dequote quoted string and return
 		return val:sub( 2, -2 ), nil
 	end
 	if #val >= 2 and val:byte(1) == 123 and val:byte(-1) == 125 then
-		ctx = ctx or getSensorState( tdev ).ctx or getExpressionContext( getSensorConfig( tdev ), tdev )
 		-- Expression wrapped in {}
 		local mp = val:sub( 2, -2 )
 		if mp:match("^%w+:%w+$") then
@@ -1873,6 +1872,7 @@ local function getValue( val, ctx, tdev )
 			end
 		end
 		D("getValue() evaluating %1", mp)
+		ctx = ctx or getSensorState( tdev ).ctx or getExpressionContext( getSensorConfig( tdev ), tdev )
 		local result,err = luaxp.evaluate( mp, ctx )
 		D("getValue() result is %1, %2", result, err)
 		if err then
@@ -1883,11 +1883,15 @@ local function getValue( val, ctx, tdev )
 				event="evaluate", expression=val, ['error']=err }
 			getSensorState( tdev ).trouble = true
 			val = ""
+		elseif result == nil or luaxp.isNull( result ) then
+			val = ""
+		elseif type(result) == "table" then
+			val = json.encode( result ) or ""
 		else
-			val = result
+			val = tostring(result)
 		end
 	end
-	return tostring(val), tonumber(val)
+	return val, tonumber(val)
 end
 
 local stringify -- fwd decl for execLua
@@ -3591,16 +3595,36 @@ local function processCondition( cond, grp, cdata, tdev )
 				cname=(cond.type or "group")=="group" and ("Group "..(cond.name or cond.id)) or ("Condition "..cond.id),
 				cond=cond.id, delay=pulseend-now }
 		else
-			-- Passed, but keep pulseuntil around until state goes false
+			-- Passed, but keep pulseuntil around until (real) test state goes false
 			D("processCondition() pulse off phase (%1)", state)
 			if state then
 				addEvent{ dev=tdev,
 					msg="%(cname)s end of pulse",
 					cname=(cond.type or "group")=="group" and ("Group "..(cond.name or cond.id)) or ("Condition "..cond.id),
 					cond=cond.id }
+				if cs.pulseuntil and (condopt.pulsebreak or 0) > 0 then
+					local holdoff = pulseend + condopt.pulsebreak
+					D("processCondition() pulse repeat, break until %1", holdoff)
+					if now >= holdoff then
+						-- Start another pulse cycle
+						D("processCondition() pulse repeat starting new on cycle")
+						cs.pulseuntil = now + condopt.pulsetime
+						scheduleDelay( tostring(tdev), condopt.pulsetime )
+						state = true -- override
+					else
+						D("processCondition() pulse repeat holding in break")
+						-- leave pulseuntil alone
+						scheduleDelay( tostring(tdev), holdoff - now )
+						state = false -- override
+					end
+				else
+					-- One-shot pulse.
+					cs.pulseuntil = state and pulseend or nil
+					state = false -- override
+				end
+			else
+				cs.pulseuntil = nil
 			end
-			cs.pulseuntil = state and pulseend or nil
-			state = false -- override
 		end
 		D("processCondition() pulse state is %1, until %2", state, cs.pulseuntil)
 	else
@@ -4690,11 +4714,12 @@ function actionAddSensor( pdev, count )
 		local df = dfMap[ v.device_type ]
 		luup.chdev.append( pdev, ptr, v.id, v.description, "", df.device_file, "", "", false )
 	end
+	local vv = string.format( "%s,Enabled=1\n,room=%s", RSSID, luup.attr_get( "room", pdev ) or "0" )
 	for k = 1,count do
 		highd = highd + 1
 		D("addSensor() creating child %3/%4 as r%1s%2", pdev, highd, k, count)
 		luup.chdev.append( pdev, ptr, string.format("r%ds%d", pdev, highd),
-			"Reactor Sensor " .. highd, "", "D_ReactorSensor.xml", "", RSSID..",Enabled=1", false )
+			"Reactor Sensor " .. highd, "", "D_ReactorSensor.xml", "", vv, false )
 	end
 	luup.chdev.sync( pdev, ptr )
 	-- Should cause reload immediately.

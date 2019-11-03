@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.5develop-19305';
+	var pluginVersion = '3.5develop-19307';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -1271,6 +1271,10 @@ var ReactorSensor = (function(api, $) {
 		}
 		if ( ( condOpts.pulsetime || 0 ) != 0 ) {
 			condDesc += "; pulse for " + condOpts.pulsetime + " secs";
+			var pbo = condOpts.pulsebreak || 0;
+			if ( pbo > 0 ) {
+				condDesc += ", repeat after " + pbo + " secs";
+			}
 		}
 		if ( ( condOpts.latch || 0 ) != 0 ) {
 			condDesc += "; latching";
@@ -2311,12 +2315,13 @@ var ReactorSensor = (function(api, $) {
 				var mode = jQuery( 'input#output:checked', $ct ).val() || "";
 				if ( "L" === mode ) {
 					/* Latching */
-					jQuery( 'input#holdtime', $ct ).prop( 'disabled', true );
+					jQuery( '.followopts,.pulseopts', $ct ).prop( 'disabled', true );
+					jQuery( '.latchopts', $ct ).prop( 'disabled', false );
 					configModified = configModified || ( undefined !== cond.options.holdtime );
 					delete cond.options.holdtime;
-					jQuery( 'input#pulsetime', $ct ).prop( 'disabled', true );
 					configModified = configModified || ( undefined !== cond.options.pulsetime );
 					delete cond.options.pulsetime;
+					delete cond.options.pulsebreak;
 
 					if ( undefined === cond.options.latch ) {
 						cond.options.latch = 1;
@@ -2324,7 +2329,8 @@ var ReactorSensor = (function(api, $) {
 					}
 				} else if ( "P"  === mode ) {
 					/* Pulse output */
-					jQuery( 'input#holdtime', $ct ).prop( 'disabled', true );
+					jQuery( '.followopts,.latchopts', $ct ).prop( 'disabled', true );
+					jQuery( '.pulseopts', $ct ).prop( 'disabled', false );
 					configModified = configModified || ( undefined !== cond.options.holdtime );
 					delete cond.options.holdtime;
 					jQuery( 'input#pulsetime', $ct ).prop( 'disabled', false );
@@ -2348,12 +2354,36 @@ var ReactorSensor = (function(api, $) {
 							configModified = true;
 						}
 					}
+					var repeats = "repeat" === jQuery( 'select#pulsemode' ).val();
+					jQuery( "span#pulsebreakopts", $ct ).toggle( repeats );
+					if ( repeats ) {
+						$f = jQuery( 'input#pulsebreak', $ct );
+						pulsetime = parseInt( $f.val() || "" );
+						if ( isNaN( pulsetime ) || pulsetime <= 0 ) {
+							$f.addClass( 'tberror' );
+							if ( undefined !== cond.options.pulsebreak ) {
+								delete cond.options.pulsebreak;
+								configModified = true;
+							}
+						} else {
+							if ( pulsetime !== cond.options.pulsebreak ) {
+								cond.options.pulsebreak = pulsetime;
+								configModified = true;
+							}
+						}
+					} else {
+						if ( undefined !== cond.options.pulsebreak ) {
+							configModified = true;
+						}
+						delete cond.options.pulsebreak;
+					}
 				} else {
 					/* Follow mode (default) */
-					jQuery( 'input#holdtime', $ct ).prop( 'disabled', false );
-					jQuery( 'input#pulsetime', $ct ).prop( 'disabled', true );
+					jQuery( '.pulseopts,.latchopts', $ct ).prop( 'disabled', true );
+					jQuery( '.followopts', $ct ).prop( 'disabled', false );
 					configModified = configModified || ( undefined !== cond.options.pulsetime );
 					delete cond.options.pulsetime;
+					delete cond.options.pulsebreak;
 					configModified = configModified || ( undefined !== cond.options.latch );
 					delete cond.options.latch;
 
@@ -2617,10 +2647,13 @@ var ReactorSensor = (function(api, $) {
 			jQuery( '<div class="opttitle">Output Control</div>' ).append( getWiki( 'Condition-Options' ) ).appendTo( out );
 			jQuery( '<label><input type="radio" id="output" name="output" value="">Follow (default) - output remains true while condition matches</label>' ).appendTo( out );
 			if ( false !== displayed.hold ) {
-				jQuery( '<label>; delay reset <input type="number" id="holdtime" class="form-control form-control-sm narrow"> seconds (0=no delay)</label>' ).appendTo( out );
+				jQuery( '<label>; delay reset <input type="number" id="holdtime" class="form-control form-control-sm narrow followopts"> seconds (0=no delay)</label>' ).appendTo( out );
 			}
 			if ( false !== displayed.pulse ) {
-				jQuery( '<br/><label><input type="radio" id="output" name="output" value="P">Pulse - on match, output goes true for <input type="number" id="pulsetime" class="form-control form-control-sm narrow"> seconds</label>' ).appendTo( out );
+				jQuery( '<br/><label><input type="radio" id="output" name="output" value="P">Pulse - on match, output goes true for <input type="number" id="pulsetime" class="form-control form-control-sm narrow pulseopts"> seconds</label>' )
+					.appendTo( out );
+				jQuery( '<select id="pulsemode" class="form-control form-control-sm pulseopts"><option value="">once</option><option value="repeat">repeat</option></select><span id="pulsebreakopts"><label for="pulsebreak">after <input type="number" id="pulsebreak" class="form-control form-control-sm narrow pulseopts"> seconds</label></span>' )
+					.appendTo( out );
 			}
 			if ( false !== displayed.latch ) {
 				jQuery( '<br/><label><input type="radio" id="output" name="output" value="L">Latch - output is held true until external reset</label>' ).appendTo( out );
@@ -2628,17 +2661,22 @@ var ReactorSensor = (function(api, $) {
 
 			/* Restore/configure */
 			if ( ( condOpts.pulsetime || 0 ) > 0 ) {
+				jQuery( '.pulseopts', out ).prop( 'disabled', false );
 				jQuery( 'input#output[value="P"]', out ).prop( 'checked', true );
-				jQuery( 'input#pulsetime', out ).prop( 'disabled', false ).val( condOpts.pulsetime || 15 );
-				jQuery( 'input#holdtime', out ).prop( 'disabled', true ).val( "" );
+				jQuery( 'input#pulsetime', out ).val( condOpts.pulsetime || 15 );
+				jQuery( 'input#pulsebreak', out ).val( condOpts.pulsebreak || "" );
+				var pbo = (condOpts.pulsebreak || 0) > 0;
+				jQuery( 'select#pulsemode', out ).val( pbo ? "repeat" : "" );
+				jQuery( 'span#pulsebreakopts', out ).toggle( pbo );
+				jQuery( '.followopts,.latchopts', out ).prop( 'disabled', true );
 			} else if ( 0 !== ( condOpts.latch || 0 ) ) {
+				jQuery( '.latchopts', out ).prop( 'disabled', false );
 				jQuery( 'input#output[value="L"]', out ).prop( 'checked', true );
-				jQuery( 'input#pulsetime', out ).prop( 'disabled', true ).val( "" );
-				jQuery( 'input#holdtime', out ).prop( 'disabled', true ).val( "" );
+				jQuery( '.followopts,.pulseopts', out ).prop( 'disabled', true );
 			} else {
+				jQuery( '.followopts', out ).prop( 'disabled', false );
 				jQuery( 'input#output[value=""]', out ).prop( 'checked', true );
-				jQuery( 'input#pulsetime', out ).prop( 'disabled', true ).val( "" );
-				jQuery( 'input#holdtime', out ).prop( 'disabled', false ).val( condOpts.holdtime || 0 );
+				jQuery( '.latchopts,.pulseopts', out ).prop( 'disabled', true );
 			}
 
 			/* Restrictions */

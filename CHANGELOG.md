@@ -4,6 +4,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 3.5 (development)
 
+* Enhancement: "Pulse" output mode for conditions now allows repeat pulses with a configurable off period.
 * Enhancement: The new *Expression Variable* condition type allows direct condition testing of an expression's most recent result value without using a self-referencing *Device State* condition.
 * Enhancement: Make event log entries more human-readable.
 * Enhancement: `Reactor` table in "Run Lua" actions now publishes state for all conditions (in table `Reactor.conditions`; keys are condition IDs). This makes the current condition states and values accessible directly in Lua without additional "gets".
