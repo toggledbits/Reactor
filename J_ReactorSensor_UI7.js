@@ -2889,7 +2889,8 @@ var ReactorSensor = (function(api, $) {
 								item.data('service', cx.serviceId);
 								item.data( 'variable', arg.name );
 								item.data( 'operator', arg.comparisson || "=" );
-								item.data( 'value', String( arg.defaultValue || "" ) );
+								item.data( 'value',
+									( undefined === arg.defaultValue || arg.optional ) ? "" : String( arg.defaultValue ) );
 								item.attr( 'id', arg.id );
 								item.html( reptext( arg.HumanFriendlyText.text || "(invalid device_json description)" ) );
 								mm.append( item );
@@ -4650,11 +4651,8 @@ var ReactorSensor = (function(api, $) {
 								/* Ignore default here, it's assumed to be valid when needed */
 								/* Blank and optional OK? Move on. */
 								if ( "" === v ) {
-									if ( p.optional || p.allowempty ) {
-										continue;
-									}
 									/* Not optional/empty allowed, flag error. */
-									field.addClass( 'tbwarn' );
+									field.toggleClass( 'tbwarn', ! ( p.optional || p.allowempty ) );
 								} else if ( v.match( varRefPattern ) ) {
 									/* Variable reference, do nothing, can't check */
 								} else {
@@ -5356,7 +5354,7 @@ var ReactorSensor = (function(api, $) {
 					xf = jQuery( '<input class="form-control form-control-sm" />' )
 						.attr( 'placeholder', fld.placeholder || "" );
 				}
-				xf.attr( 'id', fld.id ).val( fld.default || "" )
+				xf.attr( 'id', fld.id ).val( "" )
 					.on( 'change.reactor', handleActionValueChange );
 				if ( fld.label ) {
 					/* Wrap the field in a label */
@@ -5388,7 +5386,7 @@ var ReactorSensor = (function(api, $) {
 			}
 			for ( f=0; f<(ninfo.extra || []).length; f++ ) {
 				fld = ninfo.extra[f];
-				jQuery( '#' + idSelector( fld.id ), $row ).val( action[fld.id] || fld.default || "" );
+				jQuery( '#' + idSelector( fld.id ), $row ).val( action[fld.id] || "" );
 			}
 			if ( devVeraAlerts && note.veraalerts ) {
 				jQuery( '<div class="vanotice"/>' )
@@ -5501,11 +5499,11 @@ var ReactorSensor = (function(api, $) {
 						if ( ! parm.novars ) {
 							appendVariables( inp );
 						}
-						/* As a default, just choose the first option, unless specified */
-						if ( undefined !== parm.default ) {
+						/* As a default, just choose the first option, unless specified & required */
+						if ( undefined !== parm.default && !parm.optional ) {
 							inp.val( parm.default );
 						} else {
-							jQuery( 'option:first' ).prop( 'selected', true );
+							jQuery( 'option:first', inp ).prop( 'selected', true );
 						}
 					}
 				} else if ( parm.type == "scene" ) {
@@ -5562,15 +5560,17 @@ var ReactorSensor = (function(api, $) {
 					/* Menu */
 					inp = jQuery('<select class="argument form-control form-control-sm"/>');
 					if ( parm.optional ) {
-						inp.prepend( '<option value="">not specified</option>' );
+						inp.prepend( '<option value="">(not specified)</option>' );
 					}
 					inp.append('<option value="0">0/off/false</option>');
 					inp.append('<option value="1">1/on/true</option>');
 					/* Add variables */
 					appendVariables( inp );
-					/* Don't set default, let default default -- WHY???? */
-					if ( parm.default ) {
+					/* Force default when available and not optional, otherwise first */
+					if ( undefined !== parm.default && !parm.optional ) {
 						inp.val( parm.default );
+					} else {
+						jQuery( 'option:first', inp ).prop( 'selected', true );
 					}
 				} else if ( false && parm.type == "ui1" && parm.min !== undefined && parm.max !== undefined ) {
 					inp = jQuery('<div class="argument tbslider"/>');
@@ -5588,14 +5588,14 @@ var ReactorSensor = (function(api, $) {
 						}
 					});
 					inp.slider("option", "disabled", false);
-					inp.slider("option", "value", undefined === parm.default ? parm.min : parm.default ); //??? fixme: clobbered later
+					inp.slider("option", "value", parm.default || parm.min ); /* parm.min always defined in this block */
 				} else if ( (parm.type || "").match(/^(r|u?i)[124]$/i ) ) {
 					inp = jQuery( '<input class="argument narrow form-control form-control-sm">' );
 					if ( ! parm.novars ) {
 						inp.attr( 'list', 'reactorvarlist' );
 					}
 					inp.attr( 'placeholder', action.parameters[k].name );
-					inp.val( undefined==parm.default ? (undefined==parm.min ? (undefined==parm.optional ? 0 : "") : parm.min ) : parm.default );
+					inp.val( parm.optional ? "" : ( parm.default || parm.min || 0 ) );
 				} else {
 					console.log("J_ReactorSensor_UI7.js: using default field presentation for type " + String(parm.type));
 					inp = jQuery( '<input class="argument form-control form-control-sm">' );
@@ -5603,7 +5603,7 @@ var ReactorSensor = (function(api, $) {
 						inp.attr( 'list', 'reactorvarlist' );
 					}
 					inp.attr( 'placeholder', action.parameters[k].name );
-					inp.val( undefined===parm.default ? "" : parm.default );
+					inp.val( ( undefined===parm.default || parm.optional ) ? "" : parm.default );
 				}
 				inp.attr('id', parm.name ).addClass( 'argument' );
 				inp.on( 'change.reactor', handleActionValueChange );
@@ -5819,11 +5819,8 @@ var ReactorSensor = (function(api, $) {
 					for ( var ip=0; ip < (service.actionList[j].arguments || []).length; ++ip ) {
 						var p = service.actionList[j].arguments[ip];
 						p.type = p.dataType || "string";
-						if ( ! p.defaultValue ) {
-							p.optional = 1;
-						} else {
-							p.default = p.defaultValue;
-						}
+						p.optional = 1; /* In this case, all are assumed optional */
+						p.default = p.defaultValue;
 					}
 				}
 				key = service.serviceId + "/" + actname;
@@ -6294,8 +6291,14 @@ var ReactorSensor = (function(api, $) {
 									/* Variable reference, get current value. */
 									v = api.getDeviceState( api.getCpanelDeviceId(), "urn:toggledbits-com:serviceId:ReactorValues", vn[1] ) || "";
 								}
-								if ( "" === v && undefined !== p.default ) v = p.default;
-								if ( "" === v && p.optional ) continue;
+								if ( "" === v ) {
+									if ( p.optional ) {
+										continue;
+									}
+									if ( undefined !== p.default ) {
+										v = p.default;
+									}
+								}
 								param[p.name] = v;
 								actionText += p.name + "=" + quot(v) + ", ";
 							}
