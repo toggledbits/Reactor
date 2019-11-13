@@ -3789,7 +3789,7 @@ local function processSensorUpdate( tdev, sst )
 
 		-- Mark a stable base of time
 		local tt = getVarNumeric( "TestTime", 0, tdev, RSSID )
-		if tt ~= 0 then addEvent{ dev=tdev, "Test time %(t)s", t=os.date("%Y-m-d %H:%M:%S", tt) } end
+		if tt ~= 0 then addEvent{ dev=tdev, msg="Test time %(t)s", t=os.date("%Y-%m-%d %H:%M:%S", tt) } end
 		sst.timebase = tt == 0 and os.time() or tt
 		sst.timeparts = os.date("*t", sst.timebase)
 		sst.timetest = tt > 0
@@ -4367,6 +4367,8 @@ local function startSensor( tdev, pdev, isReload )
 		-- Watch our own cdata; when it changes, re-evaluate.
 		-- NOTE: MUST BE *AFTER* INITIAL LOAD OF CDATA
 		addServiceWatch( tdev, RSSID, "cdata", tdev )
+		addServiceWatch( tdev, RSSID, "TestTime", tdev )
+		addServiceWatch( tdev, RSSID, "TestHouseMode", tdev )
 
 		-- Start tick
 		scheduleDelay( { id=tostring(tdev), owner=tdev, func=sensorTick }, 1, { replace=true } )
@@ -5188,16 +5190,24 @@ function watch( dev, sid, var, oldVal, newVal )
 	D("watch(%1,%2,%3,%4,%5)", dev, sid, var, oldVal, newVal)
 	assert(var ~= nil) -- nil if service or device watch (can happen on openLuup)
 
-	if sid == RSSID and var == "cdata" then
-		-- Sensor configuration change. Immediate update.
-		if isEnabled( dev ) then
-			L("%1 (#%2) configuration change, updating!", dev, luup.devices[dev].description)
-			addEvent{ dev=dev, msg="Configuration changed!", event="configchange" }
-			stopScene( dev, nil, dev ) -- Stop all scenes in this device context.
-			getSensorConfig( dev, true )
-			scheduleDelay( { id=tostring(dev), owner=dev, func=sensorTick }, 1 )
+	if sid == RSSID then
+		if var == "cdata" then
+			-- Sensor configuration change. Immediate update.
+			if isEnabled( dev ) then
+				L("%1 (#%2) configuration change, updating!", dev, luup.devices[dev].description)
+				addEvent{ dev=dev, msg="Configuration changed!", event="configchange" }
+				stopScene( dev, nil, dev ) -- Stop all scenes in this device context.
+				getSensorConfig( dev, true )
+				scheduleDelay( { id=tostring(dev), owner=dev, func=sensorTick }, 1 )
+			else
+				D("watch() ignoring config change on disabled RS %1 (#%2)", luup.devices[dev].description, dev)
+			end
 		else
-			D("watch() ignoring config change on disabled RS %1 (#%2)", luup.devices[dev].description, dev)
+			-- Something changed, schedule update
+			if isEnabled( dev ) then
+				D("watch() scheduling sensor update for %1/%2 change", sid, var)
+				scheduleDelay( { id=tostring(dev), owner=dev, func=sensorTick }, 1 )
+			end
 		end
 	elseif luup.devices[dev].device_num_parent == pluginDevice and
 			luup.devices[dev].id == "hmt" and sid == SENSOR_SID and
