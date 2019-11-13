@@ -13,6 +13,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 * Enhancement: The Activities tab now can filter the display by "true" and "false" activities (suggestion by tunnus).
 * Internal: Clean up mechanism for determining SSL parameters for SMTP connections.
 * Internal: Upgrade of configuration is only done by core now; no duplication of effort on the JS side.
+* Fix: "try" action operating in Activity editor was not substituting variables correctly; partly a limitation introduced by the evolation of variable, and partly bug, but in any case, fixed.
 * Fix: After clearing condition state, make sure initial update/restart runs all activities eligible (esp. root).
 * Fix: Cosmetic bug in the appearance of scene list for Run Scene activity.
 * Fix: Cosmetic bug--"updates" action does not need "ignore case" checkbox.
