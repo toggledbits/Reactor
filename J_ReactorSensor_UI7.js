@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.4hotfix-19288';
+	var pluginVersion = '3.4hotfix-19317';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -434,6 +434,24 @@ var ReactorSensor = (function(api, $) {
 			makeix( cf.conditions.root || {}, 0 );
 		}
 		return d.ixCond;
+	}
+
+	function getConditionStates( myid ) {
+		myid = myid || api.getCpanelDeviceId();
+		var s = api.getDeviceState( myid, serviceId, "cstate" ) || "";
+		var cstate = {};
+		if ( ! isEmpty( s ) ) {
+			try {
+				cstate = JSON.parse( s );
+				return cstate;
+			} catch (e) {
+				console.log("cstate cannot be parsed: " + String(e));
+			}
+		} else {
+			console.log("cstate unavailable");
+		}
+		/* Return empty cstate structure */
+		return { vars: {} };
 	}
 
 	/* Traverse - Depth Order */
@@ -6104,6 +6122,7 @@ var ReactorSensor = (function(api, $) {
 				break;
 
 			case "action-try":
+				var cvars = false;
 				if ( jQuery( '.tberror', row ).length > 0 ) {
 					alert( 'Please fix the errors before attempting to run this action.' );
 					return;
@@ -6133,7 +6152,13 @@ var ReactorSensor = (function(api, $) {
 								var vn = v.match( varRefPattern );
 								if ( vn && vn.length == 2 ) {
 									/* Variable reference, get current value. */
-									v = api.getDeviceState( api.getCpanelDeviceId(), "urn:toggledbits-com:serviceId:ReactorValues", vn[1] ) || "";
+									if ( ! cvars ) {
+										var cstate = getConditionStates();
+										cvars = cstate.vars || {};
+									}
+									if ( undefined !== cvars[vn[1]] ) {
+										v = cvars[vn[1]].lastvalue || "";
+									}
 								}
 								if ( "" === v && undefined !== p.default ) v = p.default;
 								if ( "" === v && p.optional ) continue;

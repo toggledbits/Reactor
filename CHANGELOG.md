@@ -2,6 +2,13 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
+## Version 3.4 Hotfixen
+
+* 19240-01: SMTP notifications to Google/Gmail fail with `555 5.5.2 Syntax error` (L_Reactor.lua)
+* 19273-01: Using a variable reference in a delay doesn’t work properly. (L_Reactor.lua)
+* 19288-01: It appears certain Unicode characters can make the ancient JSON library that is standard in current Vera firmware hiccup and produce empty results, erasing a ReactorSensor’s configuration. Several different approaches to preventing damage to the config are implemented in this hotfix. (J_ReactorSensor_UI7.js, L_Reactor.lua)
+* 19317-01: Fix variable substitution in "Try" action operation in Activity editor (J_ReactorSensor_UI7.js)
+
 ## Version 3.4 (released)
 
 * Enhancement: new *Notify* action will send a notification to the selected users with a custom message. See [the Wiki](https://github.com/toggledbits/Reactor/wiki/Notify-Action).
