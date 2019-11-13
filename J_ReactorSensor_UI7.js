@@ -438,6 +438,24 @@ var ReactorSensor = (function(api, $) {
 		return d.ixCond;
 	}
 
+	function getConditionStates( myid ) {
+		myid = myid || api.getCpanelDeviceId();
+		var s = api.getDeviceState( myid, serviceId, "cstate" ) || "";
+		var cstate = {};
+		if ( ! isEmpty( s ) ) {
+			try {
+				cstate = JSON.parse( s );
+				return cstate;
+			} catch (e) {
+				console.log("cstate cannot be parsed: " + String(e));
+			}
+		} else {
+			console.log("cstate unavailable");
+		}
+		/* Return empty cstate structure */
+		return { vars: {} };
+	}
+
 	/* Traverse - Depth Order */
 	function DOtraverse( node, op, args, filter ) {
 		if ( ( !filter ) || filter( node ) ) {
@@ -1339,7 +1357,7 @@ var ReactorSensor = (function(api, $) {
 
 		var title = 'Group: ' + (grp.name || grp.id ) +
 			( grp.disabled ? " (disabled)" : "" ) + " <" + grp.id + ">";
-		jQuery( 'span#titletext', grpel ).text( title + getCondOptionDesc( grp ) );
+		jQuery( 'span#titletext', grpel ).text( title + getCondOptionDesc( grp ) + "; " );
 		jQuery( '.condbtn', grpel ).text( (grp.invert ? "NOT " : "") + (grp.operator || "and" ).toUpperCase() );
 
 		/* Highlight groups that are "true" */
@@ -1458,17 +1476,8 @@ var ReactorSensor = (function(api, $) {
 			console.log("cdata unavailable");
 			return;
 		}
-		var s = api.getDeviceStateVariable( pdev, serviceId, "cstate" ) || "";
-		var cstate = {};
-		if ( ! isEmpty( s ) ) {
-			try {
-				cstate = JSON.parse( s );
-			} catch (e) {
-				console.log("cstate cannot be parsed: " + String(e));
-			}
-		} else {
-			console.log("cstate unavailable");
-		}
+
+		var cstate = getConditionStates( pdev );
 
 		/* If starting from scratch (first call), purge unused state */
 		if ( 0 === stel.children( 'div' ).length ) {
@@ -4361,17 +4370,7 @@ var ReactorSensor = (function(api, $) {
 		var myid = api.getCpanelDeviceId();
 		var cdata = getConfiguration( myid );
 
-		var s = api.getDeviceState( myid, serviceId, "cstate" ) || "";
-		var cstate = {};
-		if ( ! isEmpty( s ) ) {
-			try {
-				cstate = JSON.parse( s );
-			} catch (e) {
-				console.log("cstate cannot be parsed: " + String(e));
-			}
-		} else {
-			console.log("cstate unavailable");
-		}
+		var cstate = getConditionStates( myid );
 		var csvars = cstate.vars || {};
 
 		/* Create a list of variables by index, sorted. cdata.variables is a map/hash,
@@ -6260,6 +6259,7 @@ var ReactorSensor = (function(api, $) {
 				break;
 
 			case "action-try":
+				var cvars = false;
 				if ( jQuery( '.tberror', row ).length > 0 ) {
 					alert( 'Please fix the errors before attempting to run this action.' );
 					return;
@@ -6289,7 +6289,13 @@ var ReactorSensor = (function(api, $) {
 								var vn = v.match( varRefPattern );
 								if ( vn && vn.length == 2 ) {
 									/* Variable reference, get current value. */
-									v = api.getDeviceState( api.getCpanelDeviceId(), "urn:toggledbits-com:serviceId:ReactorValues", vn[1] ) || "";
+									if ( ! cvars ) {
+										var cstate = getConditionStates();
+										cvars = cstate.vars || {};
+									}
+									if ( undefined !== cvars[vn[1]] ) {
+										v = cvars[vn[1]].lastvalue || "";
+									}
 								}
 								if ( "" === v ) {
 									if ( p.optional ) {
@@ -6299,7 +6305,7 @@ var ReactorSensor = (function(api, $) {
 										v = p.default;
 									}
 								}
-								param[p.name] = v;
+								param[p.name] = String(v);
 								actionText += p.name + "=" + quot(v) + ", ";
 							}
 						}
