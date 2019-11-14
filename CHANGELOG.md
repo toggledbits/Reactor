@@ -17,10 +17,12 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 * Fix: After clearing condition state, make sure initial update/restart runs all activities eligible (esp. root).
 * Fix: Cosmetic bug in the appearance of scene list for Run Scene activity.
 * Fix: Cosmetic bug--"updates" action does not need "ignore case" checkbox.
-* Hotfix 19318-01: Work around issue with Chrome getting confused when two data-list fields have the same ID;
-* Hotfix-19288-01: Attempt to prevent special characters that seem to disrupt dkjson; handle config very defensively, essentially bailing out more readily when things don't smell right--we can fix it manually--so that any disruption of the JSON doesn't result in a total loss of the config.
-* Hotfix-19273-01: Delay action with variable ref doesn't work (fixed).
-* Hotfix-19240-01: Google SMTP service requires specific wrapping of the from address.
+* 19240-01: SMTP notifications to Google/Gmail fail with `555 5.5.2 Syntax error` (L_Reactor.lua)
+* 19273-01: Using a variable reference in a delay doesn’t work properly. (L_Reactor.lua)
+* 19288-01: It appears certain Unicode characters can make the ancient JSON library that is standard in current Vera firmware hiccup and produce empty results, erasing a ReactorSensor’s configuration. Several different approaches to preventing damage to the config are implemented in this hotfix. (J_ReactorSensor_UI7.js, L_Reactor.lua)
+* 19317-01: Fix variable substitution in "Try" action operation in Activity editor (J_ReactorSensor_UI7.js)
+* 19317-02: Fix action editor incorrectly reselecting currently configured value (J_ReactorSensor_UI7.js)
+* 19318-01: Work around issue with Chrome getting confused when multiple data-list fields have same ID (minor but apparently really annoying)
 
 ## Version 3.4 (released)
 
