@@ -6533,27 +6533,35 @@ var ReactorSensor = (function(api, $) {
 						break;
 
 					case "device":
-						if ( 0 == jQuery( 'select.devicemenu option[value="' + act.device + '"]', newRow ).length ) {
+						if ( 0 === jQuery( 'select.devicemenu option[value="' + act.device + '"]', newRow ).length ) {
 							var opt = jQuery( '<option/>' ).val( act.device ).text( '#' + act.device + ' ' + ( act.deviceName || 'name?' ) + ' (missing)' );
 							// opt.insertAfter( jQuery( 'select.devicemenu option[value=""]:first', newRow ) );
 							jQuery( 'select.devicemenu', newRow ).prepend( opt ).addClass( "tberror" );
+							newRow.addClass( "tberror" );
 						}
 						jQuery( 'select.devicemenu', newRow ).val( act.device );
 						changeActionDevice( newRow, parseInt( act.device ), function( row, action ) {
 							var key = action.service + "/" + action.action;
-							if ( 0 == jQuery( 'select#actionmenu option[value="' + key + '"]', row ).length ) {
+							if ( 0 === jQuery( 'select#actionmenu option[value="' + key + '"]', row ).length ) {
 								var opt = jQuery( '<option/>' ).val( key ).text( key );
 								jQuery( 'select#actionmenu', row ).prepend( opt );
 							}
 							jQuery( 'select#actionmenu', row ).val( key );
 							changeActionAction( row, key );
+							var pfx = row.attr( 'id' ) + '-';
 							for ( var j=0; j<(action.parameters || []).length; j++ ) {
-								if ( false && 0 === jQuery( '#' + idSelector( action.parameters[j].name ), row ).length ) {
-									var inp = jQuery( '<input class="argument form-control form-control-sm">' ).attr('id', action.parameters[j].name);
-									var lbl = jQuery( '<label/>' ).attr('for', action.parameters[j].name).text(action.parameters[j].name).addClass('tbrequired').append(inp);
+								var fld = jQuery( '#' + idSelector( pfx + action.parameters[j].name ), row );
+								if ( false && 0 === fld.length ) {
+									var inp = jQuery( '<input class="argument form-control form-control-sm">' )
+										.attr( 'id', pfx + action.parameters[j].name );
+									var lbl = jQuery( '<label/>' )
+										.attr( 'for', pfx + action.parameters[j].name )
+										.addClass( 'optarg' )
+										.text( action.parameters[j].name + '[X]:' )
+										.append( inp );
 									jQuery( 'div.actiondata', row ).append( lbl );
 								}
-								jQuery( '#' + idSelector( action.parameters[j].name ), row ).val( action.parameters[j].value || "" );
+								fld.val( action.parameters[j].value || "" );
 							}
 						}, [ newRow, act ]);
 						break;
@@ -6580,7 +6588,9 @@ var ReactorSensor = (function(api, $) {
 						if ( undefined !== act.device && 0 === jQuery( 'select.devicemenu option[value="' + act.device + '"]', newRow ).length ) {
 							jQuery( '<option/>' ).val( act.device )
 								.text( '#' + act.device + ' ' + ( act.deviceName || 'name?' ) + ' (missing)' )
-								.prependTo( jQuery( 'select.devicemenu', newRow ).addClass( "tberror" ) );
+								.prependTo( jQuery( 'select.devicemenu', newRow )
+								.addClass( "tberror" ) );
+							newRow.addClass( "tberror" );
 						}
 						jQuery( 'select.devicemenu', newRow ).val( act.device || "-1" );
 						$m = jQuery( 'select#activity', newRow );
@@ -6589,6 +6599,7 @@ var ReactorSensor = (function(api, $) {
 							jQuery( '<option/>' ).val( act.activity || "undef" )
 								.text( ( act.activity || "name?" ) + " (missing)" )
 								.prependTo( $m.addClass( 'tberror' ) );
+							newRow.addClass( "tberror" );
 						}
 						$m.val( act.activity || "undef" );
 						break;
@@ -6597,7 +6608,9 @@ var ReactorSensor = (function(api, $) {
 						if ( undefined !== act.device && 0 === jQuery( 'select.devicemenu option[value="' + act.device + '"]', newRow ).length ) {
 							jQuery( '<option/>' ).val( act.device )
 								.text( '#' + act.device + ' ' + ( act.deviceName || 'name?' ) + ' (missing)' )
-								.prependTo( jQuery( 'select.devicemenu', newRow ).addClass( "tberror" ) );
+								.prependTo( jQuery( 'select.devicemenu', newRow )
+								.addClass( "tberror" ) );
+							newRow.addClass( "tberror" );
 						}
 						jQuery( 'select.devicemenu', newRow ).val( act.device || "-1" );
 						$m = jQuery( 'select#group', newRow );
@@ -6606,6 +6619,7 @@ var ReactorSensor = (function(api, $) {
 							jQuery( '<option/>' ).val( act.group || "undef" )
 								.text( ( act.group || "name?" ) + " (missing)" )
 								.prependTo( $m.addClass( 'tberror' ) );
+							newRow.addClass( "tberror" );
 						}
 						$m.val( act.group || "undef" );
 						break;
