@@ -17,6 +17,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 * Fix: After clearing condition state, make sure initial update/restart runs all activities eligible (esp. root).
 * Fix: Cosmetic bug in the appearance of scene list for Run Scene activity.
 * Fix: Cosmetic bug--"updates" action does not need "ignore case" checkbox.
+* Hotfix 19317-01: Fix variable refs in "try" action operation;
 * Hotfix-19288-01: Attempt to prevent special characters that seem to disrupt dkjson; handle config very defensively, essentially bailing out more readily when things don't smell right--we can fix it manually--so that any disruption of the JSON doesn't result in a total loss of the config.
 * Hotfix-19273-01: Delay action with variable ref doesn't work (fixed).
 * Hotfix-19240-01: Google SMTP service requires specific wrapping of the from address.

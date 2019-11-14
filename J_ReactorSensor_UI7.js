@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.5develop-19307';
+	var pluginVersion = '3.5develop-19317';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -4695,9 +4695,7 @@ var ReactorSensor = (function(api, $) {
 
 			case "runscene":
 				dev = jQuery( 'select#scene', row );
-				if ( isEmpty( dev.val() ) ) {
-					dev.addClass( "tberror" );
-				}
+				dev.toggleClass( 'tberror', isEmpty( dev.val() ) );
 				break;
 
 			case "runlua":
@@ -4712,20 +4710,19 @@ var ReactorSensor = (function(api, $) {
 
 			case "rungsa":
 				dev = jQuery( 'select.devicemenu', row );
-				if ( isEmpty( dev.val() ) ) {
-					dev.addClass( 'tberror' );
-				}
+				dev.toggleClass( 'tberror', isEmpty( dev.val() ) );
 				dev = jQuery( 'select#activity', row );
-				if ( isEmpty( dev.val() ) ) {
-					dev.addClass( 'tberror' );
-				}
+				dev.toggleClass( 'tberror', isEmpty( dev.val() ) );
+				break;
+
+			case "setvar":
+				var vname = jQuery( 'input#varname', row );
+				vname.toggleClass( 'tberror', isEmpty( vname.val() ) );
 				break;
 
 			case "resetlatch":
 				dev = jQuery( 'select.devicemenu', row );
-				if ( isEmpty( dev.val() ) ) {
-					dev.addClass( 'tberror' );
-				}
+				dev.toggleClass( 'tberror', isEmpty( dev.val() ) );
 				break;
 
 			case "notify":
@@ -5124,6 +5121,10 @@ var ReactorSensor = (function(api, $) {
 						action.deviceName = devobj.name;
 					}
 					action.activity = jQuery( 'select#activity', row ).val() || "";
+					break;
+
+				case "setvar":
+					// ???FIXME
 					break;
 
 				case "resetlatch":
@@ -6152,6 +6153,10 @@ var ReactorSensor = (function(api, $) {
 					.on( 'change.reactor', handleActionValueChange );
 				break;
 
+			case "setvar":
+				// ???FIXME
+				break;
+
 			case "resetlatch":
 				makeDeviceMenu( "", "", function( devobj ) {
 						return devobj.device_type === deviceType;
@@ -6464,6 +6469,7 @@ var ReactorSensor = (function(api, $) {
 			'<option value="runlua">Run Lua</option>' +
 			'<option value="runscene">Run Scene</option>' +
 			'<option value="rungsa">Run Group Activity</option>' +
+			'<option value="setvar">Set Variable</option>' +
 			'<option value="resetlatch">Reset Latched</option>' +
 			'</select></div>' );
 		row.append('<div class="actiondata col-xs-12 col-sm-12 col-md-6 col-lg-8 form-inline"></div>');
@@ -6575,6 +6581,10 @@ var ReactorSensor = (function(api, $) {
 								.prependTo( $m.addClass( 'tberror' ) );
 						}
 						$m.val( act.activity || "undef" );
+						break;
+
+					case "setvar":
+						/* ??? FIXME */
 						break;
 
 					case "resetlatch":
