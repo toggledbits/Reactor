@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.4hotfix-19317';
+	var pluginVersion = '3.4hotfix-19318exp';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -4852,6 +4852,7 @@ var ReactorSensor = (function(api, $) {
 		_rmscene( myid, deletes );
 	}
 
+	/* Rebuild actions for section (class actionlist) */
 	function buildActionList( root ) {
 		if ( jQuery('.tberror', root ).length > 0 ) {
 			return false;
@@ -4864,6 +4865,7 @@ var ReactorSensor = (function(api, $) {
 		var firstScene = true;
 		jQuery( 'div.actionrow', root ).each( function( ix ) {
 			var row = jQuery( this );
+			var pfx = row.attr( 'id' ) + '-';
 			var actionType = jQuery( 'select#actiontype', row ).val();
 			var action = { type: actionType, index: ix+1 };
 			var k, pt, t, devnum, devobj;
@@ -4926,7 +4928,7 @@ var ReactorSensor = (function(api, $) {
 								pt.value = ai.parameters[k].value;
 							} else {
 								/* Ignore default here, it's assumed to be valid when needed */
-								t = jQuery( '#' + idSelector( ai.parameters[k].name ), row ).val() || "";
+								t = jQuery( '#' + idSelector( pfx + ai.parameters[k].name ), row ).val() || "";
 								if ( isEmpty( t ) ) {
 									if ( ai.parameters[k].optional ) {
 										continue; /* skip it, not even put on the list */
@@ -4943,7 +4945,8 @@ var ReactorSensor = (function(api, $) {
 						jQuery( '.argument', row ).each( function() {
 							var val = jQuery( this ).val();
 							if ( ! isEmpty( val ) ) {
-								action.parameters.push( { name: jQuery( this ).attr('id'), value: val } );
+								var pname = (jQuery( this ).attr( 'id' ) || "unnamed").replace( pfx, '' );
+								action.parameters.push( { name: pname, value: val } );
 							}
 						});
 					}
@@ -5166,7 +5169,7 @@ var ReactorSensor = (function(api, $) {
 	}
 
 	/**
-	 * Given a section, update cdata to match.
+	 * Given a section (class actionlist), update cdata to match.
 	 */
 	function updateActionList( section ) {
 		var sn = section.attr( 'id' );
@@ -5299,6 +5302,8 @@ var ReactorSensor = (function(api, $) {
 	}
 
 	function changeActionAction( row, newVal ) {
+		// assert( row.hasClass( 'actionrow' ) );
+		var pfx = row.attr( 'id' );
 		var ct = jQuery( 'div.actiondata', row );
 		jQuery( 'label,.argument', ct ).remove();
 		if ( isEmpty( newVal ) ) {
@@ -5464,13 +5469,14 @@ var ReactorSensor = (function(api, $) {
 					inp.attr( 'placeholder', action.parameters[k].name );
 					inp.val( undefined===parm.default ? "" : parm.default );
 				}
-				inp.attr('id', parm.name ).addClass( 'argument' );
+				inp.attr('id', pfx + '-' + parm.name ).addClass( 'argument' );
 				inp.on( 'change.reactor', handleActionValueChange );
 				/* If there are more than one parameters, wrap each in a label. */
 				if ( action.parameters.length > 1 ) {
 					var label = jQuery("<label/>");
-					label.attr("for", parm.name );
-					label.text( ( parm.label || parm.name ) + ": " );
+					label.attr("for", pfx + '-' + parm.name );
+					label.text( ( parm.label || parm.name ) + ":" );
+					label.append( '&nbsp;' );
 					label.append( inp );
 					if ( parm.optional ) inp.addClass("optarg");
 					ct.append(" ");
@@ -6235,10 +6241,13 @@ var ReactorSensor = (function(api, $) {
 						}).done( function( data, statusText, jqXHR ) {
 							var pred = row;
 							var newRow;
+							var ns = Date.now();
+							var container = row.closest( 'div.actionlist' );
 							if ( ! isEmpty( data.lua ) ) {
 								/* Insert Lua */
 								var lua = (data.encoded_lua || 0) != 0 ? atob(data.lua) : data.lua;
 								newRow = getActionRow();
+								newRow.attr( 'id', container.attr( 'id' ) + ns++ );
 								jQuery( "select#actiontype", newRow).val( "runlua" );
 								changeActionType( newRow, "runlua" );
 								jQuery( "textarea.luacode", newRow ).val( lua ).trigger( "reactorinit" );
@@ -6252,6 +6261,7 @@ var ReactorSensor = (function(api, $) {
 								if ( 0 != (gr.delay || 0) ) {
 									/* Delayed group -- insert delay action */
 									newRow = getActionRow();
+									newRow.attr( 'id', container.attr( 'id' ) + ns++ );
 									jQuery( "select#actiontype", newRow).val( "delay" );
 									changeActionType( newRow, "delay" );
 									jQuery( "input#delay", newRow ).val( gr.delay );
@@ -6261,6 +6271,7 @@ var ReactorSensor = (function(api, $) {
 								for ( var k=0; k < (gr.actions || []).length; k++ ) {
 									var act = gr.actions[k];
 									newRow = getActionRow();
+									newRow.attr( 'id', container.attr( 'id' ) + ns++ );
 									jQuery( 'select#actiontype', newRow).val( "device" );
 									changeActionType( newRow, "device" );
 									if ( 0 == jQuery( 'select.devicemenu option[value="' + act.device + '"]', newRow ).length ) {
@@ -6342,6 +6353,8 @@ var ReactorSensor = (function(api, $) {
 		var btn = jQuery( ev.currentTarget );
 		var container = btn.closest( 'div.actionlist' );
 		var newRow = getActionRow();
+		var id = container.attr( 'id' ) + Date.now();
+		newRow.attr( 'id', id );
 		newRow.insertBefore( jQuery( '.buttonrow', container ) );
 		container.addClass( 'tbmodified' );
 		newRow.addClass( 'tbmodified' );
@@ -6352,10 +6365,12 @@ var ReactorSensor = (function(api, $) {
 	function loadActions( section, scene ) {
 		var insertionPoint = jQuery( 'div.buttonrow', section );
 		var newRow;
+		var ns = Date.now();
 		for ( var i=0; i < (scene.groups || []).length; i++ ) {
 			var gr = scene.groups[i];
 			if ( 0 !== (gr.delay || 0) ) {
 				newRow = getActionRow();
+				newRow.attr( 'id', section.attr( 'id' ) + ns++ );
 				jQuery( "select#actiontype", newRow ).val( "delay" );
 				changeActionType( newRow, "delay" );
 				jQuery( "input#delay", newRow ).val( gr.delay );
@@ -6366,6 +6381,7 @@ var ReactorSensor = (function(api, $) {
 				var $m;
 				var act = gr.actions[k];
 				newRow = getActionRow();
+				newRow.attr( 'id', section.attr( 'id' ) + ns++ );
 				jQuery( 'select#actiontype', newRow).val( act.type || "comment" );
 				changeActionType( newRow, act.type || "comment" );
 				switch ( act.type ) {
@@ -6381,6 +6397,7 @@ var ReactorSensor = (function(api, $) {
 						}
 						jQuery( 'select.devicemenu', newRow ).val( act.device );
 						changeActionDevice( newRow, parseInt( act.device ), function( row, action ) {
+							var pfx = row.attr( 'id' ) + '-';
 							var key = action.service + "/" + action.action;
 							if ( 0 == jQuery( 'select#actionmenu option[value="' + key + '"]', row ).length ) {
 								var opt = jQuery( '<option/>' ).val( key ).text( key );
@@ -6389,12 +6406,17 @@ var ReactorSensor = (function(api, $) {
 							jQuery( 'select#actionmenu', row ).val( key );
 							changeActionAction( row, key );
 							for ( var j=0; j<(action.parameters || []).length; j++ ) {
-								if ( false && 0 === jQuery( '#' + idSelector( action.parameters[j].name ), row ).length ) {
-									var inp = jQuery( '<input class="argument form-control form-control-sm">' ).attr('id', action.parameters[j].name);
-									var lbl = jQuery( '<label/>' ).attr('for', action.parameters[j].name).text(action.parameters[j].name).addClass('tbrequired').append(inp);
+								if ( false && 0 === jQuery( '#' + idSelector( pfx + action.parameters[j].name ), row ).length ) {
+									var inp = jQuery( '<input class="argument form-control form-control-sm">' )
+										.attr('id', pfx + action.parameters[j].name);
+									var lbl = jQuery( '<label/>' )
+										.attr( 'for', pfx + action.parameters[j].name).text(action.parameters[j].name )
+										.addClass( 'tbrequired' )
+										.append( inp );
 									jQuery( 'div.actiondata', row ).append( lbl );
 								}
-								jQuery( '#' + idSelector( action.parameters[j].name ), row ).val( action.parameters[j].value || "" );
+								jQuery( '#' + idSelector( pfx + action.parameters[j].name ), row )
+									.val( action.parameters[j].value || "" );
 							}
 						}, [ newRow, act ]);
 						break;
