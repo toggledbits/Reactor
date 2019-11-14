@@ -5388,7 +5388,7 @@ var ReactorSensor = (function(api, $) {
 						if ( undefined !== parm.default ) {
 							inp.val( parm.default );
 						} else {
-							jQuery( 'option:first' ).prop( 'selected', true );
+							jQuery( 'option:first', inp ).prop( 'selected', true );
 						}
 					}
 				} else if ( parm.type == "scene" ) {
