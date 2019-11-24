@@ -13,14 +13,19 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 * Enhancement: The Activities tab now can filter the display by "true" and "false" activities (suggestion by tunnus).
 * Internal: Clean up mechanism for determining SSL parameters for SMTP connections.
 * Internal: Upgrade of configuration is only done by core now; no duplication of effort on the JS side.
+* Fix: Do not clear operands when changing operators.
+* Fix: Condition value field IDs "unique-ified" similar to hotfix 19318-01 for some Mac browsers.
+* Fix: Delay input fields need same unique ID treatment, similar to hotfix 19318-01, for some Mac browsers.
 * Fix: "try" action operating in Activity editor was not substituting variables correctly; partly a limitation introduced by the evolation of variable, and partly bug, but in any case, fixed.
 * Fix: After clearing condition state, make sure initial update/restart runs all activities eligible (esp. root).
 * Fix: Cosmetic bug in the appearance of scene list for Run Scene activity.
 * Fix: Cosmetic bug--"updates" action does not need "ignore case" checkbox.
-* Hotfix 19317-01: Fix variable refs in "try" action operation;
-* Hotfix-19288-01: Attempt to prevent special characters that seem to disrupt dkjson; handle config very defensively, essentially bailing out more readily when things don't smell right--we can fix it manually--so that any disruption of the JSON doesn't result in a total loss of the config.
-* Hotfix-19273-01: Delay action with variable ref doesn't work (fixed).
-* Hotfix-19240-01: Google SMTP service requires specific wrapping of the from address.
+* 19240-01: SMTP notifications to Google/Gmail fail with `555 5.5.2 Syntax error` (L_Reactor.lua)
+* 19273-01: Using a variable reference in a delay doesn’t work properly. (L_Reactor.lua)
+* 19288-01: It appears certain Unicode characters can make the ancient JSON library that is standard in current Vera firmware hiccup and produce empty results, erasing a ReactorSensor’s configuration. Several different approaches to preventing damage to the config are implemented in this hotfix. (J_ReactorSensor_UI7.js, L_Reactor.lua)
+* 19317-01: Fix variable substitution in "Try" action operation in Activity editor (J_ReactorSensor_UI7.js)
+* 19317-02: Fix action editor incorrectly reselecting currently configured value (J_ReactorSensor_UI7.js)
+* 19318-01: Work around issue with Chrome getting confused when multiple data-list fields have same ID (minor but apparently really annoying)
 
 ## Version 3.4 (released)
 
