@@ -1839,14 +1839,19 @@ local function getExpressionContext( cdata, tdev )
 end
 
 -- Get a value (works as constant or expression (including simple variable ref).
--- Returns result as string and number
+-- Returns result as string, number, unmodified, error message (when non-nil)
 local function getValue( val, ctx, tdev )
 	D("getValue(%1,%2,%3)", val, ctx, tdev)
-	if type(val) == "number" then return tostring(val), val end
+	local err
+	if type(val) == "number" then
+		return tostring(val), val, val
+	end
+	local result = val
 	val = tostring(val or "")
 	if #val >= 2 and val:byte(1) == 34 and val:byte(-1) == 34 then
 		-- Dequote quoted string and return
-		return val:sub( 2, -2 ), nil
+		result = val:sub( 2, -2 )
+		return result, tonumber(result), result
 	end
 	if #val >= 2 and val:byte(1) == 123 and val:byte(-1) == 125 then
 		-- Expression wrapped in {}
@@ -1860,20 +1865,23 @@ local function getValue( val, ctx, tdev )
 				addEvent{ dev=tdev,
 					msg="TROUBLE: Evaluation of reference %{expression}q failed, no state data for condition ${cond}s",
 					expression=val, cond=cond }
+				return "", nil, nil, "no state for condition"
 			elseif subtype == "n" then
-				return cs.matchcount or 0
+				val = cs.matchcount or 0
 			elseif subtype == "t" then
-				return cs.evalstamp
+				val = cs.evalstamp
+			elseif subtype == "v" then
+				val = cs.lastvalue
 			else
-				if subtype ~= "v" then L({level=2,msg="%1 (#%2) unsupported subtype ref in %3; returning last value"},
+				L({level=2,msg="%1 (#%2) unsupported subtype ref in %3; returning last value"},
 					luup.devices[tdev].description, tdev, mp)
-				end
-				return cs.lastvalue
+				return "", nil, nil, "invalid subtype ref"
 			end
+			return tostring(val), val, val
 		end
 		D("getValue() evaluating %1", mp)
 		ctx = ctx or getSensorState( tdev ).ctx or getExpressionContext( getSensorConfig( tdev ), tdev )
-		local result,err = luaxp.evaluate( mp, ctx )
+		result,err = luaxp.evaluate( mp, ctx )
 		D("getValue() result is %1, %2", result, err)
 		if err then
 			L({level=2,msg="%1 (%2) Error evaluating %3: %4"}, luup.devices[tdev].description,
@@ -1891,7 +1899,7 @@ local function getValue( val, ctx, tdev )
 			val = tostring(result)
 		end
 	end
-	return val, tonumber(val)
+	return val, tonumber(val), result, err
 end
 
 local stringify -- fwd decl for execLua
@@ -2081,6 +2089,48 @@ local function execLua( fname, luafragment, extarg, tdev )
 end
 
 local runScene -- forward declaration
+
+-- Set variable action (use by scene action and device action)
+local function doSetVar( varname, value, tdev )
+	local cdata = getSensorConfig( tdev )
+	if ( cdata.variables or {} )[varname] == nil then
+		return false, "variable not defined"
+	end
+	if not tostring( cdata.variables[ varname ].expression or ""):match( "^%s*$" ) then
+		-- Non-empty expression--can't set these variables
+		return false, "can't set value on expression-driven variable"
+	end
+	local cstate = loadCleanState( tdev )
+	cstate.vars = cstate.vars or {}
+	local vs = cstate.vars[ varname ]
+	if vs == nil then
+		vs = {}
+		cstate.vars[ varname ] = vs
+	end
+
+	local ctx = getSensorState( tdev ).ctx or getExpressionContext( getSensorConfig( tdev ), tdev )
+	local sv, _, vv, err = getValue( value, ctx, tdev )
+	local oldVal = vs.lastvalue
+	if oldVal ~= vv then
+		vs.lastvalue = vv
+		vs.valuestamp = os.time()
+		vs.changed = 1
+		-- Update LuaXP evaluation context if it exists.
+		local sst = getSensorState( tdev )
+		if sst.ctx then
+			sst.ctx[ varname ] = vv
+		end
+		-- Update state variable if it's exported.
+		if ( cdata.variables[ varname ].export or 1 ) ~= 0 then
+			setVar( VARSID, varname, sv or "", tdev )
+			setVar( VARSID, varname .. "_Error", err or "", tdev )
+		end
+		-- Save updated state.
+		cstate.lastUsed = os.time()
+		luup.variable_set( RSSID, "cstate", json.encode( cstate ), tdev )
+	end
+	return true, oldVal, vv
+end
 
 -- Perform notify action
 local function doActionNotify( action, scid, tdev )
@@ -2469,6 +2519,23 @@ local function execSceneGroups( tdev, taskid, scd )
 					end
 					local opts = json.encode( { contextDevice=device } )
 					luup.call_action( RSSID, "RunScene", { SceneNum=action.activity or "error", Options=opts }, device )
+				elseif action.type == "setvar" then
+					local success, oldval, newval = doSetVar( action.variable, action.value, tdev )
+					if success then
+						addEvent{ dev=tdev, msg="Variable %(variable)q set to %(newValue)q; was %(newValue)q",
+							variable=action.variable, newValue=newval, oldValue=oldval }
+						if (action.reeval or 0) ~= 0 then
+							scheduleDelay( tdev, 1 )
+						end
+					else
+						L({level=2,msg="Set Variable action (%1 group %2 action %3) target %4 failed: "..tostring(oldval)},
+							scd.id, nextGroup, ix, action.variable)
+						addEvent{ dev=tdev,
+								msg="%(sceneName)s group %(group)s action %(index)s Set Variable %(varname)q failed: %(err)s",
+								event="runscene", scene=scd.id, sceneName=scd.name or scd.id,
+								group=nextGroup, index=ix, varname=action.variable, ['err']=oldval }
+						getSensorState( tdev ).trouble = true
+					end
 				elseif action.type == "resetlatch" then
 					local device = action.device or -1
 					local group = action.group or ""
@@ -2683,6 +2750,7 @@ local function updateVariables( cdata, tdev )
 	D("updateVariables(cdata,%1)", tdev)
 	local first = true
 	local ctx
+	local condState = loadCleanState( tdev )
 	for _,v in variables( cdata ) do
 		if first then
 			local sst = getSensorState( tdev )
@@ -2691,6 +2759,9 @@ local function updateVariables( cdata, tdev )
 			first = false
 		end
 		D("updateVariables() evaluate %1", v)
+		if (condState.vars or {})[v.name] then
+			condState.vars[v.name].changed = nil
+		end
 		evaluateVariable( v.name, ctx, cdata, tdev )
 	end
 end
@@ -5041,54 +5112,18 @@ end
 
 function actionSetVariable( opt, tdev )
 	assertEnabled( tdev )
-	local cdata = getSensorConfig( tdev )
-	if ( cdata.variables or {} )[opt.VariableName or "_"] == nil then
-		L({level=2,msg="Warning: action attempt to set variable %3 on %1 (#%2)failed, variable not defined."},
-			luup.devices[tdev].description, tdev, opt.VariableName )
-		return false
+	local success, oldval, newval = doSetVar( opt.VariableName, opt.NewValue, tdev )
+	if success then
+		addEvent{ dev=tdev, msg="Variable %(variable)q set to %(newValue)q; was %(newValue)q",
+				  variable=opt.VariableName, newValue=newval, oldValue=oldval }
+		scheduleDelay( tdev, 1 )
+		return true
 	end
-	if not tostring( cdata.variables[ opt.VariableName ].expression or ""):match( "^%s*$" ) then
-		-- Non-empty expression--can't set these variables
-		L({level=1,msg="Invalid attempt to set value on expression-driven variable %1 (ignored)"}, opt.VariableName)
-		return false
-	end
-	local cstate = loadCleanState( tdev )
-	cstate.vars = cstate.vars or {}
-	local vs = cstate.vars[ opt.VariableName ]
-	if vs == nil then
-		vs = {}
-		cstate.vars[ opt.VariableName ] = vs
-	end
-	-- Value is handled as string because that's how Luup actions roll.
-	local vv = tostring( opt.NewValue == nil and "" or opt.NewValue )
-	addEvent{ dev=tdev,
-		msg="SetVariable action invoked, %(variable)s was %(oldValue)q now %(newValue)q",
-		event="action", action="SetVariable", variable=opt.VariableName, oldValue=vs.lastvalue, newValue=vv }
-	D("actionSetVariable() %1=%2, last=%3", opt.VariableName, vv, vs)
-	if tostring( vs.lastvalue ) ~= vv then
-		local oldVal = vs.lastvalue
-		vs.lastvalue = vv
-		vs.valuestamp = os.time()
-		vs.changed = 1
-		-- Update LuaXP evaluation context if it exists.
-		local sst = getSensorState( tdev )
-		if sst.ctx then
-			sst.ctx[ opt.VariableName ] = vv
-		end
-		-- Update state variable if it's exported.
-		if ( cdata.variables[ opt.VariableName ].export or 1 ) ~= 0 then
-			setVar( VARSID, opt.VariableName, vv, tdev )
-			setVar( VARSID, opt.VariableName.."_Error", "", tdev )
-		end
-		-- Save updated state.
-		cstate.lastUsed = os.time()
-		luup.variable_set( RSSID, "cstate", json.encode( cstate ), tdev )
-		L("SetVariable action changes %1 from %2 to %3", opt.VariableName, oldVal, vv)
-
-	else
-		L("SetVariable action %1 no change, value remains %2", opt.VariableName, vs.lastvalue == nil and "" or vs.lastvalue)
-	end
-	scheduleDelay( tdev, 1 )
+	L({level=2,msg="%1 (#%2) SetVariable device action on %3 failed: "..tostring(oldval)},
+		luup.devices[tdev].description, tdev, opt.VariableName)
+	addEvent{ dev=tdev, msg="SetVariable device action on %(varname)q failed: %(err)s",
+		varname=opt.VariableName, ['err']=oldval }
+	return false
 end
 
 -- Return the plugin version string
@@ -5603,7 +5638,7 @@ end
 function request( lul_request, lul_parameters, lul_outputformat )
 	D("request(%1,%2,%3) luup.device=%4", lul_request, lul_parameters, lul_outputformat, luup.device)
 	local action = lul_parameters['action'] or lul_parameters['command'] or ""
-	local deviceNum = tonumber( lul_parameters['device'], 10 )
+	local deviceNum = tonumber( lul_parameters['device'] )
 	if action == "debug" then
 		if lul_parameters.debug ~= nil then
 			debugMode = TRUESTRINGS:match( lul_parameters.debug )
@@ -5633,8 +5668,9 @@ function request( lul_request, lul_parameters, lul_outputformat )
 	elseif action == "clearconditionstate" then
 		if luup.devices[deviceNum] and luup.devices[deviceNum].device_type == RSTYPE then
 			clearConditionState( deviceNum )
-			return '{"status":true}', "application/json"
+			return json.encode( { status=true } ), "application/json"
 		end
+		L({level=2,msg="Invalid clearconditionstate action device %1"}, deviceNum)
 		return "ERROR\nInvalid device in request", "text/plain"
 
 	elseif action == "clearpluginstate" then
