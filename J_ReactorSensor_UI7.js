@@ -855,12 +855,16 @@ var ReactorSensor = (function(api, $) {
 		var myid = api.getCpanelDeviceId();
 		var cdata = getConfiguration( myid );
 
+		jQuery( "button#revertconf" ).prop( "disabled", true );
+		jQuery( "button#saveconf" ).text("Wait...").prop( "disabled", true );
+
 		/* Save to persistent state */
 		cdata.timestamp = Math.floor( Date.now() / 1000 );
 		cdata.serial = ( cdata.serial || 0 ) + 1;
 		cdata.device = myid;
-		console.log("handleSaveClick(): saving config serial " + String(cdata.serial) + ", timestamp " + String(cdata.timestamp));
+		console.log("handleSaveClick(): save config serial " + String(cdata.serial) + ", timestamp " + String(cdata.timestamp));
 		waitForReloadComplete( "Waiting for system ready before saving configuration..." ).then( function() {
+			console.log("handleSaveClick() ready, requesting condition state clear");
 			jQuery.ajax({
 				url: api.getDataRequestURL(),
 				data: {
@@ -870,44 +874,47 @@ var ReactorSensor = (function(api, $) {
 				},
 				dataType: "json",
 				timeout: 5000
+			}).done( function( data ) {
 			}).fail( function( jqXHR, textStatus, errorThrown ) {
 				console.log("Failed to clear condition state on " + myid + ": " + textStatus + " " + String(errorThrown));
 				console.log(jqXHR.responseText);
-			});
-			api.setDeviceStateVariablePersistent( myid, serviceId, "cdata",
-				JSON.stringify( cdata, function( k, v ) { return ( k.match( /^__/ ) || v === null ) ? undefined : purify(v); } ),
-				{
-					'onSuccess' : function() {
-						configModified = false;
-						updateSaveControls();
-						console.log("handleSaveClick(): successful save of config serial " + String(cdata.serial) + ", timestamp " + String(cdata.timestamp));
-						if ( "function" === typeof(fnext) ) fnext.apply( null, fargs );
-						if ( cdata.__reloadneeded ) {
-							delete cdata.__reloadneeded;
-							api.showCustomPopup( "Reloading Luup...", { autoHide: false, category: 3 } );
-							setTimeout( function() {
-								api.performActionOnDevice( 0, "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "Reload",
-									{ actionArguments: { Reason: "Reactor saved config needs reload" } } );
+			}).always( function() {
+				console.log("handleSaveClick() writing cdata");
+				api.setDeviceStateVariablePersistent( myid, serviceId, "cdata",
+					JSON.stringify( cdata, function( k, v ) { return ( k.match( /^__/ ) || v === null ) ? undefined : purify(v); } ),
+					{
+						'onSuccess' : function() {
+							configModified = false;
+							updateSaveControls();
+							console.log("handleSaveClick(): SUCCESS, serial " + String(cdata.serial) + ", timestamp " + String(cdata.timestamp));
+							if ( "function" === typeof(fnext) ) fnext.apply( null, fargs );
+							if ( cdata.__reloadneeded ) {
+								delete cdata.__reloadneeded;
+								api.showCustomPopup( "Reloading Luup...", { autoHide: false, category: 3 } );
 								setTimeout( function() {
-									waitForReloadComplete().then( function() {
-										$("#myModal").modal("hide");
-									}).catch( function(reason) {
-										$("#myModal").modal("hide");
-									});
+									api.performActionOnDevice( 0, "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "Reload",
+										{ actionArguments: { Reason: "Reactor saved config needs reload" } } );
+									setTimeout( function() {
+										waitForReloadComplete().then( function() {
+											$("#myModal").modal("hide");
+										}).catch( function(reason) {
+											$("#myModal").modal("hide");
+										});
+									}, 5000 );
 								}, 5000 );
-							}, 5000 );
-						} else {
-							clearUnusedStateVariables( myid, cdata );
+							} else {
+								clearUnusedStateVariables( myid, cdata );
+							}
+						},
+						'onFailure' : function() {
+							alert('There was a problem saving the configuration. Vera/Luup may have been restarting. Please try hitting the "Save" button again.');
+							updateSaveControls();
+							if ( "function" === typeof(fnext) ) fnext.apply( null, fargs );
 						}
-					},
-					'onFailure' : function() {
-						alert('There was a problem saving the configuration. Vera/Luup may have been restarting. Please try hitting the "Save" button again.');
-						updateSaveControls();
-						if ( "function" === typeof(fnext) ) fnext.apply( null, fargs );
 					}
-				}
-			);
-		});
+				); /* setDeviceState */
+			}); /* always */
+		}); /* then */
 	}
 
 	/**
@@ -1228,7 +1235,8 @@ var ReactorSensor = (function(api, $) {
 	function updateSaveControls() {
 		var errors = jQuery('.tberror');
 		var pos = $( window ).scrollTop();
-		jQuery('button#saveconf').prop('disabled', ! ( configModified && errors.length === 0 ) );
+		jQuery('button#saveconf').text("Save")
+			.prop('disabled', ! ( configModified && errors.length === 0 ) );
 		jQuery('button#revertconf').prop('disabled', !configModified);
 		setTimeout( function() { $(window).scrollTop( pos ); }, 100 );
 	}
@@ -2529,7 +2537,7 @@ var ReactorSensor = (function(api, $) {
 					var lbl = fmt.match( /^([^%]*)%\d+([^%]*)%\d+(.*)$/ );
 					if ( null !== lbl ) {
 						if ( !isEmpty( lbl[1] ) ) {
-							jQuery( '<label for="' + idSelector( cond.id + '-val1' ) + 
+							jQuery( '<label for="' + idSelector( cond.id + '-val1' ) +
 								'" class="tbsecondaryinput"/>' )
 								.text( lbl[1] )
 								.insertBefore( $inp );
@@ -4347,24 +4355,6 @@ var ReactorSensor = (function(api, $) {
 		jQuery( 'div#varname input', editrow ).focus();
 	}
 
-	function handleVariableSaveClick( ev ) {
-		try {
-			var myid = api.getCpanelDeviceId();
-			var cdata = getConfiguration( myid );
-			for ( var vn in ( cdata.variables || {} ) ) {
-				if ( cdata.variables.hasOwnProperty( vn ) ) {
-					if ( 0 !== cdata.variables[vn].export ) {
-						api.setDeviceStateVariablePersistent( myid, "urn:toggledbits-com:serviceId:ReactorValues", vn, "" );
-						api.setDeviceStateVariablePersistent( myid, "urn:toggledbits-com:serviceId:ReactorValues", vn + "_Error", "Not yet initialized" );
-					}
-				}
-			}
-		} catch( e ) {
-			console.log(String(e));
-		}
-		return handleSaveClick( ev );
-	}
-
 	/**
 	 * Redraw variables and expressions.
 	*/
@@ -4443,7 +4433,7 @@ var ReactorSensor = (function(api, $) {
 
 
 		jQuery("button#addvar", container).on( 'click.reactor', handleAddVariableClick );
-		jQuery("button#saveconf", container).on( 'click.reactor', handleVariableSaveClick );
+		jQuery("button#saveconf", container).on( 'click.reactor', handleSaveClick );
 		jQuery("button#revertconf", container).on( 'click.reactor', handleRevertClick );
 
 		updateVariableControls();
@@ -4728,7 +4718,7 @@ var ReactorSensor = (function(api, $) {
 				break;
 
 			case "setvar":
-				var vname = jQuery( 'input#varname', row );
+				var vname = jQuery( 'select#variable', row );
 				vname.toggleClass( 'tberror', isEmpty( vname.val() ) );
 				break;
 
@@ -5139,7 +5129,8 @@ var ReactorSensor = (function(api, $) {
 					break;
 
 				case "setvar":
-					// ???FIXME
+					action.variable = jQuery( 'select#variable', row ).val();
+					action.value = jQuery( 'input', row).val();
 					break;
 
 				case "resetlatch":
@@ -6174,7 +6165,40 @@ var ReactorSensor = (function(api, $) {
 				break;
 
 			case "setvar":
-				// ???FIXME
+				$m = jQuery( '<select/>', { id: "variable", class: "form-control form-control-sm" } )
+					.appendTo( ct );
+				var cdata = getConfiguration();
+				var vix = [];
+				for ( var vn in ( cdata.variables || {} ) ) {
+					if ( cdata.variables.hasOwnProperty( vn ) ) {
+						var v = cdata.variables[vn];
+						if ( isEmpty( v.expression ) ) {
+							vix.push( v );
+						}
+					}
+				}
+				vix.sort( function( a, b ) {
+					var i1 = a.index || -1;
+					var i2 = b.index || -1;
+					if ( i1 === i2 ) {
+						i1 = (a.name || "").toLowerCase();
+						i2 = (b.name || "").toLowerCase();
+						if ( i1 === i2 ) return 0;
+						/* fall through */
+					}
+					return ( i1 < i2 ) ? -1 : 1;
+				});
+				for ( var iv=0; iv<vix.length; iv++ ) {
+					$( '<option/>' ).val( vix[iv].name ).text( vix[iv].name )
+						.appendTo( $m );
+				}
+				$( '<option/>' ).val( "" ).text( '--choose--' ).prependTo( $m );
+				$m.val("").on( 'change.reactor', handleActionValueChange );
+				ct.append( " = " );
+				jQuery( '<input class="form-control form-control-sm" list="reactorvarlist">' )
+					.attr( 'id', pfx + "value" )
+					.on( 'change.reactor', handleActionValueChange )
+					.appendTo( ct );
 				break;
 
 			case "resetlatch":
@@ -6560,7 +6584,6 @@ var ReactorSensor = (function(api, $) {
 							var opt = jQuery( '<option/>' ).val( act.device ).text( '#' + act.device + ' ' + ( act.deviceName || 'name?' ) + ' (missing)' );
 							// opt.insertAfter( jQuery( 'select.devicemenu option[value=""]:first', newRow ) );
 							jQuery( 'select.devicemenu', newRow ).prepend( opt ).addClass( "tberror" );
-							newRow.addClass( "tberror" );
 						}
 						jQuery( 'select.devicemenu', newRow ).val( act.device );
 						changeActionDevice( newRow, parseInt( act.device ), function( row, action ) {
@@ -6622,13 +6645,19 @@ var ReactorSensor = (function(api, $) {
 							jQuery( '<option/>' ).val( act.activity || "undef" )
 								.text( ( act.activity || "name?" ) + " (missing)" )
 								.prependTo( $m.addClass( 'tberror' ) );
-							newRow.addClass( "tberror" );
 						}
 						$m.val( act.activity || "undef" );
 						break;
 
 					case "setvar":
-						/* ??? FIXME */
+						$m = jQuery( 'select#variable', newRow );
+						if ( 0 === jQuery( 'option[value=' + quot(act.variable) + ']', newRow ).length ) {
+							jQuery( '<option/>' ).val( act.variable )
+								.text( act.variable + "? (invalid)" )
+								.appendTo( $m.addClass( 'tberror' ) );
+						}
+						$m.val( act.variable || "" );
+						jQuery( 'input', newRow ).val( act.value || "" );
 						break;
 
 					case "resetlatch":
@@ -6637,7 +6666,6 @@ var ReactorSensor = (function(api, $) {
 								.text( '#' + act.device + ' ' + ( act.deviceName || 'name?' ) + ' (missing)' )
 								.prependTo( jQuery( 'select.devicemenu', newRow )
 								.addClass( "tberror" ) );
-							newRow.addClass( "tberror" );
 						}
 						jQuery( 'select.devicemenu', newRow ).val( act.device || "-1" );
 						$m = jQuery( 'select#group', newRow );
@@ -6646,7 +6674,6 @@ var ReactorSensor = (function(api, $) {
 							jQuery( '<option/>' ).val( act.group || "undef" )
 								.text( ( act.group || "name?" ) + " (missing)" )
 								.prependTo( $m.addClass( 'tberror' ) );
-							newRow.addClass( "tberror" );
 						}
 						$m.val( act.group || "undef" );
 						break;
@@ -6682,6 +6709,7 @@ var ReactorSensor = (function(api, $) {
 						jQuery( 'input#unrecdata', newRow ).val( JSON.stringify( act ) );
 				}
 
+				newRow.has('.tberror').addClass('tberror');
 				newRow.insertBefore( insertionPoint );
 			}
 		}
