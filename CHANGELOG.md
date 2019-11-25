@@ -11,6 +11,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 * Enhancement: `Reactor` table in "Run Lua" actions now publishes group states (in `Reactor.groups`) by name as well as by ID. Previously the keys were group IDs. Now you can use either in "Run Lua" actions.
 * Enhancement: Do not check firmware version in debug mode, specifically for allowing testing on any firmware, including alpha/unblessed.
 * Enhancement: The Activities tab now can filter the display by "true" and "false" activities (suggestion by tunnus).
+* Enhancement: Update LuaXP to latest version (1.0); adds `date()` and `map()` functions; see https://github.com/toggledbits/luaxp
 * Internal: Clean up mechanism for determining SSL parameters for SMTP connections.
 * Internal: Upgrade of configuration is only done by core now; no duplication of effort on the JS side.
 * Fix: Do not clear operands when changing operators.
