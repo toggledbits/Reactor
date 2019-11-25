@@ -8,14 +8,14 @@
 -- Github: https://github.com/toggledbits/luaxp
 ------------------------------------------------------------------------
 
-local _M = {}
+module("L_LuaXP_Reactor", package.seeall)
 
-_M._VERSION = "1.0"
-_M._VNUMBER = 10000
-_M._DEBUG = false -- Caller may set boolean true or function(msg)
+_VERSION = "1.0"
+_VNUMBER = 10000
+_DEBUG = false -- Caller may set boolean true or function(msg)
 
 -- Binary operators and precedence (lower prec is higher precedence)
-_M.binops = {
+binops = {
       { op='.',  prec=-1 }
     , { op='*',  prec= 3 }
     , { op='/',  prec= 3 }
@@ -90,7 +90,7 @@ end
 -- Debug output function. If _DEBUG is false or nil, no output.
 -- If function, uses that, otherwise print()
 local function D(s, ...)
-    if not _M._DEBUG then return end
+    if not _DEBUG then return end
     local str = string.gsub(s, "%%(%d+)", function( n )
             n = tonumber(n, 10)
             if n < 1 or n > #arg then return "nil" end
@@ -103,7 +103,7 @@ local function D(s, ...)
             return tostring(val)
         end
     )
-    if base.type(_M._DEBUG) == "function" then _M._DEBUG(str) else print(str) end
+    if base.type(_DEBUG) == "function" then _DEBUG(str) else print(str) end
 end
 
 -- Forward declarations
@@ -130,7 +130,7 @@ local function isAtom( v, typ )
 end
 
 -- Special case null atom
-local function isNull( v )
+function isNull( v )
     return isAtom( v, TNUL )
 end
 
@@ -139,7 +139,7 @@ local function comperror(msg, loc)
     return error( { __source='luaxp', ['type']='compile', location=loc, message=msg } )
 end
 
-local function evalerror(msg, loc)
+function evalerror(msg, loc)
     D("throwing evalerror at %1: %2", loc, msg)
     return error( { __source='luaxp', ['type']='evaluation', location=loc, message=msg } )
 end
@@ -469,7 +469,7 @@ end
 
 local function xp_tlen( t )
     local n = 0
-    for _,v in pairs(t) do n = n + 1 end
+    for _ in pairs(t) do n = n + 1 end
     return n
 end
 
@@ -594,7 +594,7 @@ end
 -- Skips white space, returns index of non-space character or nil
 local function skip_white( expr, index )
     D("skip_white from %1 in %2", index, expr)
-    local s,e = string.find( expr, "^%s+", index )
+    local _,e = string.find( expr, "^%s+", index )
     if e then index = e + 1 end -- whitespace(s) found, return pos after
     return index
 end
@@ -875,7 +875,7 @@ local function scan_binop( expr, index )
         local st = op .. ch
         local matched = false
         k = k + 1
-        for _,f in ipairs(_M.binops) do
+        for _,f in ipairs(binops) do
             if string.sub(f.op,1,k) == st then
                 -- matches something
                 matched = true
@@ -1010,7 +1010,7 @@ local function check_operand( v1, allow1, v2, allow2 )
     return res
 end
 
-local function coerce(val, typ)
+function coerce(val, typ)
     local vt = base.type(val)
     D("coerce: attempt (%1)%2 to %3", vt, val, typ)
     if vt == typ then return val end -- already there?
@@ -1026,7 +1026,7 @@ local function coerce(val, typ)
         end
     elseif typ == "string" then
         if vt == "number" then return tostring(val)
-        elseif vt == "boolean" then return value and "true" or "false"
+        elseif vt == "boolean" then return val and "true" or "false"
         elseif isNull(val) then return "" -- null coerces to empty string within expressions
         end
     elseif typ == "number" then
@@ -1465,7 +1465,7 @@ end
 -- PUBLIC METHODS
 
 -- Compile the expression (public method)
-function _M.compile( expressionString )
+function compile( expressionString )
     local s,v,n -- n???
     s,v,n = pcall(_comp, expressionString)
     if s then
@@ -1476,7 +1476,7 @@ function _M.compile( expressionString )
 end
 
 -- Public method to execute compiled expression. Accepts a context (ctx)
-function _M.run( compiledExpression, executionContext )
+function run( compiledExpression, executionContext )
     executionContext = executionContext or {}
     if (compiledExpression == nil or compiledExpression.rpn == nil or base.type(compiledExpression.rpn) ~= "table") then return nil end
     local stack = {}
@@ -1489,18 +1489,12 @@ function _M.run( compiledExpression, executionContext )
 end
 
 -- Public convenience method to compile and run and expression.
-function _M.evaluate( expressionString, executionContext )
-    local r,m = _M.compile( expressionString )
+function evaluate( expressionString, executionContext )
+    local r,m = compile( expressionString )
     if r == nil then return r,m end -- return error as we got it
-    return _M.run( r, executionContext ) -- and directly return whatever run() wants to return
+    return run( r, executionContext ) -- and directly return whatever run() wants to return
 end
 
 -- Special exports
-_M.dump = dump
-_M.isNull = isNull
-_M.coerce = coerce
-_M.NULL = NULLATOM
-_M.null = NULLATOM
-_M.evalerror = evalerror
-
-return _M
+NULL = NULLATOM
+null = NULLATOM
