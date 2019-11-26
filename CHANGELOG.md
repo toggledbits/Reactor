@@ -4,8 +4,9 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 3.5 (development)
 
-* Enhancement: "Pulse" output mode for conditions now allows repeat pulses with a configurable off period.
+* Enhancement: "Pulse" output mode for conditions now allows repeat pulses with a configurable *off/false* period between.
 * Enhancement: The new *Expression Variable* condition type allows direct condition testing of an expression's most recent result value without using a self-referencing *Device State* condition.
+* Enhancement: The new *Set Variable* activity allows direct setting of a variable without using a self-directed *Device State* activity with a *SetVariable* service action. The target variable must be "expression-less" (that is, its configured expression is blank/empty).
 * Enhancement: Make event log entries more human-readable.
 * Enhancement: `Reactor` table in "Run Lua" actions now publishes state for all conditions (in table `Reactor.conditions`; keys are condition IDs). This makes the current condition states and values accessible directly in Lua without additional "gets".
 * Enhancement: `Reactor` table in "Run Lua" actions now publishes group states (in `Reactor.groups`) by name as well as by ID. Previously the keys were group IDs. Now you can use either in "Run Lua" actions.
@@ -14,6 +15,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 * Enhancement: Update LuaXP to latest version (1.0); adds `date()` and `map()` functions; see https://github.com/toggledbits/luaxp
 * Internal: Clean up mechanism for determining SSL parameters for SMTP connections.
 * Internal: Upgrade of configuration is only done by core now; no duplication of effort on the JS side.
+* Fix: Fix reinitialization issue when switching between tabs without saving and user elects to abandon changes.
 * Fix: Do not clear operands when changing operators.
 * Fix: Condition value field IDs "unique-ified" similar to hotfix 19318-01 for some Mac browsers.
 * Fix: Delay input fields need same unique ID treatment, similar to hotfix 19318-01, for some Mac browsers.
