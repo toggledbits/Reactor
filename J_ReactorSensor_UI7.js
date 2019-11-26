@@ -405,6 +405,7 @@ var ReactorSensor = (function(api, $) {
 
 	/* Get configuration; load if needed */
 	function getConfiguration( myid, force ) {
+		myid = myid || api.getCpanelDeviceId();
 		var d = getInstanceData( myid );
 		if ( force || ! d.cdata ) {
 			loadConfigData( myid );
@@ -864,57 +865,58 @@ var ReactorSensor = (function(api, $) {
 		cdata.device = myid;
 		console.log("handleSaveClick(): save config serial " + String(cdata.serial) + ", timestamp " + String(cdata.timestamp));
 		waitForReloadComplete( "Waiting for system ready before saving configuration..." ).then( function() {
-			console.log("handleSaveClick() ready, requesting condition state clear");
-			jQuery.ajax({
-				url: api.getDataRequestURL(),
-				data: {
-					id: "lr_Reactor",
-					action: "clearconditionstate",
-					device: myid
-				},
-				dataType: "json",
-				timeout: 5000
-			}).done( function( data ) {
-			}).fail( function( jqXHR, textStatus, errorThrown ) {
-				console.log("Failed to clear condition state on " + myid + ": " + textStatus + " " + String(errorThrown));
-				console.log(jqXHR.responseText);
-			}).always( function() {
-				console.log("handleSaveClick() writing cdata");
-				api.setDeviceStateVariablePersistent( myid, serviceId, "cdata",
-					JSON.stringify( cdata, function( k, v ) { return ( k.match( /^__/ ) || v === null ) ? undefined : purify(v); } ),
-					{
-						'onSuccess' : function() {
-							configModified = false;
-							updateSaveControls();
-							console.log("handleSaveClick(): SUCCESS, serial " + String(cdata.serial) + ", timestamp " + String(cdata.timestamp));
-							if ( "function" === typeof(fnext) ) fnext.apply( null, fargs );
-							if ( cdata.__reloadneeded ) {
-								delete cdata.__reloadneeded;
-								api.showCustomPopup( "Reloading Luup...", { autoHide: false, category: 3 } );
+			console.log("handleSaveClick() writing cdata");
+			api.setDeviceStateVariablePersistent( myid, serviceId, "cdata",
+				JSON.stringify( cdata, function( k, v ) { return ( k.match( /^__/ ) || v === null ) ? undefined : purify(v); } ),
+				{
+					'onSuccess' : function() {
+						configModified = false;
+						updateSaveControls();
+						console.log("handleSaveClick(): SUCCESS, serial " + String(cdata.serial) + ", timestamp " + String(cdata.timestamp));
+						if ( "function" === typeof(fnext) ) fnext.apply( null, fargs );
+						if ( cdata.__reloadneeded ) {
+							delete cdata.__reloadneeded;
+							api.showCustomPopup( "Reloading Luup...", { autoHide: false, category: 3 } );
+							setTimeout( function() {
+								api.performActionOnDevice( 0, "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "Reload",
+									{ actionArguments: { Reason: "Reactor saved config needs reload" } } );
 								setTimeout( function() {
-									api.performActionOnDevice( 0, "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "Reload",
-										{ actionArguments: { Reason: "Reactor saved config needs reload" } } );
-									setTimeout( function() {
-										waitForReloadComplete().then( function() {
-											$("#myModal").modal("hide");
-										}).catch( function(reason) {
-											$("#myModal").modal("hide");
-										});
-									}, 5000 );
+									waitForReloadComplete().then( function() {
+										$("#myModal").modal("hide");
+									}).catch( function(reason) {
+										$("#myModal").modal("hide");
+									});
 								}, 5000 );
-							} else {
-								clearUnusedStateVariables( myid, cdata );
-							}
-						},
-						'onFailure' : function() {
-							alert('There was a problem saving the configuration. Vera/Luup may have been restarting. Please try hitting the "Save" button again.');
-							updateSaveControls();
-							if ( "function" === typeof(fnext) ) fnext.apply( null, fargs );
+							}, 5000 );
+						} else {
+							clearUnusedStateVariables( myid, cdata );
 						}
+					},
+					'onFailure' : function() {
+						alert('There was a problem saving the configuration. Vera/Luup may have been restarting. Please try hitting the "Save" button again.');
+						updateSaveControls();
+						if ( "function" === typeof(fnext) ) fnext.apply( null, fargs );
 					}
-				); /* setDeviceState */
-			}); /* always */
+				}
+			); /* setDeviceStateVariable */
 		}); /* then */
+	}
+
+	/**
+	 * Check for unsaved changes, save...
+	 */
+	function checkUnsaved( myid ) {
+		if ( configModified ) {
+			if ( confirm( msgUnsavedChanges ) ) {
+				handleSaveClick( undefined );
+			} else {
+				/* Discard unsaved config */
+				var d = getInstanceData( myid );
+				delete d.cdata;
+				delete d.ixCond;
+			}
+		}
+		configModified = false;
 	}
 
 	/**
@@ -928,6 +930,7 @@ var ReactorSensor = (function(api, $) {
 		var myid = api.getCpanelDeviceId();
 		getConfiguration( myid, true );
 		configModified = false;
+		updateSaveControls();
 
 		/* Be careful about which tab we're on here. */
 		/* ??? when all tabs are modules, module.redraw() is a one-step solution */
@@ -944,10 +947,15 @@ var ReactorSensor = (function(api, $) {
 	}
 
 	/* Closing the control panel. */
-	function onBeforeCpanelClose(args) {
-		// console.log( 'onBeforeCpanelClose args: ' + JSON.stringify(args) );
-		if ( configModified && confirm( msgUnsavedChanges ) ) {
-			handleSaveClick( undefined );
+	function onBeforeCpanelClose( args ) {
+		console.log( 'onBeforeCpanelClose args: ' ); console.log( args );
+		if ( configModified ) {
+			if ( confirm( msgUnsavedChanges ) ) {
+				handleSaveClick( undefined );
+			} else {
+				/* Force reload last saved config (safe) */
+				getConfiguration( false, true );
+			}
 		}
 		configModified = false;
 	}
@@ -1571,10 +1579,10 @@ var ReactorSensor = (function(api, $) {
 	function doStatusPanel()
 	{
 		console.log("doStatusPanel()");
+
 		/* Make sure changes are saved. */
-		if ( configModified && confirm( msgUnsavedChanges ) ) {
-			handleSaveClick( undefined );
-		}
+		var myid = api.getCpanelDeviceId();
+		checkUnsaved( myid );
 
 		if ( ! initModule() ) {
 			return;
@@ -1619,15 +1627,16 @@ var ReactorSensor = (function(api, $) {
 
 		api.setCpanelContent( '<div id="reactorstatus" class="reactortab"></div>' );
 		inStatusPanel = true; /* Tell the event handler it's OK */
+		api.registerEventHandler('on_ui_deviceStatusChanged', ReactorSensor, 'onUIDeviceStatusChanged');
 
 		try {
-			updateStatus( api.getCpanelDeviceId() );
-		} catch( e ) {
-			console.log( e );
-			console.log( e.stack );
+			updateStatus( myid );
 		}
-
-		api.registerEventHandler('on_ui_deviceStatusChanged', ReactorSensor, 'onUIDeviceStatusChanged');
+		catch ( e ) {
+			inStatusPanel = false; /* stop updates */
+			console.log( e );
+			alert( e.stack );
+		}
 	}
 
 /** ***************************************************************************
@@ -3998,11 +4007,8 @@ var ReactorSensor = (function(api, $) {
 	{
 		console.log("doConditions()");
 		try {
-			if ( configModified && confirm( msgUnsavedChanges) ) {
-				handleSaveClick( undefined );
-			}
-
 			var myid = api.getCpanelDeviceId();
+			checkUnsaved( myid );
 
 			if ( ! CondBuilder.init( myid ) ) {
 				return;
@@ -4094,6 +4100,7 @@ var ReactorSensor = (function(api, $) {
 		catch (e)
 		{
 			console.log( 'Error in ReactorSensor.doConditions(): ' + String( e ) );
+			console.log( e );
 			alert( e.stack );
 		}
 	}
@@ -4444,9 +4451,8 @@ var ReactorSensor = (function(api, $) {
 		console.log("doVariables()");
 		try {
 			/* Make sure changes are saved. */
-			if ( configModified && confirm( msgUnsavedChanges ) ) {
-				handleSaveClick( undefined );
-			}
+			var myid = api.getCpanelDeviceId();
+			checkUnsaved( myid );
 
 			if ( ! initModule() ) {
 				return;
@@ -4492,6 +4498,7 @@ var ReactorSensor = (function(api, $) {
 		catch (e)
 		{
 			console.log( 'Error in ReactorSensor.doVariables(): ' + String( e ) );
+			console.log(e);
 			alert( e.stack );
 		}
 	}
@@ -5130,7 +5137,12 @@ var ReactorSensor = (function(api, $) {
 
 				case "setvar":
 					action.variable = jQuery( 'select#variable', row ).val();
-					action.value = jQuery( 'input', row).val();
+					action.value = jQuery( 'input#' + idSelector( pfx + "value" ), row ).val();
+					if ( jQuery( "input#" + idSelector( pfx + "reeval" ), row ).prop( "checked" ) ) {
+						action.reeval = 1;
+					} else {
+						delete action.reeval;
+					}
 					break;
 
 				case "resetlatch":
@@ -6199,6 +6211,12 @@ var ReactorSensor = (function(api, $) {
 					.attr( 'id', pfx + "value" )
 					.on( 'change.reactor', handleActionValueChange )
 					.appendTo( ct );
+				$m = jQuery( "<label/", { "for": pfx + "reeval", "class": "form-checkbox" } );
+				jQuery( "<input>",
+					{ "id": pfx + "reeval", "type": "checkbox", "class": "form-control" }
+					).appendTo( $m );
+				$m.append("&nbsp;Force re-evaluation of variables and conditions");
+				$m.appendTo( ct );
 				break;
 
 			case "resetlatch":
@@ -6610,6 +6628,12 @@ var ReactorSensor = (function(api, $) {
 								fld.val( action.parameters[j].value || "" );
 							}
 						}, [ newRow, act ]);
+						if ( -1 === act.device &&
+							"urn:toggledbits-com:serviceId:ReactorSensor" === act.service &&
+							"SetVariable" === act.action ) {
+							jQuery( '<div class="notice">ATTENTION: Consider changing this <em>Device Action</em> to a <em>Set Variable</em>", which is more efficient (and easier to read).</div>' )
+								.appendTo( newRow );
+						}
 						break;
 
 					case "runscene":
@@ -6969,9 +6993,8 @@ var ReactorSensor = (function(api, $) {
 	}
 
 	function preloadActivities() {
-		if ( configModified && confirm( msgUnsavedChanges) ) {
-			handleSaveClick( undefined );
-		}
+		var myid = api.getCpanelDeviceId();
+		checkUnsaved( myid );
 
 		if ( ! initModule() ) {
 			return;
@@ -7087,14 +7110,14 @@ var ReactorSensor = (function(api, $) {
 			dataType: 'text',
 			timeout: 15000
 		}).done( function( data, statusText, jqXHR ) {
-			var keypat = new RegExp( "Reactor\\(debug\\): startSensor\\(" + api.getCpanelDeviceId() + "," );
+			var keypat = new RegExp( "9c6c9aa0-1060-11ea-b3de-9303e5fab7a5" );
 			var pos = data.search( keypat );
 			if ( pos < 0 ) {
 				jQuery( 'div#logdata' ).append( '<b>SUBJECT DATA NOT FOUND. RESTART THIS REACTOR SENSOR AFTER ENABLING DEBUG.</b>' );
 				return;
 			}
 			while ( pos >= 0 ) {
-				data = data.substring( pos+16 );
+				data = data.substring( pos+36 );
 				pos = data.search( keypat );
 			}
 			jQuery( 'div#logdata' ).empty().append( '<pre/>' );
@@ -7397,9 +7420,8 @@ var ReactorSensor = (function(api, $) {
 	{
 		console.log("doTools()");
 
-		if ( configModified && confirm( msgUnsavedChanges ) ) {
-			handleSaveClick( undefined );
-		}
+		var myid = api.getCpanelDeviceId();
+		checkUnsaved( myid );
 
 		if ( ! initModule() ) {
 			return;
@@ -7446,7 +7468,7 @@ var ReactorSensor = (function(api, $) {
 			html += '<li>If you are asked for a "debug log snippet", use this procedure (unless given other instructions in the request):<ol><li>Turn on debug by clicking this link: <a href="' +
 			api.getDataRequestURL() + '?id=lr_Reactor&action=debug&debug=1" target="_blank">Turn debug ON</a></li><li>Restart this sensor to force a re-evaluation of all conditions: <a href="' +
 			api.getDataRequestURL() + '?id=action&output_format=xml&DeviceNum=' + api.getCpanelDeviceId() + '&serviceId=' +
-			encodeURIComponent( serviceId ) + '&action=Restart" target="_blank">Restart this ReactorSensor</a></li><li><strong>Wait at least 60 seconds, not less.</strong> This is very important&mdash;proceeding too soon may result in incomplete log data. During this period, you should also provide any "stimulus" needed to demonstrate the issue (e.g. turn devices on/off).</li><li>Click this link to <a href="javascript:void();" id="grablog">generate the log snippet</a> (the relevant part the log file). It should magically appear at the bottom of this page&mdash;scroll down!</li><li>Post the log snippet to the forum thread, or email it <em>together with your logic summary report and your forum username</em> to <a href="mailto:reactor-logs@toggledbits.com" target="_blank">reactor-logs@toggledbits.com</a>. Note: this email address is for receiving logs only; do not submit questions or other requests to this address.</li></ol>';
+			encodeURIComponent( serviceId ) + '&action=Restart" target="_blank">Restart this ReactorSensor</a></li><li><strong>Wait at least 60 seconds, not less.</strong> This is very important&mdash;proceeding too soon may result in incomplete log data. During this period, you should also provide any "stimulus" needed to demonstrate the issue (e.g. turn devices on/off).</li><li>Click this link to <a href="javascript:void(0);" id="grablog">generate the log snippet</a> (the relevant part the log file). It should magically appear at the bottom of this page&mdash;scroll down!</li><li>Post the log snippet to the forum thread, or email it <em>together with your logic summary report and your forum username</em> to <a href="mailto:reactor-logs@toggledbits.com" target="_blank">reactor-logs@toggledbits.com</a>. Note: this email address is for receiving logs only; do not submit questions or other requests to this address.</li></ol>';
 		}
 		html += '</ul></div>';
 

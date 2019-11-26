@@ -4372,7 +4372,7 @@ end
 
 -- Start an instance
 local function startSensor( tdev, pdev, isReload )
-	D("startSensor(%1,%2)", tdev, pdev) -- DO NOT string--used for log snippet
+	D("startSensor(%1,%2) <9c6c9aa0-1060-11ea-b3de-9303e5fab7a5>", tdev, pdev) -- DO NOT modify string--used for log snippet
 
 	-- Open event log if needed
 	local sst = getSensorState( tdev )
