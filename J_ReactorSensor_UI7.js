@@ -2967,6 +2967,10 @@ var ReactorSensor = (function(api, $) {
 				case 'comment':
 					container.append('<input id="commenttext" type="text" class="form-control form-control-sm" autocomplete="off">');
 					jQuery('input', container).on( 'change.reactor', handleConditionRowChange ).val( cond.comment || "" );
+					if ( "cond0" === cond.id && ( cond.comment || "").match( /^Welcome to your new Reactor/i ) ) {
+						jQuery( '<div><strong>New to Reactor?</strong> Check out the <a href="https://youtu.be/wkdFjwEuF58" target="_blank">tutorial videos</a>. There\'s also <a href="https://github.com/toggledbits/Reactor/wiki" target="_blank">the Reactor Wiki</a> and <a href="https://community.getvera.com/c/plugins-and-plugin-development/reactor" target="_blank">Community Forum Category</a>.</div>' )
+							.appendTo( container );
+					}
 					break;
 
 				case 'service':
