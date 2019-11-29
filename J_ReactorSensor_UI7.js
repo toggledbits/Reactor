@@ -6876,7 +6876,7 @@ var ReactorSensor = (function(api, $) {
 			dataType: 'text',
 			timeout: 15000
 		}).done( function( data, statusText, jqXHR ) {
-			var keypat = new RegExp( "Reactor\\(debug\\): startSensor\\(" + api.getCpanelDeviceId() + "," );
+			var keypat = new RegExp( ": startSensor\\(" + api.getCpanelDeviceId() + "," );
 			var pos = data.search( keypat );
 			if ( pos < 0 ) {
 				jQuery( 'div#logdata' ).append( '<b>SUBJECT DATA NOT FOUND. RESTART THIS REACTOR SENSOR AFTER ENABLING DEBUG.</b>' );
