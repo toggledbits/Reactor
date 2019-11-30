@@ -1806,23 +1806,6 @@ local function getExpressionContext( cdata, tdev )
 		getSensorState( tdev ).trouble = true
 	end
 
-	if getVarNumeric( "UseOldVariableResolver", 0, tdev, RSSID ) ~= 0 then
-		-- This is the old (pre-2.4) resolver--recursively resolve.
-		-- Implement LuaXP extension resolver as recursive evaluation. This allows expressions
-		-- to reference other variables, makes working order of evaluation.
-		ctx.__functions.__resolve = function( name, c2x )
-			D("__resolve(%1,c2x)", name)
-			if (c2x.__resolving or {})[name] then
-				luaxp.evalerror("Circular reference detected (" .. name .. ")")
-				return luaxp.NULL
-			end
-			c2x.__resolving = c2x.__resolving or {}
-			c2x.__resolving[name] = true
-			local val = evaluateVariable( name, c2x, cdata, tdev )
-			c2x.__resolving[name] = nil
-			return val
-		end
-	end
 	-- Add previous values to Luaxp context. We use the cstate versions rather
 	-- than the state variables to preserve original data type. Every defined
 	-- variable must have an entry in ctx.
