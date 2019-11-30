@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.5develop-19330';
+	var pluginVersion = '3.5develop-19333';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -6215,11 +6215,8 @@ var ReactorSensor = (function(api, $) {
 					.attr( 'id', pfx + "value" )
 					.on( 'change.reactor', handleActionValueChange )
 					.appendTo( ct );
-				$m = jQuery( "<label/", { "for": pfx + "reeval", "class": "form-checkbox" } );
-				jQuery( "<input>",
-					{ "id": pfx + "reeval", "type": "checkbox", "class": "form-control" }
-					).appendTo( $m );
-				$m.append("&nbsp;Force re-evaluation of variables and conditions");
+				$m = getCheckbox( pfx + "reeval", "1", "Force re-evaluation of expressions and conditions", "" );
+				jQuery( 'input', $m ).on( 'change.reactor', handleActionValueChange );
 				$m.appendTo( ct );
 				break;
 
@@ -6593,7 +6590,9 @@ var ReactorSensor = (function(api, $) {
 				var $m;
 				var act = gr.actions[k];
 				newRow = getActionRow();
-				newRow.attr( 'id', section.attr( 'id' ) + ns++ );
+				var rid = section.attr( 'id' ) + ns++;
+				var pfx = rid + '-';
+				newRow.attr( 'id', rid );
 				jQuery( 'select#actiontype', newRow).val( act.type || "comment" );
 				changeActionType( newRow, act.type || "comment" );
 				switch ( act.type ) {
@@ -6616,7 +6615,6 @@ var ReactorSensor = (function(api, $) {
 							}
 							jQuery( 'select#actionmenu', row ).val( key );
 							changeActionAction( row, key );
-							var pfx = row.attr( 'id' ) + '-';
 							for ( var j=0; j<(action.parameters || []).length; j++ ) {
 								var fld = jQuery( '#' + idSelector( pfx + action.parameters[j].name ), row );
 								if ( false && 0 === fld.length ) {
@@ -6685,7 +6683,8 @@ var ReactorSensor = (function(api, $) {
 								.appendTo( $m.addClass( 'tberror' ) );
 						}
 						$m.val( act.variable || "" );
-						jQuery( 'input', newRow ).val( act.value || "" );
+						jQuery( 'input#' + idSelector( pfx + "value"), newRow ).val( act.value || "" );
+						jQuery( 'input#' + idSelector( pfx + "reeval"), newRow ).prop( "checked", 0 !== ( act.reeval || 0 ) );
 						break;
 
 					case "resetlatch":
