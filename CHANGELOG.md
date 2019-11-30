@@ -13,6 +13,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 * Enhancement: Do not check firmware version in debug mode, specifically for allowing testing on any firmware, including alpha/unblessed.
 * Enhancement: The Activities tab now can filter the display by "true" and "false" activities (suggestion by tunnus).
 * Enhancement: Update LuaXP to latest version (1.0); adds `date()` and `map()` functions; see https://github.com/toggledbits/luaxp
+* Enhancement: In places where variable substitution is allowed (i.e. where you can use `{variablename}`), you can now use an expression (same syntax as Expressions tab, just surround the expression in curly braces).
 * Internal: Clean up mechanism for determining SSL parameters for SMTP connections.
 * Internal: Upgrade of configuration is only done by core now; no duplication of effort on the JS side.
 * Fix: Fix reinitialization issue when switching between tabs without saving and user elects to abandon changes.
