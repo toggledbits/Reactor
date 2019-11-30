@@ -3614,7 +3614,7 @@ local function processCondition( cond, grp, cdata, tdev )
 					cond=cond.id, dur=condopt.duration, rem=rem }
 			else
 				addEvent{ dev=tdev,
-					msg="%(cname)s successfully sustained for at least %(dur) seconds (actual %(age)s)",
+					msg="%(cname)s successfully sustained for at least %(dur)s seconds (actual %(age)s)",
 					cname=(cond.type or "group")=="group" and ("Group "..(cond.name or cond.id)) or ("Condition "..cond.id),
 					cond=cond.id, dur=condopt.duration, age=age }
 				D("processCondition() cond %1 age %2 (>=%3) success", cond.id, age, condopt.duration)
