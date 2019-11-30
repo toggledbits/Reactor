@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.5develop-19330"
+local _PLUGIN_VERSION = "3.5develop-19333"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION	= 19295
@@ -1680,7 +1680,7 @@ local function getExpressionContext( cdata, tdev )
 		return val
 	end
 	ctx.__functions.getattribute = function( args )
-		local dev, attr = unpack( args )
+		local dev, attr, trouble = unpack( args )
 		local vn
 		if luaxp.isNull( dev ) or dev == -1 then
 			vn = tdev
@@ -1688,7 +1688,7 @@ local function getExpressionContext( cdata, tdev )
 			vn = finddevice( dev, tdev )
 			D("setstate(%1), dev=%2, attr=%3, vn(dev)=%4", args, dev, attr, vn)
 			if vn == luaxp.NULL or vn == nil or luup.devices[vn] == nil then
-				return luaxp.evalerror( "Device not found" )
+				return trouble == false and luaxp.evalerror( "Device not found" ) or luaxp.NULL
 			end
 		end
 		if attr == nil then return luaxp.evalerror("Invalid attribute name") end
@@ -1847,7 +1847,7 @@ local function getValue( val, ctx, tdev )
 		return tostring(val), val, val
 	end
 	local result = val
-	val = tostring(val or "")
+	val = tostring(val or ""):gsub("%s+$", "")
 	if #val >= 2 and val:byte(1) == 34 and val:byte(-1) == 34 then
 		-- Dequote quoted string and return
 		result = val:sub( 2, -2 )
@@ -5725,7 +5725,9 @@ YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 			" config " .. tostring(_CONFIGVERSION) ..
 			" cdata " .. tostring(_CDATAVERSION) ..
 			" ui " .. tostring(_UIVERSION) ..
-			" pluginDevice " .. pluginDevice .. EOL
+			" pluginDevice " .. pluginDevice ..
+			" LuaXP " .. tostring(luaxp._VERSION) ..
+			EOL
 		r = r .. "    System: "
 		if isOpenLuup then
 			local v = getVarNumeric( "Vnumber", 0, isOpenLuup, "openLuup" )
