@@ -132,6 +132,7 @@ var ReactorSensor = (function(api, $) {
 	var msgGroupIdChange = "Click to change group name";
 	var msgOptionsShow = "Show condition options";
 	var msgOptionsHide = "Hide condition options";
+	var msgRemoteAlert = "You appear to be using remote access for this session. Editing of ReactorSensor configurations via remote access is possible, but not recommended due to the latency and inconsistency of cloud connections and infrastructure. You may experience issues, particularly when saving large configurations. Using local access exclusively is strongly recommended. It is also a good idea to back up your ReactorSensors (using the Backup/Restore tab in the Reactor master device) prior to editing via remote access.";
 
 	/* Insert the header items */
 	/* Checkboxes, see https://codepen.io/VoodooSV/pen/XoZJme */
@@ -175,6 +176,7 @@ var ReactorSensor = (function(api, $) {
 	div#tbcopyright { display: block; margin: 12px 0px; } \
 	div#tbbegging { display: block; color: #ff6600; margin-top: 12px; } \
 	div.reactortab .vanotice { font-size: 0.9em; line-height: 1.5em; color: #666; margin-top: 4px; } \
+	div.reactortab div.remotealert { margin: 4px 4px; padding: 8px 8px; border: 2px solid red; color: red; border-radius: 8px; font-size: 0.9em; } \
 </style>');
 	}
 
@@ -191,6 +193,10 @@ var ReactorSensor = (function(api, $) {
 		} catch( e ) {}
 
 		return html;
+	}
+
+	function checkRemoteAccess() {
+		return !isOpenLuup && null === api.getDataRequestURL().match( /^https?:\/\/(\d+)\.(\d+)\.(\d+)\.(\d+)/ );
 	}
 
 	/* Create an ID that's functionally unique for our purposes. */
@@ -4086,6 +4092,12 @@ var ReactorSensor = (function(api, $) {
 
 			api.setCpanelContent(html);
 
+			if ( checkRemoteAccess() ) {
+				jQuery( 'div.reactortab' ).prepend(
+					jQuery( '<div class="remotealert" />' ).text( msgRemoteAlert )
+				);
+			}
+
 			/* Set up a data list with our variables */
 			var cd = getConfiguration( myid );
 			var dl = jQuery('<datalist id="reactorvarlist"></datalist>');
@@ -4496,6 +4508,12 @@ var ReactorSensor = (function(api, $) {
 			html += footer();
 
 			api.setCpanelContent(html);
+
+			if ( checkRemoteAccess() ) {
+				jQuery( 'div.reactortab' ).prepend(
+					jQuery( '<div class="remotealert" />' ).text( msgRemoteAlert )
+				);
+			}
 
 			redrawVariables();
 		}
@@ -6945,6 +6963,11 @@ var ReactorSensor = (function(api, $) {
 
 		try {
 			jQuery( 'div#tbcopyright' ).append('<span> Reactor device info ver ' + String(deviceInfo.serial) + '</span>');
+			if ( checkRemoteAccess() ) {
+				jQuery( 'div.reactortab' ).prepend(
+					jQuery( '<div class="remotealert" />' ).text( msgRemoteAlert )
+				);
+			}
 		}
 		catch (e) {}
 
