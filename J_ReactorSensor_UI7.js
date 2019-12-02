@@ -6333,6 +6333,7 @@ var ReactorSensor = (function(api, $) {
 					return;
 				}
 				var typ = jQuery( 'select#actiontype', row ).val() || "comment";
+				var pfx = row.attr( 'id' ) + '-';
 				if ( "device" === typ ) {
 					var d = parseInt( jQuery( 'select.devicemenu', row ).val() );
 					if ( -1 === d ) d = api.getCpanelDeviceId();
@@ -6353,7 +6354,7 @@ var ReactorSensor = (function(api, $) {
 								param[p.name] = p.value;
 								actionText += "{" + p.name + "=" + String(p.value) + "}, ";
 							} else {
-								var v = (jQuery( '#' + idSelector( p.name ), row ).val() || "").trim();
+								var v = (jQuery( '#' + idSelector( pfx + p.name ), row ).val() || "").trim();
 								var vn = v.match( varRefPattern );
 								if ( vn && vn.length == 2 ) {
 									/* Variable reference, get current value. */
@@ -6381,7 +6382,7 @@ var ReactorSensor = (function(api, $) {
 						/* No action info whatsoever, build from fields */
 						jQuery( '.argument', row ).each( function() {
 							var val = jQuery( this ).val();
-							var vname = jQuery( this ).attr('id');
+							var vname = jQuery( this ).attr( 'id' ).replace( pfx, "" );
 							param[ vname ] = val;
 							actionText += vname + "=" + quot(val) + ", ";
 						});
