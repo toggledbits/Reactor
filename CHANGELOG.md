@@ -10,6 +10,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 * 19317-01: Fix variable substitution in "Try" action operation in Activity editor (J_ReactorSensor_UI7.js)
 * 19317-02: Fix action editor incorrectly reselecting currently configured value (J_ReactorSensor_UI7.js)
 * 19318-01: Work around issue with Chrome getting confused when two data-list fields have same ID (cosmetic but apparently really annoying)
+* 19337-01: Attempt fix for Vera JS API variable state inconsistency.
 
 ## Version 3.4 (released)
 

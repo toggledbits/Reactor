@@ -17,7 +17,7 @@ var Reactor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '72acc6ea-f24d-11e8-bd87-74d4351650de';
 
-	var pluginVersion = '3.4hotfix-19317';
+	var pluginVersion = '3.4hotfix-19337';
 
 	var _UIVERSION = 19237;     /* must coincide with Lua core */
 
@@ -267,10 +267,13 @@ var Reactor = (function(api, $) {
 			return;
 		}
 		cdata.device = dev.id; /* Make sure device agrees with config (new target?) */
+		var jsstr = JSON.stringify( cdata );
 		api.setDeviceStateVariablePersistent( dev.id, "urn:toggledbits-com:serviceId:ReactorSensor",
-			"cdata", JSON.stringify( cdata ),
+			"cdata", jsstr,
 			{
 				'onSuccess' : function() {
+					api.setDeviceState( dev.id, "urn:toggledbits-com:serviceId:ReactorSensor",
+						"cdata", jsstr ); /* force local/lu_status */
 					jQuery( '.reactortab div#restorestatus p#' + idSelector(item) + ' > img' ).replaceWith( "<span> succeeded.</span>" );
 					/* If specific restore item selected, also check rename option */
 					var $ri = jQuery( '.reactortab select#restoreitem option:selected' );

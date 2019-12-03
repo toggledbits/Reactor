@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.4hotfix-19332';
+	var pluginVersion = '3.4hotfix-19337';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -213,7 +213,7 @@ var ReactorSensor = (function(api, $) {
 	/* Ref http://dkolf.de/src/dkjson-lua.fsl/home (see 1.2 comments) */
 	/* Ref https://docs.microsoft.com/en-us/openspecs/ie_standards/ms-es3/def92c0a-e69f-4e5e-8c5e-9f6c9e58e28b */
 	function purify( s ) {
-		return "string" !== typeof(s) ? s : 
+		return "string" !== typeof(s) ? s :
 			s.replace(/[\x00-\x1f\x7f-\x9f\u2028\u2029]/g, "");
 			/* or... s.replace( /[\u007F-\uFFFF]/g, function(ch) { return "\\u" + ("0000"+ch.charCodeAt(0).toString(16)).substr(-4); } ) */
 	}
@@ -859,10 +859,14 @@ var ReactorSensor = (function(api, $) {
 		cdata.device = myid;
 		console.log("handleSaveClick(): saving config serial " + String(cdata.serial) + ", timestamp " + String(cdata.timestamp));
 		waitForReloadComplete( "Waiting for system ready before saving configuration..." ).then( function() {
-			api.setDeviceStateVariablePersistent( myid, serviceId, "cdata",
-				JSON.stringify( cdata, function( k, v ) { return ( k.match( /^__/ ) || v === null ) ? undefined : purify( v ); } ),
+			console.log("handleSaveClick() writing cdata");
+			var jsstr = JSON.stringify( cdata,
+				function( k, v ) { return ( k.match( /^__/ ) || v === null ) ? undefined : purify(v); }
+			);
+			api.setDeviceStateVariablePersistent( myid, serviceId, "cdata", jsstr,
 				{
 					'onSuccess' : function() {
+						api.setDeviceState( myid, serviceId, "cdata", jsstr ); /* force local/lu_status */
 						configModified = false;
 						updateSaveControls();
 						console.log("handleSaveClick(): successful save of config serial " + String(cdata.serial) + ", timestamp " + String(cdata.timestamp));
@@ -1685,7 +1689,7 @@ var ReactorSensor = (function(api, $) {
 						/* Never allow group states, as these should be done using a grpstate cond */
 						if ( st.service === "urn:toggledbits-com:serviceId:ReactorGroup" ) continue;
 						/* If own RS, very limited list of variables allowed */
-						if ( device == myid && st.service !== "urn:toggledbits-com:serviceId:ReactorValues" && 
+						if ( device == myid && st.service !== "urn:toggledbits-com:serviceId:ReactorValues" &&
 							!st.variable.match( /^(TripCount|Runtime|Armed|LastTrip)$/ ) ) continue;
 					}
 					var vnm = st.variable.toLowerCase();
@@ -6422,7 +6426,7 @@ var ReactorSensor = (function(api, $) {
 						break;
 
 					case "runscene":
-						menuSelectDefaultInsert( jQuery( 'select#scene', newRow), act.scene, 
+						menuSelectDefaultInsert( jQuery( 'select#scene', newRow), act.scene,
 							( act.sceneName || "name?" ) + ' (#' + act.scene + ') (missing)' );
 						jQuery( 'select#method', newRow).val( act.usevera ? "V" : "" );
 						break;
