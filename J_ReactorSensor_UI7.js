@@ -196,7 +196,8 @@ var ReactorSensor = (function(api, $) {
 	}
 
 	function checkRemoteAccess() {
-		return !isOpenLuup && null === api.getDataRequestURL().match( /^https?:\/\/(\d+)\.(\d+)\.(\d+)\.(\d+)/ );
+		// return !isOpenLuup && null === api.getDataRequestURL().match( /^https?:\/\/(\d+)\.(\d+)\.(\d+)\.(\d+)/ );
+		return false; /* LATER 3.5 2019-12-02... not yet, let's see how other var changes work out */
 	}
 
 	/* Create an ID that's functionally unique for our purposes. */
@@ -355,7 +356,8 @@ var ReactorSensor = (function(api, $) {
 		if ( ! ( me && deviceType === me.device_type ) ) {
 			throw "Device " + String(myid) + " not found or incorrect type";
 		}
-		var s = api.getDeviceState( myid, serviceId, "cdata" ) || "";
+		// PHR??? Dynamic false needs more testing. Save/update of local/lustatus should be sufficient
+		var s = api.getDeviceState( myid, serviceId, "cdata" /* , { dynamic: false } */ ) || "";
 		if ( isEmpty( s ) ) {
 			console.log("Empty cdata; restart ReactorSensor");
 			throw "Unable to parse configuration. Please restart the ReactorSensor and try again.";
@@ -872,10 +874,13 @@ var ReactorSensor = (function(api, $) {
 		console.log("handleSaveClick(): save config serial " + String(cdata.serial) + ", timestamp " + String(cdata.timestamp));
 		waitForReloadComplete( "Waiting for system ready before saving configuration..." ).then( function() {
 			console.log("handleSaveClick() writing cdata");
-			api.setDeviceStateVariablePersistent( myid, serviceId, "cdata",
-				JSON.stringify( cdata, function( k, v ) { return ( k.match( /^__/ ) || v === null ) ? undefined : purify(v); } ),
+			var jsstr = JSON.stringify( cdata, 
+				function( k, v ) { return ( k.match( /^__/ ) || v === null ) ? undefined : purify(v); }
+			);
+			api.setDeviceStateVariablePersistent( myid, serviceId, "cdata", jsstr,
 				{
 					'onSuccess' : function() {
+						api.setDeviceState( myid, serviceId, "cdata", jsstr ); /* force local/lu_status */
 						configModified = false;
 						updateSaveControls();
 						console.log("handleSaveClick(): SUCCESS, serial " + String(cdata.serial) + ", timestamp " + String(cdata.timestamp));

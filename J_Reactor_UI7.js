@@ -38,6 +38,15 @@ var Reactor = (function(api, $) {
 		return JSON.stringify( String(s) );
 	}
 
+	/* Remove special characters that disrupt JSON processing on Vera (dkjson 1.2 in particular */
+	/* Ref http://dkolf.de/src/dkjson-lua.fsl/home (see 1.2 comments) */
+	/* Ref https://docs.microsoft.com/en-us/openspecs/ie_standards/ms-es3/def92c0a-e69f-4e5e-8c5e-9f6c9e58e28b */
+	function purify( s ) {
+		return "string" !== typeof(s) ? s :
+			s.replace(/[\x00-\x1f\x7f-\x9f\u2028\u2029]/g, "");
+			/* or... s.replace( /[\u007F-\uFFFF]/g, function(ch) { return "\\u" + ("0000"+ch.charCodeAt(0).toString(16)).substr(-4); } ) */
+	}
+
 	/* zero-fill */
 	function fill( s, n, p ) {
 		if ( "string" !== typeof(s) ) {
@@ -267,10 +276,14 @@ var Reactor = (function(api, $) {
 			return;
 		}
 		cdata.device = dev.id; /* Make sure device agrees with config (new target?) */
+		var jsstr = JSON.stringify( cdata, 
+			function( k, v ) { return ( k.match( /^__/ ) || v === null ) ? undefined : purify(v); }
+		);
 		api.setDeviceStateVariablePersistent( dev.id, "urn:toggledbits-com:serviceId:ReactorSensor",
-			"cdata", JSON.stringify( cdata ),
+			"cdata", jsstr,
 			{
 				'onSuccess' : function() {
+					api.setDeviceState( dev.id, serviceId, "cdata", jsstr ); /* force local/lu_status */
 					jQuery( '.reactortab div#restorestatus p#' + idSelector(item) + ' > img' ).replaceWith( "<span> succeeded.</span>" );
 					/* If specific restore item selected, also check rename option */
 					var $ri = jQuery( '.reactortab select#restoreitem option:selected' );
