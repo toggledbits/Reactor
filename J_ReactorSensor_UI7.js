@@ -251,7 +251,7 @@ var ReactorSensor = (function(api, $) {
 
 	/* Select current value in menu; if not present, select first item. */
 	function menuSelectDefaultFirst( $mm, val ) {
-		var $opt = jQuery( 'option[value=' + quot( val || "" ) + ']', $mm );
+		var $opt = jQuery( 'option[value=' + quot( coalesce( val, "" ) ) + ']', $mm );
 		if ( 0 === $opt.length ) {
 			$opt = jQuery( 'option:first', $mm );
 		}
@@ -874,7 +874,7 @@ var ReactorSensor = (function(api, $) {
 		console.log("handleSaveClick(): save config serial " + String(cdata.serial) + ", timestamp " + String(cdata.timestamp));
 		waitForReloadComplete( "Waiting for system ready before saving configuration..." ).then( function() {
 			console.log("handleSaveClick() writing cdata");
-			var jsstr = JSON.stringify( cdata, 
+			var jsstr = JSON.stringify( cdata,
 				function( k, v ) { return ( k.match( /^__/ ) || v === null ) ? undefined : purify(v); }
 			);
 			api.setDeviceStateVariablePersistent( myid, serviceId, "cdata", jsstr,
@@ -1011,7 +1011,7 @@ var ReactorSensor = (function(api, $) {
 					if ( undefined === t.args || t.args > 0 ) {
 						if ( t.args > 1 ) {
 							var fmt = t.format || "%1,%2";
-							k = ( cond.value || "" ).split( /,/ );
+							k = coalesce( cond.value, "" ).split( /,/ );
 							fmt = fmt.replace( '%1', k.length > 0 ? conditionValueText( k[0], t.numeric ) : "" );
 							fmt = fmt.replace( '%2', k.length > 1 ? conditionValueText( k[1], t.numeric ) : "" );
 							str += ' ' + fmt;
@@ -1222,7 +1222,7 @@ var ReactorSensor = (function(api, $) {
 	 * names sorted alpha.
 	 */
 	function makeDeviceMenu( val, name, filter ) {
-		val = val || "";
+		val = coalesce( val, "" );
 		var el = jQuery('<select class="devicemenu form-control form-control-sm"></select>');
 		getSortedDeviceList().forEach( function( roomObj ) {
 			var haveItem = false;
@@ -1550,12 +1550,12 @@ var ReactorSensor = (function(api, $) {
 						vv = String( vv );
 					}
 				}
-				var ve = vs.err || "";
+				var ve = coalesce( vs.err, "" );
 				if ( vv && vv.length > 256 ) {
 					vv = vv.substring( 0, 253 ) + "...";
 				}
 				el.append( jQuery('<div class="col-sm-6 col-md-2" />').text( vd.name ) );
-				el.append( jQuery('<div class="col-sm-12 col-md-7 tb-sm" />').text( isEmpty( vd.expression || "" ) ? "(no expression)" : vd.expression ) );
+				el.append( jQuery('<div class="col-sm-12 col-md-7 tb-sm" />').text( isEmpty( vd.expression ) ? "(no expression)" : vd.expression ) );
 				el.append( jQuery('<div class="col-sm-6 col-md-3 tb-hardwrap" />').text( "" !== ve ? ve : vv ) );
 				if ( "" !== ve ) {
 					el.addClass( 'tb-exprerr' );
@@ -1737,7 +1737,7 @@ var ReactorSensor = (function(api, $) {
 					.prependTo( $el );
 			}
 			jQuery( '<option/>' ).val( "" ).text( '--choose--' ).prependTo( $el );
-			$el.val( currExpr || "" );
+			$el.val( coalesce( currExpr, "" ) );
 			return $el;
 		}
 
@@ -6514,6 +6514,7 @@ var ReactorSensor = (function(api, $) {
 									jQuery( 'select.devicemenu', newRow ).val( act.device );
 									pred = newRow.addClass( "tbmodified" ).insertAfter( pred );
 									changeActionDevice( newRow, parseInt( act.device ), function( row, action ) {
+										var pfx = row.attr( 'id' ) + '-';
 										var key = action.service + "/" + action.action;
 										if ( 0 == jQuery( 'select#actionmenu option[value="' + key + '"]', row ).length ) {
 											var opt = jQuery( '<option/>' ).val( key ).text( key );
@@ -6615,7 +6616,6 @@ var ReactorSensor = (function(api, $) {
 				var act = gr.actions[k];
 				newRow = getActionRow();
 				var rid = section.attr( 'id' ) + ns++;
-				var pfx = rid + '-';
 				newRow.attr( 'id', rid );
 				jQuery( 'select#actiontype', newRow).val( act.type || "comment" );
 				changeActionType( newRow, act.type || "comment" );
@@ -6632,6 +6632,7 @@ var ReactorSensor = (function(api, $) {
 						}
 						jQuery( 'select.devicemenu', newRow ).val( act.device );
 						changeActionDevice( newRow, parseInt( act.device ), function( row, action ) {
+							var pfx = row.attr( 'id' ) + '-';
 							var key = action.service + "/" + action.action;
 							if ( 0 === jQuery( 'select#actionmenu option[value="' + key + '"]', row ).length ) {
 								var opt = jQuery( '<option/>' ).val( key ).text( key );
@@ -6651,7 +6652,7 @@ var ReactorSensor = (function(api, $) {
 										.append( inp );
 									jQuery( 'div.actiondata', row ).append( lbl );
 								}
-								fld.val( action.parameters[j].value || "" );
+								fld.val( coalesce( action.parameters[j].value, "" ) );
 							}
 						}, [ newRow, act ]);
 						if ( -1 === act.device &&
@@ -6707,7 +6708,7 @@ var ReactorSensor = (function(api, $) {
 								.appendTo( $m.addClass( 'tberror' ) );
 						}
 						$m.val( act.variable || "" );
-						jQuery( 'input#' + idSelector( pfx + "value"), newRow ).val( act.value || "" );
+						jQuery( 'input#' + idSelector( pfx + "value"), newRow ).val( coalesce( act.value, "" ) );
 						jQuery( 'input#' + idSelector( pfx + "reeval"), newRow ).prop( "checked", 0 !== ( act.reeval || 0 ) );
 						break;
 
