@@ -5165,7 +5165,7 @@ var ReactorSensor = (function(api, $) {
 				case "setvar":
 					action.variable = jQuery( 'select#variable', row ).val();
 					action.value = jQuery( 'input#' + idSelector( pfx + "value" ), row ).val();
-					if ( jQuery( "input#" + idSelector( pfx + "reeval" ), row ).prop( "checked" ) ) {
+					if ( jQuery( "input#reeval", row ).prop( "checked" ) ) {
 						action.reeval = 1;
 					} else {
 						delete action.reeval;
@@ -6238,7 +6238,7 @@ var ReactorSensor = (function(api, $) {
 					.attr( 'id', pfx + "value" )
 					.on( 'change.reactor', handleActionValueChange )
 					.appendTo( ct );
-				$m = getCheckbox( pfx + "reeval", "1", "Force re-evaluation of expressions and conditions", "" );
+				$m = getCheckbox( "reeval", "1", "Force re-evaluation of expressions and conditions", "" );
 				jQuery( 'input', $m ).on( 'change.reactor', handleActionValueChange );
 				$m.appendTo( ct );
 				break;
@@ -6708,8 +6708,8 @@ var ReactorSensor = (function(api, $) {
 								.appendTo( $m.addClass( 'tberror' ) );
 						}
 						$m.val( act.variable || "" );
-						jQuery( 'input#' + idSelector( pfx + "value"), newRow ).val( coalesce( act.value, "" ) );
-						jQuery( 'input#' + idSelector( pfx + "reeval"), newRow ).prop( "checked", 0 !== ( act.reeval || 0 ) );
+						jQuery( 'input#' + idSelector( rid + "-value"), newRow ).val( coalesce( act.value, "" ) );
+						jQuery( 'input#reeval', newRow ).prop( "checked", 0 !== ( act.reeval || 0 ) );
 						break;
 
 					case "resetlatch":
