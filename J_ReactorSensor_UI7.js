@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.5develop-19337';
+	var pluginVersion = '3.5develop-19341';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -42,6 +42,7 @@ var ReactorSensor = (function(api, $) {
 	var timeFormat = "%T";
 	var configModified = false;
 	var inStatusPanel = false;
+	var spyDevice = false;
 	var isOpenLuup = false;
 	var isALTUI = false;
 	var devVeraAlerts = false;
@@ -7449,6 +7450,39 @@ var ReactorSensor = (function(api, $) {
 		});
 	}
 
+	function spyDeviceChangeHandler( args ) {
+		if ( ! spyDevice ) return;
+		if ( args.id == spyDevice ) {
+			for ( var i=0; i<args.states.length; i++ ) {
+				var txt =
+					args.states[i].service + " / " + args.states[i].variable + " = " +
+						String( args.states[i].value ) + "\n";
+				var $fld = jQuery( '#devspyoutput' ).append( txt ).show();
+				if ( $fld.length ) {
+					$fld.scrollTop( $fld.prop( 'scrollHeight' ) - $fld.height() );
+				}
+			}
+		}
+	}
+
+	function handleDevSpyDevice( ev ) {
+		var menu = jQuery( ev.currentTarget );
+		var dev = menu.val();
+		spyDevice = false;
+		jQuery( '#devspyoutput' ).empty();
+		if ( isEmpty( dev ) ) {
+			jQuery( '#devspyoutput' ).hide();
+			return;
+		}
+		spyDevice = parseInt( dev );
+		var devobj = api.getDeviceObject( spyDevice );
+		if ( devobj ) {
+			jQuery( '#devspyoutput' ).show();
+			jQuery( '#devspyoutput' ).text( 'Watching #' + spyDevice + " " + devobj.name +
+				"; waiting for changes in device states...\n" );
+		}
+	}
+
 	function doTools()
 	{
 		console.log("doTools()");
@@ -7462,7 +7496,13 @@ var ReactorSensor = (function(api, $) {
 
 		header();
 
-		var html = '<div id="reactortools" class="reactortab">';
+		var html = '';
+
+		html += '<style> \
+textarea#devspyoutput { width: 100%; font-family: monospace; } \
+</style>';
+
+		html += '<div id="reactortools" class="reactortab">';
 		html += '<h3>Test Tools</h3>';
 
 		html += '<div class="row">';
@@ -7504,6 +7544,11 @@ var ReactorSensor = (function(api, $) {
 			encodeURIComponent( serviceId ) + '&action=Restart" target="_blank">Restart this ReactorSensor</a></li><li><strong>Wait at least 60 seconds, not less.</strong> This is very important&mdash;proceeding too soon may result in incomplete log data. During this period, you should also provide any "stimulus" needed to demonstrate the issue (e.g. turn devices on/off).</li><li>Click this link to <a href="javascript:void(0);" id="grablog">generate the log snippet</a> (the relevant part the log file). It should magically appear at the bottom of this page&mdash;scroll down!</li><li>Post the log snippet to the forum thread, or email it <em>together with your logic summary report and your forum username</em> to <a href="mailto:reactor-logs@toggledbits.com" target="_blank">reactor-logs@toggledbits.com</a>. Note: this email address is for receiving logs only; do not submit questions or other requests to this address.</li></ol>';
 		}
 		html += '</ul></div>';
+
+		html += '<div id="devicespy"><h3>Device Spy</h3>If you\'re trying to figure out what state variables are changing on a device, choose the device below, and then perform operations on the device any way that is consistent with what you want to detect. The list will show you what state variables are changing.\
+<div class="form-inline"><select id="devspydev" class="form-control form-control-sm"><option value="">--choose--</option></select></div> \
+<textarea id="devspyoutput" rows="16" wrap="off" class="form-control form-control-sm" /> \
+</div>';
 
 		html += footer();
 
@@ -7584,6 +7629,10 @@ var ReactorSensor = (function(api, $) {
 			});
 		});
 
+		deviceMenu = deviceMenu.clone().attr( 'id', 'devspydev' ).on( 'change.reactor', handleDevSpyDevice );
+		jQuery( 'select#devspydev' ).replaceWith( deviceMenu );
+		jQuery( '#devspyoutput' ).hide();
+
 		/* Tools get log fetcher */
 		if ( ! isOpenLuup ) {
 			jQuery( '<div id="logdata"/>' ).insertAfter( 'div#tbcopyright' );
@@ -7591,6 +7640,8 @@ var ReactorSensor = (function(api, $) {
 		}
 
 		updateToolsVersionDisplay();
+
+		api.registerEventHandler('on_ui_deviceStatusChanged', ReactorSensor, 'spyDeviceChangeHandler');
 	}
 
 /** ***************************************************************************
@@ -7606,6 +7657,7 @@ var ReactorSensor = (function(api, $) {
 		onBeforeCpanelClose: onBeforeCpanelClose,
 		onUIDeviceStatusChanged: onUIDeviceStatusChanged,
 		doTools: doTools,
+		spyDeviceChangeHandler: spyDeviceChangeHandler,
 		doActivities: preloadActivities,
 		doConditions: doConditions,
 		doVariables: doVariables,
