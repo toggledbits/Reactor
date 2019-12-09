@@ -44,7 +44,7 @@ local hasBattery = true
 local usesHouseMode = false
 local geofenceMode = 0
 local geofenceEvent = 0
-local maxEvents = 50
+local maxEvents = 100
 local dateFormat = false
 local timeFormat = false
 local luaEnv -- global state for all runLua actions
