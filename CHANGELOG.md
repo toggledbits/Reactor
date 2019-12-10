@@ -17,6 +17,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 * Enhancement: The "Device Spy" on the Tools tab reports changes in state variables (dynamically) on a selected device. This is intended to help users find state variables that change as the device is used/updated.
 * Internal: Clean up mechanism for determining SSL parameters for SMTP connections.
 * Internal: Upgrade of configuration is only done by core now; no duplication of effort on the JS side.
+* Fix: Fix color of text for ALTUI users using dark themes.
 * Fix: Fix reinitialization issue when switching between tabs without saving and user elects to abandon changes.
 * Fix: Do not clear operands when changing operators.
 * Fix: Condition value field IDs "unique-ified" similar to hotfix 19318-01 for some Mac browsers.

@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.5develop-19341';
+	var pluginVersion = '3.5develop-19344';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -138,11 +138,13 @@ var ReactorSensor = (function(api, $) {
 	/* Insert the header items */
 	/* Checkboxes, see https://codepen.io/VoodooSV/pen/XoZJme */
 	function header() {
-		var $head = jQuery( 'head' );
+		if ( jQuery( 'style#reactor' ).length > 0 ) return;
 		/* Load material design icons */
+		var $head = jQuery( 'head' );
 		$head.append('<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">');
 		$head.append( '\
-<style>\
+<style id="reactor">\
+	div.reactortab { background-color: white; color: black; } \
 	div.reactortab input.narrow { max-width: 6em; } \
 	div.reactortab input.tbfullwidth { width: 100%; } \
 	div.reactortab input.tiny { max-width: 4em; text-align: center; } \
@@ -1395,7 +1397,7 @@ var ReactorSensor = (function(api, $) {
 			var gs = cstate[ grp.id ] || {};
 			getCondState( grp, gs.laststate, cstate, jQuery( 'span.currentvalue', grpel ) );
 			if ( gs.evalstate ) {
-				grpel.addClass( "truestate" );
+				grpel.addClass( "truestate" ).removeClass( "falsestate" );
 			}
 		}
 		container.append( grpel );
@@ -4601,7 +4603,9 @@ var ReactorSensor = (function(api, $) {
 					lastRoom = r;
 				}
 				xg.append( jQuery( '<option/>' ).val( scenes[i].id )
-					.text( String(scenes[i].name) + ' (#' + String(scenes[i].id) + ')' ) );
+					.text( String(scenes[i].name) + ' (#' + String(scenes[i].id) +
+					( scenes[i].paused ? ", disabled" : "" ) +
+					')' ) );
 			}
 			if ( xg && jQuery( 'option:first', xg ).length > 0 ) {
 				menu.append( xg );
@@ -6108,8 +6112,8 @@ var ReactorSensor = (function(api, $) {
 			grp = null;
 		}
 		DOtraverse( root || {}, function( node ) {
-				$m.append( jQuery( '<option/>' ).val( node.id + ".true" ).text( node.name + " is true" ) )
-					.append( jQuery( '<option/>' ).val( node.id + ".false" ).text( node.name + " is false" ) );
+				$m.append( jQuery( '<option/>' ).val( node.id + ".true" ).text( (node.name || node.id ) + " is true" ) )
+					.append( jQuery( '<option/>' ).val( node.id + ".false" ).text( (node.name || node.id ) + " is false" ) );
 			}, false, function( node ) {
 				return node.id !== grp && "group" === ( node.type || "group" ) && "nul" !== node.operator;
 			}
