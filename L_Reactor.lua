@@ -481,7 +481,7 @@ function sun( lon, lat, elev, t )
 		0.0069 * math.sin( 2 * lam )
 	local decl = math.asin( math.sin( lam ) * math.sin( 0.409105 ) )
 	function w0( rl, elvm, dang, wid )
-		if not wid then wid = 0.0144862 end
+		wid = wid or 0.0144862
 		return math.acos( ( math.sin( (-wid) +
 			( -0.0362330 * math.sqrt( elvm ) / 1.0472 ) ) -
 				math.sin( rl ) * math.sin( dang ) ) /
@@ -492,7 +492,7 @@ function sun( lon, lat, elev, t )
 		civdawn=JE(Jt-w0(rlat,elev,decl,tw)/tau), civdusk=JE(Jt+w0(rlat,elev,decl,tw)/tau),
 		nautdawn=JE(Jt-w0(rlat,elev,decl,2*tw)/tau), nautdusk=JE(Jt+w0(rlat,elev,decl,2*tw)/tau),
 		astrodawn=JE(Jt-w0(rlat,elev,decl,3*tw)/tau), astrodusk=JE(Jt+w0(rlat,elev,decl,3*tw)/tau) },
-		JE(Jt), 24*w0(rlat,elev,decl)/pi
+		JE(Jt), 24*w0(rlat,elev,decl)/pi -- solar noon and day length
 end
 
 -- Add, if not already set, a watch on a device and service.
@@ -672,6 +672,8 @@ end
 local function setMessage(s, dev)
 	DA( dev ~= nil )
 	luup.variable_set(RSSID, "Message", s or "", dev)
+	luup.variable_set(RSSID, "NONSENSENAME", os.time(), dev)
+	luup.variable_set(VARSID, "NONSENSENAME", os.time(), dev)
 end
 
 -- Array to map, where f(elem) returns key[,value]
@@ -5185,6 +5187,11 @@ local function sensorWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
 	if dev == pdev then
 		addEvent{ dev=tdev, event='devicewatch', device=dev,
 			name=(luup.devices[dev] or {}).description, var=var }
+	elseif sid == RSSID and var == "cdata" then
+		L("%1 (#%2) configuration change, updating!", dev, luup.devices[dev].description)
+		addEvent{ dev=dev, msg="Configuration changed!", event="configchange" }
+		stopScene( dev, nil, dev ) -- Stop all scenes in this device context.
+		getSensorConfig( dev, true )
 	else
 		addEvent{ dev=tdev, event='devicewatch', device=dev,
 			msg="Device %(name)s (#%(device)s) %(var)s changed from %(old)s to %(new)s",
@@ -5208,28 +5215,12 @@ function watch( dev, sid, var, oldVal, newVal )
 	D("watch(%1,%2,%3,%4,%5)", dev, sid, var, oldVal, newVal)
 	assert(var ~= nil) -- nil if service or device watch (can happen on openLuup)
 
-	if sid == RSSID then
-		if var == "cdata" then
-			-- Sensor configuration change. Immediate update.
-			if isEnabled( dev ) then
-				L("%1 (#%2) configuration change, updating!", dev, luup.devices[dev].description)
-				addEvent{ dev=dev, msg="Configuration changed!", event="configchange" }
-				stopScene( dev, nil, dev ) -- Stop all scenes in this device context.
-				getSensorConfig( dev, true )
-				scheduleDelay( { id=tostring(dev), owner=dev, func=sensorTick }, 1 )
-			else
-				D("watch() ignoring config change on disabled RS %1 (#%2)", luup.devices[dev].description, dev)
-			end
-		else
-			-- Something changed, schedule update
-			if isEnabled( dev ) then
-				D("watch() scheduling sensor update for %1/%2 change", sid, var)
-				scheduleDelay( { id=tostring(dev), owner=dev, func=sensorTick }, 1 )
-			end
-		end
-	elseif luup.devices[dev].device_num_parent == pluginDevice and
-			luup.devices[dev].id == "hmt" and sid == SENSOR_SID and
-			var == "Armed" then
+	-- openLuup: as of 191210, openLuup's variable_watch is a little different, in that it places
+	-- a service watch when a variable watch is placed for a variable that is NOT declared in the
+	-- service file. So filter a bit more here (reduces re-eval chatter that I was hunting for).
+
+	if luup.devices[dev].device_num_parent == pluginDevice and
+			luup.devices[dev].id == "hmt" and sid == SENSOR_SID and var == "Armed" then
 		-- Arming state changed on HMT, update house mode.
 		D("watch() HMT device %1 arming state changed", dev)
 		if geofenceMode ~= 0 and getVarNumeric( "SuppressGeofenceHMTUpdate", 0, pluginDevice, MYSID ) == 0 then
@@ -5246,11 +5237,12 @@ function watch( dev, sid, var, oldVal, newVal )
 		-- No geofencing on openLuup, so we don't need to worry about that here.
 		setVar( MYSID, "HouseMode", newVal, pluginDevice )
 	else
-		local key = string.format("%d/%s/%s", dev, sid, var)
-		if watchData[key] ~= nil then
+		-- Dispatch watches for ReactorSensors
+		local key = string.format("%d/%s/%s", dev or 0, sid or "X", var or "X")
+		if watchData[key] then
 			for t in pairs( watchData[key] ) do
-				local tdev = tonumber(t)
-				if tdev ~= nil and isEnabled( tdev ) then
+				local tdev = tonumber(t) or 0
+				if (luup.devices[tdev] or {}).device_type == RSTYPE and isEnabled( tdev ) then
 					D("watch() dispatching to %1 (%2)", tdev, luup.devices[tdev].description)
 					local success,err = pcall( sensorWatch, dev, sid, var, oldVal, newVal, tdev, pluginDevice )
 					if not success then
@@ -5259,7 +5251,7 @@ function watch( dev, sid, var, oldVal, newVal )
 				end
 			end
 		else
-			L("Watch callback for unregistered key %1", key)
+			D("watch() callback for unregistered/unwatched dev/service/state %1", key)
 		end
 	end
 end
