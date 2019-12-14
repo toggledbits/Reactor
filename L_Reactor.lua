@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.5develop-19341"
+local _PLUGIN_VERSION = "3.5develop-19348"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION	= 19295
@@ -2124,10 +2124,9 @@ local function doActionNotify( action, scid, tdev )
 	if ( cf.notifications or {} )[nid] then
 		local host = "Vera-" .. (luup.pk_accesspoint or "?")
 		local msg = cf.notifications[nid].message or ""
-		msg = msg:gsub( "%{([^}]+)%}", function( vname )
-			if (cf.variables or {})[vname] then
-				return (getSensorState( tdev ).ctx or {})[vname] or ""
-			end
+		msg = msg:gsub( "(%{[^}]+%})", function( mm )
+			local vv = getValue( mm, nil, tdev )
+			return vv
 		end )
 		if action.method == "VA" then -- VeraAlerts
 			if devVeraAlerts then
@@ -5531,11 +5530,15 @@ function getCondOpt( cond )
 		r = r .. " repeats " .. condopt.repeatcount ..
 			" within " .. ( condopt.repeatwithin or 60 ).. "s"
 	end
-	if (condopt.holdtime or 0) > 0 then
-		r = r .. "; delay reset for " .. condopt.holdtime .. "s"
-	end
 	if (condopt.latch or 0) ~= 0 then
-		r = r .. "; latching"
+		r = r .. "; output latching"
+	elseif (condopt.pulsetime or 0) > 0 then
+		r = r .. "; output pulse " .. condopt.pulsetime .. "s on"
+		if ( condopt.pulsebreak or 0 ) > 0 then
+			r = r .. " " .. condopt.pulsebreak .. "s off and repeat"
+		end
+	elseif (condopt.holdtime or 0) > 0 then
+		r = r .. "; output follow, delay reset for " .. condopt.holdtime .. "s"
 	end
 	return r
 end
