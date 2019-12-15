@@ -17,11 +17,11 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.5develop-19348';
+	var pluginVersion = '3.5develop-19349';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
-	var _UIVERSION = 19330;     /* must coincide with Lua core */
+	var _UIVERSION = 19349;     /* must coincide with Lua core */
 
 	var _CDATAVERSION = 19305;  /* must coincide with Lua core */
 
@@ -103,7 +103,7 @@ var ReactorSensor = (function(api, $) {
 		{ op: 'notin', desc: 'not in', args: 1 },
 		{ op: 'istrue', desc: 'is TRUE', args: 0, nocase: false },
 		{ op: 'isfalse', desc: 'is FALSE', args: 0, nocase: false },
-		{ op: 'change', desc: 'changes', args: 2, format: "from %1 to %2", optional: 2 },
+		{ op: 'change', desc: 'changes', args: 2, format: "from %1 to %2", optional: 2, blank: "(any)" },
 		{ op: 'update', desc: 'updates', args: 0, nocase: false }
 	];
 
@@ -1015,8 +1015,13 @@ var ReactorSensor = (function(api, $) {
 						if ( t.args > 1 ) {
 							var fmt = t.format || "%1,%2";
 							k = coalesce( cond.value, "" ).split( /,/ );
-							fmt = fmt.replace( '%1', k.length > 0 ? conditionValueText( k[0], t.numeric ) : "" );
-							fmt = fmt.replace( '%2', k.length > 1 ? conditionValueText( k[1], t.numeric ) : "" );
+							/* Remove trailing empties if they are optional */
+							while ( k.length > 0 && ( t.optional || 0 ) >= k.length && isEmpty( k[k.length-1] ) ) {
+								k.pop();
+							}
+							/* ??? FIXME -- Future pattern replacement loop. For now, never more than 2, so simple */
+							fmt = fmt.replace( '%1', k.length > 0 && !isEmpty( k[0] ) ? conditionValueText( k[0], t.numeric ) : (t.blank || '""' ) );
+							fmt = fmt.replace( '%2', k.length > 1 && !isEmpty( k[1] ) ? conditionValueText( k[1], t.numeric ) : (t.blank || '""' ) );
 							str += ' ' + fmt;
 						} else {
 							str += ' ' + conditionValueText( cond.value, t.numeric );
@@ -1322,6 +1327,10 @@ var ReactorSensor = (function(api, $) {
 			var pbo = condOpts.pulsebreak || 0;
 			if ( pbo > 0 ) {
 				condDesc += ", repeat after " + pbo + " secs";
+				pbo = condOpts.pulsecount || 0;
+				if ( pbo > 0 ) {
+					condDesc += ", up to " + pbo + " times";
+				}
 			}
 		}
 		if ( ( condOpts.latch || 0 ) != 0 ) {
@@ -1348,6 +1357,15 @@ var ReactorSensor = (function(api, $) {
 					el.append( " (last " + cs.repeats.length + " span " + dtime + " secs)" );
 				}
 			}
+			if ( ( cs.pulsecount || 0 ) > 0 ) {
+				var lim = ( cond.options||{} ).pulsecount || 0;
+				el.append( " (pulsed " + cs.pulsecount +
+					( lim > 0 ? ( " of max " + lim ) : "" ) +
+					" times)" );
+			}
+			if ( cs.latched ) {
+				el.append( '<span>&nbsp;(latched)' );
+			}
 			/* Generate unique IDs for timers so that redraws will have
 			   different IDs, and the old timers will self-terminate. */
 			var id;
@@ -1369,9 +1387,6 @@ var ReactorSensor = (function(api, $) {
 				(function( c, t, l ) {
 					setTimeout( function() { updateTime( c, t, "; pulse ", true, l ); }, 20 );
 				})( id, cs.pulseuntil, 0 );
-			}
-			if ( cs.latched ) {
-				el.append( '<span>&nbsp;(latched)' );
 			}
 		}
 	}
@@ -2362,6 +2377,7 @@ var ReactorSensor = (function(api, $) {
 					configModified = configModified || ( undefined !== cond.options.pulsetime );
 					delete cond.options.pulsetime;
 					delete cond.options.pulsebreak;
+					delete cond.options.pulsecount;
 
 					if ( undefined === cond.options.latch ) {
 						cond.options.latch = 1;
@@ -2388,7 +2404,6 @@ var ReactorSensor = (function(api, $) {
 						pulsetime = getInteger( pulsetime );
 						if ( isNaN( pulsetime ) || pulsetime <= 0 ) {
 							$f.addClass( 'tberror' );
-							cond.options.pulsetime = 1;
 						} else if ( pulsetime !== cond.options.pulsetime ) {
 							cond.options.pulsetime = pulsetime;
 							configModified = true;
@@ -2401,13 +2416,28 @@ var ReactorSensor = (function(api, $) {
 						pulsetime = parseInt( $f.val() || "" );
 						if ( isNaN( pulsetime ) || pulsetime <= 0 ) {
 							$f.addClass( 'tberror' );
-							if ( undefined !== cond.options.pulsebreak ) {
-								delete cond.options.pulsebreak;
-								configModified = true;
-							}
 						} else {
 							if ( pulsetime !== cond.options.pulsebreak ) {
 								cond.options.pulsebreak = pulsetime;
+								configModified = true;
+							}
+						}
+						$f = jQuery( 'input#pulsecount', $ct );
+						var lim = $f.val() || "";
+						if ( isEmpty( lim ) ) {
+							if ( 0 !== cond.options.pulsecount ) {
+								delete cond.options.pulsecount;
+								configModified = true;
+							}
+						} else {
+							lim = parseInt( lim );
+							if ( isNaN( lim ) || lim < 0 ) {
+								$f.addClass( 'tberror' );
+							} else if ( 0 === lim && cond.options.pulsecount ) {
+								delete cond.options.pulsecount;
+								configModified = true;
+							} else if ( cond.options.pulsecount !== lim ) {
+								cond.options.pulsecount = lim;
 								configModified = true;
 							}
 						}
@@ -2416,6 +2446,7 @@ var ReactorSensor = (function(api, $) {
 							configModified = true;
 						}
 						delete cond.options.pulsebreak;
+						delete cond.options.pulsecount;
 					}
 				} else {
 					/* Follow mode (default) */
@@ -2424,6 +2455,7 @@ var ReactorSensor = (function(api, $) {
 					configModified = configModified || ( undefined !== cond.options.pulsetime );
 					delete cond.options.pulsetime;
 					delete cond.options.pulsebreak;
+					delete cond.options.pulsecount;
 					configModified = configModified || ( undefined !== cond.options.latch );
 					delete cond.options.latch;
 
@@ -2701,7 +2733,7 @@ var ReactorSensor = (function(api, $) {
 			if ( false !== displayed.pulse ) {
 				jQuery( '<br/><label><input type="radio" id="output" name="output" value="P">Pulse - on match, output goes true for <input type="number" id="pulsetime" class="form-control form-control-sm narrow pulseopts"> seconds</label>' )
 					.appendTo( out );
-				jQuery( '<select id="pulsemode" class="form-control form-control-sm pulseopts"><option value="">once</option><option value="repeat">repeat</option></select><span id="pulsebreakopts"><label for="pulsebreak">after <input type="number" id="pulsebreak" class="form-control form-control-sm narrow pulseopts"> seconds</label></span>' )
+				jQuery( '<select id="pulsemode" class="form-control form-control-sm pulseopts"><option value="">once</option><option value="repeat">repeat</option></select><span id="pulsebreakopts"><label for="pulsebreak">after <input type="number" id="pulsebreak" class="form-control form-control-sm narrow pulseopts"> seconds</label><label>, up to <input type="number" id="pulsecount" class="form-control form-control-sm narrow pulseopts">&nbsp;times&nbsp;(0/blank=no&nbsp;limit)</label></span>' )
 					.appendTo( out );
 			}
 			if ( false !== displayed.latch ) {
@@ -2714,6 +2746,7 @@ var ReactorSensor = (function(api, $) {
 				jQuery( 'input#output[value="P"]', out ).prop( 'checked', true );
 				jQuery( 'input#pulsetime', out ).val( condOpts.pulsetime || 15 );
 				jQuery( 'input#pulsebreak', out ).val( condOpts.pulsebreak || "" );
+				jQuery( 'input#pulsecount', out ).val( condOpts.pulsecount || "" );
 				var pbo = (condOpts.pulsebreak || 0) > 0;
 				jQuery( 'select#pulsemode', out ).val( pbo ? "repeat" : "" );
 				jQuery( 'span#pulsebreakopts', out ).toggle( pbo );

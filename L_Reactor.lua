@@ -11,12 +11,12 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.5develop-19348"
+local _PLUGIN_VERSION = "3.5develop-19349"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION	= 19295
 local _CDATAVERSION		= 19305	-- must coincide with JS
-local _UIVERSION		= 19330	-- must coincide with JS
+local _UIVERSION		= 19349	-- must coincide with JS
       _SVCVERSION		= 19202	-- must coincide with impl file (not local)
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
@@ -3657,6 +3657,7 @@ local function processCondition( cond, grp, cdata, tdev )
 		if state and not cs.evalstate then
 			-- Starting new pulse... or are we...
 			pulseend = cs.pulseuntil or ( now + condopt.pulsetime )
+			if not cs.pulseuntil then cs.pulsecount = 1 end
 		else
 			-- Continuing from last true edge (even if state false)
 			pulseend = ( (cs.evaledge or {}).t or 0 ) + condopt.pulsetime
@@ -3683,11 +3684,19 @@ local function processCondition( cond, grp, cdata, tdev )
 					local holdoff = pulseend + condopt.pulsebreak
 					D("processCondition() pulse repeat, break until %1", holdoff)
 					if now >= holdoff then
-						-- Start another pulse cycle
-						D("processCondition() pulse repeat starting new on cycle")
-						cs.pulseuntil = now + condopt.pulsetime
-						scheduleDelay( tostring(tdev), condopt.pulsetime )
-						state = true -- override
+						local pulselim = condopt.pulsecount or 0
+						if pulselim == 0 or ( cs.pulsecount or 1 ) < pulselim then
+							-- Start another pulse cycle
+							cs.pulsecount = ( cs.pulsecount or 1 ) + 1
+							D("processCondition() pulse repeat starting new on cycle (%1/%2)",
+								cs.pulsecount, pulselim)
+							cs.pulseuntil = now + condopt.pulsetime
+							scheduleDelay( tostring(tdev), condopt.pulsetime )
+							state = true -- override
+						else
+							D("processCondition() pulse count limit reached (%1/%2)", cs.pulsecount, pulselim)
+							state = false -- override
+						end
 					else
 						D("processCondition() pulse repeat holding in break")
 						-- leave pulseuntil alone
@@ -3697,15 +3706,18 @@ local function processCondition( cond, grp, cdata, tdev )
 				else
 					-- One-shot pulse.
 					cs.pulseuntil = state and pulseend or nil
+					cs.pulsecount = nil
 					state = false -- override
 				end
 			else
 				cs.pulseuntil = nil
+				cs.pulsecount = nil
 			end
 		end
 		D("processCondition() pulse state is %1, until %2", state, cs.pulseuntil)
 	else
 		cs.pulseuntil = nil
+		cs.pulsecount = nil
 	end
 
 	-- Hold time (delay reset)
@@ -5558,6 +5570,9 @@ function getCondOpt( cond )
 		r = r .. "; output pulse " .. condopt.pulsetime .. "s on"
 		if ( condopt.pulsebreak or 0 ) > 0 then
 			r = r .. " " .. condopt.pulsebreak .. "s off and repeat"
+			if ( condopt.pulsecount or 0 ) > 0 then
+				r = r .. " max " .. condopt.pulsecount .. " times"
+			end
 		end
 	elseif (condopt.holdtime or 0) > 0 then
 		r = r .. "; output follow, delay reset for " .. condopt.holdtime .. "s"
@@ -5574,6 +5589,7 @@ function RG( grp, condState, level, r )
 		getCondOpt( grp ) ..
 		( gs.evalstate and " TRUE" or " false" ) .. " as of " .. shortDate( gs.evalstamp ) ..
 		( grp.disabled and " DISABLED" or "" ) ..
+		( gs.pulsecount and ( " pulses " .. gs.pulsecount ) or "" ) ..
 		' <' .. tostring(grp.id) .. '>' ..
 		EOL
 	local opch = ({ ['and']="&", ['or']="|", xor="^", ['nul']="Z" })[grp.operator or "and"] or "+"
@@ -5634,6 +5650,9 @@ function RG( grp, condState, level, r )
 			r = r .. tostring(cs.lastvalue) .. " at " .. shortDate( cs.valuestamp )
 			r = r .. ( cs.laststate and "; T" or "; F" ) .. "/" .. (cs.evalstate and "T" or "F" )
 			r = r .. " as of " .. shortDate( cs.statestamp ) .. "/" .. shortDate( cs.evalstamp )
+			if cs.pulsecount then
+				r = r .. "; pulses " .. cs.pulsecount
+			end
 			r = r .. "]"
 		end
 		if condtype ~= "group" then

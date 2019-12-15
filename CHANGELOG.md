@@ -4,7 +4,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 3.5 (development)
 
-* Enhancement: "Pulse" output mode for conditions now allows repeat pulses with a configurable *off/false* period between.
+* Enhancement: "Pulse" output mode for conditions now allows repeat pulses with a configurable *off/false* period between and a limit on the number of pulses.
 * Enhancement: The new *Expression Variable* condition type allows direct condition testing of an expression's most recent result value without using a self-referencing *Device State* condition.
 * Enhancement: The new *Set Variable* activity allows direct setting of a variable without using a self-directed *Device State* activity with a *SetVariable* service action. The target variable must be "expression-less" (that is, its configured expression is blank/empty).
 * Enhancement: Make event log entries more human-readable.
