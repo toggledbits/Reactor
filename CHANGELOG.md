@@ -13,6 +13,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 * Enhancement: Do not check firmware version in debug mode, specifically for allowing testing on any firmware, including alpha/unblessed.
 * Enhancement: The Activities tab now can filter the display by "true" and "false" activities (suggestion by tunnus).
 * Enhancement: Update LuaXP to latest version (1.0.1); adds `date()` and `map()` functions, more trig; see https://github.com/toggledbits/luaxp
+* Enhancement: The new `getstatetime()` expression function is now available to return Luup's last-modified timestamp for a state variable.
 * Enhancement: In places where variable substitution is allowed (i.e. where you can use `{variablename}`), you can now use an expression (same syntax as Expressions tab, just surround the expression in curly braces).
 * Enhancement: The "Device Spy" on the Tools tab reports changes in state variables (dynamically) on a selected device. This is intended to help users find state variables that change as the device is used/updated.
 * Internal: Clean up mechanism for determining SSL parameters for SMTP connections.
