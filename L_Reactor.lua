@@ -1655,6 +1655,28 @@ local function getExpressionContext( cdata, tdev )
 		-- Get and return value
 		return getVar( var, luaxp.NULL, vn, svc )
 	end
+	ctx.__functions.getstatetime = function( args )
+		local dev, svc, var, trouble, watch = unpack( args )
+		local vn
+		if luaxp.isNull( dev ) or dev == -1 then
+			vn = tdev
+		else
+			vn = finddevice( dev, tdev )
+			D("getstate(%1), dev=%2, svc=%3, var=%4, vn(dev)=%5", args, dev, svc, var, vn)
+			if luaxp.isNull( vn ) or vn == nil or luup.devices[vn] == nil then
+				-- default behavior for getstate() is error (legacy, diff from finddevice)
+				if trouble == false then return luaxp.NULL end
+				return luaxp.evalerror( "Device not found" )
+			end
+		end
+		-- Create a watch if we don't have one. Don't watch our own, unless forced.
+		if watch ~= false and ( watch==true or vn ~= tdev ) then
+			addServiceWatch( vn, svc, var, tdev )
+		end
+		-- Get and return timestamp
+		local _,ts = luup.variable_get( svc, var, vn )
+		return ts or luaxp.NULL
+	end
 	ctx.__functions.setstate = function( args )
 		local dev, svc, var, val = unpack( args )
 		local vn
@@ -3646,7 +3668,7 @@ local function processCondition( cond, grp, cdata, tdev )
 			cs.pulseuntil = pulseend
 			scheduleDelay( tostring(tdev), pulseend - now )
 			addEvent{ dev=tdev,
-				msg="%(cname)s setting timing for output pulse %(delay)s seconds",
+				msg="%(cname)s timing output pulse, %(delay)s seconds remain",
 				cname=(cond.type or "group")=="group" and ("Group "..(cond.name or cond.id)) or ("Condition "..cond.id),
 				cond=cond.id, delay=pulseend-now }
 		else
@@ -5566,7 +5588,7 @@ function RG( grp, condState, level, r )
 		elseif condtype == "service" then
 			r = r .. string.format("%s (%d) ", cond.device == -1 and "(self)" or ( ( luup.devices[cond.device]==nil ) and ( "*** missing " .. ( cond.devicename or "unknown" ) ) or
 				luup.devices[cond.device].description ), cond.device )
-			r = r .. string.format("%s/%s %s %s", cond.service or "?", cond.variable or "?", cond.operator or cond.condition or "?",
+			r = r .. string.format("%s/%s %s %s", cond.service or "?", cond.variable or "?", cond.operator or "?",
 				cond.value or "")
 			if cond.nocase == 0 then r = r .. " (match case)" end
 			if cond.device ~= -1 then
@@ -5585,12 +5607,21 @@ function RG( grp, condState, level, r )
 		elseif condtype == "housemode" then
 			r = r .. "in " .. ( cond.value or "" )
 		elseif condtype == "sun" then
-			r = r .. ( cond.operator or cond.condition or "?" ) .. " " .. ( cond.value or "" )
+			r = r .. ( cond.operator or "?" ) .. " " .. ( cond.value or "" )
 		elseif condtype == "trange" then
-			r = r .. ( cond.operator or cond.condition or "?" ) .. " " .. ( cond.value or "" )
+			r = r .. ( cond.operator or "?" ) .. " " .. ( cond.value or "" )
 		elseif condtype == "ishome" then
 			r = r .. ( cond.operator or "is" ) .. " " .. ( cond.value or "" )
 		elseif condtype == "reload" then
+		elseif condtype == "interval" then
+			if (cond.days or 0) > 0 then r = r .. cond.days .. "d" end
+			r = r .. string.format("%02dh:%02dm", tonumber(cond.hours) or 0, tonumber(cond.mins) or 0)
+			if cond.relto == "condtrue" then
+				r = r .. " relative to <" .. (cond.relcond or "?") .. "> true"
+			end
+		elseif condtype == "var" then
+			r = r .. string.format("%s %s %s", tostring(cond.var), tostring(cond.operator),
+				tostring(cond.value))
 		else
 			r = r .. json.encode(cond)
 		end
@@ -5767,7 +5798,7 @@ YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 				local status = ( ( getVarNumeric( "Armed", 0, n, SENSOR_SID ) ~= 0 ) and " armed" or "" )
 				status = status .. ( ( getVarNumeric("Tripped", 0, n, SENSOR_SID ) ~= 0 ) and " tripped" or "" )
 				status = status .. ( ( getVarNumeric("Trouble", 0, n, RSSID ) ~= 0 ) and " TROUBLE" or "" )
-				r = r .. string.rep( "=", 132 ) .. EOL
+				r = r .. string.rep( "*", 132 ) .. EOL
 				r = r .. string.format("%s (#%d)%s", tostring(d.description), n, status) .. EOL
 				local cdata = getSensorConfig( n )
 				if not cdata then
