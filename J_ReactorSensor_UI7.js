@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.5develop-19349';
+	var pluginVersion = '3.5develop-19350';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -58,7 +58,8 @@ var ReactorSensor = (function(api, $) {
 		"ishome": "Geofence",
 		"reload": "Luup Reloaded",
 		"grpstate": "Group State",
-		"var": "Expression Variable"
+		"var": "Expression Variable",
+		"group": "Group"
 	};
 	/* Note: default true for the following: hold, pulse, latch */
 	var condOptions = {
@@ -994,7 +995,7 @@ var ReactorSensor = (function(api, $) {
 		var str = "", t, k;
 		switch ( cond.type || "group" ) {
 			case 'group':
-				str = "Group: " + String(cond.name || cond.id);
+				str = String(cond.name || cond.id);
 				break;
 
 			case 'service':
@@ -3352,7 +3353,9 @@ var ReactorSensor = (function(api, $) {
 					mm = jQuery( '<select id="relcond" class="form-control form-control-sm" />' );
 					mm.append( jQuery( '<option/>' ).val( "" ).text( '--choose--' ) );
 					DOtraverse( getConditionIndex().root, function( n ) {
-						mm.append( jQuery( '<option/>' ).val( n.id ).text( makeConditionDescription( n ) ) );
+						var tt = (condTypeName[n.type || "group"] || "?") + ": " + 
+							makeConditionDescription( n ) + " <" + String(n.id) + ">";
+						mm.append( jQuery( '<option/>' ).val( n.id ).text( tt ) );
 					}, false, function( n ) {
 						return "comment" !== n.type && n.id != cond.id && !isAncestor( n.id, cond.id );
 					});
