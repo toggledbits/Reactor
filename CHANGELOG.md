@@ -26,6 +26,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 * Fix: Delay input fields need same unique ID treatment, similar to hotfix 19318-01, for some Mac browsers.
 * Fix: "try" action operating in Activity editor was not substituting variables correctly; partly a limitation introduced by the evolation of variable, and partly bug, but in any case, fixed.
 * Fix: After clearing condition state, make sure initial update/restart runs all activities eligible (esp. root).
+* Fix: Try to reduce complexity of the interaction with VeraAlerts for notifications; fixes some issues in scene handling that create odd side-effects for users, and allows editing of recipients in the Activities tab. Messages on VA-controlled notifications are still required to be edited in VA. Recipient changes still require user to enter VA's "Edit" tab to get those changes to take effect. It is what it is.
 * Fix: Cosmetic bug in the appearance of scene list for Run Scene activity.
 * Fix: Cosmetic bug--"updates" action does not need "ignore case" checkbox.
 * 19240-01: SMTP notifications to Google/Gmail fail with `555 5.5.2 Syntax error` (L_Reactor.lua)
@@ -35,6 +36,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 * 19317-02: Fix action editor incorrectly reselecting currently configured value (J_ReactorSensor_UI7.js)
 * 19318-01: Work around issue with Chrome getting confused when multiple data-list fields have same ID (minor but apparently really annoying)
 * 19337-01: Attempt to deal with inconsistencies in variable handling in Vera's JS API
+* 19354-01: Fixes for VeraAlerts notifications mentioned above were backported to 3.4.
 
 ## Version 3.4 (released)
 
