@@ -4829,33 +4829,81 @@ var ReactorSensor = (function(api, $) {
 		row.has('.tberror').addClass('tberror');
 	}
 
-	/* Check that notification scene exists; create it if not */
-	function checkNotificationScene( myid, nid ) {
-		var k;
-		myid = myid || api.getCpanelDeviceId();
-		var scene = false;
+	/* Find notification scene by notification ID */
+	function findNotificationScene( myid, nid ) {
 		var ud = api.getUserData();
-		for ( k=0; k<ud.scenes.length; k++ ) {
+		for ( var k=0; k<ud.scenes.length; k++ ) {
 			if ( String(ud.scenes[k].notification_only) === String(myid) &&
-				String((ud.scenes[k].triggers || [])[0].template) === "10" &&
+				String((ud.scenes[k].triggers || [])[0].template) === "10" && /* magic */
 				String(ud.scenes[k].triggers[0].arguments[0].value) == String(nid) ) {
-					scene = ud.scenes[k];
-					break;
+					return ud.scenes[k];
 			}
 		}
+		return false;
+	}
+
+	/* Test if notification scene is controlled by VeraAlerts */
+	function isVAControlledScene( scene ) {
+		if ( devVeraAlerts ) {
+			try {
+				if ( !isEmpty( scene.triggers[0].lua ) ) {
+					var m = scene.triggers[0].lua;
+					if ( 0 != ( scene.triggers[0].encoded_lua || 0 ) ) {
+						m = atob( m );
+					}
+					return null !== m.match( /StartVeraAlerts/i );
+				}
+			} catch( e ) {
+				console.log("Failed to decode/handle VA scene lua for #" + scene.id);
+				console.log(e);
+			}
+		}
+		return false;
+	}
+
+	/* Given a notification scene ID, return VeraAlerts message override, if any. */
+	function getVAMessageOverride( scid ) {
+		var mo = api.getDeviceStateVariable( devVeraAlerts, "urn:richardgreen:serviceId:VeraAlert1", "MsgOverride" ) || "";
+		try {
+			if ( !isEmpty(mo) ) {
+				/* custom array, Lua-ish, not JSON */
+				var md = mo.match( /'([^']*)',?/g );
+				var vad = new RegExp( "^'" + String(scid) + "_0'", "i" );
+				for ( var k=0; k<md.length; k+=2 ) {
+					if ( vad.test( md[k] ) && !isEmpty( md[k+1] ) ) {
+						vad = decodeURIComponent( md[k+1].replace( /',?$/, "" ).replace( /^'/, "" ) );
+						if ( !isEmpty( vad ) ) {
+							return vad;
+						}
+						return false;
+					}
+				}
+			}
+		} catch( e ) {
+			console.log("Failed to get VA message for " + String(scid) + " from " + String(mo));
+			console.log(e);
+		}
+	}
+
+	/* Check that notification scene exists; create it if not */
+	function checkNotificationScene( myid, nid ) {
+		myid = myid || api.getCpanelDeviceId();
+		var scene = findNotificationScene( myid, nid );
 		/* Create or update it. */
 		var cf = getConfiguration( myid );
-		var req = { id: "scene", action: "create" };
-		var nn = (cf.notifications || {})[String(nid)] || {};
+		cf.notifications = cf.notifications || {};
+		cf.notifications[String(nid)] = cf.notifications[String(nid)] || { id: nid };
+		var nn = cf.notifications[String(nid)];
+		nn.message = nn.message || nid;
 		if ( !scene ) {
 			/* Set up new scene */
 			scene = {
-				name: nn.message || nid, /* message should go here */
+				name: nn.message, /* message should go here */
 				notification_only: myid,
 				modeStatus: "0",
 				triggers: [{
 					device: myid,
-					name: nn.message || nid,
+					name: nn.message,
 					enabled: 1,
 					arguments: [{ id: "1", value: nid }], /* notification id here */
 					template: "10",
@@ -4865,73 +4913,24 @@ var ReactorSensor = (function(api, $) {
 				room: 0
 			};
 		} else {
-			if ( devVeraAlerts ) {
-				/* If VeraAlerts is in use, check for message override. */
-				var mo = api.getDeviceStateVariable( devVeraAlerts, "urn:richardgreen:serviceId:VeraAlert1", "MsgOverride" ) || "";
-				try {
-					if ( !isEmpty(mo) ) {
-						/* custom array, Lua-ish, not JSON */
-						var md = mo.match( /'([^']*)',?/g );
-						var vad = new RegExp( "^'" + String(scene.id) + "_0'", "i" );
-						for ( k=0; k<md.length; k+=2 ) {
-							if ( vad.test( md[k] ) && !isEmpty( md[k+1] ) ) {
-								vad = decodeURIComponent( md[k+1].replace( /',?$/, "" ).replace( /^'/, "" ) );
-								if ( !isEmpty( vad ) ) {
-									nn.message = vad;
-									nn.veraalerts = 1;
-								}
-								break;
-							}
-						}
-					}
-				} catch( e ) {
-					console.log("Failed to save VA message for " + scene.id + ", data " + mo);
-					console.log(e);
-				}
-				/* Recipients overrides as well. */
-				try {
-					if ( !isEmpty( scene.triggers[0].lua ) ) {
-						var m = scene.triggers[0].lua;
-						if ( 0 != ( scene.triggers[0].encoded_lua || 0 ) ) {
-							m = atob( m );
-						}
-						var r = m.match( /Recipients\s*=\s*'([^']*)'/ );
-						if ( r.length > 1 && !isEmpty( r[1] ) ) {
-							/* VA uses list of names; map them back to user IDs for Vera and us */
-							var unames = r[1];
-							var uu = [];
-							r = unames.match( /([^,]+)/g );
-							if ( r.length > 0 ) {
-								for ( k=0; k<r.length; k++ ) {
-									if ( userNameIx[r[k]] )
-										uu.push( userNameIx[r[k]] );
-									else
-										console.log("*** Did not find user ID for VeraAlerts username " + String(r[k]) + "; skipping.");
-								}
-							}
-							nn.users = uu.join( ',' );
-							nn.usernames = unames;
-							nn.veraalerts = 1;
-						}
-					}
-				} catch( e ) {
-					console.log("Failed to decode/handle VA scene lua for #" + scene.id);
-					console.log(e);
-				}
+			/* Existing scene */
+			nn.scene = scene.id;
+			/* If VeraAlerts is installed, see if scene has been modified with VA's scene Lua */
+			if ( devVeraAlerts && isVAControlledScene( scene ) ) {
+				nn.veraalerts = 1;
 			} else {
-				/* If VeraAlerts is removed, remove the flag as well to make the scene editable again */
 				delete nn.veraalerts;
 			}
 			/* Maybe update existing scene */
-			nn.scene = scene.id;
-			if ( scene.name === nn.message && scene.users === nn.users ) {
+			if ( scene.name === nn.message && scene.users === ( nn.users || "" ) ) {
 				return false;
 			}
-			scene.name = nn.message || nid;
+			scene.name = nn.message;
 			scene.users = nn.users || "";
 			scene.triggers[0].users = scene.users;
-			scene.triggers[0].name = nn.message || nid;
+			scene.triggers[0].name = scene.name;
 		}
+		var req = { id: "scene", action: "create" };
 		req.json = JSON.stringify( scene );
 		jQuery.ajax({
 			url: api.getDataRequestURL(),
@@ -4966,6 +4965,7 @@ var ReactorSensor = (function(api, $) {
 		for ( k=0; k<nk.length; k++ ) {
 			nots[nk[k]] = true;
 		}
+		delete nots.nextid; /* reserved key */
 
 		/* Remove all keys from nots for which there is an action. */
 		var valids = {};
@@ -4977,14 +4977,15 @@ var ReactorSensor = (function(api, $) {
 					if ( "notify" === action.type ) {
 						var key = String(action.notifyid);
 						if ( undefined === cf.notifications[key] ) {
-							console.log("Action #" + l + " in group #" + k +
-								" of " + act + " refers to non-existent notification " +
-								key);
+							console.log("cleanNotificationScenes() action #" + l + " in group #" + 
+								k + " of " + act + " refers to non-existent notification " + key);
 						} else {
 							valids[key] = true;
 							delete nots[key];
 							/* If this is a non-native method, remove a scene */
 							if ( "" !== (action.method || "") && cf.notifications[key].scene ) {
+								console.log("cleanNotificationScenes() marking scene " + String(cf.notifications[key].scene) +
+									" for deletion, non-native method for notification " + key);
 								deletes.push( cf.notifications[key].scene );
 								delete cf.notifications[key].scene;
 							}
@@ -4996,9 +4997,8 @@ var ReactorSensor = (function(api, $) {
 
 		/* At this point, any remaining in nots are not associated with any action */
 		for ( var n in nots ) {
-			if ( nots.hasOwnProperty( n ) && n !== "nextid" ) {
-				if ( cf.notifications[n].scene )
-					deletes.push( cf.notifications[n].scene );
+			if ( nots.hasOwnProperty( n ) ) {
+				console.log("cleanNotificationScenes() removing orphan notification " + String(n));
 				delete cf.notifications[n];
 			}
 		}
@@ -5014,7 +5014,7 @@ var ReactorSensor = (function(api, $) {
 				if ( deletes.indexOf( scenes[k].id ) >= 0 ) {
 					console.log("Scene " + scenes[k].id + " already marked for deletion");
 				} else if ( undefined === valids[String(scenes[k].triggers[0].arguments[0].value)] ) {
-					console.log("Marking unused notification scene #" + scenes[k].id);
+					console.log("Marking orphaned notification scene #" + scenes[k].id);
 					deletes.push(scenes[k].id);
 				} else {
 					/* Save scene on notification. Remove from valids so any dups are also removed. */
@@ -5261,12 +5261,12 @@ var ReactorSensor = (function(api, $) {
 					if ( "" === method ) {
 						delete action.method;
 						checkNotificationScene( myid, nid );
-						jQuery( 'input', row ).prop( 'disabled', cf.notifications[nid].veraalerts == 1 );
+						jQuery( 'input#message', row ).prop( 'disabled', cf.notifications[nid].veraalerts == 1 );
 						jQuery( '.vanotice', row ).toggle( cf.notifications[nid].veraalerts == 1 );
 					} else {
 						action.method = method;
 						delete cf.notifications[nid].veraalerts;
-						jQuery( 'input', row ).prop( 'disabled', false );
+						jQuery( 'input#message', row ).prop( 'disabled', false );
 						jQuery( '.vanotice', row ).hide();
 					}
 					action.notifyid = nid;
@@ -5417,7 +5417,7 @@ var ReactorSensor = (function(api, $) {
 		jQuery( "select#method", $row ).val( ninfo.id ); /* override */
 		jQuery( 'fieldset#users', $row ).toggle( false !== ninfo.users );
 		jQuery( 'fieldset#extrafields', $row ).remove();
-		jQuery( 'div.vanotice', $row ).remove();
+		jQuery( 'div.vanotice', $row ).hide();
 		jQuery( 'div.notifynotice', $row ).remove();
 		/*  Do not clear message or users (even if we don't use them) */
 		var f, fld;
@@ -5455,8 +5455,22 @@ var ReactorSensor = (function(api, $) {
 		if ( action && (cf.notifications || {})[action.notifyid] ) {
 			/* Load current values from passed action */
 			var note = cf.notifications[action.notifyid];
+			var scene = findNotificationScene( api.getCpanelDeviceId(), action.notifyid );
+			var isVA = scene && isVAControlledScene( scene );
+			if ( isVA && ! note.veraalerts ) {
+				note.veraalerts = 1;
+				configModified = true;
+			} else if ( note.veraalerts && !isVA ) {
+				delete note.veraalerts;
+				configModified = true;
+			}
 			jQuery( 'input#message', $row ).val( note.message || "" );
 			if ( false !== ninfo.users ) {
+				/* See if scene has been updated behind us */
+				if ( scene && scene.users !== ( note.users || "" ) ) {
+					note.users = scene.users || "";
+					configModified = true;
+				}
 				var ua = note.users || "";
 				if ( "" !== ua ) {
 					ua = ua.split( /,/ );
@@ -5474,11 +5488,12 @@ var ReactorSensor = (function(api, $) {
 				fld = ninfo.extra[f];
 				jQuery( '#' + idSelector( fld.id ), $row ).val( action[fld.id] || "" );
 			}
-			if ( devVeraAlerts && note.veraalerts ) {
+			if ( devVeraAlerts ) {
 				jQuery( '<div class="vanotice"/>' )
-					.text("NOTE: This notification has been modified by VeraAlerts. In order for changes to be effective, they must be made in VeraAlerts. Also note that regardless of the configuration/use here, VA controls the recipients, message text, delivery, and filtering.")
+					.text("NOTE: This notification has been modified by VeraAlerts. The message text can only be changed there. You may change recipients here, but you must go into VeraAlerts \"Edit\" mode after so that it updates its data. Delivery and filtering of this message is under control of VeraAlerts.")
+					.toggle( isVA )
 					.insertAfter( jQuery( 'input#message', $row ) );
-				jQuery( 'input', $row ).prop( 'disabled', true );
+				jQuery( 'input#message', $row ).prop( 'disabled', isVA );
 			}
 		}
 		if ( ninfo.config ) {
