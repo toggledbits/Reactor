@@ -11,6 +11,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 * 19317-02: Fix action editor incorrectly reselecting currently configured value (J_ReactorSensor_UI7.js)
 * 19318-01: Work around issue with Chrome getting confused when two data-list fields have same ID (cosmetic but apparently really annoying)
 * 19337-01: Attempt fix for Vera JS API variable state inconsistency.
+* 19354-01: Backport changes from 3.5 for notification config when VeraAlerts is in use; cleans up some unexpected behaviors around notification scene handling.
 
 ## Version 3.4 (released)
 
