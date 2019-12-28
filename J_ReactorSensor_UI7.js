@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.5develop-19354';
+	var pluginVersion = '3.5develop-19362';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -385,6 +385,11 @@ var ReactorSensor = (function(api, $) {
 		}
 		/* Special version check */
 		if ( ( cdata.version || 0 ) > _CDATAVERSION ) {
+			alert("This ReactorSensor configuration is an unsupported format/version " +
+				String( cdata.version ) + " for this version of Reactor (" +
+				pluginVersion + " " + _CDATAVERSION + "). If you've downgraded Reactor from a later " +
+				"version, you need to restore a backup of this ReactorSensor's configuration made " +
+				"from the earlier version.");
 			console.log("The configuration for this ReactorSensor is an unsupported format/version (" +
 				String( cdata.version ) + "). Upgrade Reactor or restore an older config from backup.");
 			throw "Incompatible configuration format/version";
@@ -1264,7 +1269,8 @@ var ReactorSensor = (function(api, $) {
 		var errors = jQuery('.tberror');
 		var pos = $( window ).scrollTop();
 		jQuery('button#saveconf').text("Save")
-			.prop('disabled', ! ( configModified && errors.length === 0 ) );
+			.prop('disabled', ! ( configModified && errors.length === 0 ) )
+			.attr('title', errors.length === 0 ? "" : "Fix errors before saving");
 		jQuery('button#revertconf').prop('disabled', !configModified);
 		setTimeout( function() { $(window).scrollTop( pos ); }, 100 );
 	}
@@ -3353,7 +3359,7 @@ var ReactorSensor = (function(api, $) {
 					mm = jQuery( '<select id="relcond" class="form-control form-control-sm" />' );
 					mm.append( jQuery( '<option/>' ).val( "" ).text( '--choose--' ) );
 					DOtraverse( getConditionIndex().root, function( n ) {
-						var tt = (condTypeName[n.type || "group"] || "?") + ": " + 
+						var tt = (condTypeName[n.type || "group"] || "?") + ": " +
 							makeConditionDescription( n ) + " <" + String(n.id) + ">";
 						mm.append( jQuery( '<option/>' ).val( n.id ).text( tt ) );
 					}, false, function( n ) {
@@ -4977,7 +4983,7 @@ var ReactorSensor = (function(api, $) {
 					if ( "notify" === action.type ) {
 						var key = String(action.notifyid);
 						if ( undefined === cf.notifications[key] ) {
-							console.log("cleanNotificationScenes() action #" + l + " in group #" + 
+							console.log("cleanNotificationScenes() action #" + l + " in group #" +
 								k + " of " + act + " refers to non-existent notification " + key);
 						} else {
 							valids[key] = true;
@@ -6917,7 +6923,9 @@ var ReactorSensor = (function(api, $) {
 			var target = jQuery( 'div#' + idSelector( id ) + ".actionlist" );
 			if ( ( "inuse" === vis && isEmptyActivity( ac[id] ) ) ||
 				( "true" === vis && ! id.match( /\.true$/ ) ) ||
-				( "false" === vis && ! id.match( /\.false$/ ) ) ){
+				( "false" === vis && ! id.match( /\.false$/ ) ) ||
+				( "errors" === vis && 0 === jQuery(".tberror,.tbwarn", target).length )
+				) {
 				target.slideUp();
 			} else {
 				jQuery( 'div#' + idSelector( id ) + ".actionlist" ).slideDown();
@@ -6948,6 +6956,7 @@ var ReactorSensor = (function(api, $) {
 					.append( jQuery( '<option value="inuse">In Use</option>' ) )
 					.append( jQuery( '<option value="true">True Only</option>' ) )
 					.append( jQuery( '<option value="false">False Only</option>' ) )
+					.append( jQuery( '<option value="errors">With Errors</option>' ) )
 				)
 			);
 		container.append( el );
@@ -7187,11 +7196,11 @@ var ReactorSensor = (function(api, $) {
  ** **************************************************************************/
 
 	function grabLog( ev ) {
-		jQuery( 'div#logdata' ).empty();
+		jQuery( 'div#rslogdata' ).empty();
 		var url = api.getDataRequestURL();
 		url = url.replace( /(:3480|\/port_3480).*/, "" );
 		url = url + "/cgi-bin/cmh/log.sh?Device=LuaUPnP";
-		jQuery( 'div#logdata' ).append( jQuery( '<p/>' ).text( 'Fetching ' + url ) );
+		jQuery( 'div#rslogdata' ).append( '<h3>Debug Log Snippet</h3><p>Fetching ' + url + '</p>' );
 		$.ajax({
 			url: url,
 			data: {},
@@ -7202,26 +7211,29 @@ var ReactorSensor = (function(api, $) {
 			var keypat = new RegExp( "9c6c9aa0-1060-11ea-b3de-9303e5fab7a5" );
 			var pos = data.search( keypat );
 			if ( pos < 0 ) {
-				jQuery( 'div#logdata' ).append( '<b>SUBJECT DATA NOT FOUND. RESTART THIS REACTOR SENSOR AFTER ENABLING DEBUG.</b>' );
+				jQuery( 'div#rslogdata' ).append( '<p><strong>SUBJECT DATA NOT FOUND. RESTART THIS REACTOR SENSOR AFTER ENABLING DEBUG. SEE INSTRUCTIONS ABOVE.</strong></p>' );
 				return;
 			}
 			while ( pos >= 0 ) {
 				data = data.substring( pos+36 );
 				pos = data.search( keypat );
 			}
-			jQuery( 'div#logdata' ).empty().append( '<pre/>' );
+			jQuery( 'div#rslogdata' ).empty().append( '<h3>Debug Log Snippet</h3><pre/>' );
 			var lines = data.split( /\r?\n/ );
 			var k = 0, n = 0;
-			while ( n < 500 && k<lines.length ) {
+			var nmax = parseInt( api.getDeviceState( api.getCpanelDeviceId(), serviceId, "MaxLogSnippet" ) || "" );
+			if ( isNaN( nmax ) || nmax < 500 ) nmax = 500;
+			var $f = jQuery( 'div#rslogdata pre' );
+			while ( n < nmax && k<lines.length ) {
 				var l = lines[k].replace( /<span\s+[^>]*>/i, "" ).replace( /<\/span>/i, "" );
 				if ( ! l.match( /^(06)/ ) ) {
-					jQuery( 'div#logdata pre' ).append( l + "\n" );
+					$f.append( l + "\n" );
 					n++;
 				}
 				k++;
 			}
 		}).fail( function() {
-			jQuery( 'div#logdata' ).empty().append("<b>Hmm, that didn't go well. Try again in a few moments.</b>");
+			jQuery( 'div#rslogdata' ).empty().append("<b>Hmm, that didn't go well. Try again in a few moments.</b>");
 		});
 	}
 
@@ -7579,8 +7591,6 @@ textarea#devspyoutput { width: 100%; font-family: monospace; } \
 			' using your selected date/time. <b>Remember to turn these settings off when you have finished testing!</b></div>';
 		html += '</div>'; /* row */
 
-		html += '</div>'; /* .reactortab */
-
 		html += '<div><h3>Update Device Information Database</h3>The device information database contains information to help smooth out the user interface for device actions. The "Activities" tab will notify you when an update is available. You may update by clicking the button below; this process does not require a Luup restart or browser refresh. The updates are shared by all ReactorSensors, so updating any one of them updates all of them. This process sends information about the versions of your Vera firmware, this plugin, and the current database, but no personally-identifying information. This information is used to select the correct database for your configuration; it is not used for tracking you. <span id="di-ver-info"/><p><button id="updateinfo" class="btn btn-sm btn-success">Update Device Info</button> <span id="status"/></p>';
 
 		/* This feature doesn't work on openLuup -- old form of lu_device request isn't implemented */
@@ -7591,7 +7601,7 @@ textarea#devspyoutput { width: 100%; font-family: monospace; } \
 		html += '<div id="troubleshooting"><h3>Troubleshooting &amp; Support</h3>If you are having trouble working out your condition logic, or you think you have found a bug, here are some steps and tools you can use:';
 		html += '<ul><li>Check the documentation in the <a href="https://github.com/toggledbits/Reactor/wiki" target="_blank">Reactor Wiki</a>.</li><li>The <a href="https://community.getvera.com/c/plugins-amp-plugin-development/reactor" target="_blank">Reactor Board</a> in the Vera Community Forums is a great way to get support for questions, how-to\'s, etc.</li><li>Generate and examine a <a href="' +
 			api.getDataRequestURL() + '?id=lr_Reactor&action=summary&device=' + api.getCpanelDeviceId() + '" target="_blank">Logic&nbsp;Summary</a> report. This text-based report shows your ReactorSensor\'s current state, and its event list, which may tell you a lot about what led up to that state.</li>' +
-			'<li>If the logic summary is not helping you, please post it in its entirety, together with a description of what you are trying to accomplish and/or the problem you are having, to a new thread on the Reactor Board (linked above). <strong>Please do not post screenshots</strong> unless you are reporting a UI/appearance bug. Generally speaking, the logic summary is far more useful (and easier to make and post, by design).</li>';
+			'<li>If the logic summary is not helping you, please post it using the instructions in the report header, together with a description of what you are trying to accomplish and/or the problem you are having, to a new thread on the Reactor Board (linked above). <strong>Please do not post screenshots</strong> unless you are reporting a UI/appearance bug. Generally speaking, the logic summary is far more useful (and easier to make and post, by design).</li>';
 		if ( ! isOpenLuup ) {
 			html += '<li>If you are asked for a "debug log snippet", use this procedure (unless given other instructions in the request):<ol><li>Turn on debug by clicking this link: <a href="' +
 			api.getDataRequestURL() + '?id=lr_Reactor&action=debug&debug=1" target="_blank">Turn debug ON</a></li><li>Restart this sensor to force a re-evaluation of all conditions: <a href="' +
@@ -7604,6 +7614,8 @@ textarea#devspyoutput { width: 100%; font-family: monospace; } \
 <div class="form-inline"><select id="devspydev" class="form-control form-control-sm"><option value="">--choose--</option></select></div> \
 <textarea id="devspyoutput" rows="16" wrap="off" class="form-control form-control-sm" /> \
 </div>';
+
+		html += '</div>'; /* .reactortab */
 
 		html += footer();
 
@@ -7659,11 +7671,11 @@ textarea#devspyoutput { width: 100%; font-family: monospace; } \
 
 		var deviceMenu = makeDeviceMenu( "", "" );
 		deviceMenu.attr('id', 'devices');
-		jQuery( 'div#enhancement select#devices' ).replaceWith( deviceMenu );
-		jQuery( 'div#enhancement button#submitdata' ).on( 'click.reactor', handleSendDeviceDataClick );
+		jQuery( 'div#enhancement select#devices', container ).replaceWith( deviceMenu );
+		jQuery( 'div#enhancement button#submitdata', container ).on( 'click.reactor', handleSendDeviceDataClick );
 
-		jQuery( 'button#updateinfo' ).on( 'click.reactor', function( ) {
-			var msg = jQuery( 'button#updateinfo' ).parent().find('span#status');
+		jQuery( 'button#updateinfo', container ).on( 'click.reactor', function( ) {
+			var msg = jQuery( 'button#updateinfo', container ).parent().find('span#status');
 			msg.text("Please wait, downloading update...");
 			$.ajax({
 				url: api.getDataRequestURL(),
@@ -7678,20 +7690,20 @@ textarea#devspyoutput { width: 100%; font-family: monospace; } \
 				msg.text( "Update successful! The changes take effect immediately; no restart necessary." );
 				// don't call updateToolsVersionDisplay() again because we'd need to reload devinfo to
 				// get the right message.
-				jQuery( 'span#di-ver-info' ).html( "Your database is up to date!" );
+				jQuery( 'span#di-ver-info', container ).html( "Your database is up to date!" );
 			}).fail( function( x, y, z ) {
 				msg.text( "The update failed; Vera busy/restarting. Try again in a moment." );
 			});
 		});
 
 		deviceMenu = deviceMenu.clone().attr( 'id', 'devspydev' ).on( 'change.reactor', handleDevSpyDevice );
-		jQuery( 'select#devspydev' ).replaceWith( deviceMenu );
-		jQuery( '#devspyoutput' ).hide();
+		jQuery( 'select#devspydev', container ).replaceWith( deviceMenu );
+		jQuery( '#devspyoutput', container ).hide();
 
 		/* Tools get log fetcher */
 		if ( ! isOpenLuup ) {
-			jQuery( '<div id="logdata"/>' ).insertAfter( 'div#tbcopyright' );
-			jQuery( 'a#grablog' ).on( 'click', grabLog );
+			jQuery( '<div id="rslogdata"/>' ).insertAfter( 'div#tbcopyright' );
+			jQuery( 'a#grablog', container ).on( 'click', grabLog );
 		}
 
 		updateToolsVersionDisplay();

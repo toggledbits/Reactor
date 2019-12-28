@@ -11,13 +11,13 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.5develop-19354"
+local _PLUGIN_VERSION = "3.5develop-19362"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
-local _CONFIGVERSION	= 19295
+local _CONFIGVERSION	= 19362
 local _CDATAVERSION		= 19305	-- must coincide with JS
 local _UIVERSION		= 19349	-- must coincide with JS
-      _SVCVERSION		= 19202	-- must coincide with impl file (not local)
+	  _SVCVERSION		= 19202	-- must coincide with impl file (not local)
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -887,6 +887,7 @@ local function plugin_runOnce( pdev )
 		initVar( "Message", "", pdev, MYSID )
 		initVar( "DebugMode", 0, pdev, MYSID )
 		initVar( "MaxEvents", "", pdev, MYSID )
+		initVar( "MaxLogSnippet", "", pdev, MYSID )
 		initVar( "StateCacheExpiry", 600, pdev, MYSID )
 		initVar( "UseACE", "1", pdev, MYSID )
 		initVar( "ACEURL", "", pdev, MYSID )
@@ -948,6 +949,9 @@ local function plugin_runOnce( pdev )
 
 	if s < 19245 then
 		os.execute("rm -f /etc/cmh-ludl/Reactor.log")
+	end
+	if s < 19362 then
+		initVar( "MaxLogSnippet", "", pdev, MYSID )
 	end
 
 	-- Update version last.
@@ -2832,6 +2836,7 @@ local function doComparison( cond, op, vv, vn, cv, cn, tdev )
 		local lo = tonumber( #vs > 0 and vs[1] or "?" )
 		local hi = tonumber( #vs > 1 and vs[2] or "?" )
 		if vn ==  nil or lo == nil or hi == nil then return vv,false end
+		if hi > lo then lo,hi = hi,lo end
 		local between = vn >= lo and vn <= hi
 		if ( op == "bet" and not between ) or ( op == "nob" and between ) then
 			return vv,false
@@ -5726,27 +5731,27 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		return '{"status":true,"message":"Plugin state cleared"}', "application/json"
 
 	elseif action == "summary" then
-		local r = [[
+		local r = ([[
 INSTRUCTIONS FOR POSTING TO VERA COMMUNITY FORUMS:
-        * COPY/PASTE ALL lines AFTER the ===== separator below, INCLUDING the ``` lines.
-        * DO NOT omit the ``` lines! They must be included to preserve report formatting!
-        * DO NOT edit or redact this report. If you have privacy concerns about posting it to the forums, send via email, below.
+	* COPY/PASTE ALL lines AFTER the ===== separator below, INCLUDING the ``` lines.
+	* DO NOT omit the ``` lines! They must be included to preserve report formatting!
+	* DO NOT edit or redact this report. If you have privacy concerns about posting it to the forums, send via email, below.
 
-INSTRUCTIONS FOR EMAILING:
-        > Use this method if you have concerns about posting the report contents publicly.
-        * Right-click in this pane and choose "Save as..." to save this entire report to a file.
-        * ATTACH the file in an email to: reactor@toggledbits.com
-        * DO NOT copy/paste the report text into the email body! Attachments only please.
-        * Include your forum name in the body of the email, so I know who you are.
-        * Please let me know via the community forums that you've emailed the report.
-        * Please do not use this email address for any other communication. It's for report attachments only.
+INSTRUCTIONS FOR EMAILING (BETTER PRIVACY):
+	> Use this method if you have concerns about posting the report contents publicly.
+	* Right-click in this pane and choose "Save as..." to save this entire report to a file.
+	* ATTACH the file in an email to: reactor@toggledbits.com
+	* DO NOT copy/paste the report text into the email body! Attachments only please.
+	* Include your forum name in the body of the email, so I know who you are.
+	* Please let me know via the community forums that you've emailed a report.
+	* Please DO NOT use this email address for any other communication. It's for report attachments only.
 
-THANK YOU IN ADVANCE FOR READING AND FOLLOWING THESE INSTRUCTIONS! ALTHOUGH MY TIME IS FREE, I DON'T ALWAYS HAVE A LOT OF IT, SO
-YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
+THANK YOU IN ADVANCE FOR READING AND FOLLOWING THESE INSTRUCTIONS! ALTHOUGH MY TIME IS FREE, I DON'T ALWAYS HAVE A LOT OF IT,
+SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 
 =====
 
-]]
+]]):gsub("\t","  ")
 		r = r .. "```" .. EOL
 		r = r .. string.rep("*", 51) .. " REACTOR LOGIC SUMMARY REPORT " .. string.rep("*", 51) .. EOL
 		r = r .. "   Version: " .. tostring(_PLUGIN_VERSION) ..

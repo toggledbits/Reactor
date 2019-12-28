@@ -17,7 +17,7 @@ var Reactor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '72acc6ea-f24d-11e8-bd87-74d4351650de';
 
-	var pluginVersion = '3.5develop-19354';
+	var pluginVersion = '3.5develop-19362';
 
 	var _UIVERSION = 19349;     /* must coincide with Lua core */
 
@@ -276,7 +276,7 @@ var Reactor = (function(api, $) {
 			return;
 		}
 		cdata.device = dev.id; /* Make sure device agrees with config (new target?) */
-		var jsstr = JSON.stringify( cdata, 
+		var jsstr = JSON.stringify( cdata,
 			function( k, v ) { return ( k.match( /^__/ ) || v === null ) ? undefined : purify(v); }
 		);
 		api.setDeviceStateVariablePersistent( dev.id, "urn:toggledbits-com:serviceId:ReactorSensor",
@@ -426,11 +426,11 @@ var Reactor = (function(api, $) {
 			html += '\
 <div class="row"> \
   <div class="col-xs-12 col-sm-12"> \
-    <h4>Bulk Create New ReactorSensors</h4> \
-    <div class="form-inline">To create multiple ReactorSensors at once, select the number of sensors and click "Create ReactorSensors". This operation causes a Luup reload, and you will need to hard-refresh your browser. \
-      <label>Count: <select id="countrs" class="form-control form-control-sm"></select></label> \
-      <button id="creaters" class="btn btn-sm btn-warning">Create ReactorSensors</button> \
-    </div>\
+	<h4>Bulk Create New ReactorSensors</h4> \
+	<div class="form-inline">To create multiple ReactorSensors at once, select the number of sensors and click "Create ReactorSensors". This operation causes a Luup reload, and you will need to hard-refresh your browser. \
+	  <label>Count: <select id="countrs" class="form-control form-control-sm"></select></label> \
+	  <button id="creaters" class="btn btn-sm btn-warning">Create ReactorSensors</button> \
+	</div>\
   </div>\
 </div>';
 
