@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.5develop-19362';
+	var pluginVersion = '3.5develop-20008';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -1316,7 +1316,8 @@ var ReactorSensor = (function(api, $) {
 		var condDesc = "";
 		if ( undefined !== condOpts.after ) {
 			condDesc += ( ( condOpts.aftertime || 0 ) > 0 ? ' within ' + condOpts.aftertime + ' secs' : '' ) +
-				' after ' + makeConditionDescription( getConditionIndex()[ condOpts.after] );
+				' after ' + makeConditionDescription( getConditionIndex()[ condOpts.after ] ) +
+				( 0 === ( condOpts.aftermode || 0 ) ? ' (which is still TRUE)' : '' );
 		}
 		if ( ( condOpts.repeatcount || 0 ) > 1 ) {
 			condDesc += " repeats " + condOpts.repeatcount +
@@ -1413,7 +1414,7 @@ var ReactorSensor = (function(api, $) {
 		jQuery( '.condbtn', grpel ).text( (grp.invert ? "NOT " : "") + (grp.operator || "and" ).toUpperCase() );
 
 		/* Highlight groups that are "true" */
-		if ( grp.disabled ) {
+		if ( grp.disabled || "0" === api.getDeviceState( api.getCpanelDeviceId(), serviceId, "Enabled" ) ) {
 			grpel.addClass( 'groupdisabled' );
 		} else {
 			var gs = cstate[ grp.id ] || {};
@@ -1601,7 +1602,7 @@ var ReactorSensor = (function(api, $) {
 		}
 		var pdev = api.getCpanelDeviceId();
 		if ( args.id == pdev ) {
-			if ( arrayFindValue( args.states || [], function( v ) { return null !== v.variable.match( /^(cdata|cstate|Tripped|Armed)$/i ); } ) ) {
+			if ( arrayFindValue( args.states || [], function( v ) { return null !== v.variable.match( /^(cdata|cstate|Tripped|Armed|Enabled)$/i ); } ) ) {
 				try {
 					updateStatus( pdev );
 				} catch (e) {
@@ -2272,21 +2273,28 @@ var ReactorSensor = (function(api, $) {
 				var $pred = jQuery( 'select#pred', $ct );
 				if ( isEmpty( $pred.val() ) ) {
 					jQuery( 'input#predtime', $ct ).prop( 'disabled', true ).val( "" );
+					jQuery( 'input.predmode', $ct ).prop( 'disabled', true );
 					if ( undefined !== cond.options.after ) {
 						delete cond.options.after;
 						delete cond.options.aftertime;
+						delete cond.options.aftermode;
 						configModified = true;
 					}
 				} else {
 					jQuery( 'input#predtime', $ct ).prop( 'disabled', false );
+					jQuery( 'input.predmode', $ct ).prop( 'disabled', false );
 					var pt = parseInt( jQuery('input#predtime', $ct).val() );
 					if ( isNaN( pt ) || pt < 0 ) {
 						pt = 0;
 						jQuery('input#predtime', $ct).val(pt);
 					}
-					if ( cond.options.after !== $pred.val() || cond.options.aftertime !== pt ) {
+					var predmode = jQuery( 'input.predmode', $ct ).prop( 'checked' ) ? 0 : 1;
+					if ( cond.options.after !== $pred.val() || cond.options.aftertime !== pt ||
+						( cond.options.aftermode || 0 ) != predmode ) {
 						cond.options.after = $pred.val();
 						cond.options.aftertime = pt;
+						if ( predmode == 1 ) cond.options.aftermode = 1;
+						else delete cond.options.aftermode;
 						configModified = true;
 					}
 				}
@@ -2740,7 +2748,7 @@ var ReactorSensor = (function(api, $) {
 			if ( false !== displayed.pulse ) {
 				jQuery( '<br/><label><input type="radio" id="output" name="output" value="P">Pulse - on match, output goes true for <input type="number" id="pulsetime" class="form-control form-control-sm narrow pulseopts"> seconds</label>' )
 					.appendTo( out );
-				jQuery( '<select id="pulsemode" class="form-control form-control-sm pulseopts"><option value="">once</option><option value="repeat">repeat</option></select><span id="pulsebreakopts"><label for="pulsebreak">after <input type="number" id="pulsebreak" class="form-control form-control-sm narrow pulseopts"> seconds</label><label>, up to <input type="number" id="pulsecount" class="form-control form-control-sm narrow pulseopts">&nbsp;times&nbsp;(0/blank=no&nbsp;limit)</label></span>' )
+				jQuery( '<select id="pulsemode" class="form-control form-control-sm pulseopts"><option value="">once</option><option value="repeat">repeat</option></select><span id="pulsebreakopts"><label for="pulsebreak">after <input type="number" id="pulsebreak" class="form-control form-control-sm narrow pulseopts"> seconds,</label> <label>up to <input type="number" id="pulsecount" class="form-control form-control-sm narrow pulseopts">&nbsp;times&nbsp;(0/blank=no&nbsp;limit)</label></span>' )
 					.appendTo( out );
 			}
 			if ( false !== displayed.latch ) {
@@ -2785,8 +2793,14 @@ var ReactorSensor = (function(api, $) {
 					rst.append('<div id="predopt" class="form-inline"><label>Condition must occur after&nbsp;</label></div>');
 					jQuery('div#predopt label', rst).append( $preds );
 					jQuery('div#predopt', rst).append('&nbsp;<label>within <input type="text" id="predtime" class="form-control form-control-sm narrow" autocomplete="off">&nbsp;seconds (0=no time limit)</label>');
+					jQuery('div#predopt', rst).append( getCheckbox( getUID("check"), "0", 
+						"Predecessor must still be true for this condition to go true", "predmode" ) );
 					jQuery('select#pred', rst).val( condOpts.after || "" );
-					jQuery('input#predtime', rst).val( condOpts.aftertime || 0 ).prop( 'disabled', "" !== ( condOpts.after || "" ) );
+					jQuery('input#predtime', rst).val( condOpts.aftertime || 0 )
+						.prop( 'disabled', "" === ( condOpts.after || "" ) );
+					jQuery('input.predmode', rst)
+						.prop( 'checked', 0 === ( condOpts.aftermode || 0 ) )
+						.prop( 'disabled', "" === ( condOpts.after || "" ) );
 				}
 
 				/* Duration */
@@ -3630,6 +3644,7 @@ var ReactorSensor = (function(api, $) {
 				if ( ixCond.hasOwnProperty( ci ) && (ixCond[ci].options || {}).after === condId ) {
 					delete ixCond[ci].options.after;
 					delete ixCond[ci].options.aftertime;
+					delete ixCond[ci].options.aftermode;
 				}
 			}
 
@@ -3737,6 +3752,7 @@ var ReactorSensor = (function(api, $) {
 					}
 					delete ixCond[ci].options.after;
 					delete ixCond[ci].options.aftertime;
+					delete ixCond[ci].options.aftermode;
 				}
 			}
 
@@ -5212,7 +5228,7 @@ var ReactorSensor = (function(api, $) {
 				case "setvar":
 					action.variable = jQuery( 'select#variable', row ).val();
 					action.value = jQuery( 'input#' + idSelector( pfx + "value" ), row ).val();
-					if ( jQuery( "input#reeval", row ).prop( "checked" ) ) {
+					if ( jQuery( "input.tbreeval", row ).prop( "checked" ) ) {
 						action.reeval = 1;
 					} else {
 						delete action.reeval;
@@ -6300,8 +6316,9 @@ var ReactorSensor = (function(api, $) {
 					.attr( 'id', pfx + "value" )
 					.on( 'change.reactor', handleActionValueChange )
 					.appendTo( ct );
-				$m = getCheckbox( "reeval", "1", "Force re-evaluation of expressions and conditions", "" );
-				jQuery( 'input', $m ).on( 'change.reactor', handleActionValueChange );
+				$m = getCheckbox( getUID("reeval"), "1", "Force re-evaluation of expressions and conditions", "" );
+				jQuery( 'input', $m ).addClass("tbreeval")
+					.on( 'change.reactor', handleActionValueChange );
 				$m.appendTo( ct );
 				break;
 
@@ -6717,7 +6734,7 @@ var ReactorSensor = (function(api, $) {
 								fld.val( coalesce( action.parameters[j].value, "" ) );
 							}
 						}, [ newRow, act ]);
-						if ( -1 === act.device &&
+						if ( false && -1 === act.device &&
 							"urn:toggledbits-com:serviceId:ReactorSensor" === act.service &&
 							"SetVariable" === act.action ) {
 							jQuery( '<div class="notice">ATTENTION: Consider changing this <em>Device Action</em> to a <em>Set Variable</em>", which is more efficient (and easier to read).</div>' )
@@ -6771,7 +6788,7 @@ var ReactorSensor = (function(api, $) {
 						}
 						$m.val( act.variable || "" );
 						jQuery( 'input#' + idSelector( rid + "-value"), newRow ).val( coalesce( act.value, "" ) );
-						jQuery( 'input#reeval', newRow ).prop( "checked", 0 !== ( act.reeval || 0 ) );
+						jQuery( 'input.tbreeval', newRow ).prop( "checked", 0 !== ( act.reeval || 0 ) );
 						break;
 
 					case "resetlatch":

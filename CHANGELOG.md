@@ -16,6 +16,8 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 * Enhancement: The new `getstatetime()` expression function is now available to return Luup's last-modified timestamp for a state variable.
 * Enhancement: In places where variable substitution is allowed (i.e. where you can use `{variablename}`), you can now use an expression (same syntax as Expressions tab, just surround the expression in curly braces).
 * Enhancement: The "Device Spy" on the Tools tab reports changes in state variables (dynamically) on a selected device. This is intended to help users find state variables that change as the device is used/updated.
+* Enhancement: Add option for sequence ("after") condition restriction to ignore current state of predecessor (so timing is based only on last true edge of predecessor).
+* Enhancement: When a ReactorSensor is disabled, its Status view will show all gray (as if all groups were disabled, which they effectively are).
 * Internal: Clean up mechanism for determining SSL parameters for SMTP connections.
 * Internal: Upgrade of configuration is only done by core now; no duplication of effort on the JS side.
 * Fix: Improve the list contents for the "relative to" conditions on Interval conditions.

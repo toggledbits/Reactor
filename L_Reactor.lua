@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.5develop-19362"
+local _PLUGIN_VERSION = "3.5develop-20008"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION	= 19362
@@ -334,7 +334,9 @@ local function getSSLParams( prefix, pdev, sid )
 	-- Old school: individual config vars for various settings
 	params = {}
 	-- Repititious, but expeditous. If more in future, go table-driven.
-	local s = getVar( prefix.."SSLProtocol", "", pdev, sid )
+	local sslLib = require "ssl"
+	sslLib = sslLib or {}
+	local s = getVar( prefix.."SSLProtocol", ( sslLib._VERSION == "0.5" ) and "tlsv1" or "any", pdev, sid )
 	params.protocol = s ~= "" and s or nil
 	s = getVar( prefix.."SSLMode", "client", pdev, sid )
 	params.mode = s ~= "" and s or nil
@@ -2160,12 +2162,12 @@ local function doActionNotify( action, scid, tdev )
 					{ Message=msg, Recipients=cf.notifications[nid].usernames or "" },
 					devVeraAlerts )
 			else
-				return false, "VeraAlerts is not available"
+				error "VeraAlerts is not available"
 			end
 		elseif action.method == "SM" then -- SMTP Mail
 			local ok,smtp = pcall( require, "socket.smtp" )
 			if not ok or type(smtp) ~= "table" then
-				return false, "socket.smtp is not installed"
+				error "socket.smtp is not installed"
 			else
 				local server = getReactorVar( "SMTPServer", "localhost" )
 				local port = getVarNumeric( "SMTPPort", 0, pluginDevice, MYSID )
@@ -2193,9 +2195,9 @@ local function doActionNotify( action, scid, tdev )
 									local r, e = sock:connect( hh, pp )
 									if not r then return r, e end
 									local ssl = require "ssl"
-									D("SMTP send wrapping %s", tostring(sock))
+									D("SMTP send wrapping %1 using SSL version %2", sock, ssl._VERSION)
 									sock = ssl.wrap( sock, getSSLParams( "SMTP" ) )
-									D("SMTP after wrapping, sock is %s", tostring(sock))
+									D("SMTP after wrapping, sock is %1", sock)
 									return sock:dohandshake()
 								end
 							}, {
@@ -2220,13 +2222,13 @@ local function doActionNotify( action, scid, tdev )
 					if sendt.user then sendt.user = "****" end
 					if sendt.password then sendt.password = "****" end
 					L({level=2,msg="SMTP Send failed, %1; package %2; message %3"}, e, sendt, msgt)
-					return false, "SMTP send failed, " .. tostring(e)
+					error("SMTP send failed, " .. tostring(e))
 				end
 			end
 		elseif action.method == "PR" then -- Prowl
 			local apikey = getReactorVar( "ProwlAPIKey", "" )
 			if apikey == "" or apikey == "X" then
-				return false, "Prowl API Key not set"
+				error "Prowl API Key not set"
 			else
 				local provider = getReactorVar( "ProwlProvider", "" )
 				local subject = getReactorVar( "ProwlSubject", luup.devices[tdev].description )
@@ -2252,7 +2254,7 @@ local function doActionNotify( action, scid, tdev )
 				end
 				if st ~= 0 or ht ~= 200 then
 					L({level=2,msg="Prowl send returned %1 httpStatus=%2 [%3]"}, st, ht, baseurl)
-					return false, "Prowl send request failed (" .. tostring(st) .. ", " .. tostring(ht) .. ")"
+					error( "Prowl send request failed (" .. tostring(st) .. ", " .. tostring(ht) .. ")" )
 				end
 			end
 		elseif action.method == "SD" then -- Syslog Datagram
@@ -2273,7 +2275,7 @@ local function doActionNotify( action, scid, tdev )
 				udp:close()
 				if stat == nil then
 					L({level=2,msg="Failed to send SYSLOG message to %1: %2"}, action.hostip, err)
-					return false, "Syslog notification to " .. tostring(action.hostip) .. " failed, " .. tostring(err)
+					error( "Syslog notification to " .. tostring(action.hostip) .. " failed, " .. tostring(err) )
 				end
 			end
 		elseif action.method == "AA" then -- AddAlert (Vera action) (undocumented)
@@ -2289,16 +2291,16 @@ local function doActionNotify( action, scid, tdev )
 			D("doActionNotify User URL notification returned %1,%2 [%3]", st, ht, baseurl)
 			if st ~= 0 or ht ~= 200 then
 				L({level=2,msg="User URL notification returned %1 httpStatus=%2 [%3]"}, st, ht, baseurl)
-				return false, "User HTTP notification failed (" .. tostring(st) .. ", " .. tostring(ht) .. ")"
+				error("User HTTP notification failed (" .. tostring(st) .. ", " .. tostring(ht) .. ")")
 			end
 		else
 			-- The "standard" Vera way, via hidden scene.
 			queueNotification( nid, tdev )
 		end
 	else
-		return false, "Unable to find notification config #" .. tostring(nid)
+		error( "Unable to find notification config #" .. tostring(nid) )
 	end
-	return true
+	return false
 end
 
 -- Run the next scene group(s), until we run out of groups or a group delay
@@ -2561,9 +2563,9 @@ local function execSceneGroups( tdev, taskid, scd )
 						luup.call_action( RSSID, "ClearLatched", { Group=group }, device )
 					end
 				elseif action.type == "notify" then
-					local success,err = doActionNotify( action, scd.id, tdev )
+					local success,err = pcall( doActionNotify, action, scd.id, tdev )
 					if not success then
-						L({level=2,msg="Notify action failed: " ..err .. " (%1 group %2 action %3)"},
+						L({level=2,msg="Notify action failed: " .. err .. " (%1 group %2 action %3)"},
 							scd.id, nextGroup, ix)
 						local ev = { dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, index=ix }
 						ev.warning = err
@@ -2836,7 +2838,7 @@ local function doComparison( cond, op, vv, vn, cv, cn, tdev )
 		local lo = tonumber( #vs > 0 and vs[1] or "?" )
 		local hi = tonumber( #vs > 1 and vs[2] or "?" )
 		if vn ==  nil or lo == nil or hi == nil then return vv,false end
-		if hi > lo then lo,hi = hi,lo end
+		if lo > hi then lo,hi = hi,lo end
 		local between = vn >= lo and vn <= hi
 		if ( op == "bet" and not between ) or ( op == "nob" and between ) then
 			return vv,false
@@ -3561,11 +3563,13 @@ local function processCondition( cond, grp, cdata, tdev )
 			else
 				local age = cs.statestamp - predState.statestamp
 				local window = condopt.aftertime or 0
+				local predstate = ( condopt.aftermode or 0 ) ~= 0 or predState.evalstate
 				-- To clear, pred must be true, pred's true precedes our true, and if window, age within window
 				D("evaluateCondition() pred %1, window %2, age %3", predCond.id, window, age)
-				if not ( predState.evalstate and age >= 0 and ( window==0 or age <= window ) ) then
-					D("evaluateCondition() didn't meet sequence requirement %1 after %2(=%3) within %4 (%5 ago)",
-						cond.id, predCond.id, predState.evalstate, condopt.aftertime or "any", age)
+				if not ( predstate and age >= 0 and ( window==0 or age <= window ) ) then
+					D("evaluateCondition() didn't meet sequence requirement %1 after %2(=%3) mode %6 within %4 (%5 ago)",
+						cond.id, predCond.id, predState.evalstate, condopt.aftertime or "any", age,
+						condopt.aftermode or 0)
 					addEvent{ dev=tdev, msg="%(cname)s predecessor condition restriction not met",
 						cname=(cond.type or "group")=="group" and ("Group "..(cond.name or cond.id)) or ("Condition "..cond.id),
 						cond=cond.id }
@@ -5379,6 +5383,10 @@ local function getReactorScene( t, s, tdev, runscenes, cf )
 						  " (" .. tostring(act.device) .. ")" ) )
 					resp = resp .. " action " .. (act.service or "?") .. "/" .. (act.action or "?") .. "( " .. p .. " )"
 					resp = resp .. EOL
+					summaryDevices[tostring(act.device)] = true
+					if ( ( luup.devices[act.device] or {} ).device_num_parent or 0 ) ~= 0 then
+						summaryDevices[tostring(luup.devices[act.device].device_num_parent)] = true
+					end
 				elseif act.type == "housemode" then
 					resp = resp .. pfx .. "Change house mode to " .. tostring(act.housemode) .. EOL
 				elseif act.type == "rungsa" then
