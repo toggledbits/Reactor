@@ -870,6 +870,14 @@ local function sensor_runOnce( tdev )
 		deleteVar( RSSID, "ReloadConditionHoldTime", tdev )
 	end
 
+	-- Remove leftover development stuff that leaked out in beta (3.5)
+	if luup.variable_get( RSSID, "NONSENSENAME", dev ) ~= nil then
+		luup.variable_set(RSSID, "NONSENSENAME", nil, dev) -- ??? remove after 3.6
+	end
+	if luup.variable_get( VARSID, "NONSENSENAME", dev ) ~= nil then
+		luup.variable_set(VARSID, "NONSENSENAME", nil, dev) -- ??? remove after 3.6
+	end
+
 	-- Update version last.
 	if s ~= _CONFIGVERSION then
 		luup.variable_set(RSSID, "Version", _CONFIGVERSION, tdev)
