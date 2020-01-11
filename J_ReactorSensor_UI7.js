@@ -169,7 +169,7 @@ var ReactorSensor = (function(api, $) {
 	div.reactortab .tbwikilink i.material-icons { font-size: 18px; position: relative; top: 4px; } \
 	div.reactortab button.md-btn:disabled { color: #ccc; cursor: not-allowed; } \
 	div.reactortab button.md-btn[disabled] { color: #ccc; cursor: not-allowed; } \
-	div.reactortab button.md-btn { line-height: 1em; cursor: pointer; color: #333; background-color: #fff; padding: 1px 0px 0px 0px; border-radius: 4px; box-shadow: #ccc 2px 2px; } \
+	div.reactortab button.md-btn { line-height: 1em; cursor: pointer; color: #333; background-color: #fff; padding: 1px 0px 0px 0px; border: 1px solid transparent; border-radius: 4px; box-shadow: #ccc 2px 2px; background-image: linear-gradient( to bottom, #ffffff, #e6e6e6 ); background-repeat: repeat-x; } \
 	div.reactortab button.md-btn i { font-size: 16pt; line-height: 1em; } \
 	div.reactortab optgroup { color: #333; font-weight: bold; } \
 	div.reactortab .dropdown-item { display: block; width: 100%; padding: 2px 12px; clear: both; font-weight: normal; color: #000; text-align: inherit; white-space: nowrap; background-color: transparent; border: 0; } \
@@ -4161,7 +4161,7 @@ var ReactorSensor = (function(api, $) {
 
 			html += 'div#tab-conds.reactortab fieldset.vargroup { display: inline-block; white-space: nowrap; }';
 			html += 'div#tab-conds.reactortab div.eventlist { display: inline-block; }';
-			html += 'div#tab-conds.reactortab div.eventlist button { padding: 5px 0px;  border-radius: 4px 0 0 4px; background-color: #ccc; background-image: linear-gradient( to bottom, #ffffff, #e6e6e6 ); background-repeat: repeat-x; }';
+			html += 'div#tab-conds.reactortab div.eventlist button { padding: 5px 0px; border-radius: 4px 0 0 4px; background-color: #ccc; background-image: linear-gradient( to bottom, #ffffff, #e6e6e6 ); background-repeat: repeat-x; }';
 			html += 'div#tab-conds.reactortab div.eventlist button i { font-size: 21px; color: #666; vertical-align:middle; }';
 			html += 'div#tab-conds.reactortab .varmenu { border-left: none; border-top-left-radius: 0px; border-bottom-left-radius: 0px; }';
 
