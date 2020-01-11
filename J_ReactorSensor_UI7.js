@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.5develop-20008';
+	var pluginVersion = '3.5develop-20011';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -149,7 +149,7 @@ var ReactorSensor = (function(api, $) {
 	div.reactortab input.narrow { max-width: 6em; } \
 	div.reactortab input.tbfullwidth { width: 100%; } \
 	div.reactortab input.tiny { max-width: 4em; text-align: center; } \
-	div.reactortab label { font-weight: normal; } \
+	div.reactortab label { font-weight: normal; padding: 0 2px; } \
 	div.reactortab label.tbsecondaryinput { margin-left: 0.5em; margin-right: 0.5em; } \
 	div.reactortab .tbinline { display: inline-block; } \
 	div.reactortab .checkbox { padding-left: 20px; } \
@@ -350,6 +350,16 @@ var ReactorSensor = (function(api, $) {
 			.appendTo( $div );
 		jQuery( '<label/>' ).attr( 'for', id ).html( label )
 			.appendTo( $div );
+		return $div;
+	}
+
+	/* Generate an inline radio button */
+	function getRadio( id, value, label, classes ) {
+		var $div = jQuery( '<label class="radio" />' );
+		jQuery( '<input type="radio" />' ).attr( 'id', id ).attr( 'name', id ).val( value )
+			.addClass( classes || "" )
+			.appendTo( $div );
+		$div.append( label );
 		return $div;
 	}
 
@@ -2382,7 +2392,7 @@ var ReactorSensor = (function(api, $) {
 					}
 				}
 
-				var mode = jQuery( 'input#output:checked', $ct ).val() || "";
+				var mode = jQuery( 'input.opt-output:checked', $ct ).val() || "";
 				if ( "L" === mode ) {
 					/* Latching */
 					jQuery( '.followopts,.pulseopts', $ct ).prop( 'disabled', true );
@@ -2741,24 +2751,35 @@ var ReactorSensor = (function(api, $) {
 			/* Output Control */
 			var out = jQuery( '<div/>', { "id": "outputopt", "class": "form-inline tboptgroup" } ).appendTo( $container );
 			jQuery( '<div class="opttitle">Output Control</div>' ).append( getWiki( 'Condition-Options' ) ).appendTo( out );
-			jQuery( '<label><input type="radio" id="output" name="output" value="">Follow (default) - output remains true while condition matches</label>' ).appendTo( out );
+			var fs = jQuery( '<fieldset class="opt-fs"/> ').appendTo( out );
+			var rid = "output" + getUID();
+			getRadio( rid, "", "Follow (default) - output remains true while condition matches", "opt-output" )
+				.appendTo( fs );
 			if ( false !== displayed.hold ) {
-				jQuery( '<label>; delay reset <input type="number" id="holdtime" class="form-control form-control-sm narrow followopts"> seconds (0=no delay)</label>' ).appendTo( out );
+				fs.append( '; ' );
+				jQuery( '<label>delay reset <input type="number" id="holdtime" class="form-control form-control-sm narrow followopts"> seconds (0=no delay)</label>' ).appendTo( fs );
 			}
-			if ( false !== displayed.pulse ) {
-				jQuery( '<br/><label><input type="radio" id="output" name="output" value="P">Pulse - on match, output goes true for <input type="number" id="pulsetime" class="form-control form-control-sm narrow pulseopts"> seconds</label>' )
-					.appendTo( out );
+			/* Pulse group is not displayed for update and change operators; always display if configured, though,
+			   do any legacy configs prior to this restriction being added are still editable. */
+			if ( ( false !== displayed.pulse && !(cond.operator || "=").match( /^(update|change)/ ) ) ||
+				condOpts.pulsetime ) {
+				fs = jQuery( '<fieldset class="opt-fs" />' ).appendTo( out );
+				getRadio( rid, "P", "Pulse - output goes true for", "opt-output" ).appendTo( fs );
+				jQuery( '<input type="number" id="pulsetime" class="form-control form-control-sm narrow pulseopts"> seconds</label>' )
+					.appendTo( fs );
 				jQuery( '<select id="pulsemode" class="form-control form-control-sm pulseopts"><option value="">once</option><option value="repeat">repeat</option></select><span id="pulsebreakopts"><label for="pulsebreak">after <input type="number" id="pulsebreak" class="form-control form-control-sm narrow pulseopts"> seconds,</label> <label>up to <input type="number" id="pulsecount" class="form-control form-control-sm narrow pulseopts">&nbsp;times&nbsp;(0/blank=no&nbsp;limit)</label></span>' )
-					.appendTo( out );
+					.appendTo( fs );
 			}
 			if ( false !== displayed.latch ) {
-				jQuery( '<br/><label><input type="radio" id="output" name="output" value="L">Latch - output is held true until external reset</label>' ).appendTo( out );
+				fs = jQuery( '<fieldset class="opt-fs" />' ).appendTo( out );
+				getRadio( rid, "L", "Latch - output is held true until external reset", "opt-output" )
+					.appendTo( fs );
 			}
 
 			/* Restore/configure */
 			if ( ( condOpts.pulsetime || 0 ) > 0 ) {
 				jQuery( '.pulseopts', out ).prop( 'disabled', false );
-				jQuery( 'input#output[value="P"]', out ).prop( 'checked', true );
+				jQuery( 'input#' + idSelector(rid) + '[value="P"]', out ).prop( 'checked', true );
 				jQuery( 'input#pulsetime', out ).val( condOpts.pulsetime || 15 );
 				jQuery( 'input#pulsebreak', out ).val( condOpts.pulsebreak || "" );
 				jQuery( 'input#pulsecount', out ).val( condOpts.pulsecount || "" );
@@ -2768,11 +2789,11 @@ var ReactorSensor = (function(api, $) {
 				jQuery( '.followopts,.latchopts', out ).prop( 'disabled', true );
 			} else if ( 0 !== ( condOpts.latch || 0 ) ) {
 				jQuery( '.latchopts', out ).prop( 'disabled', false );
-				jQuery( 'input#output[value="L"]', out ).prop( 'checked', true );
+				jQuery( 'input#' + idSelector(rid) + '[value="L"]', out ).prop( 'checked', true );
 				jQuery( '.followopts,.pulseopts', out ).prop( 'disabled', true );
 			} else {
 				jQuery( '.followopts', out ).prop( 'disabled', false );
-				jQuery( 'input#output[value=""]', out ).prop( 'checked', true );
+				jQuery( 'input#' + idSelector(rid) + '[value=""]', out ).prop( 'checked', true );
 				jQuery( '.latchopts,.pulseopts', out ).prop( 'disabled', true );
 			}
 
@@ -2782,6 +2803,7 @@ var ReactorSensor = (function(api, $) {
 				jQuery( '<div class="opttitle">Restrictions</div>' ).append( getWiki( 'Condition-Options' ) ).appendTo( rst );
 				/* Sequence (predecessor condition) */
 				if ( displayed.sequence ) {
+					fs = jQuery( '<fieldset class="opt-fs form-inline"/>' ).appendTo( rst );
 					var $preds = jQuery('<select id="pred" class="form-control form-control-sm"><option value="">(any time/no sequence)</option></select>');
 					/* Add groups that are not ancestor of condition */
 					DOtraverse( (getConditionIndex()).root, function( node ) {
@@ -2790,27 +2812,30 @@ var ReactorSensor = (function(api, $) {
 						/* If node is not ancestor (line to root) or descendent of cond, allow as predecessor */
 						return "comment" !== node.type && cond.id !== node.id && !isAncestor( node.id, cond.id ) && !isDescendent( node.id, cond.id );
 					});
-					rst.append('<div id="predopt" class="form-inline"><label>Condition must occur after&nbsp;</label></div>');
-					jQuery('div#predopt label', rst).append( $preds );
-					jQuery('div#predopt', rst).append('&nbsp;<label>within <input type="text" id="predtime" class="form-control form-control-sm narrow" autocomplete="off">&nbsp;seconds (0=no time limit)</label>');
-					jQuery('div#predopt', rst).append( getCheckbox( getUID("check"), "0", 
+					jQuery( '<label>Condition must occur after&nbsp;</label>' )
+						.append( $preds )
+						.appendTo( fs );
+					fs.append('&nbsp;<label>within <input type="text" id="predtime" class="form-control form-control-sm narrow" autocomplete="off">&nbsp;seconds (0=no time limit)</label>');
+					fs.append( getCheckbox( getUID("check"), "0",
 						"Predecessor must still be true for this condition to go true", "predmode" ) );
-					jQuery('select#pred', rst).val( condOpts.after || "" );
-					jQuery('input#predtime', rst).val( condOpts.aftertime || 0 )
+					jQuery('select#pred', fs).val( condOpts.after || "" );
+					jQuery('input#predtime', fs).val( condOpts.aftertime || 0 )
 						.prop( 'disabled', "" === ( condOpts.after || "" ) );
-					jQuery('input.predmode', rst)
+					jQuery('input.predmode', fs)
 						.prop( 'checked', 0 === ( condOpts.aftermode || 0 ) )
 						.prop( 'disabled', "" === ( condOpts.after || "" ) );
 				}
 
 				/* Duration */
 				if ( displayed.duration ) {
-					rst.append('<div id="duropt" class="form-inline"><label>Condition must be sustained for&nbsp;</label><select id="durop" class="form-control form-control-sm"><option value="ge">at least</option><option value="lt">less than</option></select><input type="text" id="duration" class="form-control form-control-sm narrow" autocomplete="off"><label>&nbsp;seconds</label></div>');
+					fs = jQuery( '<fieldset class="opt-fs form-inline"/>' ).appendTo( rst );
+					fs.append('<label>Condition must be sustained for&nbsp;</label><select id="durop" class="form-control form-control-sm"><option value="ge">at least</option><option value="lt">less than</option></select><input type="text" id="duration" class="form-control form-control-sm narrow" autocomplete="off"><label>&nbsp;seconds</label>');
 				}
 
 				/* Repeat */
 				if ( displayed.repeat ) {
-					rst.append('<div id="repopt" class="form-inline"><label>Condition must repeat <input type="text" id="rcount" class="form-control form-control-sm narrow" autocomplete="off"> times within <input type="text" id="rspan" class="form-control form-control-sm narrow" autocomplete="off"> seconds</label></div>');
+					fs = jQuery( '<fieldset class="opt-fs form-inline" />' ).appendTo( rst );
+					fs.append('<label>Condition must repeat <input type="text" id="rcount" class="form-control form-control-sm narrow" autocomplete="off"> times within <input type="text" id="rspan" class="form-control form-control-sm narrow" autocomplete="off"> seconds</label>');
 				}
 
 				if ( ( condOpts.duration || 0 ) > 0 ) {
@@ -2908,8 +2933,10 @@ var ReactorSensor = (function(api, $) {
 		 */
 		function makeEventMenu( cond, $row ) {
 			var el = jQuery( '<div id="eventlist" class="dropdown" />' );
-			el.append( '<button id="dropdownTriggers" class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" title="Click for device-defined events"><i class="material-icons" aria-haspopup="true" aria-expanded="false">chevron_right</i></button>' );
-			var mm = jQuery( '<div class="dropdown-menu" role="menu" aria-labelledby="dropdownTriggers" />' );
+			var btnid = getUID('btn');
+			el.append( '<button id="dropdownTriggers" class="btn btn-default dropdown-toggle device-triggers" type="button" data-toggle="dropdown" title="Click for device-defined events"><i class="material-icons" aria-haspopup="true" aria-expanded="false">chevron_right</i></button>' );
+			$( 'button.device-triggers', el ).attr( 'id', btnid );
+			var mm = jQuery( '<div class="dropdown-menu" role="menu" />' ).attr( 'aria-labelledby', btnid );
 			el.append( mm );
 			var myid = api.getCpanelDeviceId();
 			var myself = -1 === cond.device || cond.device === myid;
@@ -4133,10 +4160,11 @@ var ReactorSensor = (function(api, $) {
 			html += 'div#tab-conds.reactortab button.md-btn.attn { background-color: #ffff80; }';
 			html += 'div#tab-conds.reactortab button.md-btn.draghandle { cursor: grab; }';
 			html += 'div#tab-conds.reactortab div.tboptgroup { background: #fff; border: 1px solid grey; border-radius: 12px; padding: 12px 12px; }';
-			// html += 'div#tab-conds.reactortab div#outputopt { }';
 			html += 'div#tab-conds.reactortab div#restrictopt { margin-top: 4px; }';
 			html += 'div#tab-conds.reactortab div.opttitle { font-size: 1.15em; font-weight: bold; }';
 			html += 'div#tab-conds.reactortab fieldset.condfields { display: inline-block; }';
+			html += 'div#tab-conds.reactortab fieldset.opt-fs { display: block; border-bottom: 1px solid #ccc; margin: 4px 0 0 16px; padding: 4px 0; }';
+			html += 'div#tab-conds.reactortab fieldset.opt-fs input[type=radio] { margin-left: -16px; }';
 			html += 'div#tab-conds.reactortab input.titleedit { font-size: 12px; height: 24px; }';
 			html += "</style>";
 			jQuery("head").append( html );
