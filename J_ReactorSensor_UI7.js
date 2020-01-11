@@ -3125,7 +3125,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 						$( "select.opmenu option[value='update']", container ).remove();
 						$( "div.currval", container ).text("");
 					} else {
-						updateCurrentServiceValue( container );
+						updateCurrentServiceValue( row );
 					}
 					break;
 
@@ -3189,7 +3189,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 						updateConditionRow( $row ); /* pass it on */
 					});
 
-					updateCurrentServiceValue( container );
+					updateCurrentServiceValue( row );
 					break;
 
 				case 'housemode':
@@ -4386,6 +4386,9 @@ div#tab-conds.reactortab input.titleedit { font-size: 12px; height: 24px; } \
 		$( 'button#addvar', container ).prop( 'disabled', true );
 		$( 'button.md-btn', container ).prop( 'disabled', true );
 		$( 'textarea.expr', row ).prop( 'disabled', false );
+		
+		/* Remove any prior getstates */
+		$('div#opt-state').remove();
 
 		var el = $( '<div class="col-xs-12 col-md-9 col-md-offset-2 form-inline" />' );
 		el.append( makeDeviceMenu( "", "" ).attr( 'id', 'gsdev' ) );
