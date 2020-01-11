@@ -4163,7 +4163,7 @@ var ReactorSensor = (function(api, $) {
 			html += 'div#tab-conds.reactortab div.eventlist { display: inline-block; }';
 			html += 'div#tab-conds.reactortab div.eventlist button { padding: 5px 0px;  border-radius: 4px 0 0 4px; background-color: #ccc; background-image: linear-gradient( to bottom, #ffffff, #e6e6e6 ); background-repeat: repeat-x; }';
 			html += 'div#tab-conds.reactortab div.eventlist button i { font-size: 21px; color: #666; vertical-align:middle; }';
-			html += 'div#tab-conds.reactortab .varmenu { border-left: none; }';
+			html += 'div#tab-conds.reactortab .varmenu { border-left: none; border-top-left-radius: 0px; border-bottom-left-radius: 0px; }';
 
 			html += 'div#tab-conds.reactortab div.tboptgroup { background: #fff; border: 1px solid grey; border-radius: 12px; padding: 12px 12px; }';
 			html += 'div#tab-conds.reactortab div#restrictopt { margin-top: 4px; }';
