@@ -2540,11 +2540,13 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 		 * Update current value display for service condition
 		 */
 		function updateCurrentServiceValue( row ) {
+			console.assert( row.hasClass("cond-cond") );
+			var condID = row.attr( 'id' );
 			var device = parseInt( $("select.devicemenu", row).val() );
 			var service = $("select.varmenu", row).val() || "";
 			var variable = service.replace( /^[^\/]+\//, "" );
 			service = service.replace( /\/.*$/, "" );
-			var blk = $( 'div#currval', row );
+			var blk = $( 'div.currval', row );
 			if ( ! ( isNaN(device) || isEmpty( service ) || isEmpty( variable ) ) ) {
 				var val = api.getDeviceState( device, service, variable );
 				if ( undefined === val || false === val ) {
@@ -3111,7 +3113,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 					v = $( '<fieldset id="nocaseopt" />' ).appendTo( container );
 					getCheckbox( cond.id + "-nocase", "1", "Ignore&nbsp;case", "nocase" )
 						.appendTo( v );
-					container.append('<div id="currval"/>');
+					container.append('<div class="currval" />');
 
 					setUpConditionOpFields( container, cond );
 					$("input.operand", container).on( 'change.reactor', handleConditionRowChange );
@@ -3121,7 +3123,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 					if ( "var" === cond.type ) {
 							/* Remove "updates" op for var condition */
 						$( "select.opmenu option[value='update']", container ).remove();
-						$( "div#currval", container ).text("");
+						$( "div.currval", container ).text("");
 					} else {
 						updateCurrentServiceValue( container );
 					}
@@ -3157,7 +3159,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 					mm.append( $( '<option/>' ).val( "change" ).text( "changes" ) );
 					container.append( mm );
 					menuSelectDefaultFirst( mm, cond.operator );
-					container.append('<div id="currval"/>');
+					container.append('<div class="currval" />');
 
 					setUpConditionOpFields( container, cond );
 					$("select.opmenu", container).on( 'change.reactor', handleConditionRowChange );
@@ -4153,7 +4155,7 @@ div#tab-conds.reactortab div.condopts { padding-left: 32px; } \
 div#tab-conds.reactortab div.cond-type { display: inline-block; vertical-align: top; } \
 div#tab-conds.reactortab div.params { display: inline-block; clear: right; } \
 div#tab-conds.reactortab div.params fieldset { display: inline-block; border: none; margin: 0 4px; padding: 0 0; } \
-div#tab-conds.reactortab div#currval { font-family: "Courier New", Courier, monospace; font-size: 0.9em; margin: 8px 0px; display: block; } \
+div#tab-conds.reactortab div.currval { font-family: "Courier New", Courier, monospace; font-size: 0.9em; margin: 8px 0px; display: block; } \
 div#tab-conds.reactortab div.warning { color: red; } \
 div#tab-conds.reactortab button.md-btn.attn { background-color: #ffff80; } \
 div#tab-conds.reactortab button.md-btn.draghandle { cursor: grab; } \
@@ -4422,7 +4424,8 @@ div#tab-conds.reactortab input.titleedit { font-size: 12px; height: 24px; } \
 	function getVariableRow() {
 		var el = $('<div class="row varexp"></div>');
 		el.append( '<div id="varname" class="col-xs-12 col-sm-12 col-md-2"></div>' );
-		el.append( '<div class="col-xs-12 col-sm-9 col-md-8"><textarea class="expr form-control form-control-sm" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="off"/><div id="currval" /></div>' );
+		el.append( '<div class="col-xs-12 col-sm-9 col-md-8"><textarea class="expr form-control form-control-sm" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="off"/>');
+		$('<div class="currval" />').appendTo( el );
 		// ??? devices_other is an alternate for insert state variable
 		el.append( '<div class="col-xs-12 col-sm-3 col-md-2 text-right">\
 <button class="btn md-btn draghandle" title="Change order (drag)"><i class="material-icons">reorder</i></button>\
@@ -4515,7 +4518,7 @@ div#tab-conds.reactortab input.titleedit { font-size: 12px; height: 24px; } \
 			$( 'div#varname', el).text( vd.name );
 			$( 'textarea.expr', el ).val( vd.expression ).prop( 'disabled', false );
 			$( 'button.md-btn', el ).prop( 'disabled', false );
-			var blk = $( 'div#currval', el ).empty();
+			var blk = $( 'div.currval', el ).empty();
 			if ( csvars[ vd.name ] && undefined !== csvars[ vd.name ].lastvalue ) {
 				var vs = csvars[ vd.name ];
 				if ( null === vs.lastvalue ) {
@@ -4589,7 +4592,7 @@ div#tab-vars.reactortab div.varexp.tberror { border-left: 4px solid red; } \
 div#tab-vars.reactortab textarea.expr { font-family: monospace; resize: vertical; width: 100% !important; } \
 div#tab-vars.reactortab div.varexp { cursor: default; margin: 2px 0 2px 0; } \
 div#tab-vars.reactortab div#varname:after { content: " ="; } \
-div#tab-vars.reactortab div#currval { font-family: "Courier New", Courier, monospace; font-size: 0.9em; } \
+div#tab-vars.reactortab div.currval { font-family: "Courier New", Courier, monospace; font-size: 0.9em; } \
 div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow: none; } \
 </style>');
 			}
