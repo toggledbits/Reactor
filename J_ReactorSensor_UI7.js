@@ -2707,7 +2707,7 @@ var ReactorSensor = (function(api, $) {
 			jQuery("select.varmenu", $row).off( 'change.reactor' ).on( 'change.reactor', handleConditionVarChange );
 
 			newMenu = makeEventMenu( cond, $row );
-			jQuery( 'div#eventlist', $row ).replaceWith( newMenu );
+			jQuery( 'div.eventlist', $row ).replaceWith( newMenu );
 
 			updateCurrentServiceValue( $row );
 
@@ -2932,9 +2932,9 @@ var ReactorSensor = (function(api, $) {
 		 * Make event menu from static JSON eventlist for device
 		 */
 		function makeEventMenu( cond, $row ) {
-			var el = jQuery( '<div id="eventlist" class="dropdown" />' );
+			var el = jQuery( '<div class="eventlist dropdown" />' );
 			var btnid = getUID('btn');
-			el.append( '<button id="dropdownTriggers" class="btn btn-default dropdown-toggle device-triggers" type="button" data-toggle="dropdown" title="Click for device-defined events"><i class="material-icons" aria-haspopup="true" aria-expanded="false">chevron_right</i></button>' );
+			el.append( '<button id="dropdownTriggers" class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" title="Click for device-defined events"><i class="material-icons" aria-haspopup="true" aria-expanded="false">arrow_right</i></button>' );
 			$( 'button.device-triggers', el ).attr( 'id', btnid );
 			var mm = jQuery( '<div class="dropdown-menu" role="menu" />' ).attr( 'aria-labelledby', btnid );
 			el.append( mm );
@@ -3090,12 +3090,14 @@ var ReactorSensor = (function(api, $) {
 							cond.devicename = v;
 							configModified = true;
 						}
+						var fs = $('<fieldset class="vargroup"/>')
+							.appendTo( container );
 						try {
-							container.append( makeEventMenu( cond, row ) );
+							fs.append( makeEventMenu( cond, row ) );
 						} catch( e ) {
 							console.log("Error while attempting to handle device JSON: " + String(e));
 						}
-						container.append( makeVariableMenu( cond.device, cond.service, cond.variable ) );
+						fs.append( makeVariableMenu( cond.device, cond.service, cond.variable ) );
 						jQuery("select.varmenu", container).on( 'change.reactor', handleConditionVarChange );
 						jQuery("select.devicemenu", container).on( 'change.reactor', handleDeviceChange );
 					}
@@ -4152,19 +4154,24 @@ var ReactorSensor = (function(api, $) {
 			html += 'div#tab-conds.reactortab div.params { display: inline-block; clear: right; }';
 			html += 'div#tab-conds.reactortab div.params fieldset { display: inline-block; border: none; margin: 0 4px; padding: 0 0; }';
 
-			html += 'div#tab-conds.reactortab div#eventlist { display: inline-block; }';
-			html += 'div#tab-conds.reactortab div#eventlist button { padding: 6px 4px; }';
-			html += 'div#tab-conds.reactortab div#eventlist button i { font-size: 16pt; color: #666; vertical-align:middle; }';
 			html += 'div#tab-conds.reactortab div#currval { font-family: "Courier New", Courier, monospace; font-size: 0.9em; margin: 8px 0px; display: block; }';
 			html += 'div#tab-conds.reactortab div.warning { color: red; }';
 			html += 'div#tab-conds.reactortab button.md-btn.attn { background-color: #ffff80; }';
 			html += 'div#tab-conds.reactortab button.md-btn.draghandle { cursor: grab; }';
+
+			html += 'div#tab-conds.reactortab fieldset.vargroup { display: inline-block; white-space: nowrap; }';
+			html += 'div#tab-conds.reactortab div.eventlist { display: inline-block; }';
+			html += 'div#tab-conds.reactortab div.eventlist button { padding: 5px 0px;  border-radius: 4px 0 0 4px; background-color: #ccc; background-image: linear-gradient( to bottom, #ffffff, #e6e6e6 ); background-repeat: repeat-x; }';
+			html += 'div#tab-conds.reactortab div.eventlist button i { font-size: 21px; color: #666; vertical-align:middle; }';
+			html += 'div#tab-conds.reactortab .varmenu { border-left: none; }';
+
 			html += 'div#tab-conds.reactortab div.tboptgroup { background: #fff; border: 1px solid grey; border-radius: 12px; padding: 12px 12px; }';
 			html += 'div#tab-conds.reactortab div#restrictopt { margin-top: 4px; }';
 			html += 'div#tab-conds.reactortab div.opttitle { font-size: 1.15em; font-weight: bold; }';
 			html += 'div#tab-conds.reactortab fieldset.condfields { display: inline-block; }';
 			html += 'div#tab-conds.reactortab fieldset.opt-fs { display: block; border-bottom: 1px solid #ccc; margin: 4px 0 0 16px; padding: 4px 0; }';
 			html += 'div#tab-conds.reactortab fieldset.opt-fs input[type=radio] { margin-left: -16px; }';
+
 			html += 'div#tab-conds.reactortab input.titleedit { font-size: 12px; height: 24px; }';
 			html += "</style>";
 			jQuery("head").append( html );
