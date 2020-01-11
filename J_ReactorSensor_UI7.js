@@ -1413,7 +1413,7 @@ var ReactorSensor = (function(api, $) {
 	function showGroupStatus( grp, container, cstate, parentGroup ) {
 		var grpel = $( '\
 <div class="reactorgroup"> \
-  <div class="grouptitle"><button class="btn condbtn"/><span id="titletext">??</span> <span class="currentvalue"/></div> \
+  <div class="grouptitle"><button class="btn condbtn"/><span class="re-title">??</span> <span class="currentvalue"/></div> \
   <div class="grpbody"> \
 	<div class="grpcond"/> \
   </div> \
@@ -1421,7 +1421,7 @@ var ReactorSensor = (function(api, $) {
 
 		var title = 'Group: ' + (grp.name || grp.id ) +
 			( grp.disabled ? " (disabled)" : "" ) + " <" + grp.id + ">";
-		$( 'span#titletext', grpel ).text( title + getCondOptionDesc( grp ) + "; " );
+		$( 'span.re-title', grpel ).text( title + getCondOptionDesc( grp ) + "; " );
 		$( '.condbtn', grpel ).text( (grp.invert ? "NOT " : "") + (grp.operator || "and" ).toUpperCase() );
 
 		/* Highlight groups that are "true" */
@@ -1570,7 +1570,7 @@ var ReactorSensor = (function(api, $) {
 				return ( i1 < i2 ) ? -1 : 1;
 			});
 			var grpel = $( '<div class="reactorgroup" id="variables"/>' );
-			grpel.append( '<div class="grouptitle"><span id="titletext">Expressions</span></div>' );
+			grpel.append( '<div class="grouptitle"><span class="re-title">Expressions</span></div>' );
 			var body = $( '<div class="groupbody" />' );
 			grpel.append( body );
 			for ( var ix=0; ix<vix.length; ix++ ) {
@@ -1646,7 +1646,7 @@ div#reactorstatus div.reactorgroup { position: relative; border-radius: 4px; bor
 div#reactorstatus div#variables.reactorgroup { border: 1px solid #039 } \
 div#reactorstatus div.reactorgroup.groupdisabled * { background-color: #ccc !important; color: #000 !important } \
 div#reactorstatus div.grouptitle { color: #fff; background-color: #039; min-height: 32px; line-height: 2em; border: 1px solid #000; border-radius: inherit; } \
-div#reactorstatus div.grouptitle span#titletext { margin-left: 1em; } \
+div#reactorstatus div.grouptitle span.re-title { margin-left: 1em; } \
 div#reactorstatus div.grouptitle button.condbtn { background-color: #bce8f1; color: #000; width: 5em; border: none; padding: 6px 6px; } \
 div#reactorstatus div.grpbody { position: relative; padding: 0; background-color: #fff; } \
 div#reactorstatus div.grpcond { list-style: none; padding: 0 0 0 44px; margin: 0; } \
@@ -1866,7 +1866,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 
 		/* Make a menu of eligible groups in a ReactorSensor */
 		function makeRSGroupMenu( cond ) {
-			var mm = $( '<select id="grpmenu" class="form-control form-control-sm" />' );
+			var mm = $( '<select class="form-control form-control-sm re-grpmenu" />' );
 			mm.empty();
 			$( '<option/>' ).val( "" ).text("--choose--").appendTo( mm );
 			try {
@@ -1921,14 +1921,14 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 		function updateConditionRow( $row, target ) {
 			var condId = $row.attr("id");
 			var cond = getConditionIndex()[ condId ];
-			var typ = $row.hasClass( "cond-cond" ) ? $("select#condtype", $row).val() || "comment" : "group";
+			var typ = $row.hasClass( "cond-cond" ) ? $("select.re-condtype", $row).val() || "comment" : "group";
 			cond.type = typ;
 			$('.tberror', $row).removeClass('tberror');
 			$row.removeClass('tberror');
 			var val, res, $el;
 			switch (typ) {
 				case "":
-					$( 'select#condtype', $row ).addClass( 'tberror' );
+					$( 'select.re-condtype', $row ).addClass( 'tberror' );
 					break;
 
 				case 'group':
@@ -2023,9 +2023,9 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 				case "grpstate":
 					removeConditionProperties( cond, "device,devicename,groupid,groupname,operator,options" );
 					cond.device = parseInt( $( 'div.params select.devicemenu', $row ).val(), $row );
-					cond.groupid = $( 'div.params select#grpmenu', $row ).val() || "";
-					$( "div.params select#grpmenu", $row ).toggleClass( 'tberror', isEmpty( cond.groupid ) );
-					cond.groupname = $( 'div.params select#grpmenu option:selected', $row ).text();
+					cond.groupid = $( 'div.params select.re-grpmenu', $row ).val() || "";
+					$( "div.params select.re-grpmenu", $row ).toggleClass( 'tberror', isEmpty( cond.groupid ) );
+					cond.groupname = $( 'div.params select.re-grpmenu option:selected', $row ).text();
 					cond.operator = $( 'div.params select.opmenu', $row ).val() || "istrue";
 					break;
 
@@ -2044,8 +2044,8 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 					cond.operator = $("div.params select.opmenu", $row).val() || "is";
 					if ( "change" === cond.operator ) {
 						// Join simple two value list, but don't save "," on its own.
-						cond.value = $( 'select#frommode', $row ).val() || "";
-						val = $( 'select#tomode', $row ).val();
+						cond.value = $( 'select.re-frommode', $row ).val() || "";
+						val = $( 'select.re-tomode', $row ).val();
 						if ( ! isEmpty( val ) ) {
 							cond.value += "," + val;
 						}
@@ -2054,7 +2054,11 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 						$("input.hmode:checked", $row).each( function( ix, control ) {
 							res.push( control.value /* DOM element */ );
 						});
-						cond.value = res.join( ',' );
+						if ( 0 === res.length ) {
+							$( 'select.opmenu', $row ).addClass( 'tberror' );
+						} else {
+							cond.value = res.join( ',' );
+						}
 					}
 					break;
 
@@ -2070,9 +2074,9 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 						} else {
 							var losOtros;
 							if ( pdiv.hasClass('start') ) {
-								losOtros = $('fieldset#end input.year', $row);
+								losOtros = $('fieldset.re-endfields input.year', $row);
 							} else {
-								losOtros = $('fieldset#start input.year', $row);
+								losOtros = $('fieldset.re-startfields input.year', $row);
 							}
 							if ( newval === "" && losOtros.val() !== "" ) {
 								losOtros.val("");
@@ -2081,57 +2085,57 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 							}
 						}
 					}
-					var mon = $("fieldset#start select.monthmenu", $row).val() || "";
+					var mon = $("fieldset.re-startfields select.monthmenu", $row).val() || "";
 					if ( isEmpty( mon ) ) {
 						/* No/any month. Disable years. */
 						$( '.datespec', $row ).val( "" ).prop( 'disabled', true );
 						/* Ending month must also be blank */
-						$( 'fieldset#end select.monthmenu', $row ).val( "" );
+						$( 'fieldset.re-endfields select.monthmenu', $row ).val( "" );
 					} else {
 						/* Month specified, year becomes optional, but either both
 						   years must be specified or neither for between/not. */
 						$( '.datespec', $row ).prop( 'disabled', false );
-						$( 'fieldset#start select.daymenu:has(option[value=""]:selected)', $row ).addClass( 'tberror' );
+						$( 'fieldset.re-startfields select.daymenu:has(option[value=""]:selected)', $row ).addClass( 'tberror' );
 						if ( between ) {
-							$( 'fieldset#end select.daymenu:has(option[value=""]:selected)', $row ).addClass( 'tberror' );
-							var y1 = $( 'fieldset#start input.year', $row ).val() || "";
-							var y2 = $( 'fieldset#end input.year', $row ).val() || "";
+							$( 'fieldset.re-endfields select.daymenu:has(option[value=""]:selected)', $row ).addClass( 'tberror' );
+							var y1 = $( 'fieldset.re-startfields input.year', $row ).val() || "";
+							var y2 = $( 'fieldset.re-endfields input.year', $row ).val() || "";
 							if ( isEmpty( y1 ) !== isEmpty( y2 ) ) {
 								$( '.datespec', $row ).addClass( 'tberror' );
 							}
-							var m2 = $( 'fieldset#end select.monthmenu', $row ).val() || "";
+							var m2 = $( 'fieldset.re-endfields select.monthmenu', $row ).val() || "";
 							if ( isEmpty( m2 ) ) {
 								/* Ending month may not be blank--flag both start/end */
 								$( 'select.monthmenu', $row ).addClass( 'tberror' );
 							}
 						}
 					}
-					var dom = $( 'fieldset#start select.daymenu', $row ).val() || "";
+					var dom = $( 'fieldset.re-startfields select.daymenu', $row ).val() || "";
 					if ( isEmpty( dom ) ) {
 						/* Start day is blank. So must be end day */
-						$( 'fieldset#end select.daymenu', $row ).val( "" );
+						$( 'fieldset.re-endfields select.daymenu', $row ).val( "" );
 					} else if ( between ) {
 						/* Between with start day, end day must also be specified. */
-						$( 'fieldset#end select.daymenu:has(option[value=""]:selected)', $row ).addClass( 'tberror' );
+						$( 'fieldset.re-endfields select.daymenu:has(option[value=""]:selected)', $row ).addClass( 'tberror' );
 					}
 
 					/* Fetch and load */
 					res = [];
-					res.push( isEmpty( mon ) ? "" : $("fieldset#start input.year", $row).val() || "" );
+					res.push( isEmpty( mon ) ? "" : $("fieldset.re-startfields input.year", $row).val() || "" );
 					res.push( mon );
-					res.push( $("fieldset#start select.daymenu", $row).val() || "" );
-					res.push( $("fieldset#start select.hourmenu", $row).val() || "0" );
-					res.push( $("fieldset#start select.minmenu", $row).val() || "0" );
+					res.push( $("fieldset.re-startfields select.daymenu", $row).val() || "" );
+					res.push( $("fieldset.re-startfields select.hourmenu", $row).val() || "0" );
+					res.push( $("fieldset.re-startfields select.minmenu", $row).val() || "0" );
 					if ( ! between ) {
 						Array.prototype.push.apply( res, ["","","","",""] );
-						$('fieldset#end', $row).hide();
+						$('fieldset.re-endfields', $row).hide();
 					} else {
-						$('fieldset#end', $row).show();
-						res.push( isEmpty( mon ) ? "" : $("fieldset#end input.year", $row).val() || "" );
-						res.push( isEmpty( mon ) ? "" : $("fieldset#end select.monthmenu", $row).val() || "" );
-						res.push( $("fieldset#end select.daymenu", $row).val() || "" );
-						res.push( $("fieldset#end select.hourmenu", $row).val() || "0" );
-						res.push( $("fieldset#end select.minmenu", $row).val() || "0" );
+						$('fieldset.re-endfields', $row).show();
+						res.push( isEmpty( mon ) ? "" : $("fieldset.re-endfields input.year", $row).val() || "" );
+						res.push( isEmpty( mon ) ? "" : $("fieldset.re-endfields select.monthmenu", $row).val() || "" );
+						res.push( $("fieldset.re-endfields select.daymenu", $row).val() || "" );
+						res.push( $("fieldset.re-endfields select.hourmenu", $row).val() || "0" );
+						res.push( $("fieldset.re-endfields select.minmenu", $row).val() || "0" );
 					}
 					cond.value = res.join(',');
 					break;
@@ -2140,25 +2144,25 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 					removeConditionProperties( cond, "operator,value,options" );
 					cond.operator = $('div.params select.opmenu', $row).val() || "after";
 					res = [];
-					var whence = $('div.params select#sunstart', $row).val() || "sunrise";
-					var offset = getInteger( $('div.params input#startoffset', $row).val() || "0" );
+					var whence = $('div.params select.re-sunstart', $row).val() || "sunrise";
+					var offset = getInteger( $('div.params input.re-startoffset', $row).val() || "0" );
 					if ( isNaN( offset ) ) {
 						/* Validation error, flag and treat as 0 */
 						offset = 0;
-						$('div.params input#startoffset', $row).addClass('tberror');
+						$('div.params input.re-startoffset', $row).addClass('tberror');
 					}
 					res.push( whence + ( offset < 0 ? '' : '+' ) + String(offset) );
 					if ( cond.operator == "bet" || cond.operator == "nob" ) {
-						$( 'fieldset#end', $row ).show();
-						whence = $('select#sunend', $row).val() || "sunset";
-						offset = getInteger( $('input#endoffset', $row).val() || "0" );
+						$( 'fieldset.re-endfields', $row ).show();
+						whence = $('select.re-sunend', $row).val() || "sunset";
+						offset = getInteger( $('input.re-endoffset', $row).val() || "0" );
 						if ( isNaN( offset ) ) {
 							offset = 0;
-							$('div.params input#endoffset', $row).addClass('tberror');
+							$('div.params input.re-endoffset', $row).addClass('tberror');
 						}
 						res.push( whence + ( offset < 0 ? '' : '+' ) + String(offset) );
 					} else {
-						$( 'fieldset#end', $row ).hide();
+						$( 'fieldset.re-endfields', $row ).hide();
 						res.push("");
 					}
 					cond.value = res.join(',');
@@ -2167,72 +2171,72 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 				case 'interval':
 					removeConditionProperties( cond, "days,hours,mins,basetime,relto,relcond,options" );
 					var nmin = 0;
-					var v = $('div.params #days', $row).val() || "0";
+					var v = $('div.params .re-days', $row).val() || "0";
 					if ( v.match( varRefPattern ) ) {
 						cond.days = v;
 						nmin = 1440;
 					} else {
 						v = getOptionalInteger( v, 0 );
 						if ( isNaN(v) || v < 0 ) {
-							$( 'div.params #days', $row ).addClass( 'tberror' );
+							$( 'div.params .re-days', $row ).addClass( 'tberror' );
 						} else {
 							cond.days = v;
 							nmin = nmin + 1440 * v;
 						}
 					}
 					if ( typeof(cond.days) == "string" || ( typeof(cond.days) == "number" && 0 !== cond.days ) ) {
-						$('div.params #hours,#mins', $row).prop('disabled', true).val("0");
+						$('div.params .re-hours,.re-mins', $row).prop('disabled', true).val("0");
 						cond.hours = 0;
 						cond.mins = 0;
 					} else {
-						$('div.params #hours,#mins', $row).prop('disabled', false);
-						v = $('div.params #hours', $row).val() || "0";
+						$('div.params .re-hours,.re-mins', $row).prop('disabled', false);
+						v = $('div.params .re-hours', $row).val() || "0";
 						if ( v.match( varRefPattern ) ) {
 							cond.hours = v;
 							nmin = 60;
 						} else {
 							v = getOptionalInteger( v, 0 );
 							if ( isNaN(v) || v < 0 || v > 23 ) {
-								$( 'div.params #hours', $row ).addClass( 'tberror' );
+								$( 'div.params .re-hours', $row ).addClass( 'tberror' );
 							} else {
 								cond.hours = v;
 								nmin = nmin + 60 * v;
 							}
 						}
-						v = $('div.params #mins', $row).val() || "0";
+						v = $('div.params .re-mins', $row).val() || "0";
 						if ( v.match( varRefPattern ) ) {
 							cond.mins = v;
 							nmin = 1;
 						} else {
 							v = getOptionalInteger( v, 0 );
 							if ( isNaN(v) || v < 0 || v > 59 ) {
-								$( 'div.params #mins', $row ).addClass( 'tberror' );
+								$( 'div.params .re-mins', $row ).addClass( 'tberror' );
 							} else {
 								cond.mins = v;
 								nmin = nmin + v;
 							}
 						}
 						if ( 0 !== nmin ) {
-							$( '#days', $row ).prop( 'disabled', true ).val("0");
+							$( '.re-days', $row ).prop( 'disabled', true ).val("0");
 						} else {
-							$( '#days', $row ).prop( 'disabled', false );
+							$( '.re-days', $row ).prop( 'disabled', false );
 						}
 					}
 					if ( nmin <= 0 ) {
-						$( 'div.params #days,#hours,#mins', $row ).addClass( 'tberror' );
+						$( 'div.params .re-days,.re-hours,.re-mins', $row ).addClass( 'tberror' );
 					}
 					/* Interval relative to... */
-					v = $( 'div.params select#relto', $row ).val() || "";
+					v = $( 'div.params select.re-relto', $row ).val() || "";
 					if ( "condtrue" === v ) {
 						cond.relto = v;
-						cond.relcond = $( 'div.params select#relcond', $row).val() || "";
+						cond.relcond = $( 'div.params select.re-relcond', $row).val() || "";
 						if ( "" === cond.relcond ) {
-							$( 'div.params select#relcond', $row ).addClass( 'tberror' );
+							$( 'div.params select.re-relcond', $row ).addClass( 'tberror' );
 						}
 						delete cond.basetime;
 					} else {
-						var rh = $( 'div.params select#relhour', $row ).val() || "00";
-						var rm = $( 'div.params select#relmin', $row ).val() || "00";
+						var rh = $( 'div.params select.re-relhour', $row ).val() || "00";
+						var rm = $( 'div.params select.re-relmin', $row ).val() || "00";
 						if ( rh == "00" && rm == "00" ) {
 							delete cond.basetime;
 						} else {
@@ -2248,13 +2252,13 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 					cond.operator = $("div.params select.geofencecond", $row).val() || "is";
 					res = [];
 					if ( "at" === cond.operator || "notat" === cond.operator ) {
-						res[0] = $( 'select#userid', $row ).val() || "";
-						res[1] = $( 'select#location', $row ).val() || "";
+						res[0] = $( 'select.re-userid', $row ).val() || "";
+						res[1] = $( 'select.re-location', $row ).val() || "";
 						if ( isEmpty( res[0] ) ) {
-							$( 'select#userid', $row ).addClass( 'tberror' );
+							$( 'select.re-userid', $row ).addClass( 'tberror' );
 						}
 						if ( isEmpty( res[1] ) ) {
-							$( 'select#location', $row ).addClass( 'tberror' );
+							$( 'select.re-location', $row ).addClass( 'tberror' );
 						}
 					} else {
 						$("input.useropt:checked", $row).each( function( ix, control ) {
@@ -2280,9 +2284,9 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 				cond.options = cond.options || {};
 
 				/* Predecessor condition (sequencing) */
-				var $pred = $( 'select#pred', $ct );
+				var $pred = $( 'select.re-predecessor', $ct );
 				if ( isEmpty( $pred.val() ) ) {
-					$( 'input#predtime', $ct ).prop( 'disabled', true ).val( "" );
+					$( 'input.re-predtime', $ct ).prop( 'disabled', true ).val( "" );
 					$( 'input.predmode', $ct ).prop( 'disabled', true );
 					if ( undefined !== cond.options.after ) {
 						delete cond.options.after;
@@ -2291,12 +2295,12 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 						configModified = true;
 					}
 				} else {
-					$( 'input#predtime', $ct ).prop( 'disabled', false );
+					$( 'input.re-predtime', $ct ).prop( 'disabled', false );
 					$( 'input.predmode', $ct ).prop( 'disabled', false );
-					var pt = parseInt( $('input#predtime', $ct).val() );
+					var pt = parseInt( $('input.re-predtime', $ct).val() );
 					if ( isNaN( pt ) || pt < 0 ) {
 						pt = 0;
-						$('input#predtime', $ct).val(pt);
+						$('input.re-predtime', $ct).val(pt);
 					}
 					var predmode = $( 'input.predmode', $ct ).prop( 'checked' ) ? 0 : 1;
 					if ( cond.options.after !== $pred.val() || cond.options.aftertime !== pt ||
@@ -2310,11 +2314,11 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 				}
 
 				/* Repeats */
-				var $rc = $('input#rcount', $ct);
+				var $rc = $('input.re-repeatcount', $ct);
 				if ( isEmpty( $rc.val() ) || $rc.prop('disabled') ) {
-					$('input#duration', $ct).prop('disabled', false);
-					$('select#durop', $ct).prop('disabled', false);
-					$('input#rspan', $ct).val("").prop('disabled', true);
+					$('input.re-duration', $ct).prop('disabled', false);
+					$('select.re-durop', $ct).prop('disabled', false);
+					$('input.re-repeatspan', $ct).val("").prop('disabled', true);
 					if ( undefined !== cond.options.repeatcount ) {
 						delete cond.options.repeatcount;
 						delete cond.options.repeatwithin;
@@ -2332,17 +2336,17 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 							delete cond.options.duration_op;
 							configModified = true;
 						}
-						$('input#duration', $ct).val("").prop('disabled', true);
-						$('select#durop', $ct).val("ge").prop('disabled', true);
-						$('input#rspan', $ct).prop('disabled', false);
-						if ( $('input#rspan', $ct).val() === "" ) {
-							$('input#rspan', $ct).val( "60" );
+						$('input.re-duration', $ct).val("").prop('disabled', true);
+						$('select.re-durop', $ct).val("ge").prop('disabled', true);
+						$('input.re-repeatspan', $ct).prop('disabled', false);
+						if ( $('input.re-repeatspan', $ct).val() === "" ) {
+							$('input.re-repeatspan', $ct).val( "60" );
 							cond.options.repeatwithin = 60;
 							configModified = true;
 						}
 					}
 				}
-				var $rs = $('input#rspan', $ct);
+				var $rs = $('input.re-repeatspan', $ct);
 				if ( ! $rs.prop('disabled') ) {
 					var rspan = getInteger( $rs.val() );
 					if ( isNaN( rspan ) || rspan < 1 ) {
@@ -2357,10 +2361,10 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 				}
 
 				/* Duration (sustained for) */
-				var $dd = $('input#duration', $ct);
+				var $dd = $('input.re-duration', $ct);
 				if ( isEmpty( $dd.val() ) || $dd.prop('disabled') ) {
-					$('input#rcount', $ct).prop('disabled', false);
-					// $('input#rspan', $ct).prop('disabled', false);
+					$('input.re-repeatcount', $ct).prop('disabled', false);
+					// $('input.re-repeatspan', $ct).prop('disabled', false);
 					if ( undefined !== cond.options.duration ) {
 						delete cond.options.duration;
 						delete cond.options.duration_op;
@@ -2372,8 +2376,8 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 						$dd.addClass('tberror');
 					} else {
 						$dd.removeClass('tberror');
-						$('input#rcount', $ct).val("").prop('disabled', true);
-						// $('input#rspan', $ct).val("").prop('disabled', true);
+						$('input.re-repeatcount', $ct).val("").prop('disabled', true);
+						// $('input.re-repeatspan', $ct).val("").prop('disabled', true);
 						delete cond.options.repeatwithin;
 						delete cond.options.repeatcount;
 						if ( ( cond.options.duration || 0 ) !== dur ) {
@@ -2381,11 +2385,11 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 							if ( dur === 0 ) {
 								delete cond.options.duration;
 								delete cond.options.duration_op;
-								$('input#rcount', $ct).prop('disabled', false);
-								// $('input#rspan', $ct).prop('disabled', false);
+								$('input.re-repeatcount', $ct).prop('disabled', false);
+								// $('input.re-repeatspan', $ct).prop('disabled', false);
 							} else {
 								cond.options.duration = dur;
-								cond.options.duration_op = $('select#durop', $ct).val() || "ge";
+								cond.options.duration_op = $('select.re-durop', $ct).val() || "ge";
 							}
 							configModified = true;
 						}
@@ -2414,11 +2418,11 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 					$( '.pulseopts', $ct ).prop( 'disabled', false );
 					configModified = configModified || ( undefined !== cond.options.holdtime );
 					delete cond.options.holdtime;
-					$( 'input#pulsetime', $ct ).prop( 'disabled', false );
+					$( 'input.re-pulsetime', $ct ).prop( 'disabled', false );
 					configModified = configModified || ( undefined !== cond.options.latch );
 					delete cond.options.latch;
 
-					var $f = $( 'input#pulsetime', $ct );
+					var $f = $( 'input.re-pulsetime', $ct );
 					var pulsetime = $f.val() || "";
 					if ( isEmpty( pulsetime ) ) {
 						pulsetime = 15; /* force a default */
@@ -2434,10 +2438,10 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 							configModified = true;
 						}
 					}
-					var repeats = "repeat" === $( 'select#pulsemode' ).val();
-					$( "span#pulsebreakopts", $ct ).toggle( repeats );
+					var repeats = "repeat" === $( 'select.re-pulsemode' ).val();
+					$( "span.re-pulsebreakopts", $ct ).toggle( repeats );
 					if ( repeats ) {
-						$f = $( 'input#pulsebreak', $ct );
+						$f = $( 'input.re-pulsebreak', $ct );
 						pulsetime = parseInt( $f.val() || "" );
 						if ( isNaN( pulsetime ) || pulsetime <= 0 ) {
 							$f.addClass( 'tberror' );
@@ -2447,7 +2451,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 								configModified = true;
 							}
 						}
-						$f = $( 'input#pulsecount', $ct );
+						$f = $( 'input.re-pulsecount', $ct );
 						var lim = $f.val() || "";
 						if ( isEmpty( lim ) ) {
 							if ( 0 !== cond.options.pulsecount ) {
@@ -2485,7 +2489,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 					delete cond.options.latch;
 
 					/* Hold time (delay reset) */
-					$dd = $( 'input#holdtime', $ct );
+					$dd = $( 'input.re-holdtime', $ct );
 					if ( isEmpty( $dd.val() ) ) {
 						/* Empty and 0 are equivalent */
 						configModified = configModified || ( undefined !== cond.options.holdtime );
@@ -2580,13 +2584,13 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 
 			if ( "housemode" === cond.type ) {
 				if ( "change" == ( cond.operator || "is" ) ) {
-					$( 'fieldset#housemodechecks', $row ).hide();
-					$( 'fieldset#housemodeselects', $row ).show();
-					menuSelectDefaultInsert( $( 'select#frommode', $row ), vv.length > 0 ? vv[0] : "" );
-					menuSelectDefaultInsert( $( 'select#tomode', $row   ), vv.length > 1 ? vv[1] : "" );
+					$( 'fieldset.re-modechecks', $row ).hide();
+					$( 'fieldset.re-modeselects', $row ).show();
+					menuSelectDefaultInsert( $( 'select.re-frommode', $row ), vv.length > 0 ? vv[0] : "" );
+					menuSelectDefaultInsert( $( 'select.re-tomode', $row   ), vv.length > 1 ? vv[1] : "" );
 				} else {
-					$( 'fieldset#housemodechecks', $row ).show();
-					$( 'fieldset#housemodeselects', $row ).hide();
+					$( 'fieldset.re-modechecks', $row ).show();
+					$( 'fieldset.re-modeselects', $row ).hide();
 					vv.forEach( function( ov ) {
 						$('input#' + idSelector( cond.id + '-mode-' + ov ), $row).prop('checked', true);
 					});
@@ -2654,7 +2658,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 						$inp.show();
 					}
 				}
-				var $opt = $( 'fieldset#nocaseopt', $row );
+				var $opt = $( 'fieldset.re-nocaseopt', $row );
 				if ( 0 === ( op.numeric || 0 ) && false !== op.nocase ) {
 					$opt.show();
 					$( 'input.nocase', $opt ).prop( 'checked', coalesce( cond.nocase, 1 ) !== 0 );
@@ -2759,7 +2763,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 				.appendTo( fs );
 			if ( false !== displayed.hold ) {
 				fs.append( '; ' );
-				$( '<label>delay reset <input type="number" id="holdtime" class="form-control form-control-sm narrow followopts"> seconds (0=no delay)</label>' ).appendTo( fs );
+				$( '<label>delay reset <input type="number" class="form-control form-control-sm narrow followopts re-holdtime"> seconds (0=no delay)</label>' ).appendTo( fs );
 			}
 			/* Pulse group is not displayed for update and change operators; always display if configured, though,
 			   do any legacy configs prior to this restriction being added are still editable. */
@@ -2767,9 +2771,9 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 				condOpts.pulsetime ) {
 				fs = $( '<fieldset class="opt-fs" />' ).appendTo( out );
 				getRadio( rid, "P", "Pulse - output goes true for", "opt-output" ).appendTo( fs );
-				$( '<input type="number" id="pulsetime" class="form-control form-control-sm narrow pulseopts"> seconds</label>' )
+				$( '<input type="number" class="form-control form-control-sm narrow pulseopts re-pulsetime"> seconds</label>' )
 					.appendTo( fs );
-				$( '<select id="pulsemode" class="form-control form-control-sm pulseopts"><option value="">once</option><option value="repeat">repeat</option></select><span id="pulsebreakopts"><label for="pulsebreak">after <input type="number" id="pulsebreak" class="form-control form-control-sm narrow pulseopts"> seconds,</label> <label>up to <input type="number" id="pulsecount" class="form-control form-control-sm narrow pulseopts">&nbsp;times&nbsp;(0/blank=no&nbsp;limit)</label></span>' )
+				$( '<select class="form-control form-control-sm pulseopts re-pulsemode"><option value="">once</option><option value="repeat">repeat</option></select><span id="pulsebreakopts"><label>after <input type="number" class="form-control form-control-sm narrow pulseopts re-pulsebreak"> seconds,</label> <label>up to <input type="number" class="form-control form-control-sm narrow pulseopts re-pulsecount">&nbsp;times&nbsp;(0/blank=no&nbsp;limit)</label></span>' )
 					.appendTo( fs );
 			}
 			if ( false !== displayed.latch ) {
@@ -2782,12 +2786,12 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 			if ( ( condOpts.pulsetime || 0 ) > 0 ) {
 				$( '.pulseopts', out ).prop( 'disabled', false );
 				$( 'input#' + idSelector(rid) + '[value="P"]', out ).prop( 'checked', true );
-				$( 'input#pulsetime', out ).val( condOpts.pulsetime || 15 );
-				$( 'input#pulsebreak', out ).val( condOpts.pulsebreak || "" );
-				$( 'input#pulsecount', out ).val( condOpts.pulsecount || "" );
+				$( 'input.re-pulsetime', out ).val( condOpts.pulsetime || 15 );
+				$( 'input.re-pulsebreak', out ).val( condOpts.pulsebreak || "" );
+				$( 'input.re-pulsecount', out ).val( condOpts.pulsecount || "" );
 				var pbo = (condOpts.pulsebreak || 0) > 0;
-				$( 'select#pulsemode', out ).val( pbo ? "repeat" : "" );
-				$( 'span#pulsebreakopts', out ).toggle( pbo );
+				$( 'select.re-pulsemode', out ).val( pbo ? "repeat" : "" );
+				$( 'span.re-pulsebreakopts', out ).toggle( pbo );
 				$( '.followopts,.latchopts', out ).prop( 'disabled', true );
 			} else if ( 0 !== ( condOpts.latch || 0 ) ) {
 				$( '.latchopts', out ).prop( 'disabled', false );
@@ -2806,7 +2810,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 				/* Sequence (predecessor condition) */
 				if ( displayed.sequence ) {
 					fs = $( '<fieldset class="opt-fs form-inline"/>' ).appendTo( rst );
-					var $preds = $('<select id="pred" class="form-control form-control-sm"><option value="">(any time/no sequence)</option></select>');
+					var $preds = $('<select class="form-control form-control-sm re-predecessor"><option value="">(any time/no sequence)</option></select>');
 					/* Add groups that are not ancestor of condition */
 					DOtraverse( (getConditionIndex()).root, function( node ) {
 						$preds.append( $( '<option/>' ).val( node.id ).text( makeConditionDescription( node ) ) );
@@ -2817,11 +2821,11 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 					$( '<label>Condition must occur after&nbsp;</label>' )
 						.append( $preds )
 						.appendTo( fs );
-					fs.append('&nbsp;<label>within <input type="text" id="predtime" class="form-control form-control-sm narrow" autocomplete="off">&nbsp;seconds (0=no time limit)</label>');
+					fs.append('&nbsp;<label>within <input type="text" class="form-control form-control-sm narrow re-predtime" autocomplete="off">&nbsp;seconds (0=no time limit)</label>');
 					fs.append( getCheckbox( getUID("check"), "0",
 						"Predecessor must still be true for this condition to go true", "predmode" ) );
-					$('select#pred', fs).val( condOpts.after || "" );
-					$('input#predtime', fs).val( condOpts.aftertime || 0 )
+					$('select.re-predecessor', fs).val( condOpts.after || "" );
+					$('input.re-predtime', fs).val( condOpts.aftertime || 0 )
 						.prop( 'disabled', "" === ( condOpts.after || "" ) );
 					$('input.predmode', fs)
 						.prop( 'checked', 0 === ( condOpts.aftermode || 0 ) )
@@ -2831,25 +2835,25 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 				/* Duration */
 				if ( displayed.duration ) {
 					fs = $( '<fieldset class="opt-fs form-inline"/>' ).appendTo( rst );
-					fs.append('<label>Condition must be sustained for&nbsp;</label><select id="durop" class="form-control form-control-sm"><option value="ge">at least</option><option value="lt">less than</option></select><input type="text" id="duration" class="form-control form-control-sm narrow" autocomplete="off"><label>&nbsp;seconds</label>');
+					fs.append('<label>Condition must be sustained for&nbsp;</label><select class="form-control form-control-sm re-durop"><option value="ge">at least</option><option value="lt">less than</option></select><input type="text" class="form-control form-control-sm narrow re-duration" autocomplete="off"><label>&nbsp;seconds</label>');
 				}
 
 				/* Repeat */
 				if ( displayed.repeat ) {
 					fs = $( '<fieldset class="opt-fs form-inline" />' ).appendTo( rst );
-					fs.append('<label>Condition must repeat <input type="text" id="rcount" class="form-control form-control-sm narrow" autocomplete="off"> times within <input type="text" id="rspan" class="form-control form-control-sm narrow" autocomplete="off"> seconds</label>');
+					fs.append('<label>Condition must repeat <input type="text" class="form-control form-control-sm narrow re-repeatcount" autocomplete="off"> times within <input type="text" class="form-control form-control-sm narrow re-repeatspan" autocomplete="off"> seconds</label>');
 				}
 
 				if ( ( condOpts.duration || 0 ) > 0 ) {
-					$('input#rcount,input#rspan', rst).prop('disabled', true);
-					$('input#duration', rst).val( condOpts.duration );
-					$('select#durop', rst).val( condOpts.duration_op || "ge" );
+					$('input.re-repeatcount,input.re-repeatspan', rst).prop('disabled', true);
+					$('input.re-duration', rst).val( condOpts.duration );
+					$('select.re-durop', rst).val( condOpts.duration_op || "ge" );
 				} else {
 					var rc = condOpts.repeatcount || "";
-					$('input#duration', rst).prop('disabled', rc != "");
-					$('select#durop', rst).prop('disabled', rc != "");
-					$('input#rcount', rst).val( rc );
-					$('input#rspan', rst).prop('disabled', rc=="").val( rc == "" ? "" : ( condOpts.repeatwithin || "60" ) );
+					$('input.re-duration', rst).prop('disabled', rc != "");
+					$('select.re-durop', rst).prop('disabled', rc != "");
+					$('input.re-repeatcount', rst).val( rc );
+					$('input.re-repeatspan', rst).prop('disabled', rc=="").val( rc == "" ? "" : ( condOpts.repeatwithin || "60" ) );
 				}
 			}
 
@@ -2873,8 +2877,8 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 		 * Update location selector to show correct locations for selected user.
 		 */
 		function updateGeofenceLocations( row, loc ) {
-			var user = $( 'select#userid', row ).val() || "";
-			var mm = $( 'select#location', row );
+			var user = $( 'select.re-userid', row ).val() || "";
+			var mm = $( 'select.re-location', row );
 			mm.empty();
 			if ( "" !== user ) {
 				var ud = api.getUserData();
@@ -2914,11 +2918,11 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 			var row = el.closest( 'div.cond-container' );
 			var val = el.val() || "is";
 			if ( "at" === val || "notat" === val ) {
-				$( 'fieldset#geolong', row ).show();
-				$( 'fieldset#geoquick', row ).hide();
+				$( 'fieldset.re-geolong', row ).show();
+				$( 'fieldset.re-geoquick', row ).hide();
 			} else {
-				$( 'fieldset#geolong', row ).hide();
-				$( 'fieldset#geoquick', row ).show();
+				$( 'fieldset.re-geolong', row ).hide();
+				$( 'fieldset.re-geoquick', row ).show();
 			}
 			handleConditionRowChange( ev );
 		}
@@ -3062,7 +3066,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 					break;
 
 				case 'comment':
-					container.append('<input id="commenttext" type="text" class="form-control form-control-sm" autocomplete="off">');
+					container.append('<input type="text" class="form-control form-control-sm re-comment" autocomplete="off">');
 					$('input', container).on( 'change.reactor', handleConditionRowChange ).val( cond.comment || "" );
 					if ( "cond0" === cond.id && ( cond.comment || "").match( /^Welcome to your new Reactor/i ) ) {
 						$( '<div><strong>New to Reactor?</strong> Check out the <a href="https://youtu.be/wkdFjwEuF58" target="_blank">tutorial videos</a>. There\'s also <a href="https://github.com/toggledbits/Reactor/wiki" target="_blank">the Reactor Wiki</a> and <a href="https://community.getvera.com/c/plugins-and-plugin-development/reactor" target="_blank">Community Forum Category</a>.</div>' )
@@ -3110,7 +3114,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 					}
 					container.append( makeServiceOpMenu( cond.operator ) );
 					container.append('<input type="text" id="' + cond.id + '-value" class="operand form-control form-control-sm" autocomplete="off" list="reactorvarlist">');
-					v = $( '<fieldset id="nocaseopt" />' ).appendTo( container );
+					v = $( '<fieldset class="re-nocaseopt" />' ).appendTo( container );
 					getCheckbox( cond.id + "-nocase", "1", "Ignore&nbsp;case", "nocase" )
 						.appendTo( v );
 					container.append('<div class="currval" />');
@@ -3163,7 +3167,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 
 					setUpConditionOpFields( container, cond );
 					$("select.opmenu", container).on( 'change.reactor', handleConditionRowChange );
-					$("select#grpmenu", container).on( 'change.reactor', handleConditionRowChange );
+					$("select.re-grpmenu", container).on( 'change.reactor', handleConditionRowChange );
 					$("select.devicemenu", container).on( 'change.reactor', function( ev ) {
 						var $el = $( ev.currentTarget );
 						var newDev = $el.val();
@@ -3184,7 +3188,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 
 						/* Make a new service/variable menu and replace it on the row. */
 						var newMenu = makeRSGroupMenu( cond );
-						$("select#grpmenu", $row).empty().append( newMenu.children() );
+						$("select.re-grpmenu", $row).empty().append( newMenu.children() );
 
 						updateConditionRow( $row ); /* pass it on */
 					});
@@ -3202,7 +3206,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 					container.append( mm );
 					container.append( " " );
 					// Checkboxes in their own fieldset
-					var d = $( '<fieldset id="housemodechecks" class="condfields form-inline"/>' );
+					var d = $( '<fieldset class="condfields form-inline re-modechecks"/>' );
 					for ( k=1; k<=4; k++ ) {
 						getCheckbox( cond.id + '-mode-' + k, k, houseModeName[k] || k, "hmode" )
 							.appendTo( d );
@@ -3210,17 +3214,17 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 					container.append( d );
 					$( "input.hmode", container ).on( 'change.reactor', handleConditionRowChange );
 					// Menus in a separate fieldset
-					d = $( '<fieldset id="housemodeselects" class="condfields"/>' );
+					d = $( '<fieldset class="condfields re-modeselects"/>' );
 					mm = $( '<select class="form-control form-control-sm"/>' );
 					mm.append( '<option value="">(any)</option>' );
 					for ( k=1; k<=4; k++ ) {
 						mm.append( $( '<option/>' ).val(k).text( houseModeName[k] ) );
 					}
-					d.append( mm.clone().attr( 'id', 'frommode' ) );
+					d.append( mm.clone().addClass( 're-frommode' ) );
 					d.append( " to " );
-					d.append( mm.attr( 'id', 'tomode' ) );
+					d.append( mm.addClass( 're-tomode' ) );
 					container.append( d );
-					$( 'select#frommode,select#tomode', container).on( 'change.reactor', handleConditionRowChange );
+					$( 'select.re-frommode,select.re-tomode', container).on( 'change.reactor', handleConditionRowChange );
 
 					// Restore values and set up correct display.
 					setUpConditionOpFields( container, cond );
@@ -3250,14 +3254,14 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 					container.append( makeDateTimeOpMenu( cond.operator ) );
 					$("select.opmenu", container).append('<option value="before">before</option>');
 					$("select.opmenu", container).append('<option value="after">after</option>');
-					container.append('<fieldset id="start">' +
-						'<select id="sunstart"></select> '+
-						' offset&nbsp;<input type="text" id="startoffset" value="" class="tiny form-control form-control-sm" autocomplete="off">&nbsp;minutes' +
+					container.append('<fieldset class="re-startfields">' +
+						'<select class="re-sunstart" />'+
+						' offset&nbsp;<input type="text" value="" class="tiny form-control form-control-sm re-startoffset" autocomplete="off">&nbsp;minutes' +
 						'</fieldset>'
 					);
-					container.append('<fieldset id="end">&nbsp;and ' +
-						'<select id="sunend"></select> '+
-						' offset&nbsp;<input type="text" id="endoffset" value="" class="tiny form-control form-control-sm" autocomplete="off">&nbsp;minutes' +
+					container.append('<fieldset class="re-endfields">&nbsp;and ' +
+						'<select class="re-sunend"></select> '+
+						' offset&nbsp;<input type="text" value="" class="tiny form-control form-control-sm re-endoffset" autocomplete="off">&nbsp;minutes' +
 						'</fieldset>'
 					);
 					mm = $('<select class="form-control form-control-sm">' +
@@ -3266,15 +3270,15 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 						'<option value="nautdawn">Nautical dawn</option><option value="nautdusk">Nautical dusk</option>' +
 						'<option value="astrodawn">Astronomical dawn</option><option value="astrodusk">Astronomical dusk</option></select>'
 						);
-					$('select#sunend', container).replaceWith( mm.clone().attr( 'id', 'sunend' ) );
-					$('select#sunstart', container).replaceWith( mm.attr( 'id', 'sunstart' ) );
+					$('select.re-sunend', container).replaceWith( mm.clone().addClass( 're-sunend' ) );
+					$('select.re-sunstart', container).replaceWith( mm.addClass( 're-sunstart' ) );
 					/* Restore. Condition first... */
 					op = menuSelectDefaultFirst( $("select.opmenu", container), cond.operator );
 					$("select.opmenu", container).on( 'change.reactor', handleConditionRowChange );
 					if ( "bet" === op || "nob" === op ) {
-						$("fieldset#end", container).show();
+						$("fieldset.re-endfields", container).show();
 					} else {
-						$("fieldset#end", container).hide();
+						$("fieldset.re-endfields", container).hide();
 					}
 					/* Start */
 					var vals = ( cond.value || "sunrise+0,sunset+0" ).split(/,/);
@@ -3283,16 +3287,16 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 						k = [ "", "sunrise", "0" ];
 						configModified = true;
 					}
-					$("select#sunstart", container).on( 'change.reactor', handleConditionRowChange ).val( k[1] );
-					$("input#startoffset", container).on( 'change.reactor', handleConditionRowChange ).val( k[2] );
+					$("select.re-sunstart", container).on( 'change.reactor', handleConditionRowChange ).val( k[1] );
+					$("input.re-startoffset", container).on( 'change.reactor', handleConditionRowChange ).val( k[2] );
 					/* End */
 					k = ( vals[1] || "sunset+0" ).match( /^([^+-]+)(.*)/ );
 					if ( k === null || k.length !== 3 ) {
 						k = [ "", "sunset", "0" ];
 						configModified = true;
 					}
-					$("select#sunend", container).on( 'change.reactor', handleConditionRowChange ).val( k[1] );
-					$("input#endoffset", container).on( 'change.reactor', handleConditionRowChange ).val( k[2] );
+					$("select.re-sunend", container).on( 'change.reactor', handleConditionRowChange ).val( k[1] );
+					$("input.re-endoffset", container).on( 'change.reactor', handleConditionRowChange ).val( k[2] );
 					break;
 
 				case 'trange':
@@ -3319,13 +3323,13 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 					for ( var mn=0; mn<60; mn+=5 ) {
 						mins.append('<option value="' + mn + '">:' + (mn < 10 ? '0' : '') + mn + '</option>');
 					}
-					container.append('<fieldset id="start" />').append('<fieldset id="end">&nbsp;and </fieldset>');
-					$("fieldset#start", container).append( months.clone() )
+					container.append('<fieldset class="re-startfields" />').append('<fieldset class="re-endfields">&nbsp;and </fieldset>');
+					$("fieldset.re-startfields", container).append( months.clone() )
 						.append( days.clone() )
 						.append('<input type="text" placeholder="yyyy or blank" title="Leave blank for any year" class="year narrow datespec form-control form-control-sm" autocomplete="off">')
 						.append( hours.clone() )
 						.append( mins.clone() );
-					$("fieldset#end", container).append( months )
+					$("fieldset.re-endfields", container).append( months )
 						.append( days )
 						.append('<input type="text" placeholder="yyyy" class="year narrow datespec form-control form-control-sm" autocomplete="off">')
 						.append( hours )
@@ -3337,15 +3341,15 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 					/* Restore values. */
 					op = menuSelectDefaultFirst( $( "select.opmenu", container ), cond.operator );
 					if ( "bet" === op || "nob" === "op" ) {
-						$("fieldset#end", container).show();
+						$("fieldset.re-endfields", container).show();
 					} else {
-						$("fieldset#end", container).hide();
+						$("fieldset.re-endfields", container).hide();
 					}
 					var vlist = (cond.value || "").split(',');
-					var flist = [ 'fieldset#start input.year', 'fieldset#start select.monthmenu','fieldset#start select.daymenu',
-								  'fieldset#start select.hourmenu', 'fieldset#start select.minmenu',
-								  'fieldset#end input.year','fieldset#end select.monthmenu', 'fieldset#end select.daymenu',
-								  'fieldset#end select.hourmenu','fieldset#end select.minmenu'
+					var flist = [ 'fieldset.re-startfields input.year', 'fieldset.re-startfields select.monthmenu','fieldset.re-startfields select.daymenu',
+								  'fieldset.re-startfields select.hourmenu', 'fieldset.re-startfields select.minmenu',
+								  'fieldset.re-endfields input.year','fieldset.re-endfields select.monthmenu', 'fieldset.re-endfields select.daymenu',
+								  'fieldset.re-endfields select.hourmenu','fieldset.re-endfields select.minmenu'
 					];
 					for ( var fx=0; fx<flist.length; fx++ ) {
 						if ( fx >= vlist.length ) {
@@ -3363,45 +3367,45 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 
 				case 'interval':
 					fs = $( '<fieldset />' );
-					el = $( '<label for="days">every </label>' );
-					el.append( '<input id="days" title="Enter an integer >= 0; hours and minutes must be 0!" value="0" class="tiny text-center form-control form-control-sm">' );
+					el = $( '<label>every </label>' );
+					el.append( '<input title="Enter an integer >= 0; hours and minutes must be 0!" value="0" class="tiny text-center form-control form-control-sm re-days">' );
 					el.append( ' days ' );
 					fs.append( el );
 					fs.append( " " );
-					el = $( '<label for="hours"> </label>' );
-					el.append( '<input id="hours" title="Enter an integer >= 0" class="tiny text-center form-control form-control-sm">' );
+					el = $( '<label> </label>' );
+					el.append( '<input title="Enter an integer >= 0" class="tiny text-center form-control form-control-sm re-hours">' );
 					el.append( ' hours ' );
 					fs.append( el );
 					fs.append( " " );
-					el = $( '<label for="mins"> </label> ');
-					el.append( '<input id="mins" title="Enter an integer >= 0" value="0" class="tiny text-center form-control form-control-sm">' );
+					el = $( '<label> </label> ');
+					el.append( '<input title="Enter an integer >= 0" value="0" class="tiny text-center form-control form-control-sm re-mins">' );
 					el.append( ' minutes ');
 					fs.append( el );
 					container.append( fs );
 					container.append( " " );
 					/* Interval relative time or condition (opposing fieldsets) */
 					el = $( '<label/>' ).text( " relative to ");
-					mm = $( '<select id="relto" class="form-control form-control-sm"/>' );
+					mm = $( '<select class="form-control form-control-sm re-relto"/>' );
 					mm.append( $( '<option/>' ).val( "" ).text( "Time" ) );
 					mm.append( $( '<option/>' ).val( "condtrue" ).text( "Condition TRUE" ) );
 					el.append( mm );
-					fs = $( '<fieldset />' ).attr( 'id', 'reltimeset' );
-					mm = $('<select id="relhour" class="form-control form-control-sm"/>');
+					fs = $( '<fieldset class="re-reltimeset" />' );
+					mm = $('<select class="form-control form-control-sm re-relhour"/>');
 					for ( k=0; k<24; k++ ) {
 						v = ( k < 10 ? "0" : "" ) + String(k);
 						mm.append( $('<option/>').val( v ).text( v ) );
 					}
 					fs.append( mm );
 					fs.append(" : ");
-					mm = $('<select id="relmin" class="form-control form-control-sm" />');
+					mm = $('<select class="form-control form-control-sm re-relmin" />');
 					for ( k=0; k<60; k+=5 ) {
 						v = ( k < 10 ? "0" : "" ) + String(k);
 						mm.append( $('<option/>').val( v ).text( v ) );
 					}
 					fs.append( mm );
 					el.append( fs );
-					fs = $( '<fieldset />' ).attr( 'id', 'relcondset' ).hide();
-					mm = $( '<select id="relcond" class="form-control form-control-sm" />' );
+					fs = $( '<fieldset class="re-relcondset" />' ).hide();
+					mm = $( '<select class="form-control form-control-sm re-relcond" />' );
 					mm.append( $( '<option/>' ).val( "" ).text( '--choose--' ) );
 					DOtraverse( getConditionIndex().root, function( n ) {
 						var tt = (condTypeName[n.type || "group"] || "?") + ": " +
@@ -3414,34 +3418,34 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 					el.append( fs );
 					/* Fin */
 					container.append( $( '<fieldset />' ).append( el ) );
-					$( "#days", container ).val( cond.days || 0 );
-					$( "#hours", container ).val( cond.hours===undefined ? 1 : cond.hours );
-					$( "#mins", container ).val( cond.mins || 0 );
-					$( "select#relto", container ).val( cond.relto || "" );
+					$( ".re-days", container ).val( cond.days || 0 );
+					$( ".re-hours", container ).val( cond.hours===undefined ? 1 : cond.hours );
+					$( ".re-mins", container ).val( cond.mins || 0 );
+					$( "select.re-relto", container ).val( cond.relto || "" );
 					if ( "condtrue" === cond.relto ) {
 						/* Relative to condition */
-						$( "fieldset#relcondset", container ).show();
-						$( "fieldset#reltimeset", container ).hide();
+						$( "fieldset.re-relcondset", container ).show();
+						$( "fieldset.re-reltimeset", container ).hide();
 						var t = cond.relcond || "";
-						menuSelectDefaultInsert( $( "select#relcond", container ), t );
+						menuSelectDefaultInsert( $( "select.re-relcond", container ), t );
 					} else {
 						/* Relative to time (default) */
 						if ( ! isEmpty( cond.basetime ) ) {
 							mm = cond.basetime.split(/,/);
-							menuSelectDefaultInsert( $( '#relhour', container ), mm[0] || '00' );
-							menuSelectDefaultInsert( $( '#relmin', container ), mm[1] || '00' );
+							menuSelectDefaultInsert( $( '.re-relhour', container ), mm[0] || '00' );
+							menuSelectDefaultInsert( $( '.re-relmin', container ), mm[1] || '00' );
 						}
 					}
 					$("select,input", container).on( 'change.reactor', function( ev ) {
 						var $el = $( ev.currentTarget );
 						var $row = $el.closest( 'div.cond-container' );
-						if ( "relto" === $el.attr( 'id' ) ) {
+						if ( $el.hasClass( "re-relto" ) ) {
 							var relto = $el.val() || "";
 							if ( "condtrue" === relto ) {
-								$( '#reltimeset', $row ).hide();
-								$( '#relcondset', $row ).show();
+								$( '.re-reltimeset', $row ).hide();
+								$( '.re-relcondset', $row ).show();
 								/* Rebuild the menu of conditions, in case changed */
-								var $mm = $( 'select#relcond', $row );
+								var $mm = $( 'select.re-relcond', $row );
 								$( 'option[value!=""]', $mm ).remove();
 								DOtraverse( getConditionIndex().root, function( n ) {
 									$mm.append( $( '<option/>' ).val( n.id ).text( makeConditionDescription( n ) ) );
@@ -3450,8 +3454,8 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 								});
 								$mm.val( "" );
 							} else {
-								$( '#reltimeset', $row ).show();
-								$( '#relcondset', $row ).hide();
+								$( '.re-reltimeset', $row ).show();
+								$( '.re-relcondset', $row ).hide();
 							}
 						}
 						handleConditionRowChange( ev ); /* pass on */
@@ -3461,9 +3465,9 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 				case 'ishome':
 					container.append(
 						'<select class="geofencecond form-control form-control-sm"><option value="is">Any selected user is home</option><option value="is not">Any selected user is NOT home</option><option value="at">User in geofence</option><option value="notat">User not in geofence</option></select>');
-					mm = $( '<select id="userid" class="form-control form-control-sm"/>' );
+					mm = $( '<select class="form-control form-control-sm re-userid"/>' );
 					mm.append( $( '<option/>' ).val("").text('--choose user--') );
-					fs = $( '<fieldset id="geoquick" />' );
+					fs = $( '<fieldset class="re-geoquick" />' );
 					for ( k in userIx ) {
 						if ( userIx.hasOwnProperty( k ) ) {
 							getCheckbox( cond.id + '-user-' + k, k, userIx[k].name || k, "useropt" )
@@ -3472,33 +3476,33 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 						}
 					}
 					container.append( fs );
-					fs = $( '<fieldset id="geolong" />' );
+					fs = $( '<fieldset class="re-geolong" />' );
 					fs.append( mm );
-					fs.append( '<select id="location" class="form-control form-control-sm"/>' );
+					fs.append( '<select class="form-control form-control-sm re-location"/>' );
 					container.append( fs );
 					$("input.useropt", container).on( 'change.reactor', handleConditionRowChange );
 					$("select.geofencecond", container)
 						.on( 'change.reactor', handleGeofenceOperatorChange );
 					op = menuSelectDefaultFirst( $( "select.geofencecond", container ), cond.operator );
-					$("select#userid", container).on( 'change.reactor', handleGeofenceUserChange );
-					$("select#location", container).on( 'change.reactor', handleConditionRowChange );
+					$("select.re-userid", container).on( 'change.reactor', handleGeofenceUserChange );
+					$("select.re-location", container).on( 'change.reactor', handleConditionRowChange );
 					if ( op === "at" || op === "notat" ) {
-						$( 'fieldset#geoquick', container ).hide();
-						$( 'fieldset#geolong', container ).show();
+						$( 'fieldset.re-geoquick', container ).hide();
+						$( 'fieldset.re-geolong', container ).show();
 						mm = ( cond.value || "" ).split(',');
 						if ( mm.length > 0 ) {
-							menuSelectDefaultInsert( $( 'select#userid', container ), mm[0] );
+							menuSelectDefaultInsert( $( 'select.re-userid', container ), mm[0] );
 							updateGeofenceLocations( container, mm[1] );
 						}
 					} else {
-						$( 'fieldset#geoquick', container ).show();
-						$( 'fieldset#geolong', container ).hide();
+						$( 'fieldset.re-geoquick', container ).show();
+						$( 'fieldset.re-geolong', container ).hide();
 						(cond.value || "").split(',').forEach( function( val ) {
 							if ( ! isEmpty( val ) ) {
 								var $c = $('input.useropt[value="' + val + '"]', container);
 								if ( 0 === $c.length ) {
 									$c = getCheckbox( cond.id + '-user-' + val, val, val + "?&nbsp;(unknown&nbsp;user)", "useropt" );
-									$c.appendTo( $( 'fieldset#geoquick', container ) );
+									$c.appendTo( $( 'fieldset.re-geoquick', container ) );
 								}
 								$c.prop('checked', true);
 							}
@@ -3569,7 +3573,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 
 			/* Insert new condition in UI */
 			var condel = getConditionTemplate( cond.id );
-			$( 'select#condtype', condel ).val( cond.type );
+			$( 'select.re-condtype', condel ).val( cond.type );
 			setConditionForType( cond, condel );
 			$( 'div.cond-list:first', $parentGroup ).append( condel );
 
@@ -3585,14 +3589,14 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 			configModified = true;
 			updateConditionRow( condel );
 
-			$( 'select#condtype', condel ).focus();
+			$( 'select.re-condtype', condel ).focus();
 		}
 
 		function handleTitleChange( ev ) {
 			var input = $( ev.currentTarget );
 			var grpid = input.closest( 'div.cond-container.cond-group' ).attr( 'id' );
 			var newname = (input.val() || "").trim();
-			var span = $( 'span#titletext', input.parent() );
+			var span = $( 'span.re-title', input.parent() );
 			var grp = getConditionIndex()[grpid];
 			input.removeClass( 'tberror' );
 			if ( newname !== grp.name ) {
@@ -3640,22 +3644,22 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 			var $el = $( ev.currentTarget );
 			var $p = $el.closest( 'div.cond-container.cond-group' );
 			var $l = $( 'div.cond-group-body:first', $p );
-			if ( "collapse" === $el.attr( 'id' ) ) {
+			if ( $el.hasClass( 're-collapse' ) ) {
 				$l.slideUp();
-				$el.attr( 'id', 'expand' ).attr( 'title', 'Expand group' );
+				$el.addClass( 're-expand' ).removeClass( 're-collapse' ).attr( 'title', 'Expand group' );
 				$( 'i', $el ).text( 'expand_more' );
 				try {
 					var n = $( 'div.cond-list:first > div', $p ).length;
-					$( 'span#titlemessage:first', $p ).text( " (" + n +
+					$( 'span.re-titlemessage:first', $p ).text( " (" + n +
 						" condition" + ( 1 !== n ? "s" : "" ) + " collapsed)" );
 				} catch( e ) {
-					$( 'span#titlemessage:first', $p ).text( " (conditions collapsed)" );
+					$( 'span.re-titlemessage:first', $p ).text( " (conditions collapsed)" );
 				}
 			} else {
 				$l.slideDown();
-				$el.attr( 'id', 'collapse' ).attr( 'title', 'Collapse group' );
+				$el.removeClass( 're-expand' ).addClass( 're-collapse' ).attr( 'title', 'Collapse group' );
 				$( 'i', $el ).text( 'expand_less' );
-				$( 'span#titlemessage:first', $p ).text( "" );
+				$( 'span.re-titlemessage:first', $p ).text( "" );
 			}
 		}
 
@@ -3933,7 +3937,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
   </div> \
   <div class="cond-body form-inline"> \
 	<div class="cond-type"> \
-	  <select id="condtype" class="form-control form-control-sm"><option value="">--choose--</option></select> \
+	  <select class="form-control form-control-sm re-condtype"><option value="">--choose--</option></select> \
 	</div> \
 	<div class="params" /> \
   </div> \
@@ -3941,12 +3945,12 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 
 			[ "comment", "service", "grpstate", "var", "housemode", "sun", "weekday", "trange", "interval", "ishome", "reload" ].forEach( function( k ) {
 				if ( ! ( isOpenLuup && k == "ishome" ) ) {
-					$( "select#condtype", el ).append( $( "<option/>" ).val( k ).text( condTypeName[k] ) );
+					$( "select.re-condtype", el ).append( $( "<option/>" ).val( k ).text( condTypeName[k] ) );
 				}
 			});
 
 			el.attr( 'id', id );
-			$('select#condtype', el).on( 'change.reactor', handleTypeChange );
+			$('select.re-condtype', el).on( 'change.reactor', handleTypeChange );
 			$('button#delcond', el).on( 'click.reactor', handleConditionDelete );
 			$("button#condmore", el).on( 'click.reactor', handleExpandOptionsClick );
 			return el;
@@ -3975,10 +3979,10 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 		<button id="disable" class="btn btn-xs btn-primary tb-disable" title="Disabled groups are ignored, as if they did not exist (conditions don\'t run)"> DISABLE </button> \
 	  </div> \
 	  <div class="cond-group-title"> \
-		<span id="titletext" /> \
+		<span class="re-title" /> \
 		<button id="edittitle" class="btn md-btn" title="Edit group name"><i class="material-icons">edit</i></button> \
 		<button id="collapse" class="btn md-btn noroot" title="Collapse group"><i class="material-icons">expand_less</i></button> \
-		<span id="titlemessage" /> \
+		<span class="re-titlemessage" /> \
 	  </div> \
 	</div> \
   </div> \
@@ -3992,7 +3996,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
   </div> \
 </div>' );
 			el.attr('id', grpid);
-			$( 'span#titletext', el ).text( grpid );
+			$( 'span.re-title', el ).text( grpid );
 			$( 'div.cond-group-conditions input[type="radio"]', el ).attr('name', grpid);
 			if ( 'root' === grpid ) {
 				/* Can't delete root group, but use the space for Save and Revert */
@@ -4007,7 +4011,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 			$( 'button#addgroup', el ).on( 'click.reactor', handleAddGroupClick );
 			$( 'button#delgroup', el ).on( 'click.reactor', handleDeleteGroupClick );
 			$( 'button#condmore', el).on( 'click.reactor', handleExpandOptionsClick );
-			$( 'span#titletext,button#edittitle', el ).on( 'click.reactor', handleTitleClick );
+			$( 'span.re-title,button#edittitle', el ).on( 'click.reactor', handleTitleClick );
 			$( 'button#collapse', el ).on( 'click.reactor', handleGroupExpandClick );
 			$( '.cond-group-control > button', el ).on( 'click.reactor', handleGroupControlClick );
 			$( '.cond-list', el ).addClass("tb-sortable").sortable({
@@ -4039,7 +4043,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 			container.append( el );
 
 			el.addClass( 'level' + depth ).addClass( 'levelmod' + (depth % 4) );
-			$( 'span#titletext', el ).text( grp.name || grp.id ).attr( 'title', msgGroupIdChange );
+			$( 'span.re-title', el ).text( grp.name || grp.id ).attr( 'title', msgGroupIdChange );
 			$( 'div.cond-group-conditions .tb-btn-radio button', el ).removeClass( "checked" );
 			$( 'div.cond-group-conditions .tb-btn-radio button#' + ( grp.operator || "and" ), el ).addClass( "checked" );
 			if ( grp.invert ) {
@@ -4060,14 +4064,14 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 					var row = getConditionTemplate( cond.id );
 					container.append( row );
 
-					var sel = $('select#condtype', row);
+					var sel = $('select.re-condtype', row);
 					if ( $('option[value="' + cond.type + '"]', sel).length === 0 ) {
 						/* Condition type not on menu, probably a deprecated form. Insert it. */
 						sel.append('<option value="' + cond.type + '">' +
 							(condTypeName[cond.type] === undefined ? cond.type + ' (deprecated)' : condTypeName[cond.type] ) +
 							'</option>');
 					}
-					$('select#condtype', row).val( cond.type );
+					$('select.re-condtype', row).val( cond.type );
 					setConditionForType( cond, row );
 				} else {
 					/* Group! */
@@ -4144,7 +4148,7 @@ div#tab-conds.reactortab .error-container { display: none; cursor: help; color: 
 .cond-list > *:not(.ui-draggable-dragging):last-child::before {  border-radius: 0 0 0 4px; } \
 .cond-list > *:not(.ui-draggable-dragging):last-child::after { display: none; } \
 div#tab-conds.reactortab .cond-group-title { display: inline-block; } \
-div#tab-conds.reactortab .cond-group-title span#titletext { padding: 0 4px; font-size: 16px; font-weight: bold; color: #036; } \
+div#tab-conds.reactortab .cond-group-title span.re-title { padding: 0 4px; font-size: 16px; font-weight: bold; color: #036; } \
 div#tab-conds.reactortab .btn.checked { background-color: #5cb85c; } \
 div#tab-conds.reactortab .btn.tb-disable.checked { background-color: #d9534f; } \
 div#tab-conds.reactortab div.cond-group.tbmodified:not(.tberror) { } \
@@ -4171,6 +4175,7 @@ div#tab-conds.reactortab fieldset.condfields { display: inline-block; } \
 div#tab-conds.reactortab fieldset.opt-fs { display: block; border-bottom: 1px solid #ccc; margin: 4px 0 0 16px; padding: 4px 0; } \
 div#tab-conds.reactortab fieldset.opt-fs input[type=radio] { margin-left: -16px; } \
 div#tab-conds.reactortab input.titleedit { font-size: 12px; height: 24px; } \
+div#tab-conds.reactortab input.re-comment { width: 100% !important; } \
 </style>');
 			}
 
@@ -4395,7 +4400,7 @@ div#tab-conds.reactortab input.titleedit { font-size: 12px; height: 24px; } \
 		el.append( CondBuilder.makeVariableMenu( parseInt( $( 'select#gsdev', el ).val() ), "", "" )
 			.attr( 'id', 'gsvar' ) );
 		el.append(' ');
-		el.append( '<label class="checkbox-inline" for="usename"><input id="usename" type="checkbox">&nbsp;Use&nbsp;Name</label>' );
+		el.append( '<label class="checkbox-inline"><input id="usename" type="checkbox">&nbsp;Use&nbsp;Name</label>' );
 		el.append(' ');
 		el.append( $( '<button/>' ).attr( 'id', 'getstateinsert' )
 			.addClass( "btn btn-xs btn-success" )
@@ -4488,7 +4493,7 @@ div#tab-conds.reactortab input.titleedit { font-size: 12px; height: 24px; } \
 		var container = $('div#tab-vars.reactortab div#reactorvars');
 		container.empty();
 		var gel = $('<div class="vargroup"></div>');
-		gel.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span class="titletext">Defined Variables</span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button class="btn btn-xs btn-success saveconf">Save</button> <button class="btn btn-xs btn-danger revertconf">Revert</button></div></div>');
+		gel.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span class="re-title">Defined Variables</span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button class="btn btn-xs btn-success saveconf">Save</button> <button class="btn btn-xs btn-danger revertconf">Revert</button></div></div>');
 
 		var list = $( '<div class="varlist tb-sortable" />' );
 		gel.append( list );
@@ -4585,7 +4590,7 @@ div#tab-conds.reactortab input.titleedit { font-size: 12px; height: 24px; } \
 div#tab-vars.reactortab .color-green { color: #006040; } \
 div#tab-vars.reactortab button.md-btn.draghandle { cursor: grab; } \
 div#tab-vars.reactortab div.tblisttitle { background-color: #444; color: #fff; padding: 8px; min-height: 42px; } \
-div#tab-vars.reactortab div.tblisttitle span.titletext { font-size: 16px; font-weight: bold; margin-right: 4em; } \
+div#tab-vars.reactortab div.tblisttitle span.re-title { font-size: 16px; font-weight: bold; margin-right: 4em; } \
 div#tab-vars.reactortab div.vargroup { border-radius: 8px; border: 2px solid #444; margin-bottom: 8px; } \
 div#tab-vars.reactortab div.vargroup .row { margin-right: 0px; margin-left: 0px; } \
 div#tab-vars.reactortab div.vargroup div.var:nth-child(odd) { background-color: #efefef; } \
@@ -4665,7 +4670,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 	function makeSceneMenu() {
 		var ud = api.getUserData();
 		var scenes = api.cloneObject( ud.scenes || [] );
-		var menu = $( '<select class="form-control form-control-sm" />' );
+		var menu = $( '<select class="form-control form-control-sm re-scene" />' );
 		/* If lots of scenes, sort by room; otherwise, use straight as-is */
 		var i;
 		if ( true || scenes.length > 10 ) {
@@ -4722,7 +4727,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 	}
 
 	function validateActionRow( row ) {
-		var actionType = $('select#actiontype', row).val();
+		var actionType = $('select.re-actiontype', row).val();
 		$('.tberror', row).removeClass( 'tberror' );
 		$('.tbwarn', row).removeClass( 'tbwarn' );
 		row.removeClass( 'tberror' );
@@ -4756,9 +4761,9 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 				} else {
 					var devnum = parseInt( dev );
 					if ( -1 === devnum ) devnum = api.getCpanelDeviceId();
-					var sact = $('select#actionmenu', row).val();
+					var sact = $('select.re-actionmenu', row).val();
 					if ( isEmpty( sact ) ) {
-						$( 'select#actionmenu', row ).addClass( "tberror" );
+						$( 'select.re-actionmenu', row ).addClass( "tberror" );
 					} else {
 						// check parameters, with value/type check when available?
 						// type, valueSet/value list, min/max
@@ -4831,7 +4836,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 				break;
 
 			case "runscene":
-				dev = $( 'select#scene', row );
+				dev = $( 'select.re-scene', row );
 				dev.toggleClass( 'tberror', isEmpty( dev.val() ) );
 				break;
 
@@ -4848,12 +4853,12 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 			case "rungsa":
 				dev = $( 'select.devicemenu', row );
 				dev.toggleClass( 'tberror', isEmpty( dev.val() ) );
-				dev = $( 'select#activity', row );
+				dev = $( 'select.re-activity', row );
 				dev.toggleClass( 'tberror', isEmpty( dev.val() ) );
 				break;
 
 			case "setvar":
-				var vname = $( 'select#variable', row );
+				var vname = $( 'select.re-variable', row );
 				vname.toggleClass( 'tberror', isEmpty( vname.val() ) );
 				break;
 
@@ -4863,13 +4868,13 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 				break;
 
 			case "notify":
-				var method = $( 'select#method', row ).val() || "";
+				var method = $( 'select.re-method', row ).val() || "";
 				var ninfo = arrayFindValue( notifyMethods, function( v ) { return v.id === method; } ) || notifyMethods[0];
-				if ( false !== ninfo.users && 0 === $("fieldset#users input:checked", row ).length ) {
-					$( 'fieldset#users', row ).addClass( 'tberror' );
+				if ( false !== ninfo.users && 0 === $("fieldset.re-users input:checked", row ).length ) {
+					$( 'fieldset.re-users', row ).addClass( 'tberror' );
 				}
 				/* Message cannot be empty. */
-				dev = $( 'input#message', row );
+				dev = $( 'input.re-message', row );
 				if ( isEmpty( dev.val() ) ) {
 					dev.addClass( 'tberror' );
 				}
@@ -5114,7 +5119,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 		$( 'div.actionrow', root ).each( function( ix ) {
 			var row = $( this );
 			var pfx = row.attr( 'id' ) + '-';
-			var actionType = $( 'select#actiontype', row ).val();
+			var actionType = $( 'select.re-actiontype', row ).val();
 			var action = { type: actionType, index: ix+1 };
 			var k, pt, t, devnum, devobj;
 
@@ -5144,12 +5149,12 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 					}
 					/* Create a new group, marked with the delay, for all subsequent actions */
 					if ( group.actions.length > 0 ) {
-						group = { actions: [], delay: t, delaytype: $( 'select#delaytype', row ).val() || "inline" };
+						group = { actions: [], delay: t, delaytype: $( 'select.re-delaytype', row ).val() || "inline" };
 						scene.groups.push( group );
 					} else {
 						/* There are no actions in the current group; just modify the delay in this group. */
 						group.delay = t;
-						group.delaytype = $( 'select#delaytype', row ).val() || "inline";
+						group.delaytype = $( 'select.re-delaytype', row ).val() || "inline";
 					}
 					/* We've set up a new group, not an action, so take an early exit
 					   from this each() */
@@ -5160,7 +5165,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 					devnum = -1 === action.device ? api.getCpanelDeviceId() : action.device;
 					devobj = api.getDeviceObject( devnum );
 					action.deviceName = (devobj || {}).name;
-					t = $( 'select#actionmenu', row ).val() || "";
+					t = $( 'select.re-actionmenu', row ).val() || "";
 					pt = t.split( /\//, 2 );
 					action.service = pt[0]; action.action = pt[1];
 					var ai = actions[ t ];
@@ -5201,17 +5206,17 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 					break;
 
 				case "housemode":
-					action.housemode = $( 'select#housemode', row ).val() || "1";
+					action.housemode = $( 'select.re-mode', row ).val() || "1";
 					break;
 
 				case "runscene":
-					action.scene = parseInt( $( "select#scene", row ).val() || "0" );
+					action.scene = parseInt( $( "select.re-scene", row ).val() || "0" );
 					if ( isNaN( action.scene ) || 0 === action.scene ) {
 						console.log("buildActionList: invalid scene selected");
 						scene = false;
 						return false;
 					}
-					if ( "V" === ($( 'select#method', row ).val() || "") ) {
+					if ( "V" === ($( 'select.re-method', row ).val() || "") ) {
 						action.usevera = 1;
 					} else {
 						delete action.usevera;
@@ -5260,11 +5265,11 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 						devobj = api.getDeviceObject( devnum < 0 ? api.getCpanelDeviceId() : devnum );
 						action.deviceName = devobj.name;
 					}
-					action.activity = $( 'select#activity', row ).val() || "";
+					action.activity = $( 'select.re-activity', row ).val() || "";
 					break;
 
 				case "setvar":
-					action.variable = $( 'select#variable', row ).val();
+					action.variable = $( 'select.re-variable', row ).val();
 					action.value = $( 'input#' + idSelector( pfx + "value" ), row ).val();
 					if ( $( "input.tbreeval", row ).prop( "checked" ) ) {
 						action.reeval = 1;
@@ -5283,7 +5288,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 						devobj = api.getDeviceObject( devnum < 0 ? api.getCpanelDeviceId() : devnum );
 						action.deviceName = devobj.name;
 					}
-					var gid = $( 'select#group', row ).val() || "";
+					var gid = $( 'select.re-group', row ).val() || "";
 					if ( isEmpty( gid ) ) {
 						delete action.group;
 					} else {
@@ -5292,9 +5297,9 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 					break;
 
 				case "notify":
-					var nid = $( 'input#notifyid', row ).val() || "";
-					var method = $( 'select#method', row ).val() || "";
-					var ua = $( 'fieldset#users input:checked', row );
+					var nid = $( 'input.re-notifyid', row ).val() || "";
+					var method = $( 'select.re-method', row ).val() || "";
+					var ua = $( 'fieldset.re-users input:checked', row );
 					var users = [], unames = [];
 					ua.each( function() {
 						var val = $(this).val();
@@ -5312,21 +5317,21 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 						do {
 							nid = String(cf.notifications.nextid++);
 						} while ( undefined !== cf.notifications[nid] );
-						$( 'input#notifyid', row ).val( nid );
+						$( 'input.re-notifyid', row ).val( nid );
 					}
 					cf.notifications[nid] = cf.notifications[nid] || { id: parseInt(nid) };
 					cf.notifications[nid].users = users.join(',');
 					cf.notifications[nid].usernames = unames.join(',');
-					cf.notifications[nid].message = $( 'input#message', row ).val() || nid;
+					cf.notifications[nid].message = $( 'input.re-message', row ).val() || nid;
 					if ( "" === method ) {
 						delete action.method;
 						checkNotificationScene( myid, nid );
-						$( 'input#message', row ).prop( 'disabled', cf.notifications[nid].veraalerts == 1 );
+						$( 'input.re-message', row ).prop( 'disabled', cf.notifications[nid].veraalerts == 1 );
 						$( '.vanotice', row ).toggle( cf.notifications[nid].veraalerts == 1 );
 					} else {
 						action.method = method;
 						delete cf.notifications[nid].veraalerts;
-						$( 'input#message', row ).prop( 'disabled', false );
+						$( 'input.re-message', row ).prop( 'disabled', false );
 						$( '.vanotice', row ).hide();
 					}
 					action.notifyid = nid;
@@ -5344,7 +5349,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 
 				default:
 					console.log("buildActionList: " + actionType + " action unrecognized");
-					var ad = $( 'input#unrecdata', row ).val() || "";
+					var ad = $( 'input#' + idSelector( pfx + 'unrecdata' ), row ).val() || "";
 					if ( "" !== ad ) {
 						action = JSON.parse( ad );
 						if ( ! action ) scene = false;
@@ -5416,10 +5421,10 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 	function updateActionControls() {
 		$( 'div.actionlist' ).each( function( ix ) {
 			var section = $( this );
-			$('div.controls button#action-up', section).prop('disabled', false);
-			$('div.actionrow:first div.controls button#action-up', section).prop('disabled', true);
-			$('div.controls button#action-down', section).prop('disabled', false);
-			$('div.actionrow:last div.controls button#action-down', section).prop('disabled', true);
+			$('div.controls button.re-moveup', section).prop('disabled', false);
+			$('div.actionrow:first div.controls button.re-moveup', section).prop('disabled', true);
+			$('div.controls button.re-movedown', section).prop('disabled', false);
+			$('div.actionrow:last div.controls button.re-movedown', section).prop('disabled', true);
 		});
 
 		/* Save and revert buttons */
@@ -5474,18 +5479,18 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 
 	function changeNotifyActionMethod( $row, method, action ) {
 		var ninfo = arrayFindValue( notifyMethods, function( v ) { return v.id === method; } ) || notifyMethods[0];
-		$( "select#method", $row ).val( ninfo.id ); /* override */
-		// $( 'fieldset#users', $row ).toggle( false !== ninfo.users );
-		$( 'fieldset#users', $row ).toggleClass( 'tbhidden', false === ninfo.users )
+		$( "select.re-method", $row ).val( ninfo.id ); /* override */
+		// $( 'fieldset.re-users', $row ).toggle( false !== ninfo.users );
+		$( 'fieldset.re-users', $row ).toggleClass( 'tbhidden', false === ninfo.users )
 			.toggleClass( 'tbinline', false !== ninfo.users );
-		$( 'fieldset#extrafields', $row ).remove();
+		$( 'fieldset.re-extrafields', $row ).remove();
 		$( 'div.vanotice', $row ).hide();
 		$( 'div.notifynotice', $row ).remove();
 		/*  Do not clear message or users (even if we don't use them) */
 		var f, fld;
 		if ( ninfo.extra ) {
-			var $extra = $( '<fieldset id="extrafields" />' )
-				.insertAfter( $( "input#message", $row ) );
+			var $extra = $( '<fieldset class="re-extrafields" />' )
+				.insertAfter( $( "input.re-message", $row ) );
 			for ( f=0; f<ninfo.extra.length; f++ ) {
 				fld = ninfo.extra[f];
 				var xf;
@@ -5526,7 +5531,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 				delete note.veraalerts;
 				configModified = true;
 			}
-			$( 'input#message', $row ).val( note.message || "" );
+			$( 'input.re-message', $row ).val( note.message || "" );
 			if ( false !== ninfo.users ) {
 				/* See if scene has been updated behind us */
 				if ( scene && scene.users !== ( note.users || "" ) ) {
@@ -5537,10 +5542,10 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 				if ( "" !== ua ) {
 					ua = ua.split( /,/ );
 					for ( f=0; f<ua.length; f++ ) {
-						var $c = $( 'fieldset#users input[value="' + ua[f] + '"]', $row );
+						var $c = $( 'fieldset.re-users input[value="' + ua[f] + '"]', $row );
 						if ( 0 === $c.length ) {
 							$c = getCheckbox( getUID( 'chk' ), ua[f], ua[f] + '?&nbsp;(unknown&nbsp;user)' );
-							$c.appendTo( $( 'fieldset#users', $row ) );
+							$c.appendTo( $( 'fieldset.re-users', $row ) );
 						}
 						$c.prop( 'checked', true );
 					}
@@ -5554,8 +5559,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 				$( '<div class="vanotice"/>' )
 					.text("NOTE: This notification has been modified by VeraAlerts. The message text can only be changed there. You may change recipients here, but you must go into VeraAlerts \"Edit\" mode after so that it updates its data. Delivery and filtering of this message is under control of VeraAlerts.")
 					.toggle( isVA )
-					.insertAfter( $( 'input#message', $row ) );
-				$( 'input#message', $row ).prop( 'disabled', isVA );
+					.insertAfter( $( 'input.re-message', $row ) );
+				$( 'input.re-message', $row ).prop( 'disabled', isVA );
 			}
 		}
 		if ( ninfo.config ) {
@@ -5563,7 +5568,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 			if ( isEmpty(s) ) {
 				$( '<div class="notifynotice"/>' )
 					.text( ninfo.config.warning || ninfo.config.message || "This method requires additional configuration that has not yet been completed." )
-					.insertBefore( $( 'input#message', $row ) );
+					.insertBefore( $( 'input.re-message', $row ) );
 				$( 'div.notifynotice', $row ).append( getWiki( 'Notify-Action' ) );
 			}
 		}
@@ -6072,7 +6077,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 
 	function changeActionDevice( row, newVal, fnext, fargs, retries ) {
 		var ct = $( 'div.actiondata', row );
-		var actionMenu = $( 'select#actionmenu', ct );
+		var actionMenu = $( 'select.re-actionmenu', ct );
 
 		// Clear the action menu and remove all arguments.
 		actionMenu.empty().prop( 'disabled', true )
@@ -6239,24 +6244,24 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 		var pfx = row.attr( 'id' ) + '-';
 		var $m;
 		ct.empty().addClass( "form-inline" );
-		$( 'button#action-try,button#action-import', row ).hide();
+		$( 'button.re-tryaction,button.re-import', row ).hide();
 
 		switch ( newVal ) {
 			case "comment":
-				ct.append('<input type="text" id="comment" class="argument form-control form-control-sm" placeholder="Enter comment text" autocomplete="off">');
+				ct.append('<input type="text" class="argument form-control form-control-sm re-comment" placeholder="Enter comment text" autocomplete="off">');
 				$( 'input', ct ).on( 'change.reactor', handleActionValueChange );
 				break;
 
 			case "device":
 				ct.append( makeDeviceMenu( "", "" ) );
-				ct.append('<select id="actionmenu" class="form-control form-control-sm"></select>');
+				ct.append('<select class="form-control form-control-sm re-actionmenu"></select>');
 				$( 'select.devicemenu', ct ).on( 'change.reactor', handleActionDeviceChange );
-				$( 'select#actionmenu', ct ).on( 'change.reactor', handleActionActionChange );
-				$( 'button#action-try', row ).show();
+				$( 'select.re-actionmenu', ct ).on( 'change.reactor', handleActionActionChange );
+				$( 'button.re-tryaction', row ).show();
 				break;
 
 			case "housemode":
-				$m = $( '<select id="housemode" class="form-control form-control-sm">')
+				$m = $( '<select class="form-control form-control-sm re-mode">')
 					.append( '<option value="1">Home</option>' ).append( '<option value="2">Away</option>' )
 					.append( '<option value="3">Night</option>' ).append( '<option value="4">Vacation</option>' )
 					.on( 'change.reactor', handleActionValueChange );
@@ -6264,25 +6269,24 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 				break;
 
 			case "delay":
-				ct.append('<label for="' + pfx + 'delay">for <input type="text" id="' +
+				ct.append('<label>for <input type="text" id="' +
 					pfx + 'delay" class="argument narrow form-control form-control-sm" title="Enter delay time as seconds, MM:SS, or HH:MM:SS" placeholder="delay time" list="reactorvarlist"></label>');
-				ct.append('<select id="delaytype" class="form-control form-control-sm"><option value="inline">from this point</option><option value="start">from start of actions</option></select>');
+				ct.append('<select class="form-control form-control-sm re-delaytype"><option value="inline">from this point</option><option value="start">from start of actions</option></select>');
 				$( 'input', ct ).on( 'change.reactor', handleActionValueChange );
 				$( 'select', ct ).on( 'change.reactor', handleActionValueChange );
 				break;
 
 			case "runscene":
 				$m = makeSceneMenu()
-					.attr('id', 'scene')
 					.prepend('<option value="" selected>--choose--</option>')
 					.val("")
 					.on( 'change.reactor', handleActionValueChange );
 				ct.append( $m );
-				$( '<select id="method" class="form-control form-control-sm"><option value="" selected">Use Reactor to run scene</option><option value="V">Hand off to Luup</option></select>' )
+				$( '<select class="form-control form-control-sm re-method"><option value="" selected">Use Reactor to run scene</option><option value="V">Hand off to Luup</option></select>' )
 					.on( 'change.reactor', handleActionValueChange )
 					.appendTo( ct );
 				getWiki( "Run-Scene-Action" ).appendTo( ct );
-				$( 'button#action-import', row ).show();
+				$( 'button.re-import', row ).show();
 				break;
 
 			case "runlua":
@@ -6305,7 +6309,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 						var $el = $( ev.currentTarget );
 						var newVal = parseInt( $el.val() || -1 );
 						var $row = $el.closest( '.actionrow' );
-						var $m = $( 'select#activity', $row ).empty();
+						var $m = $( 'select.re-activity', $row ).empty();
 						if ( !isNaN( newVal ) ) {
 							makeDeviceActivityMenu( newVal, $m ).val( "root.true" );
 						} else {
@@ -6314,7 +6318,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 						}
 						handleActionValueChange( ev );
 					}).appendTo( ct );
-				$m = $( '<select/>', { id: "activity", class: "form-control form-control-sm" } )
+				$m = $( '<select/>', { class: "form-control form-control-sm re-activity" } )
 					.appendTo( ct );
 				makeDeviceActivityMenu( -1, $m )
 					.val( "root.true" )
@@ -6322,7 +6326,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 				break;
 
 			case "setvar":
-				$m = $( '<select/>', { id: "variable", class: "form-control form-control-sm" } )
+				$m = $( '<select/>', { class: "form-control form-control-sm re-variable" } )
 					.appendTo( ct );
 				var cdata = getConfiguration();
 				var vix = [];
@@ -6371,7 +6375,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 						var $el = $( ev.currentTarget );
 						var newVal = parseInt( $el.val() || -1 );
 						var $row = $el.closest( '.actionrow' );
-						var $m = $( 'select#group', $row ).val("*");
+						var $m = $( 'select.re-group', $row ).val("*");
 						$( "option.groupoption", $m ).remove();
 						if ( !isNaN( newVal ) ) {
 							makeDeviceGroupMenu( newVal, $m );
@@ -6381,7 +6385,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 						}
 						handleActionValueChange( ev );
 					}).appendTo( ct );
-				$m = $( '<select id="group" class="form-control form-control-sm" />' )
+				$m = $( '<select class="form-control form-control-sm re-group" />' )
 					.appendTo( ct );
 				makeDeviceGroupMenu( -1, $m )
 					.prepend( '<option value="*">(all groups)</option>' )
@@ -6391,8 +6395,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 				break;
 
 			case "notify":
-				$('<input type="hidden" id="notifyid" value="">').appendTo( ct );
-				$m = $( '<select id="method" class="form-control form-control-sm" />' );
+				$('<input type="hidden" class="re-notifyid" value="">').appendTo( ct );
+				$m = $( '<select class="form-control form-control-sm re-method" />' );
 				for ( k=0; k<notifyMethods.length; ++k ) {
 					if ( "VA" === notifyMethods[k].id && !devVeraAlerts ) continue;
 					if ( "" === notifyMethods[k].id && isOpenLuup ) continue;
@@ -6402,7 +6406,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 				}
 				menuSelectDefaultFirst( $m, "" );
 				$m.on( 'change.reactor', handleNotifyActionMethodChange ).appendTo( ct );
-				var fs = $('<fieldset id="users" class="tbinline" />').appendTo( ct );
+				var fs = $('<fieldset class="tbinline re-users" />').appendTo( ct );
 				for ( var k in userIx ) {
 					if ( userIx.hasOwnProperty( k ) ) {
 						getCheckbox( getUID( "chk" ), k, userIx[k].name || k )
@@ -6410,7 +6414,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 							.appendTo( fs );
 					}
 				}
-				$('<input id="message" class="tbfullwidth form-control form-control-sm" value="">')
+				$('<input class="tbfullwidth form-control form-control-sm re-message" value="">')
 					.attr( 'placeholder', 'Enter message' )
 					.on( 'change.reactor', handleActionValueChange )
 					.appendTo( ct );
@@ -6418,7 +6422,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 				break;
 
 			default:
-				$( '<input type="hidden" id="unrecdata">' ).appendTo( ct );
+				$( '<input type="hidden">' ).attr( 'id', pfx + 'unrecdata' )
+					.appendTo( ct );
 				$( '<div>This action is not editable.</div>' ).appendTo( ct );
 				/* See loadActions */
 		}
@@ -6427,7 +6432,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 	function handleActionChange( ev ) {
 		configModified = true;
 		var row = $( ev.currentTarget ).closest( '.actionrow' );
-		var newVal = $( 'select#actiontype', row ).val();
+		var newVal = $( 'select.re-actiontype', row ).val();
 		changeActionType( row, newVal );
 		changeActionRow( row );
 	}
@@ -6438,9 +6443,9 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 			return;
 		}
 		var row = $(el).closest('div.actionrow');
-		var op = $( el ).attr('id');
+		var op = $( el ).data( 'action' );
 		switch ( op ) {
-			case "action-up":
+			case "up":
 				/* Move up in display */
 				var prior = row.prev( 'div.actionrow' ); /* find prior row */
 				if ( prior.length > 0 ) {
@@ -6450,7 +6455,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 				}
 				break;
 
-			case "action-down":
+			case "down":
 				/* Move down in display */
 				var next = row.next( 'div.actionrow' );
 				if ( next.length > 0 ) {
@@ -6460,7 +6465,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 				}
 				break;
 
-			case "action-delete":
+			case "delete":
 				var list = row.closest( 'div.actionlist' );
 				row.remove();
 				$( 'div.actionlist' ).addClass( "tbmodified" ); // all lists, because save saves all.
@@ -6468,18 +6473,18 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 				updateActionControls(); /* handles save controls too */
 				break;
 
-			case "action-try":
+			case "try":
 				var cvars = false;
 				if ( $( '.tberror', row ).length > 0 ) {
 					alert( 'Please fix the errors before attempting to run this action.' );
 					return;
 				}
-				var typ = $( 'select#actiontype', row ).val() || "comment";
+				var typ = $( 'select.re-actiontype', row ).val() || "comment";
 				var pfx = row.attr( 'id' ) + '-';
 				if ( "device" === typ ) {
 					var d = parseInt( $( 'select.devicemenu', row ).val() );
 					if ( -1 === d ) d = api.getCpanelDeviceId();
-					var s = $( 'select#actionmenu', row ).val() || "";
+					var s = $( 'select.re-actionmenu', row ).val() || "";
 					var pt = s.split( /\//, 2 );
 					// var act = (deviceInfo.services[pt[0]] || { actions: {} }).actions[pt[1]];
 					var act = actions[s];
@@ -6566,14 +6571,14 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 				}
 				break;
 
-			case "action-import":
-				if ( "runscene" !== $( 'select#actiontype', row ).val() ) {
+			case "import":
+				if ( "runscene" !== $( 'select.re-actiontype', row ).val() ) {
 					return;
 				}
 				if ( $( '.tberror', row ).length > 0 ) {
 					return;
 				}
-				var scene = parseInt( $( 'select#scene', row ).val() );
+				var scene = parseInt( $( 'select.re-scene', row ).val() );
 				if ( !isNaN( scene ) ) {
 					waitForReloadComplete().then( function() {
 						jQuery.ajax({
@@ -6596,7 +6601,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 								var lua = (data.encoded_lua || 0) != 0 ? atob(data.lua) : data.lua;
 								newRow = getActionRow();
 								newRow.attr( 'id', container.attr( 'id' ) + ns++ );
-								$( "select#actiontype", newRow).val( "runlua" );
+								$( "select.re-actiontype", newRow).val( "runlua" );
 								changeActionType( newRow, "runlua" );
 								$( "textarea.luacode", newRow ).val( lua ).trigger( "reactorinit" );
 								pred = newRow.addClass( "tbmodified" ).insertAfter( pred );
@@ -6612,10 +6617,10 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 									newRow = getActionRow();
 									pfx = container.attr( 'id' ) + ns++;
 									newRow.attr( 'id', pfx );
-									$( "select#actiontype", newRow).val( "delay" );
+									$( "select.re-actiontype", newRow).val( "delay" );
 									changeActionType( newRow, "delay" );
 									$( "input#" + idSelector( pfx + "-delay" ), newRow ).val( gr.delay );
-									$( "select#delaytype", newRow ).val( "start" );
+									$( "select.re-delaytype", newRow ).val( "start" );
 									pred = newRow.addClass( "tbmodified" ).insertAfter( pred );
 								}
 								for ( var k=0; k < (gr.actions || []).length; k++ ) {
@@ -6623,7 +6628,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 									newRow = getActionRow();
 									pfx = container.attr( 'id' ) + ns++;
 									newRow.attr( 'id', pfx );
-									$( 'select#actiontype', newRow).val( "device" );
+									$( 'select.re-actiontype', newRow).val( "device" );
 									changeActionType( newRow, "device" );
 									if ( 0 == $( 'select.devicemenu option[value="' + act.device + '"]', newRow ).length ) {
 										var opt = $( '<option/>' ).val( act.device ).text( '#' + act.device + ' ' + ( act.deviceName || 'name?' ) + ' (missing)' );
@@ -6635,11 +6640,11 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 									changeActionDevice( newRow, parseInt( act.device ), function( row, action ) {
 										var pfx = row.attr( 'id' ) + '-';
 										var key = action.service + "/" + action.action;
-										if ( 0 == $( 'select#actionmenu option[value="' + key + '"]', row ).length ) {
+										if ( 0 == $( 'select.re-actionmenu option[value="' + key + '"]', row ).length ) {
 											var opt = $( '<option/>' ).val( key ).text( key );
-											$( 'select#actionmenu', row ).prepend( opt ).prop( 'disabled', false );
+											$( 'select.re-actionmenu', row ).prepend( opt ).prop( 'disabled', false );
 										}
-										$( 'select#actionmenu', row ).val( key );
+										$( 'select.re-actionmenu', row ).val( key );
 										changeActionAction( row, key );
 										for ( var j=0; j<(action.arguments || []).length; j++ ) {
 											var a = action.arguments[j];
@@ -6675,7 +6680,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 
 	function getActionRow() {
 		var row = $( '<div class="row actionrow"></div>' );
-		row.append( '<div class="col-xs-12 col-sm-12 col-md-4 col-lg-2"><select id="actiontype" class="form-control form-control-sm">' +
+		row.append( '<div class="col-xs-12 col-sm-12 col-md-4 col-lg-2"><select class="form-control form-control-sm re-actiontype">' +
 			'<option value="comment">Comment</option>' +
 			'<option value="device">Device Action</option>' +
 			'<option value="housemode">Change House Mode</option>' +
@@ -6689,15 +6694,15 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 			'</select></div>' );
 		row.append('<div class="actiondata col-xs-12 col-sm-12 col-md-6 col-lg-8 form-inline"></div>');
 		var controls = $('<div class="controls col-xs-12 col-sm-12 col-md-2 col-lg-2 text-right"></div>');
-		controls.append( '<button id="action-try" class="btn md-btn" title="Try this action"><i class="material-icons">directions_run</i></button>' );
-		controls.append( '<button id="action-import" class="btn md-btn" title="Import scene to actions"><i class="material-icons">save_alt</i></button>' );
-		controls.append( '<button id="action-up" class="btn md-btn" title="Move up"><i class="material-icons">arrow_upward</i></button>' );
-		controls.append( '<button id="action-down" class="btn md-btn" title="Move down"><i class="material-icons">arrow_downward</i></button>' );
-		controls.append( '<button id="action-delete" class="btn md-btn" title="Remove action"><i class="material-icons">clear</i></button>' );
+		controls.append( '<button class="btn md-btn re-tryaction" data-action="try" title="Try this action"><i class="material-icons">directions_run</i></button>' );
+		controls.append( '<button class="btn md-btn re-import" data-action="import" title="Import scene to actions"><i class="material-icons">save_alt</i></button>' );
+		controls.append( '<button class="btn md-btn re-moveup" data-action="up" title="Move up"><i class="material-icons">arrow_upward</i></button>' );
+		controls.append( '<button class="btn md-btn re-movedown" data-action="down" title="Move down"><i class="material-icons">arrow_downward</i></button>' );
+		controls.append( '<button class="btn md-btn re-delete" data-action="delete" title="Remove action"><i class="material-icons">clear</i></button>' );
 		$( 'button.md-btn', controls ).on( 'click.reactor', handleActionControlClick );
-		$( 'button#action-try,button#action-import', controls ).hide();
+		$( 'button.re-tryaction,button.re-import', controls ).hide();
 		row.append( controls );
-		$( 'select#actiontype', row ).val( 'comment' ).on( 'change.reactor', handleActionChange );
+		$( 'select.re-actiontype', row ).val( 'comment' ).on( 'change.reactor', handleActionChange );
 		changeActionType( row, "comment" );
 		return row;
 	}
@@ -6724,10 +6729,10 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 			if ( 0 !== (gr.delay || 0) ) {
 				newRow = getActionRow();
 				newRow.attr( 'id', section.attr( 'id' ) + ns++ );
-				$( "select#actiontype", newRow ).val( "delay" );
+				$( "select.re-actiontype", newRow ).val( "delay" );
 				changeActionType( newRow, "delay" );
 				$( "input#" + idSelector( newRow.attr('id') + "-delay" ), newRow ).val( gr.delay );
-				$( "select#delaytype", newRow ).val( gr.delaytype || "inline" );
+				$( "select.re-delaytype", newRow ).val( gr.delaytype || "inline" );
 				newRow.insertBefore( insertionPoint );
 			}
 			for ( var k=0; k < (gr.actions || []).length; k++ ) {
@@ -6736,7 +6741,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 				newRow = getActionRow();
 				var rid = section.attr( 'id' ) + ns++;
 				newRow.attr( 'id', rid );
-				$( 'select#actiontype', newRow).val( act.type || "comment" );
+				$( 'select.re-actiontype', newRow).val( act.type || "comment" );
 				changeActionType( newRow, act.type || "comment" );
 				switch ( act.type ) {
 					case "comment":
@@ -6753,11 +6758,11 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 						changeActionDevice( newRow, parseInt( act.device ), function( row, action ) {
 							var pfx = row.attr( 'id' ) + '-';
 							var key = action.service + "/" + action.action;
-							if ( 0 === $( 'select#actionmenu option[value="' + key + '"]', row ).length ) {
+							if ( 0 === $( 'select.re-actionmenu option[value="' + key + '"]', row ).length ) {
 								var opt = $( '<option/>' ).val( key ).text( key );
-								$( 'select#actionmenu', row ).prepend( opt );
+								$( 'select.re-actionmenu', row ).prepend( opt );
 							}
-							$( 'select#actionmenu', row ).val( key );
+							$( 'select.re-actionmenu', row ).val( key );
 							changeActionAction( row, key );
 							for ( var j=0; j<(action.parameters || []).length; j++ ) {
 								var fld = $( '#' + idSelector( pfx + action.parameters[j].name ), row );
@@ -6783,13 +6788,13 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 						break;
 
 					case "runscene":
-						menuSelectDefaultInsert( $( 'select#scene', newRow), act.scene,
+						menuSelectDefaultInsert( $( 'select.re-scene', newRow), act.scene,
 							( act.sceneName || "name?" ) + ' (#' + act.scene + ') (missing)' );
-						$( 'select#method', newRow).val( act.usevera ? "V" : "" );
+						$( 'select.re-method', newRow).val( act.usevera ? "V" : "" );
 						break;
 
 					case "housemode":
-						$( 'select#housemode', newRow ).val( act.housemode || 1 );
+						$( 'select.re-mode', newRow ).val( act.housemode || 1 );
 						break;
 
 					case "runlua":
@@ -6809,7 +6814,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 							newRow.addClass( "tberror" );
 						}
 						$( 'select.devicemenu', newRow ).val( act.device || "-1" );
-						$m = $( 'select#activity', newRow );
+						$m = $( 'select.re-activity', newRow );
 						makeDeviceActivityMenu( act.device || -1, $m );
 						if ( 0 === $( 'option[value=' + quot(act.activity) + ']', $m ).length ) {
 							$( '<option/>' ).val( act.activity || "undef" )
@@ -6820,7 +6825,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 						break;
 
 					case "setvar":
-						$m = $( 'select#variable', newRow );
+						$m = $( 'select.re-variable', newRow );
 						if ( 0 === $( 'option[value=' + quot(act.variable) + ']', newRow ).length ) {
 							$( '<option/>' ).val( act.variable )
 								.text( act.variable + "? (invalid)" )
@@ -6839,7 +6844,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 								.addClass( "tberror" ) );
 						}
 						$( 'select.devicemenu', newRow ).val( act.device || "-1" );
-						$m = $( 'select#group', newRow );
+						$m = $( 'select.re-group', newRow );
 						makeDeviceGroupMenu( act.device || -1, $m );
 						if ( 0 === $( 'option[value=' + quot(act.group) + ']', $m ).length ) {
 							$( '<option/>' ).val( act.group || "undef" )
@@ -6850,8 +6855,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 						break;
 
 					case "notify":
-						$( 'input#notifyid', newRow ).val( act.notifyid || "" );
-						$m = $( 'select#method', newRow );
+						$( 'input.re-notifyid', newRow ).val( act.notifyid || "" );
+						$m = $( 'select.re-method', newRow );
 						if ( 0 === $( 'option[value="' + (act.method || "") + '"]', $m ).length ) {
 							if ( !devVeraAlerts && "VA" === act.method ) {
 								$( '<option/>' ).val("VA")
@@ -6871,13 +6876,13 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 					default:
 						console.log("loadActions: what's a " + act.type + "? Skipping it!");
 						alert( "Action type " + act.type + " unrecognized. Did you downgrade from a higher version of Reactor? I will try to preserve this action, but I can't edit it." );
-						var $am = $( 'select#actiontype', newRow );
+						var $am = $( 'select.re-actiontype', newRow );
 						if ( 0 === $( 'option[value="'+act.type+'"]', $am ).length ) {
 							$( '<option/>' ).val( act.type ).text( String(act.type) + ' (unrecognized)' )
 								.prependTo( $am );
 						}
 						$am.val( act.type );
-						$( 'input#unrecdata', newRow ).val( JSON.stringify( act ) );
+						$( 'input#' + idSelector( rid + '-unrecdata' ), newRow ).val( JSON.stringify( act ) );
 				}
 
 				newRow.has('.tberror').addClass('tberror');
@@ -6907,22 +6912,22 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 		var $el = $( ev.currentTarget );
 		var $p = $el.closest( 'div.actionlist' );
 		var $g = $( 'div.activity-group', $p );
-		if ( "collapse" === $el.attr( 'id' ) ) {
+		if ( $el.hasClass( 're-collapse' ) ) {
 			$g.slideUp();
-			$el.attr( 'id', 'expand' ).attr( 'title', 'Expand action' );
+			$el.addClass( 're-expand' ).removeClass( 're-collapse' ).attr( 'title', 'Expand action' );
 			$( 'i', $el ).text( 'expand_more' );
 			try {
 				var n = $( 'div.actionrow', $g ).length;
-				$( 'span#titlemessage', $p ).text( " (" + n +
+				$( 'span.re-titlemessage', $p ).text( " (" + n +
 					" action" + ( 1 !== n ? "s" : "" ) + " collapsed)" );
 			} catch( e ) {
-				$( 'span#titlemessage', $p ).text( " (actions collapsed)" );
+				$( 'span.re-titlemessage', $p ).text( " (actions collapsed)" );
 			}
 		} else {
 			$g.slideDown();
-			$el.attr( 'id', 'collapse' ).attr( 'title', 'Collapse action' );
+			$el.removeClass( 're-expand' ).addClass( 're-collapse' ).attr( 'title', 'Collapse action' );
 			$( 'i', $el ).text( 'expand_less' );
-			$( 'span#titlemessage', $p ).text( "" );
+			$( 'span.re-titlemessage', $p ).text( "" );
 		}
 	}
 
@@ -6932,7 +6937,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 		var row = $( '<div class="row"/>' );
 		row.append( '\
 <div class="tblisttitle col-xs-9 col-sm-9 col-lg-10"> \
-  <span class="titletext">?title?</span> \
+  <span class="re-title">?title?</span> \
   <button id="collapse" class="btn md-btn" title="Collapse action"><i class="material-icons">expand_less</i></button> \
   <span id="titlemessage" /> \
 </div> \
@@ -7030,7 +7035,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 				var scene = gr.id + '.true';
 				el = getActionListContainer();
 				el.attr( 'id', scene );
-				$( 'span.titletext', el ).text( 'When ' +
+				$( 'span.re-title', el ).text( 'When ' +
 					( gr.name || gr.id ) + ' is TRUE' );
 				container.append( el );
 				loadActions( el, cd.activities[scene] || {} );
@@ -7041,7 +7046,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 				scene = gr.id + '.false';
 				el = getActionListContainer();
 				el.attr( 'id', scene );
-				$( 'span.titletext', el ).text( 'When ' +
+				$( 'span.re-title', el ).text( 'When ' +
 					( gr.name || gr.id ) + ' is FALSE' );
 				container.append( el );
 				loadActions( el, cd.activities[scene] || {} );
@@ -7167,15 +7172,15 @@ div#tab-actions.reactortab .tberrmsg { padding: 8px 8px 8px 8px; color: red; } \
 div#tab-actions.reactortab div.actionlist { border-radius: 8px; border: 2px solid #428BCA; margin-bottom: 16px; } \
 div#tab-actions.reactortab div.actionlist .row { margin-right: 0px; margin-left: 0px; } \
 div#tab-actions.reactortab div.tblisttitle { background-color: #428BCA; color: #fff; padding: 4px 8px; min-height: 45px; } \
-div#tab-actions.reactortab div.tblisttitle span.titletext { font-size: 16px; font-weight: bold; margin-right: 1em; } \
+div#tab-actions.reactortab div.tblisttitle span.re-title { font-size: 16px; font-weight: bold; margin-right: 1em; } \
 div#tab-actions.reactortab div.actionlist label:not(.required) { font-weight: normal; } \
 div#tab-actions.reactortab div.actionlist label.required { font-weight: bold; } \
-div#tab-actions.reactortab div.actionlist.tbmodified div.tblisttitle span.titletext:after { content: " (unsaved)" } \
+div#tab-actions.reactortab div.actionlist.tbmodified div.tblisttitle span.re-title:after { content: " (unsaved)" } \
 div#tab-actions.reactortab div.actionrow,div.buttonrow { padding: 8px; } \
 div#tab-actions.reactortab div.actionlist div.actionrow:nth-child(odd) { background-color: #EFF6FF; } \
 div#tab-actions.reactortab div.actionrow.tbmodified:not(.tberror) { border-left: 4px solid green; } \
 div#tab-actions.reactortab div.actionrow.tberror { border-left: 4px solid red; } \
-div#tab-actions.reactortab input#comment { width: 100% !important; } \
+div#tab-actions.reactortab input.re-comment { width: 100% !important; } \
 div#tab-actions.reactortab textarea.luacode { font-family: monospace; resize: vertical; width: 100% !important; } \
 div#tab-actions.reactortab div.editor { width: 100%; min-height: 240px; } \
 div#tab-actions.reactortab div.tbhint { font-size: 90%; font-weight: normal; } \
