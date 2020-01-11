@@ -152,6 +152,7 @@ var ReactorSensor = (function(api, $) {
 	div.reactortab label { font-weight: normal; padding: 0 2px; } \
 	div.reactortab label.tbsecondaryinput { margin-left: 0.5em; margin-right: 0.5em; } \
 	div.reactortab .tbinline { display: inline-block; } \
+	div.reactortab .tbhidden { display: none !important; } /* workaround for show/hide bug in jquery restoring wrong display mode */ \
 	div.reactortab .checkbox { padding-left: 20px; } \
 	div.reactortab .checkbox label { display: inline-block; vertical-align: middle; position: relative; padding-left: 8px; } \
 	div.reactortab .checkbox label::before { content: ""; display: inline-block; position: absolute; width: 20px; height: 20px; left: 0; margin-left: -20px; border: 1px solid #ccc; border-radius: 3px; background-color: #fff; -webkit-transition: border 0.15s ease-in-out, color 0.15s ease-in-out; -o-transition: border 0.15s ease-in-out, color 0.15s ease-in-out; transition: border 0.15s ease-in-out, color 0.15s ease-in-out; } \
@@ -5472,7 +5473,9 @@ var ReactorSensor = (function(api, $) {
 	function changeNotifyActionMethod( $row, method, action ) {
 		var ninfo = arrayFindValue( notifyMethods, function( v ) { return v.id === method; } ) || notifyMethods[0];
 		jQuery( "select#method", $row ).val( ninfo.id ); /* override */
-		jQuery( 'fieldset#users', $row ).toggle( false !== ninfo.users );
+		// jQuery( 'fieldset#users', $row ).toggle( false !== ninfo.users );
+		jQuery( 'fieldset#users', $row ).toggleClass( 'tbhidden', false === ninfo.users )
+			.toggleClass( 'tbinline', false !== ninfo.users );
 		jQuery( 'fieldset#extrafields', $row ).remove();
 		jQuery( 'div.vanotice', $row ).hide();
 		jQuery( 'div.notifynotice', $row ).remove();
