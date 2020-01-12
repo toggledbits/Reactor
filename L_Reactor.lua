@@ -308,6 +308,8 @@ local function getVarNumeric( name, dflt, dev, sid )
 	return tonumber(s) or dflt
 end
 
+local function getVarBool( name, dflt, dev, sid ) DA(type(dflt)=="boolean", "Supplied default is not boolean") return getVarNumeric( name, dflt and 1 or 0, dev, sid ) ~= 0 end
+
 -- Get var that stores JSON data. Returns data, error flag.
 local function getVarJSON( name, dflt, dev, sid )
 	assert( dev ~= nil and name ~= nil )
@@ -442,7 +444,7 @@ end
 -- Set HMT ModeSetting
 local function setHMTModeSetting( hmtdev )
 	local chm = luup.attr_get( 'Mode', 0 ) or "1"
-	local armed = getVarNumeric( "Armed", 0, hmtdev, SENSOR_SID ) ~= 0
+	local armed = getVarBool( "Armed", false, hmtdev, SENSOR_SID )
 	local s = {}
 	for ix=1,4 do
 		table.insert( s, string.format( "%d:%s", ix, ( tostring(ix) == chm ) and ( armed and "A" or "" ) or ( armed and "" or "A" ) ) )
@@ -533,7 +535,7 @@ local function openEventLogFile( tdev )
 	end
 	local path = getVar( "EventLogPath", getInstallPath(), tdev, RSSID ) .. "ReactorSensor" .. tostring(tdev) .. "-events.log"
 	sst.eventLogName = nil
-	if getVarNumeric( "LogEventsToFile", 0, tdev, RSSID ) ~= 0 then
+	if getVarBool( "LogEventsToFile", false, tdev, RSSID ) then
 		local err,errno
 		D("openEventLogFile() opening event log file %1", path)
 		sst.eventLog,err,errno = io.open( path, "a" )
@@ -594,8 +596,8 @@ end
 
 -- Enabled?
 local function isEnabled( dev )
-	if getVarNumeric( "Enabled", 1, pluginDevice, MYSID ) == 0 then return false end
-	return getVarNumeric( "Enabled", 1, dev, RSSID ) ~= 0
+	if not getVarBool( "Enabled", true, pluginDevice, MYSID ) then return false end
+	return getVarBool( "Enabled", true, dev, RSSID )
 end
 
 -- Clear a scheduled timer task
@@ -865,18 +867,14 @@ local function sensor_runOnce( tdev )
 		initVar( "WatchResponseHoldOff", "-1", tdev, RSSID )
 	end
 
-	if s < 19295 then
-		deleteVar( RSSID, "ValueChangeHoldTime", tdev )
-		deleteVar( RSSID, "ReloadConditionHoldTime", tdev )
-	end
-
 	-- Remove leftover development stuff that leaked out in beta (3.5)
-	if luup.variable_get( RSSID, "NONSENSENAME", tdev ) ~= nil then
-		luup.variable_set(RSSID, "NONSENSENAME", nil, tdev) -- ??? remove after 3.6
-	end
-	if luup.variable_get( VARSID, "NONSENSENAME", tdev ) ~= nil then
-		luup.variable_set(VARSID, "NONSENSENAME", nil, tdev) -- ??? remove after 3.6
-	end
+	deleteVar( RSSID, "NONSENSENAME", tdev) -- ??? remove after 3.6
+	deleteVar( VARSID, "NONSENSENAME", tdev) -- ??? remove after 3.6
+
+	-- Remove old and deprecated values
+	deleteVar( RSSID, "Invert", tdev )
+	deleteVar( RSSID, "ValueChangeHoldTime", tdev )
+	deleteVar( RSSID, "ReloadConditionHoldTime", tdev )
 
 	-- Update version last.
 	if s ~= _CONFIGVERSION then
@@ -963,6 +961,9 @@ local function plugin_runOnce( pdev )
 	if s < 19362 then
 		initVar( "MaxLogSnippet", "", pdev, MYSID )
 	end
+
+	-- Remove old/deprecated values
+	deleteVar( RSSID, "Scenes", pdev )
 
 	-- Update version last.
 	if s ~= _CONFIGVERSION then
@@ -1264,7 +1265,8 @@ end
 local function queueNotification( nid, tdev )
 	D("queueNotification(%1,%2)", nid, tdev)
 	table.insert( notifyQueue, { id=nid, owner=tdev, timestamp=os.time() } )
-	while #notifyQueue > 0 and #notifyQueue > getVarNumeric( "NoticeQueueLimit", 20, tdev, RSSID ) do table.remove( notifyQueue, 1 ) end
+	local maxqueue = getVarNumeric( "NoticeQueueLimit", 20, pluginDevice, MYSID )
+	while #notifyQueue > 0 and #notifyQueue > maxqueue do table.remove( notifyQueue, 1 ) end
 	setVar( RSSID, "NotifyQueue", json.encode( notifyQueue ), pluginDevice )
 	scheduleDelay( 'notifier', 5 )
 end
@@ -1345,7 +1347,7 @@ local function loadScene( sceneId, pdev )
 	if luaFunc[starter] then luaFunc[starter] = nil end
 
 	-- Force-encode the scene lua. This is an openLuup issue, as it does not do this by default. Doing so prevents potential JSON issues.
-	if (data.lua or "") ~= "" and (data.encoded_lua or 0) == 0 and getVarNumeric("ForceEncodedLua", 1, pluginDevice, MYSID) ~= 0 then
+	if (data.lua or "") ~= "" and (data.encoded_lua or 0) == 0 and getVarBool("ForceEncodedLua", true, pluginDevice, MYSID) then
 		D("loadScene() force-encoding unencoded lua")
 		data.lua = mime.b64( data.lua )
 		data.encoded_lua = true
@@ -1949,7 +1951,7 @@ local function execLua( fname, luafragment, extarg, tdev )
 			luup.log( "Reactor: " .. err .. "\n" .. luafragment, 1 )
 			return false, err -- flag error
 		end
-		if getVarNumeric( "SuppressLuaCaching", 0, pluginDevice, MYSID ) == 0 then
+		if not getVarBool( "SuppressLuaCaching", false, pluginDevice, MYSID ) then
 			luaFunc[fname] = fnc
 		end
 	end
@@ -2014,7 +2016,7 @@ local function execLua( fname, luafragment, extarg, tdev )
 				end
 				return rawset(t._RG, n, v)
 			end
-			if what.what ~= "C" and getVarNumeric( "SuppressLuaGlobalWarnings", 0, pluginDevice, MYSID ) == 0 then
+			if what.what ~= "C" and not getVarBool( "SuppressLuaGlobalWarnings", false, pluginDevice, MYSID ) then
 				L({level=2,msg="%1 (%2) runLua action: %3 makes assignment to global %4 (missing 'local' declaration?) at %5"},
 					( luup.devices[dev] or {}).description, dev, fn, n, what)
 				addEvent{ event="lua",
@@ -2028,7 +2030,7 @@ local function execLua( fname, luafragment, extarg, tdev )
 			local what = debug.getinfo(2, "S")
 			D("luaEnv.mt.__index(%1,%2) key miss; luaEnv=%3; debuginfo=%4", tostring(t), n, tostring(luaEnv), what)
 			if ( ( ( t.package or {} ).loaded or {} )[n] ) then return t.package.loaded[n] end -- hmmm, Vera Luup
-			if what.what ~= "C" and getVarNumeric( "SuppressLuaGlobalWarnings", 0, pluginDevice, MYSID ) == 0 then
+			if what.what ~= "C" and not getVarBool( "SuppressLuaGlobalWarnings", false, pluginDevice, MYSID ) then
 				local dev = t.__reactor_getdevice()
 				local fn = t.__reactor_getscript() or tostring(what.source)
 				L({level=1,msg="%1 (%2) runLua action: %3 accesses undeclared/uninitialized global %4"},
@@ -2430,7 +2432,7 @@ local function execSceneGroups( tdev, taskid, scd )
 					-- If Lua HomeAutomationGateway RunScene action, run in Reactor
 					if action.service == "urn:micasaverde-com:serviceId:HomeAutomationGateway1" and
 							action.action == "RunScene" and devnum == 0
-							and getVarNumeric( "UseReactorScenes", 1, tdev, RSSID ) ~= 0 then
+							and getVarBool( "UseReactorScenes", true, tdev, RSSID ) then
 						-- Overriding like this runs the scene as a job (so it doesn't start immediately)
 						D("execSceneGroups() overriding Vera RunScene with our own!")
 						action.service = RSSID
@@ -2490,7 +2492,7 @@ local function execSceneGroups( tdev, taskid, scd )
 					local scene = getValue( action.scene, nil, tdev )
 					D("execSceneGroups() launching scene %1 (%2) from scene %3",
 						scene, action.scene, scd.id)
-					if (action.usevera or 0) ~= 0 or getVarNumeric( "UseReactorScenes", 1, tdev, RSSID ) == 0 then
+					if (action.usevera or 0) ~= 0 or not getVarBool( "UseReactorScenes", true, tdev, RSSID ) then
 						luup.call_action( "urn:micasaverde-com:serviceId:HomeAutomationGateway1",
 							"RunScene", { SceneNum=scene }, 0 )
 					else
@@ -2715,8 +2717,8 @@ runScene = function( scene, tdev, options )
 	end
 
 	-- If using Luup scenes, short-cut
-	if getVarNumeric("UseReactorScenes", 1, tdev, RSSID) == 0 and not options.forceReactorScenes
-		and not scd.isReactorScene then
+	if not scd.isReactorScene and
+		not ( options.forceReactorScenes or getVarBool("UseReactorScenes", true, tdev, RSSID) ) then
 		D("runScene() handing-off scene run to Luup")
 		luup.call_action( "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "RunScene", { SceneNum=scene }, 0 )
 		return
@@ -2733,38 +2735,42 @@ local function trip( state, tdev )
 	luup.variable_set( SWITCH_SID, "Target", state and "1" or "0", tdev )
 	luup.variable_set( SWITCH_SID, "Status", state and "1" or "0", tdev )
 	addEvent{dev=tdev,
-		msg="Changing RS tripped state to %(state)q",
-		event='sensorstate',state=state}
+		msg="Changing RS tripped state to %(state)q", event='sensorstate', state=state}
+
 	-- Make sure condState is loaded/ready (may have been expired by cache)
 	loadCleanState( tdev )
 	if not state then
 		-- Luup keeps (SecuritySensor1/)LastTrip, but we also keep LastReset
 		luup.variable_set( RSSID, "LastReset", os.time(), tdev )
 		-- Option, reset latched conditions
-		if getVarNumeric( "ResetLatchedOnUntrip", 0, tdev, RSSID ) ~= 0 then
+		if getVarBool( "ResetLatchedOnUntrip", false, tdev, RSSID ) then
 			-- Reset latched conditions when group resets
 			if resetLatched( false, tdev ) then
 				scheduleDelay( tostring(tdev), 0 )
 			end
 		end
-		-- Run the reset scene, if we have one.
-		local scd = getSceneData( 'root.false', tdev )
-		if not isSceneEmpty( scd ) then
-			-- Note we only stop trip actions if there are untrip actions.
-			addEvent{ dev=tdev, msg="Launching root.false activity" }
-			stopScene( tdev, nil, tdev, 'root.true' ) -- stop contra-activity
-			execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } )
+		if getVarBool( "UseLegacyTripBehavior", false, tdev, RSSID ) then
+			-- Run the reset scene, if we have one.
+			local scd = getSceneData( 'root.false', tdev )
+			if not isSceneEmpty( scd ) then
+				-- Note we only stop trip actions if there are untrip actions.
+				addEvent{ dev=tdev, msg="Launching root.false activity" }
+				stopScene( tdev, nil, tdev, 'root.true' ) -- stop contra-activity
+				execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } )
+			end
 		end
 	else
 		-- Count a trip.
 		luup.variable_set( RSSID, "TripCount", getVarNumeric( "TripCount", 0, tdev, RSSID ) + 1, tdev )
-		-- Run the trip scene, if we have one.
-		local scd = getSceneData( 'root.true', tdev )
-		if not isSceneEmpty( scd ) then
-			-- Note we only stop untrip actions if there are trip actions.
-			addEvent{ dev=tdev, msg="Launching root.true activity" }
-			stopScene( tdev, nil, tdev, 'root.false' ) -- stop contra-activity
-			execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } )
+		if getVarBool( "UseLegacyTripBehavior", false, tdev, RSSID ) then
+			-- Run the trip scene, if we have one.
+			local scd = getSceneData( 'root.true', tdev )
+			if not isSceneEmpty( scd ) then
+				-- Note we only stop untrip actions if there are trip actions.
+				addEvent{ dev=tdev, msg="Launching root.true activity" }
+				stopScene( tdev, nil, tdev, 'root.false' ) -- stop contra-activity
+				execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } )
+			end
 		end
 	end
 end
@@ -2972,7 +2978,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 			D("evaluateCondition() service state update op, timestamp=%1, prior=%2, isRestart=%3",
 				vv, cs.lastvalue, sst.isRestart)
 			-- Some vars are rewritten by restart. Attempt to ignore this.
-			if sst.isRestart and getVarNumeric( "SuppressLuupRestartUpdate", 1, tdev, RSSID ) ~= 0 then
+			if sst.isRestart and getVarBool( "SuppressLuupRestartUpdate", true, tdev, RSSID ) then
 				D("evaluateCondition() ignoring restart-time update")
 				return vv,false
 			end
@@ -3157,7 +3163,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		local stamp = ndt.year * 1000 + ndt.yday
 		local sundata = getVarJSON( "sundata", {}, pluginDevice, MYSID )
 		if ( sundata.stamp or 0 ) ~= stamp or sst.timetest then
-			if getVarNumeric( "UseLuupSunrise", 0, pluginDevice, MYSID ) ~= 0 then
+			if getVarBool( "UseLuupSunrise", true, pluginDevice, MYSID ) then
 				L({level=2,msg="Reactor is configured to use Luup's sunrise/sunset calculations; twilight times cannot be correctly evaluated and will evaluate as dawn=sunrise, dusk=sunset"})
 				addEvent{ dev=tdev, event="condition", condition=cond.id,
 					['warning']="TROUBLE: configured to use Luup sunrise/sunset; twilights not available" }
@@ -3882,9 +3888,6 @@ end
 local function processSensorUpdate( tdev, sst )
 	D("processSensorUpdate(%1)", tdev)
 
-	-- Reload sensor state if cache purged
-	loadCleanState( tdev )
-
 	-- Check throttling for update rate
 	local hasTimer = false -- luacheck: ignore 311/hasTimer
 	local maxUpdate = getVarNumeric( "MaxUpdateRate", 30, tdev, RSSID )
@@ -3897,6 +3900,12 @@ local function processSensorUpdate( tdev, sst )
 		local cdata = getSensorConfig( tdev )
 		-- if debugMode then luup.log( json.encode( cdata ), 2 ) end
 
+		-- Reload sensor state if cache purged
+		loadCleanState( tdev )
+
+		local currTrip = (sst.condState.root or {}).evalstate or false
+		local retrig = getVarBool( "Retrigger", false, tdev, RSSID )
+
 		-- Mark a stable base of time
 		local tt = getVarNumeric( "TestTime", 0, tdev, RSSID )
 		if tt ~= 0 then addEvent{ dev=tdev, msg="Test time %(t)s", t=os.date("%Y-%m-%d %H:%M:%S", tt) } end
@@ -3907,19 +3916,13 @@ local function processSensorUpdate( tdev, sst )
 
 		-- Update state (if changed)
 		updateVariables( cdata, tdev )
-		local currTrip = getVarNumeric( "Tripped", 0, tdev, SENSOR_SID ) ~= 0
-		local retrig = getVarNumeric( "Retrigger", 0, tdev, RSSID ) ~= 0
-		local invert = getVarNumeric( "Invert", 0, tdev, RSSID ) ~= 0 -- deprecated, see startSensor()
 
 		local newTrip
 		_,newTrip,hasTimer = processCondition( cdata.conditions.root, nil, cdata, tdev )
 		if newTrip == nil then
 			newTrip = false -- null from root equiv to false here
-		elseif invert then
-			newTrip = not newTrip
 		end
-		D("processSensorUpdate() trip %4was %1 now %2, retrig %3", currTrip, newTrip,
-			retrig, invert and "(inverted) " or "" )
+		D("processSensorUpdate() root was %1 now %2, retrig %3", currTrip, newTrip, retrig)
 
 		-- Save the condition state immediately. This helps the status UI show more
 		-- crisply.
@@ -3945,14 +3948,16 @@ local function processSensorUpdate( tdev, sst )
 			setVar( RSSID, "lastacc", now, tdev )
 		end
 
-		-- Pass through groups again, and run activities for any changed groups,
-		-- except root, which is handled by trip() below.
+		-- Pass through groups again, and run activities for any changed groups.
+		-- "root" group is handled as any other group now, unless UseLegacyTripBehavior is true,
+		-- in which case it's handled by trip() below.
 		D("processSensorUpdate() checking groups for state changes")
 		local gs
 		for grp in conditionGroups( cdata.conditions.root ) do
 			D("processSensorUpdate() checking group %1 for state change", grp.id)
 			gs = sst.condState[ grp.id ] or {}
-			if grp.id ~= "root" and 0 == (grp.disabled or 0) and gs.changed then
+			if gs.changed and 0 == (grp.disabled or 0) and
+					not ( grp.id == "root" and getVarBool( "UseLegacyTripBehavior", false, tdev, RSSID ) ) then
 				local activity = grp.id .. ( gs.evalstate and ".true" or ".false" )
 				D("processSensorUpdate() group %1 <%2> state changed to %3, looking for activity %4",
 					grp.name or grp.id, grp.id, gs.evalstate, activity)
@@ -3973,14 +3978,14 @@ local function processSensorUpdate( tdev, sst )
 		end
 
 		-- Set tripped state based on change in status.
-		D("processSensorUpdate() evaluating RS trip state")
+		D("processSensorUpdate() evaluating tripped state")
 		gs = sst.condState.root or {}
 		if gs.changed or currTrip ~= newTrip or ( newTrip and retrig ) then
 			-- Changed, or retriggerable.
 			local maxTrip = getVarNumeric( "MaxChangeRate", 10, tdev, RSSID )
 			_, _, rate60 = rateLimit( sst.changeRate, maxTrip, false )
 			if maxTrip == 0 or rate60 <= maxTrip then
-				D("processSensorUpdate() new RS state %1", newTrip)
+				D("processSensorUpdate() new trippped state %1", newTrip)
 				rateBump( sst.changeRate )
 				sst.changeThrottled = false
 				trip( newTrip, tdev )
@@ -4014,14 +4019,14 @@ local function processSensorUpdate( tdev, sst )
 	-- Trouble?
 	D("processSensorUpdate() trouble %1", sst.trouble)
 	setVar( RSSID, "Trouble", sst.trouble and "1" or "0", tdev )
-	if getVarNumeric( "FailOnTrouble", 0, tdev, RSSID ) ~= 0 then
+	if getVarBool( "FailOnTrouble", false, tdev, RSSID ) then
 		luup.set_failure( sst.trouble and 1 or 0, tdev )
 	end
 
 	-- No need to reschedule timer if no demand. Condition may have rescheduled
 	-- itself (no need to set hasTimer), so at the moment, hasTimer is only used
 	-- for throttle recovery.
-	if hasTimer or getVarNumeric( "ContinuousTimer", 0, tdev, RSSID ) ~= 0 then
+	if hasTimer or getVarBool( "ContinuousTimer", true, tdev, RSSID ) then
 		D("processSensorUpdate() hasTimer or ContinuousTimer, scheduling update")
 		local v = ( 60 - ( os.time() % 60 ) ) + TICKOFFS
 		scheduleDelay( tdev, v )
@@ -4118,7 +4123,7 @@ local function updateGeofences( pdev )
 	-- userdata, which can be very large. Shame that it comes back as JSON-
 	-- formatted text that we need to decode; I'm sure the action had to encode
 	-- it that way, and all we're going to do is decode back.
-	local forcedMode = getVarNumeric( "ForceGeofenceMode", 0, pdev, MYSID )
+	local forcedMode = getVarNumeric( "ForceGeofenceMode", 0, pdev, MYSID ) -- N.B. NOT BOOL!
 	if forcedMode ~= 0 then
 		geofenceMode = forcedMode
 	end
@@ -4134,7 +4139,7 @@ local function updateGeofences( pdev )
 		ishome = { version=2, users={} }
 	end
 	local rc,rs,ra
-	if getVarNumeric( "UserDataWget", 1, pdev, MYSID ) ~= 0 then
+	if getVarBool( "UserDataWget", true, pdev, MYSID ) then
 		-- As of 3.4, we wget() with ns=1 to shorten response, faster.
 		-- URL with port sub is OK here because geofencing is not on openLuup
 		rc,ra,rs = luup.inet.wget( 'http://127.0.0.1/port_3480/data_request?id=user_data&ns=1' )
@@ -4346,11 +4351,12 @@ local function masterTick(pdev)
 	end
 
 	-- Geofencing. If flag on, at least one sensor is using geofencing.
+	-- N.B. ForceGeofenceMode is NOT BOOL!
 	if geofenceMode ~= 0 or getVarNumeric( "ForceGeofenceMode", 0, pdev, MYSID ) ~= 0 then
 		-- Getting geofence data can be a long-running task because of handling
 		-- userdata, so run as a job, unless using LPeg. LPeg considerably speeds up parsing so
 		-- we can do the task inline.
-		if json and json.using_lpeg and getVarNumeric( "ForceGeofenceJob", 0, pdev, MYSID ) == 0 then
+		if json and json.using_lpeg and not getVarBool( "ForceGeofenceJob", false, pdev, MYSID ) == 0 then
 			pcall( updateGeofences, pdev )
 		else
 			D("masterTick() geofence mode %1, launching geofence update as job", geofenceMode)
@@ -4417,7 +4423,7 @@ local function startSensor( tdev, pdev, isReload )
 	-- Open event log if needed
 	local sst = getSensorState( tdev )
 	local path = getInstallPath() .. "ReactorSensor" .. tostring(tdev) .. "-events.log"
-	if getVarNumeric( "LogEventsToFile", 0, tdev, RSSID ) ~= 0 then
+	if getVarBool( "LogEventsToFile", false, tdev, RSSID ) then
 		if not sst.eventLog then
 			local err,errno
 			D("startSensor() opening event log file %1", path)
@@ -4448,12 +4454,6 @@ local function startSensor( tdev, pdev, isReload )
 
 	-- Save required UI version for collision detection.
 	setVar( RSSID, "_UIV", _UIVERSION, tdev )
-
-	-- Remove old and deprecated values
-	deleteVar( RSSID, "Scenes", pdev )
-	if getVarNumeric( "Invert", 0, pdev, RSSID ) == 0 then
-		deleteVar( RSSID, "Invert", tdev )
-	end
 
 	-- Initialize instance data; take care not to scrub eventList
 	sst.eventList = sst.eventList or {}
@@ -5938,6 +5938,15 @@ SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 								break
 							end
 						end
+					end
+				end
+
+				local first = true
+				for _,v in ipairs( { "UseReactorScenes", "LogEventsToFile", "EventLogMaxKB", "Retrigger", "AutoUntrip", "MaxUpdateRate", "MaxChangeRate", "FailOnTrouble", "ContinuousTimer", "ForceGeofenceMode", "StateCacheExpiry", "SuppressLuupRestartUpdate", "UseLegacyTripBehavior" } ) do
+					local val = luup.variable_get( RSSID, v, deviceNum )
+					if ( val or "" ) ~= "" then
+						if first then first=false r = r .. "    Special Configuration" .. EOL end
+						r = r .. "        " .. v .. " = " .. val .. EOL
 					end
 				end
 
