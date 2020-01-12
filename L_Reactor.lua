@@ -871,11 +871,11 @@ local function sensor_runOnce( tdev )
 	end
 
 	-- Remove leftover development stuff that leaked out in beta (3.5)
-	if luup.variable_get( RSSID, "NONSENSENAME", dev ) ~= nil then
-		luup.variable_set(RSSID, "NONSENSENAME", nil, dev) -- ??? remove after 3.6
+	if luup.variable_get( RSSID, "NONSENSENAME", tdev ) ~= nil then
+		luup.variable_set(RSSID, "NONSENSENAME", nil, tdev) -- ??? remove after 3.6
 	end
-	if luup.variable_get( VARSID, "NONSENSENAME", dev ) ~= nil then
-		luup.variable_set(VARSID, "NONSENSENAME", nil, dev) -- ??? remove after 3.6
+	if luup.variable_get( VARSID, "NONSENSENAME", tdev ) ~= nil then
+		luup.variable_set(VARSID, "NONSENSENAME", nil, tdev) -- ??? remove after 3.6
 	end
 
 	-- Update version last.
@@ -1274,6 +1274,9 @@ local function clearConditionState( tdev )
 	D("clearConditionState(%1)", tdev)
 	luup.variable_set( RSSID, "cstate", "", tdev )
 	getSensorState( tdev ).condState = nil
+	setVar( SENSOR_SID, "Tripped", "0", tdev )
+	setVar( SWITCH_SID, "Target", "0", tdev )
+	setVar( SWITCH_SID, "Status", "0", tdev )
 	return loadCleanState( tdev )
 end
 
@@ -1622,7 +1625,8 @@ local function getExpressionContext( cdata, tdev )
 
 	-- This should be the ONLY place that LuaXP is loaded. It additionally
 	-- defines metadata that must exist in all use.
-	luaxp = luaxp or require "L_LuaXP_Reactor"
+	luaxp = require "L_LuaXP_Reactor"
+	L({level=2,"loaded LuaXP %s version %s"}, luaxp, (luaxp or {})._VERSION)
 	-- Make sure LuaXP null renders as "null" in JSON
 	local mt = getmetatable( luaxp.NULL ) or {}
 	mt.__tojson = function() return "null" end
@@ -4052,6 +4056,7 @@ local function updateSensor( tdev )
 	sst.updating = false
 	if not success then
 		L({level=1,msg="Sensor update failed: %1"}, err)
+		addEvent{ dev=tdev, msg="FAILED: %(err)s", err=err }
 	end
 end
 
@@ -5233,6 +5238,7 @@ end
 -- Handle the sensor-specific watch (dispatched from the watch callback)
 local function sensorWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
 	D("sensorWatch(%1,%2,%3,%4,%5,%6,%7)", dev, sid, var, oldVal, newVal, tdev, pdev)
+	local enabled = isEnabled( tdev )
 	-- Watched variable has changed. Re-evaluate conditons.
 	if dev == pdev then
 		addEvent{ dev=tdev, event='devicewatch', device=dev,
@@ -5244,20 +5250,23 @@ local function sensorWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
 		getSensorConfig( dev, true )
 	else
 		addEvent{ dev=tdev, event='devicewatch', device=dev,
-			msg="Device %(name)s (#%(device)s) %(var)s changed from %(old)s to %(new)s",
+			msg="Device %(name)s (#%(device)s) %(var)s changed from %(old)s to %(new)s%(act)s",
 			name=(luup.devices[dev] or {}).description, var=sid .. "/" .. var,
 			old=string.format("%q", tostring(oldVal):sub(1,64)),
-			new=string.format("%q", tostring(newVal):sub(1,64)) }
+			new=string.format("%q", tostring(newVal):sub(1,64)),
+			act=enabled and "" or " (ignored/disabled)" }
 	end
-	local holdOff = getVarNumeric( "WatchResponseHoldOff", -1, tdev, RSSID )
-	if holdOff < 0 then
-		-- Immediate update.
-		updateSensor( tdev )
-		D("sensorWatch() update #%1 finished", tdev)
-		return
+	if enabled then
+		local holdOff = getVarNumeric( "WatchResponseHoldOff", -1, tdev, RSSID )
+		if holdOff < 0 then
+			-- Immediate update.
+			updateSensor( tdev )
+			D("sensorWatch() update #%1 finished", tdev)
+			return
+		end
+		D("sensorWatch() scheduling update of #%1 for +%2", tdev, holdOff)
+		scheduleDelay( { id=tostring(tdev), owner=tdev, func=sensorTick }, holdOff )
 	end
-	D("sensorWatch() scheduling update of #%1 for +%2", tdev, holdOff)
-	scheduleDelay( { id=tostring(tdev), owner=tdev, func=sensorTick }, holdOff )
 end
 
 -- Watch callback. Dispatches to sensor-specific handling.
@@ -5292,7 +5301,7 @@ function watch( dev, sid, var, oldVal, newVal )
 		if watchData[key] then
 			for t in pairs( watchData[key] ) do
 				local tdev = tonumber(t) or 0
-				if (luup.devices[tdev] or {}).device_type == RSTYPE and isEnabled( tdev ) then
+				if (luup.devices[tdev] or {}).device_type == RSTYPE then
 					D("watch() dispatching to %1 (%2)", tdev, luup.devices[tdev].description)
 					local success,err = pcall( sensorWatch, dev, sid, var, oldVal, newVal, tdev, pluginDevice )
 					if not success then
@@ -5770,7 +5779,7 @@ SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 ]]):gsub("\t","  ")
 		r = r .. "```" .. EOL
 		r = r .. string.rep("*", 51) .. " REACTOR LOGIC SUMMARY REPORT " .. string.rep("*", 51) .. EOL
-		luaxp = require "luaxp" -- make sure loaded
+		luaxp = require "L_LuaXP_Reactor" -- make sure loaded
 		r = r .. "   Version: " .. tostring(_PLUGIN_VERSION) ..
 			" config " .. tostring(_CONFIGVERSION) ..
 			" cdata " .. tostring(_CDATAVERSION) ..
@@ -5908,6 +5917,30 @@ SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 				end
 				summaryDevices = nil
 
+				if next(watchData) then
+					r = r .. "    Watches" .. EOL
+					for key,devs in pairs( watchData or {} ) do
+						for dev in pairs( devs or {} ) do
+							if tonumber(dev) == deviceNum then
+								if not pcall(
+									function( kk )
+										local dd = split( kk, '/' )
+										r = r .. string.format("        Device #%s %s service %s variable %s%s",
+											dd[1] or "nil", 
+											( luup.devices[tonumber(dd[1]) or -1] or {} ).description or "(deleted/unknown",
+											dd[2] or "nil", dd[3] or nil, 
+											EOL )
+									end, key )
+								then
+									r = r .. "        Error formatting " .. tostring(key) .. "=" .. 
+										tostring(dev) .. EOL
+								end
+								break
+							end
+						end
+					end
+				end
+
 				if next( scenesUsed ) then
 					r = r .. "    Scenes" .. EOL
 					for scid, scd in pairs( scenesUsed ) do
@@ -5933,7 +5966,7 @@ SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 		local sst = getSensorState( deviceNum )
 		local cdata = getSensorConfig( deviceNum )
 		local ctx = sst.ctx or getExpressionContext( cdata, deviceNum )
-		if luaxp == nil then luaxp = require("L_LuaXP_Reactor") end
+		-- luaxp = require "L_LuaXP_Reactor" -- done by getExpressionContext()
 		-- if debugMode then luaxp._DEBUG = D end
 		D("request() tryexpression expr=%1", expr)
 		if expr:match( "^%s*$" ) then
