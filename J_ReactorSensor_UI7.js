@@ -7,7 +7,7 @@
  * This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
  *
  */
-/* globals api,jQuery,$,unescape,ace,Promise,setTimeout,MultiBox */
+/* globals api,jQuery,unescape,ace,Promise,setTimeout,MultiBox */
 /* jshint multistr: true, laxcomma: true */
 
 //"use strict"; // fails on UI7, works fine with ALTUI
@@ -366,7 +366,6 @@ var ReactorSensor = (function(api, $) {
 
 	/* Load configuration data. As of 3.5, we do not do any updates here. */
 	function loadConfigData( myid ) {
-		var upgraded = false;
 		var me = api.getDeviceObject( myid );
 		if ( ! ( me && deviceType === me.device_type ) ) {
 			throw "Device " + String(myid) + " not found or incorrect type";
@@ -529,7 +528,7 @@ var ReactorSensor = (function(api, $) {
 			/* Initialize module data */
 			console.log("Initializing module data for ReactorSensor_UI7");
 			try {
-				console.log("initModule() using jQuery " + String(jQuery.fn.jquery) + "; jQuery-UI " + String(jQuery.ui.version));
+				console.log("initModule() using jQuery " + String($.fn.jquery) + "; jQuery-UI " + String($.ui.version));
 			} catch( e ) {
 				console.log("initModule() error reading jQuery/UI versions: " + String(e));
 			}
@@ -576,13 +575,13 @@ var ReactorSensor = (function(api, $) {
 				userNameIx[ud.users[ix].Name || ud.users[ix].id] = ud.users[ix].id;
 			}
 			try {
-				jQuery.each( ud.usergeofences || [], function( ix, fobj ) {
+				$.each( ud.usergeofences || [], function( ix, fobj ) {
 					/* Logically, there should not be a usergeofences[] entry for a user that
 					   doesn't exist in users[], but Vera says "hold my beer" apparently. */
 					if ( undefined === userIx[ fobj.iduser ] ) userIx[ fobj.iduser ] = { name: String(fobj.iduser) + '?' };
 					userIx[ fobj.iduser ].tags = {};
 					userNameIx[ fobj.iduser ] = fobj.iduser;
-					jQuery.each( fobj.geotags || [], function( iy, gobj ) {
+					$.each( fobj.geotags || [], function( iy, gobj ) {
 						userIx[ fobj.iduser ].tags[ gobj.id ] = {
 							id: gobj.id,
 							ishome: gobj.ishome,
@@ -772,7 +771,7 @@ var ReactorSensor = (function(api, $) {
 	 */
 	function deleteStateVariable( devnum, serviceId, variable, fnext ) {
 		console.log("deleteStateVariable: deleting " + devnum + "." + serviceId + "/" + variable);
-		jQuery.ajax({
+		$.ajax({
 			url: api.getDataRequestURL(),
 			data: {
 				id: "variableset",
@@ -2545,7 +2544,6 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 		 */
 		function updateCurrentServiceValue( row ) {
 			console.assert( row.hasClass("cond-cond") );
-			var condID = row.attr( 'id' );
 			var device = parseInt( $("select.devicemenu", row).val() );
 			var service = $("select.varmenu", row).val() || "";
 			var variable = service.replace( /^[^\/]+\//, "" );
@@ -2885,7 +2883,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 				for ( var k=0; k<(ud.usergeofences || []).length; ++k ) {
 					if ( ud.usergeofences[k].iduser == user ) {
 						mm.append( $( '<option/>' ).val( "" ).text( '--choose location--' ) );
-						jQuery.each( ud.usergeofences[k].geotags || [], function( ix, v ) {
+						$.each( ud.usergeofences[k].geotags || [], function( ix, v ) {
 							mm.append( $( '<option/>' ).val( v.id ).text( v.name ) );
 						});
 						var el = $( 'option[value="' + (loc || "") + '"]' );
@@ -4180,7 +4178,7 @@ div#tab-conds.reactortab input.re-comment { width: 100% !important; } \
 			}
 
 			/* Body content */
-			html = '<div id="tab-conds" class="reactortab">';
+			var html = '<div id="tab-conds" class="reactortab">';
 			html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>Conditions</h3></div></div>';
 
 			var rr = api.getDeviceState( myid, serviceId, "Retrigger" ) || "0";
@@ -4279,7 +4277,7 @@ div#tab-conds.reactortab input.re-comment { width: 100% !important; } \
 
 	function handleTryExprClick( ev ) {
 		var row = $( ev.currentTarget ).closest( "div.varexp" );
-		jQuery.ajax({
+		$.ajax({
 			url: api.getDataRequestURL(),
 			data: {
 				id: "lr_Reactor",
@@ -4606,7 +4604,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 			}
 
 			/* Body content */
-			html = '<div id="tab-vars" class="reactortab">';
+			var html = '<div id="tab-vars" class="reactortab">';
 			html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>Expressions/Variables</h3></div></div>';
 			html += '<div class="row"><div class="col-xs-12 col-sm-12">Expressions allow you to do complex arithmetic, string, and other operations that otherwise cannot be done in the Conditions editor. When you create an expression, you specify a variable name into which its result is stored. You can then use that variable name in your conditions and activities.</div></div>';
 
@@ -4997,7 +4995,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 		}
 		var req = { id: "scene", action: "create" };
 		req.json = JSON.stringify( scene );
-		jQuery.ajax({
+		$.ajax({
 			url: api.getDataRequestURL(),
 			method: "POST",
 			data: req,
@@ -5092,7 +5090,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 			var scene = dl.pop();
 			if ( scene ) {
 				console.log("Removing unused notification scene #" + scene);
-				jQuery.ajax({
+				$.ajax({
 					url: api.getDataRequestURL(),
 					data: { id: "scene", action: "delete", scene: scene },
 					dataType: "text",
@@ -5222,7 +5220,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 						delete action.usevera;
 					}
 					// action.sceneName = sceneByNumber[ action.scene ].name
-					jQuery.ajax({
+					$.ajax({
 						url: api.getDataRequestURL(),
 						data: {
 							id: "lr_Reactor",
@@ -5687,7 +5685,6 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 						var grp = $('<optgroup>').attr('label', 'ReactorSensor Activities');
 						DOtraverse( cd.conditions.root,
 							function( node ) {
-								var opt;
 								if ( cd.activities[node.id + ".true"] ) {
 									$( '<option/>' ).val( node.id + ".true" )
 										.text( node.name + " is TRUE" )
@@ -6097,7 +6094,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 		var devobj = api.getDeviceObject( newVal );
 		if ( !devobj ) return;
 		if ( undefined === deviceActionData[devobj.device_type] ) {
-			deviceActionData[devobj.device_type] = Promise.resolve( jQuery.ajax(
+			deviceActionData[devobj.device_type] = Promise.resolve( $.ajax(
 				{
 					url: api.getDataRequestURL(),
 					data: {
@@ -6581,7 +6578,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 				var scene = parseInt( $( 'select.re-scene', row ).val() );
 				if ( !isNaN( scene ) ) {
 					waitForReloadComplete().then( function() {
-						jQuery.ajax({
+						$.ajax({
 							url: api.getDataRequestURL(),
 							data: {
 								id: "scene",
@@ -7124,7 +7121,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 			if ( undefined !== deviceInfo ) {
 				var uc = $( '<div id="di-ver-check"/>' );
 				uc.insertBefore( $( 'div#tripactions' ) );
-				jQuery.ajax({
+				$.ajax({
 					url: "https://www.toggledbits.com/deviceinfo/checkupdate.php",
 					data: {
 						"v": deviceInfo.serial,
@@ -7202,7 +7199,7 @@ div#tab-actions.reactortab ul.dropdown-menu li:hover { color: white; background-
 			var start = Date.now();
 			var urlbase = api.getDataRequestURL().replace( /data_request.*$/i, "" );
 			console.log("Fetching " + urlbase + "D_ReactorDeviceInfo.json");
-			jQuery.ajax({
+			$.ajax({
 				url: urlbase + "D_ReactorDeviceInfo.json",
 				dataType: "json",
 				timeout: 15000
@@ -7218,7 +7215,7 @@ div#tab-actions.reactortab ul.dropdown-menu li:hover { color: white; background-
 				deviceInfo = data;
 
 				/* Body content */
-				html += '<div id="tab-actions" class="reactortab">';
+				var html = '<div id="tab-actions" class="reactortab">';
 
 				html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>Activities</h3></div></div>';
 
@@ -7342,7 +7339,7 @@ div#tab-actions.reactortab ul.dropdown-menu li:hover { color: white; background-
 	}
 
 	function processServiceFile( dd, serviceId, scpdurl ) {
-		var jqXHR = jQuery.ajax({
+		var jqXHR = $.ajax({
 			url: scpdurl,
 			dataType: "xml",
 			timeout: 15000
@@ -7410,7 +7407,7 @@ div#tab-actions.reactortab ul.dropdown-menu li:hover { color: white; background-
 
 	function sendDeviceData( device, chain ) {
 		/* Fetch the device file */
-		var p = jQuery.ajax({
+		var p = $.ajax({
 			url: api.getDataRequestURL(),
 			data: {
 				id: "lu_device",
@@ -7451,7 +7448,7 @@ div#tab-actions.reactortab ul.dropdown-menu li:hover { color: white; background-
 					chain.push( function() {
 						var jd = JSON.stringify( dd );
 						console.log("Sending " + jd);
-						return jQuery.ajax({
+						return $.ajax({
 							type: "POST",
 							url: api.getDataRequestURL(),
 							data: {
@@ -7548,7 +7545,7 @@ div#tab-actions.reactortab ul.dropdown-menu li:hover { color: white; background-
 	}
 
 	function updateToolsVersionDisplay() {
-		jQuery.ajax({
+		$.ajax({
 			url: "https://www.toggledbits.com/deviceinfo/checkupdate.php",
 			data: {
 				"v": ( deviceInfo || {}).serial || "",
@@ -7797,4 +7794,4 @@ textarea#devspyoutput { width: 100%; font-family: monospace; } \
 		doStatusPanel: doStatusPanel
 	};
 	return myModule;
-})(api, $ || jQuery);
+})(api, jQuery);
