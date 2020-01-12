@@ -7,8 +7,8 @@
  * This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
  *
  */
-/* globals api,jQuery,unescape,ace,Promise,setTimeout,MultiBox */
-/* jshint multistr: true, laxcomma: true */
+/* globals api,jQuery,unescape,ace,Promise,setTimeout,MultiBox,console,alert,confirm,window,navigator,atob,btoa */
+/* jshint multistr: true, laxcomma: true, undef: true, unused: false */
 
 //"use strict"; // fails on UI7, works fine with ALTUI
 
@@ -783,7 +783,7 @@ var ReactorSensor = (function(api, $) {
 			},
 			dataType: "json",
 			timeout: 5000
-		}).fail( function( jqXHR, textStatus, errorThrown ) {
+		}).fail( function( /* jqXHR, textStatus, errorThrown */ ) {
 			console.log( "deleteStateVariable: failed, maybe try again later" );
 		}).always( function() {
 			console.log("deleteStateVariable: finished, calling next");
@@ -1409,7 +1409,7 @@ var ReactorSensor = (function(api, $) {
 		}
 	}
 
-	function showGroupStatus( grp, container, cstate, parentGroup ) {
+	function showGroupStatus( grp, container, cstate ) {
 		var grpel = $( '\
 <div class="reactorgroup"> \
   <div class="grouptitle"><button class="btn condbtn"/><span class="re-title">??</span> <span class="currentvalue"/></div> \
@@ -1440,7 +1440,7 @@ var ReactorSensor = (function(api, $) {
 			var cond = grp.conditions[i];
 
 			if ( "group" === ( cond.type || "group" ) ) {
-				showGroupStatus( cond, grpel, cstate, grp );
+				showGroupStatus( cond, grpel, cstate );
 			} else {
 				var row = $('<div class="cond" />').attr( 'id', cond.id );
 				var currentValue = ( cstate[cond.id] || {} ).lastvalue;
@@ -2511,7 +2511,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 			}
 
 			/* Options open or not, make sure options expander is highlighted */
-			var optButton = $( $row.hasClass( 'cond-group' ) ? '.cond-group-header > div > button#condmore:first' : '.cond-actions > button#condmore', $row );
+			var optButton = $( $row.hasClass( 'cond-group' ) ? '.cond-group-header > div > button.re-condmore:first' : '.cond-actions > button.re-condmore', $row );
 			if ( hasAnyProperty( cond.options ) ) {
 				optButton.addClass( 'attn' );
 			} else {
@@ -2736,7 +2736,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 				$( 'i', $el ).text( 'expand_more' );
 				$el.attr( 'title', msgOptionsShow );
 				if ( $row.hasClass( 'tbautohidden' ) ) {
-					$( '.cond-group-title button#expand', $row ).click();
+					$( '.cond-group-title button.re-expand', $row ).click();
 					$row.removeClass( 'tbautohidden' );
 				}
 				return;
@@ -2771,7 +2771,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 				getRadio( rid, "P", "Pulse - output goes true for", "opt-output" ).appendTo( fs );
 				$( '<input type="number" class="form-control form-control-sm narrow pulseopts re-pulsetime"> seconds</label>' )
 					.appendTo( fs );
-				$( '<select class="form-control form-control-sm pulseopts re-pulsemode"><option value="">once</option><option value="repeat">repeat</option></select><span id="pulsebreakopts"><label>after <input type="number" class="form-control form-control-sm narrow pulseopts re-pulsebreak"> seconds,</label> <label>up to <input type="number" class="form-control form-control-sm narrow pulseopts re-pulsecount">&nbsp;times&nbsp;(0/blank=no&nbsp;limit)</label></span>' )
+				$( '<select class="form-control form-control-sm pulseopts re-pulsemode"><option value="">once</option><option value="repeat">repeat</option></select><span class="re-pulsebreakopts"><label>after <input type="number" class="form-control form-control-sm narrow pulseopts re-pulsebreak"> seconds,</label> <label>up to <input type="number" class="form-control form-control-sm narrow pulseopts re-pulsecount">&nbsp;times&nbsp;(0/blank=no&nbsp;limit)</label></span>' )
 					.appendTo( fs );
 			}
 			if ( false !== displayed.latch ) {
@@ -2861,8 +2861,8 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 			/* Add the options container (specific immediate child of this row selection) */
 			if ( isGroup ) {
 				$row.append( $container );
-				if ( 1 === $( '.cond-group-title button#collapse', $row ).length ) {
-					$( '.cond-group-title button#collapse', $row ).click();
+				if ( 1 === $( '.cond-group-title button.re-collapse', $row ).length ) {
+					$( '.cond-group-title button.re-collapse', $row ).click();
 					$row.addClass('tbautohidden');
 				}
 			} else {
@@ -2938,7 +2938,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 		function makeEventMenu( cond, $row ) {
 			var el = $( '<div class="eventlist dropdown" />' );
 			var btnid = getUID('btn');
-			el.append( '<button id="dropdownTriggers" class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" title="Click for device-defined events"><i class="material-icons" aria-haspopup="true" aria-expanded="false">arrow_right</i></button>' );
+			el.append( '<button class="btn btn-default dropdown-toggle re-triggers" type="button" data-toggle="dropdown" title="Click for device-defined events"><i class="material-icons" aria-haspopup="true" aria-expanded="false">arrow_right</i></button>' );
 			$( 'button.device-triggers', el ).attr( 'id', btnid );
 			var mm = $( '<div class="dropdown-menu" role="menu" />' ).attr( 'aria-labelledby', btnid );
 			el.append( mm );
@@ -3057,7 +3057,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 			}
 			var container = $('div.params', row).empty();
 
-			row.children( 'button#condmore' ).prop( 'disabled', "comment" === cond.type );
+			row.children( 'button.re-condmore' ).prop( 'disabled', "comment" === cond.type );
 
 			switch (cond.type) {
 				case "":
@@ -3094,7 +3094,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 							cond.devicename = v;
 							configModified = true;
 						}
-						var fs = $('<fieldset class="vargroup"/>')
+						fs = $('<fieldset class="vargroup"/>')
 							.appendTo( container );
 						try {
 							fs.append( makeEventMenu( cond, row ) );
@@ -3231,7 +3231,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 				case 'weekday':
 					container.append(
 						'<select class="wdcond form-control form-control-sm"><option value="">Every</option><option value="1">First</option><option value="2">2nd</option><option value="3">3rd</option><option value="4">4th</option><option value="5">5th</option><option value="last">Last</option></select>');
-					fs = $( '<fieldset id="wdopts" />' );
+					fs = $( '<fieldset class="re-wdopts" />' );
 					getCheckbox( cond.id + '-wd-1', '1', 'Sun', 'wdopt' ).appendTo( fs );
 					getCheckbox( cond.id + '-wd-2', '2', 'Mon', 'wdopt' ).appendTo( fs );
 					getCheckbox( cond.id + '-wd-3', '3', 'Tue', 'wdopt' ).appendTo( fs );
@@ -3520,7 +3520,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 			 * options, and those that do don't have all options. Clear the UI
 			 * each time, so it's rebuilt as needed. */
 			$( 'div.condopts', row ).remove();
-			var btn = $( 'button#condmore', row );
+			var btn = $( 'button.re-condmore', row );
 			if ( condOptions[ cond.type ] ) {
 				btn.prop( 'disabled', false ).show();
 				if ( hasAnyProperty( cond.options ) ) {
@@ -3631,7 +3631,8 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 				$p.append( $( '<input class="titleedit form-control form-control-sm" title="Enter new group name">' )
 					.val( grp.name || grp.id || "" ) );
 				$( 'input.titleedit', $p ).on( 'change.reactor', handleTitleChange )
-					.on( 'blur.reactor', handleTitleChange );
+					.on( 'blur.reactor', handleTitleChange )
+					.focus();
 			}
 		}
 
@@ -3659,6 +3660,63 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 				$( 'i', $el ).text( 'expand_less' );
 				$( 'span.re-titlemessage:first', $p ).text( "" );
 			}
+		}
+
+		/**
+		 * Handle click on group focus--collapses all groups except clicked
+		 */
+		function handleGroupFocusClick( ev ) {
+			var $el = $( ev.currentTarget );
+			var $p = $el.closest( 'div.cond-container.cond-group' );
+			var $l = $( 'div.cond-group-body:first', $p );
+			var focusGrp = getConditionIndex()[$p.attr('id')];
+
+			var $btn = $( 'button.re-expand', $p );
+			if ( $btn.length > 0 ) {
+				$l.slideDown();
+				$btn.removeClass( 're-expand' ).addClass( 're-collapse' ).attr( 'title', 'Collapse group' );
+				$( 'i', $btn ).text( 'expand_less' );
+				$( 'span.re-titlemessage:first', $p ).text( "" );
+			}
+
+			function hasCollapsedParent( grp ) {
+				var parent = grp.__parent;
+				return false;
+			}
+
+			/*
+				collapse: descendents of this group -- NO
+						  ancestors of this group -- NO
+						  siblings of this group -- YES
+						  none of the above -- YES
+			*/
+			DOtraverse( getConfiguration().conditions.root,
+				function( node ) {
+					var gid = node.id;
+					var $p = $( 'div#' + idSelector( gid ) + ".cond-group" );
+					var $l = $( 'div.cond-group-body:first', $p );
+					var $btn = $( 'button.re-collapse', $p );
+					if ( $btn.length > 0 && !hasCollapsedParent( focusGrp ) ) {
+						$l.slideUp();
+						$( 'button.re-collapse', $p ).removeClass( 're-collapse' ).addClass( 're-expand' ).attr( 'title', 'Expand group');
+						$( 'i', $btn ).text( 'expand_more' );
+						try {
+							var n = $( 'div.cond-list:first > div', $p ).length;
+							$( 'span.re-titlemessage:first', $p ).text( " (" + n +
+								" condition" + ( 1 !== n ? "s" : "" ) + " collapsed)" );
+						} catch( e ) {
+							$( 'span.re-titlemessage:first', $p ).text( " (conditions collapsed)" );
+						}
+					}
+				},
+				false,
+				function( node ) {
+					/* Filter out non-groups, focusGrp, and nodes that are neither ancestors nor descendents of focusGrp */
+					return "group" === ( node.type || "group" ) &&
+						node.id !== focusGrp.id &&
+						! ( isAncestor( node.id, focusGrp.id ) || isDescendent( node.id, focusGrp.id ) );
+				}
+			);
 		}
 
 		/**
@@ -3864,20 +3922,10 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 		 */
 		function handleGroupControlClick( ev ) {
 			var $el = $( ev.target );
-			var action = $el.attr( 'id' );
 			var grpid = $el.closest( 'div.cond-container.cond-group' ).attr( 'id' );
 			var grp = getConditionIndex()[ grpid ];
-			var cdata = getConfiguration();
 
-			/* Special case handling for NUL--remove activities */
-			if ( "nul" === action && groupHasActivities( grp, cdata ) ) {
-				if ( ! confirm( 'This group currently has activities associated with it. Groups with the NUL operator do not run activities. OK to delete the associated activities?' ) ) {
-					return;
-				}
-				delete cdata.activities[grpid+'.true'];
-				delete cdata.activities[grpid+'.false'];
-			}
-
+			/* Generic handling */
 			if ( $el.closest( '.btn-group' ).hasClass( 'tb-btn-radio' ) ) {
 				$el.closest( '.btn-group' ).find( '.checked' ).removeClass( 'checked' );
 				$el.addClass( 'checked' );
@@ -3885,33 +3933,29 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 				$el.toggleClass( "checked" );
 			}
 
-			switch (action) {
-				case 'not':
-					grp.invert = $el.hasClass( "checked" );
-					break;
+			if ( $el.hasClass( 're-op-not' ) ) {
+				grp.invert = $el.hasClass( "checked" );
+			} else if ( $el.hasClass( 're-disable' ) ) {
+				grp.disabled = $el.hasClass( "checked" );
+			} else {
+				var opScan = [ "re-op-and", "re-op-or", "re-op-xor", "re-op-nul" ];
+				for ( var ix=0; ix < opScan.length; ix++ ) {
+					var cls = opScan[ix];
+					if ( $el.hasClass( cls ) && $el.hasClass( "checked" ) ) {
+						/* Special case handling for NUL--remove activities */
+						var cdata = getConfiguration();
+						if ( "re-op-nul" === cls && groupHasActivities( grp, cdata ) ) {
+							if ( ! confirm( 'This group currently has activities associated with it. Groups with the NUL operator do not run activities. OK to delete the associated activities?' ) ) {
+								return;
+							}
+							delete cdata.activities[grpid+'.true'];
+							delete cdata.activities[grpid+'.false'];
+						}
 
-				case 'and':
-					grp.operator = "and";
-					break;
-
-				case 'or':
-					grp.operator = "or";
-					break;
-
-				case 'xor':
-					grp.operator = "xor";
-					break;
-
-				case 'nul':
-					grp.operator = "nul";
-					break;
-
-				case 'disable':
-					grp.disabled = $el.hasClass( 'checked' );
-					break;
-
-				default:
-					/* nada */
+						grp.operator = cls.replace( /^re-op-/, "" );
+						break;
+					}
+				}
 			}
 
 			if ( false === grp.disabled ) delete grp.disabled;
@@ -3929,9 +3973,9 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 			var el = $( '\
 <div class="cond-container cond-cond"> \
   <div class="pull-right cond-actions"> \
-	  <button id="condmore" class="btn md-btn" title="Show condition options"><i class="material-icons">expand_more</i></button> \
+	  <button class="btn md-btn re-condmore" title="Show condition options"><i class="material-icons">expand_more</i></button> \
 	  <button class="btn md-btn draghandle" title="Move condition (drag)"><i class="material-icons">reorder</i></button> \
-	  <button id="delcond" class="btn md-btn" title="Delete condition"><i class="material-icons">clear</i></button> \
+	  <button class="btn md-btn re-delcond" title="Delete condition"><i class="material-icons">clear</i></button> \
   </div> \
   <div class="cond-body form-inline"> \
 	<div class="cond-type"> \
@@ -3949,8 +3993,8 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 
 			el.attr( 'id', id );
 			$('select.re-condtype', el).on( 'change.reactor', handleTypeChange );
-			$('button#delcond', el).on( 'click.reactor', handleConditionDelete );
-			$("button#condmore", el).on( 'click.reactor', handleExpandOptionsClick );
+			$('button.re-delcond', el).on( 'click.reactor', handleConditionDelete );
+			$("button.re-condmore", el).on( 'click.reactor', handleExpandOptionsClick );
 			return el;
 		}
 
@@ -3959,27 +4003,28 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 <div class="cond-container cond-group"> \
   <div class="cond-group-header"> \
 	<div class="pull-right"> \
-	  <button id="condmore" class="btn md-btn noroot" title="Show condition options"><i class="material-icons">expand_more</i></button> \
-	  <button id="sortdrag" class="btn md-btn draghandle noroot" title="Move group (drag)"><i class="material-icons">reorder</i></button> \
-	  <button id="delgroup" class="btn md-btn noroot" title="Delete group"><i class="material-icons">clear</i></button> \
+	  <button class="btn md-btn noroot re-condmore" title="Show condition options"><i class="material-icons">expand_more</i></button> \
+	  <button class="btn md-btn draghandle noroot" title="Move group (drag)"><i class="material-icons">reorder</i></button> \
+	  <button class="btn md-btn noroot re-delgroup" title="Delete group"><i class="material-icons">clear</i></button> \
 	</div> \
 	<div class="cond-group-conditions"> \
 	  <div class="btn-group cond-group-control tb-tbn-check"> \
-		<button id="not" class="btn btn-xs btn-primary" title="Invert the result of the AND/OR/XOR"> NOT </button> \
+		<button class="btn btn-xs btn-primary re-op-not" title="Invert the result of the AND/OR/XOR"> NOT </button> \
 	  </div> \
 	  <div class="btn-group cond-group-control tb-btn-radio"> \
-		<button id="and" class="btn btn-xs btn-primary checked" title="AND means group is true only if all conditions/subgroups are true"> AND </button> \
-		<button id="or" class="btn btn-xs btn-primary" title="OR means group is true if any child condition/subgroup is true"> OR </button> \
-		<button id="xor" class="btn btn-xs btn-primary" title="XOR (exclusive or) means group is true if one and only one condition/subgroup is true"> XOR </button> \
-		<button id="nul" class="btn btn-xs btn-primary" title="NUL means group does not affect logic state of parent group"> NUL </button> \
+		<button class="btn btn-xs btn-primary re-op-and checked" title="AND means group is true only if all conditions/subgroups are true"> AND </button> \
+		<button class="btn btn-xs btn-primary re-op-or" title="OR means group is true if any child condition/subgroup is true"> OR </button> \
+		<button class="btn btn-xs btn-primary re-op-xor" title="XOR (exclusive or) means group is true if one and only one condition/subgroup is true"> XOR </button> \
+		<button class="btn btn-xs btn-primary re-op-nul" title="NUL means group does not affect logic state of parent group"> NUL </button> \
 	  </div> \
 	  <div class="btn-group cond-group-control tb-btn-check"> \
-		<button id="disable" class="btn btn-xs btn-primary tb-disable" title="Disabled groups are ignored, as if they did not exist (conditions don\'t run)"> DISABLE </button> \
+		<button class="btn btn-xs btn-primary re-disable" title="Disabled groups are ignored, as if they did not exist (conditions don\'t run)"> DISABLE </button> \
 	  </div> \
 	  <div class="cond-group-title"> \
 		<span class="re-title" /> \
-		<button id="edittitle" class="btn md-btn" title="Edit group name"><i class="material-icons">edit</i></button> \
-		<button id="collapse" class="btn md-btn noroot" title="Collapse group"><i class="material-icons">expand_less</i></button> \
+		<button class="btn md-btn re-edittitle" title="Edit group name"><i class="material-icons">edit</i></button> \
+		<button class="btn md-btn noroot re-collapse" title="Collapse group"><i class="material-icons">expand_less</i></button> \
+		<button class="btn md-btn noroot re-focus" title="Focus on this group"><i class="material-icons">filter_center_focus</i></button> \
 		<span class="re-titlemessage" /> \
 	  </div> \
 	</div> \
@@ -3988,8 +4033,8 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
   <div class="cond-group-body"> \
 	<div class="cond-list"></div> \
 	<div class="cond-group-actions"> \
-	  <button id="addcond" class="btn md-btn" title="Add condition to this group"><i class="material-icons">playlist_add</i></button> \
-	  <button id="addgroup" class="btn md-btn" title="Add subgroup to this group"><i class="material-icons">library_add</i></button> \
+	  <button class="btn md-btn re-addcond" title="Add condition to this group"><i class="material-icons">playlist_add</i></button> \
+	  <button class="btn md-btn re-addgroup" title="Add subgroup to this group"><i class="material-icons">library_add</i></button> \
 	</div> \
   </div> \
 </div>' );
@@ -3998,19 +4043,20 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 			$( 'div.cond-group-conditions input[type="radio"]', el ).attr('name', grpid);
 			if ( 'root' === grpid ) {
 				/* Can't delete root group, but use the space for Save and Revert */
-				$( 'button#delgroup', el ).replaceWith(
+				$( 'button.re-delgroup', el ).replaceWith(
 					$( '<button class="btn btn-xs btn-success saveconf"> Save </button> <button class="btn btn-xs btn-danger revertconf"> Revert </button>' )
 				);
 
 				/* For root group, remove all elements with class noroot */
 				$( '.noroot', el ).remove();
 			}
-			$( 'button#addcond', el ).on( 'click.reactor', handleAddConditionClick );
-			$( 'button#addgroup', el ).on( 'click.reactor', handleAddGroupClick );
-			$( 'button#delgroup', el ).on( 'click.reactor', handleDeleteGroupClick );
-			$( 'button#condmore', el).on( 'click.reactor', handleExpandOptionsClick );
-			$( 'span.re-title,button#edittitle', el ).on( 'click.reactor', handleTitleClick );
-			$( 'button#collapse', el ).on( 'click.reactor', handleGroupExpandClick );
+			$( 'button.re-addcond', el ).on( 'click.reactor', handleAddConditionClick );
+			$( 'button.re-addgroup', el ).on( 'click.reactor', handleAddGroupClick );
+			$( 'button.re-delgroup', el ).on( 'click.reactor', handleDeleteGroupClick );
+			$( 'button.re-condmore', el).on( 'click.reactor', handleExpandOptionsClick );
+			$( 'span.re-title,button.re-edittitle', el ).on( 'click.reactor', handleTitleClick );
+			$( 'button.re-collapse', el ).on( 'click.reactor', handleGroupExpandClick );
+			$( 'button.re-focus', el ).on( 'click.reactor', handleGroupFocusClick );
 			$( '.cond-group-control > button', el ).on( 'click.reactor', handleGroupControlClick );
 			$( '.cond-list', el ).addClass("tb-sortable").sortable({
 				helper: 'clone',
@@ -4043,15 +4089,15 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 			el.addClass( 'level' + depth ).addClass( 'levelmod' + (depth % 4) );
 			$( 'span.re-title', el ).text( grp.name || grp.id ).attr( 'title', msgGroupIdChange );
 			$( 'div.cond-group-conditions .tb-btn-radio button', el ).removeClass( "checked" );
-			$( 'div.cond-group-conditions .tb-btn-radio button#' + ( grp.operator || "and" ), el ).addClass( "checked" );
+			$( 'div.cond-group-conditions .tb-btn-radio button.re-op-' + ( grp.operator || "and" ), el ).addClass( "checked" );
 			if ( grp.invert ) {
-				$( 'div.cond-group-conditions button#not', el ).addClass( "checked" );
+				$( 'div.cond-group-conditions button.re-op-not', el ).addClass( "checked" );
 			} else { delete grp.invert; }
 			if ( grp.disabled ) {
-				$( 'div.cond-group-conditions button#disable', el ).addClass( "checked" );
+				$( 'div.cond-group-conditions button.re-disable', el ).addClass( "checked" );
 			} else { delete grp.disabled; }
 			if ( grp.options && hasAnyProperty( grp.options ) ) {
-				$( 'button#condmore', el ).addClass( 'attn' );
+				$( 'button.re-condmore', el ).addClass( 'attn' );
 			}
 
 			container = $( 'div.cond-list', el );
@@ -4148,7 +4194,7 @@ div#tab-conds.reactortab .error-container { display: none; cursor: help; color: 
 div#tab-conds.reactortab .cond-group-title { display: inline-block; } \
 div#tab-conds.reactortab .cond-group-title span.re-title { padding: 0 4px; font-size: 16px; font-weight: bold; color: #036; } \
 div#tab-conds.reactortab .btn.checked { background-color: #5cb85c; } \
-div#tab-conds.reactortab .btn.tb-disable.checked { background-color: #d9534f; } \
+div#tab-conds.reactortab .btn.re-disable.checked { background-color: #d9534f; } \
 div#tab-conds.reactortab div.cond-group.tbmodified:not(.tberror) { } \
 div#tab-conds.reactortab div.cond-group.tberror { border-left: 4px solid red; } \
 div#tab-conds.reactortab div.cond-cond.tbmodified:not(.tberror) { } \
@@ -4159,7 +4205,7 @@ div#tab-conds.reactortab div.params { display: inline-block; clear: right; } \
 div#tab-conds.reactortab div.params fieldset { display: inline-block; border: none; margin: 0 4px; padding: 0 0; } \
 div#tab-conds.reactortab div.currval { font-family: "Courier New", Courier, monospace; font-size: 0.9em; margin: 8px 0px; display: block; } \
 div#tab-conds.reactortab div.warning { color: red; } \
-div#tab-conds.reactortab button.md-btn.attn { background-color: #ffff80; } \
+div#tab-conds.reactortab button.md-btn.attn { background-color: #ff8; background-image: linear-gradient( to bottom, #fff, #ff8 );} \
 div#tab-conds.reactortab button.md-btn.draghandle { cursor: grab; } \
 div#tab-conds.reactortab fieldset.vargroup { display: inline-block; white-space: nowrap; } \
 div#tab-conds.reactortab div.eventlist { display: inline-block; } \
@@ -4261,7 +4307,7 @@ div#tab-conds.reactortab input.re-comment { width: 100% !important; } \
 					configModified = true;
 				}
 			}
-			var exp = $( 'button#export', row ).hasClass( 'attn' ) ? undefined : 0;
+			var exp = $( 'button.re-export', row ).hasClass( 'attn' ) ? undefined : 0;
 			if ( cd.variables[vname].export !== exp ) {
 				if ( 0 === exp ) {
 					cd.variables[vname].export = 0;
@@ -4389,7 +4435,7 @@ div#tab-conds.reactortab input.re-comment { width: 100% !important; } \
 		$( 'button#addvar', container ).prop( 'disabled', true );
 		$( 'button.md-btn', container ).prop( 'disabled', true );
 		$( 'textarea.expr', row ).prop( 'disabled', false );
-		
+
 		/* Remove any prior getstates */
 		$('div#opt-state').remove();
 
@@ -4429,22 +4475,22 @@ div#tab-conds.reactortab input.re-comment { width: 100% !important; } \
 
 	function getVariableRow() {
 		var el = $('<div class="row varexp"></div>');
-		el.append( '<div id="varname" class="col-xs-12 col-sm-12 col-md-2"></div>' );
+		el.append( '<div class="col-xs-12 col-sm-12 col-md-2 re-varname"></div>' );
 		el.append( '<div class="col-xs-12 col-sm-9 col-md-8"><textarea class="expr form-control form-control-sm" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="off"/>');
 		$('<div class="currval" />').appendTo( el );
 		// ??? devices_other is an alternate for insert state variable
 		el.append( '<div class="col-xs-12 col-sm-3 col-md-2 text-right">\
 <button class="btn md-btn draghandle" title="Change order (drag)"><i class="material-icons">reorder</i></button>\
-<button id="export" class="btn md-btn" title="Result exports to state variable"><i class="material-icons">import_export</i></button>\
-<button id="tryexpr" class="btn md-btn" title="Try this expression"><i class="material-icons">directions_run</i></button>\
-<button id="getstate" class="btn md-btn" title="Insert device state variable value"><i class="material-icons">memory</i></button>\
-<button id="deletevar" class="btn md-btn" title="Delete this variable"><i class="material-icons">clear</i></button>\
+<button class="btn md-btn re-export" title="Result exports to state variable"><i class="material-icons">import_export</i></button>\
+<button class="btn md-btn re-tryexpr" title="Try this expression"><i class="material-icons">directions_run</i></button>\
+<button class="btn md-btn re-getstate" title="Insert device state variable value"><i class="material-icons">memory</i></button>\
+<button class="btn md-btn re-deletevar" title="Delete this variable"><i class="material-icons">clear</i></button>\
 </div>' );
 		$( 'textarea.expr', el ).prop( 'disabled', true ).on( 'change.reactor', handleVariableChange );
-		$( 'button#export', el ).prop( 'disabled', true ).on( 'click.reactor', handleExportClick );
-		$( 'button#tryexpr', el ).prop( 'disabled', true ).on( 'click.reactor', handleTryExprClick );
-		$( 'button#getstate', el ).prop( 'disabled', true ).on( 'click.reactor', handleGetStateClick );
-		$( 'button#deletevar', el ).prop( 'disabled', true ).on( 'click.reactor', handleDeleteVariableClick );
+		$( 'button.re-export', el ).prop( 'disabled', true ).on( 'click.reactor', handleExportClick );
+		$( 'button.re-tryexpr', el ).prop( 'disabled', true ).on( 'click.reactor', handleTryExprClick );
+		$( 'button.re-getstate', el ).prop( 'disabled', true ).on( 'click.reactor', handleGetStateClick );
+		$( 'button.re-deletevar', el ).prop( 'disabled', true ).on( 'click.reactor', handleDeleteVariableClick );
 		$( 'button.draghandle', el ).prop( 'disabled', true );
 		return el;
 	}
@@ -4456,8 +4502,8 @@ div#tab-conds.reactortab input.re-comment { width: 100% !important; } \
 		$( 'div.varexp textarea.expr,button.md-btn', container ).prop( 'disabled', true );
 
 		var editrow = getVariableRow();
-		$( 'div#varname', editrow ).empty().append( '<input class="form-control form-control-sm" title="Enter a variable name and then TAB out of the field.">' );
-		$( 'div#varname input', editrow ).on('change.reactor', function( ev ) {
+		$( 'div.re-varname', editrow ).empty().append( '<input class="form-control form-control-sm" title="Enter a variable name and then TAB out of the field.">' );
+		$( 'div.re-varname input', editrow ).on('change.reactor', function( ev ) {
 			/* Convert to regular row */
 			var f = $( ev.currentTarget );
 			var row = f.closest( 'div.varexp' );
@@ -4481,7 +4527,7 @@ div#tab-conds.reactortab input.re-comment { width: 100% !important; } \
 			}
 		});
 		$( 'div.varlist', container ).append( editrow );
-		$( 'div#varname input', editrow ).focus();
+		$( 'div.re-varname input', editrow ).focus();
 	}
 
 	/**
@@ -4521,7 +4567,7 @@ div#tab-conds.reactortab input.re-comment { width: 100% !important; } \
 			var vd = vix[ix];
 			var el = getVariableRow();
 			el.attr( 'id', vd.name );
-			$( 'div#varname', el).text( vd.name );
+			$( 'div.re-varname', el).text( vd.name );
 			$( 'textarea.expr', el ).val( vd.expression ).prop( 'disabled', false );
 			$( 'button.md-btn', el ).prop( 'disabled', false );
 			var blk = $( 'div.currval', el ).empty();
@@ -4538,7 +4584,7 @@ div#tab-conds.reactortab input.re-comment { width: 100% !important; } \
 				blk.text( '(expression has not yet been evaluated or caused an error)' ).attr( 'title', "" );
 			}
 			if ( 0 !== vd.export ) {
-				$( 'button#export', el ).addClass( 'attn' );
+				$( 'button.re-export', el ).addClass( 'attn' );
 			}
 			list.append( el );
 		}
@@ -4597,9 +4643,9 @@ div#tab-vars.reactortab div.varexp.tbmodified:not(.tberror) { border-left: 4px s
 div#tab-vars.reactortab div.varexp.tberror { border-left: 4px solid red; } \
 div#tab-vars.reactortab textarea.expr { font-family: monospace; resize: vertical; width: 100% !important; } \
 div#tab-vars.reactortab div.varexp { cursor: default; margin: 2px 0 2px 0; } \
-div#tab-vars.reactortab div#varname:after { content: " ="; } \
+div#tab-vars.reactortab div.re-varname:after { content: " ="; } \
 div#tab-vars.reactortab div.currval { font-family: "Courier New", Courier, monospace; font-size: 0.9em; } \
-div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow: none; } \
+div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-image: linear-gradient( to bottom, #bf9, #8c6 );} \
 </style>');
 			}
 
@@ -4839,12 +4885,12 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 				break;
 
 			case "runlua":
-				var lua = $( 'textarea.luacode', row ).val() || "";
+				var lua = $( 'textarea.re-luacode', row ).val() || "";
 				// check Lua?
 				if ( lua.match( /^[\r\n\s]*$/ ) ) {
-					$( 'textarea.luacode', row ).addClass( "tberror" );
+					$( 'textarea.re-luacode', row ).addClass( "tberror" );
 				} else {
-					testLua( lua, $( 'textarea.luacode', row ), row );
+					testLua( lua, $( 'textarea.re-luacode', row ), row );
 				}
 				break;
 
@@ -5238,7 +5284,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 					break;
 
 				case "runlua":
-					var lua = $( 'textarea.luacode', row ).val() || "";
+					var lua = $( 'textarea.re-luacode', row ).val() || "";
 					lua = lua.replace( /\r\n/g, "\n" );
 					lua = lua.replace( /\r/, "\n" );
 					lua = lua.replace( /\s+\n/g, "\n" );
@@ -5417,7 +5463,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 	}
 
 	function updateActionControls() {
-		$( 'div.actionlist' ).each( function( ix ) {
+		$( 'div.actionlist' ).each( function( ix, obj ) {
 			var section = $( this );
 			$('div.controls button.re-moveup', section).prop('disabled', false);
 			$('div.actionrow:first div.controls button.re-moveup', section).prop('disabled', true);
@@ -5683,27 +5729,30 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 						/* Show activities in traversal order */
 						var cd = getConfiguration( devNum );
 						var grp = $('<optgroup>').attr('label', 'ReactorSensor Activities');
-						DOtraverse( cd.conditions.root,
-							function( node ) {
-								if ( cd.activities[node.id + ".true"] ) {
-									$( '<option/>' ).val( node.id + ".true" )
-										.text( node.name + " is TRUE" )
-										.appendTo( grp );
+						/* Wrap because upvalue refs with multiples executing (fully re-entrant) */
+						(function ( cd, grp, topItem ) {
+							DOtraverse( cd.conditions.root,
+								function( node ) {
+									if ( cd.activities[node.id + ".true"] ) {
+										$( '<option/>' ).val( node.id + ".true" )
+											.text( node.name + " is TRUE" )
+											.appendTo( grp );
+									}
+									if ( cd.activities[node.id + ".false"] ) {
+										$( '<option/>' ).val( node.id + ".false" )
+											.text( node.name + " is FALSE" )
+											.appendTo( grp );
+									}
+								},
+								false,
+								function( node ) {
+									return "group" === (node.type || "group");
 								}
-								if ( cd.activities[node.id + ".false"] ) {
-									$( '<option/>' ).val( node.id + ".false" )
-										.text( node.name + " is FALSE" )
-										.appendTo( grp );
-								}
-							},
-							false,
-							function( node ) {
-								return "group" === (node.type || "group");
+							);
+							if ( $('option', grp).length > 0 ) {
+								grp.insertAfter( topItem );
 							}
-						);
-						if ( $('option', grp).length > 0 ) {
-							grp.insertAfter( topItem );
-						}
+						})( cd, grp );
 					}
 					if ( undefined !== parm.extraValues ) {
 						if ( Array.isArray( parm.extraValues ) ) {
@@ -6116,7 +6165,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 		}, function( jqXHR, textStatus, errorThrown ) {
 			/* Failed. And deviceinfo as a fallback isn't really appropriate here (only lists exceptions) */
 			console.log("changeActionDevice: failed to load service data: " + textStatus + "; " + String(errorThrown));
-			console.log(jqXHR.responseText);
+			console.log(jqXHR);
 			retries = ( undefined === retries ? 0 : retries ) + 1;
 			if ( retries > 10 ) {
 				alert("Unable to load service data for this device. If you are on a remote connection, the connection to your Vera may have been lost.");
@@ -6288,11 +6337,11 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 
 			case "runlua":
 				/* Handle upgrade to ACE separately */
-				ct.append( '<textarea id="lua" wrap="off" autocorrect="off" autocomplete="off" autocapitalize="off" spellcheck="off" class="luacode form-control form-control-sm" rows="6"/>' );
+				ct.append( '<textarea wrap="off" autocorrect="off" autocomplete="off" autocapitalize="off" spellcheck="off" class="re-luacode form-control form-control-sm" rows="6"/>' );
 				if ( window.ace ) {
-					doEditor( $( 'textarea.luacode', ct ) );
+					doEditor( $( 'textarea.re-luacode', ct ) );
 				} else {
-					$( 'textarea.luacode', ct ).on( 'change.reactor', handleActionValueChange );
+					$( 'textarea.re-luacode', ct ).on( 'change.reactor', handleActionValueChange );
 				}
 				ct.append('<div class="tbhint">If your Lua code returns boolean <em>false</em>, scene execution will stop and the remaining actions that follow will not be run (this is a feature). It is also recommended that the first line of your Lua be a comment with text to help you identify the code--if there\'s an error logged, the first line of the script is almost always shown. Also, you can use the <tt>print()</tt> function to write to Reactor\'s event log, which is shown in the Logic Summary and easier/quicker to get at than the Vera log file.</div>');
 				break;
@@ -6600,7 +6649,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 								newRow.attr( 'id', container.attr( 'id' ) + ns++ );
 								$( "select.re-actiontype", newRow).val( "runlua" );
 								changeActionType( newRow, "runlua" );
-								$( "textarea.luacode", newRow ).val( lua ).trigger( "reactorinit" );
+								$( "textarea.re-luacode", newRow ).val( lua ).trigger( "reactorinit" );
 								pred = newRow.addClass( "tbmodified" ).insertAfter( pred );
 							}
 							/* Sort groups by delay ascending */
@@ -6799,7 +6848,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 						if ( act.lua ) {
 							lua = (act.encoded_lua || 0) != 0 ? atob( act.lua ) : act.lua;
 						}
-						$( 'textarea.luacode', newRow ).val( lua ).trigger( 'reactorinit' );
+						$( 'textarea.re-luacode', newRow ).val( lua ).trigger( 'reactorinit' );
 						break;
 
 					case "rungsa":
@@ -6935,8 +6984,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 		row.append( '\
 <div class="tblisttitle col-xs-9 col-sm-9 col-lg-10"> \
   <span class="re-title">?title?</span> \
-  <button id="collapse" class="btn md-btn" title="Collapse action"><i class="material-icons">expand_less</i></button> \
-  <span id="titlemessage" /> \
+  <button class="btn md-btn re-collapse" title="Collapse action"><i class="material-icons">expand_less</i></button> \
+  <span class="re-titlemessage" /> \
 </div> \
 <div class="tblisttitle col-xs-3 col-sm-3 col-lg-2 text-right"> \
   <div class="btn-group"> \
@@ -6953,10 +7002,10 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
   <div class="btn-group"> \
 	<button class="addaction btn btn-sm btn-success">Add Action</button> \
 	<div class="btn-group"> \
-	  <button id="global-import" class="btn btn-sm btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" title="Import activity or scene to this activity"> \
-		Copy From <span class="caret"></span> \
+	  <button class="btn btn-sm btn-default dropdown-toggle re-global-import" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" title="Import activity or scene to this activity"> \
+		Copy From <span class="caret" /> \
 	  </button> \
-	  <ul id="activities" class="dropdown-menu"></ul> \
+	  <ul class="dropdown-menu re-activities-list" /> \
 	</div> \
   </div> \
 </div>' );
@@ -7006,7 +7055,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 	function redrawActivities() {
 		var myid = api.getCpanelDeviceId();
 		var cd = getConfiguration( myid );
-		var container = $( 'div#activities' ).empty();
+		var container = $( 'div#re-activities' ).empty();
 
 		var el = $( '<div class="form-inline" />' )
 			.append( $( "<label>" ).text( "Show Activities: " )
@@ -7072,10 +7121,10 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 				.text( 'Not all possible activities are being shown. Choose "All" from the "Show Activities" menu at top to see everything.' ) );
 		}
 
-		$("div#tab-actions.reactortab button#collapse").on( 'click.reactor', handleActivityCollapseClick );
+		$("div#tab-actions.reactortab button.re-collapse").on( 'click.reactor', handleActivityCollapseClick );
 		$("div#tab-actions.reactortab button.addaction").on( 'click.reactor', handleAddActionClick );
-		$("div#tab-actions.reactortab ul#activities").empty().append( ul.children() );
-		$("div#tab-actions.reactortab ul#activities li").on( 'click.reactor', handleActionCopyClick );
+		$("div#tab-actions.reactortab ul.re-activities-list").empty().append( ul.children() );
+		$("div#tab-actions.reactortab ul.re-activities-list li").on( 'click.reactor', handleActionCopyClick );
 		$("div#tab-actions.reactortab button.saveconf").on( 'click.reactor', handleActionsSaveClick )
 			.prop( "disabled", !configModified );
 		$("div#tab-actions.reactortab button.revertconf").on( 'click.reactor', handleRevertClick )
@@ -7120,7 +7169,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #bf9; box-shadow:
 
 			if ( undefined !== deviceInfo ) {
 				var uc = $( '<div id="di-ver-check"/>' );
-				uc.insertBefore( $( 'div#tripactions' ) );
+				$('div#tab-actions').prepend( uc );
 				$.ajax({
 					url: "https://www.toggledbits.com/deviceinfo/checkupdate.php",
 					data: {
@@ -7178,7 +7227,7 @@ div#tab-actions.reactortab div.actionlist div.actionrow:nth-child(odd) { backgro
 div#tab-actions.reactortab div.actionrow.tbmodified:not(.tberror) { border-left: 4px solid green; } \
 div#tab-actions.reactortab div.actionrow.tberror { border-left: 4px solid red; } \
 div#tab-actions.reactortab input.re-comment { width: 100% !important; } \
-div#tab-actions.reactortab textarea.luacode { font-family: monospace; resize: vertical; width: 100% !important; } \
+div#tab-actions.reactortab textarea.re-luacode { font-family: monospace; resize: vertical; width: 100% !important; } \
 div#tab-actions.reactortab div.editor { width: 100%; min-height: 240px; } \
 div#tab-actions.reactortab div.tbhint { font-size: 90%; font-weight: normal; } \
 div#tab-actions.reactortab div.warning { color: red; } \
@@ -7219,7 +7268,7 @@ div#tab-actions.reactortab ul.dropdown-menu li:hover { color: white; background-
 
 				html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>Activities</h3></div></div>';
 
-				html += '<div id="activities"/>';
+				html += '<div id="re-activities"/>';
 
 				html += '</div>'; // tab-actions
 
@@ -7749,12 +7798,12 @@ textarea#devspyoutput { width: 100%; font-family: monospace; } \
 				},
 				dataType: 'json',
 				timeout: 30000
-			}).done( function( respData, respText, jqXHR ) {
+			}).done( function( /* respData, respText, jqXHR */ ) {
 				msg.text( "Update successful! The changes take effect immediately; no restart necessary." );
 				// don't call updateToolsVersionDisplay() again because we'd need to reload devinfo to
 				// get the right message.
 				$( 'span#di-ver-info', container ).html( "Your database is up to date!" );
-			}).fail( function( x, y, z ) {
+			}).fail( function( /* jqXHR, textStatus, errorThrown */ ) {
 				msg.text( "The update failed; Vera busy/restarting. Try again in a moment." );
 			});
 		});
