@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.5develop-20011"
+local _PLUGIN_VERSION = "3.5develop-20012"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION	= 19362
@@ -670,8 +670,6 @@ end
 local function setMessage(s, dev)
 	DA( dev ~= nil )
 	luup.variable_set(RSSID, "Message", s or "", dev)
-	luup.variable_set(RSSID, "NONSENSENAME", os.time(), dev)
-	luup.variable_set(VARSID, "NONSENSENAME", os.time(), dev)
 end
 
 -- Array to map, where f(elem) returns key[,value]
@@ -958,6 +956,7 @@ local function plugin_runOnce( pdev )
 
 	-- Remove old/deprecated values
 	deleteVar( RSSID, "Scenes", pdev )
+	deleteVar( MYSID, "isHome", pdev )
 
 	-- Update version last.
 	if s ~= _CONFIGVERSION then
@@ -4789,7 +4788,7 @@ function assertEnabled( dev ) return isEnabled( dev ) or error "Cannot perform t
 -- Add a child (used as both action and local function)
 function actionAddSensor( pdev, count )
 	D("addSensor(%1)", pdev)
-	if getVarNumeric( "Enabled", 1, pluginDevice, MYSID ) == 0 then 
+	if getVarNumeric( "Enabled", 1, pluginDevice, MYSID ) == 0 then
 		error "Cannot perform this operation when Reactor is disabled"
 	end
 	count = tonumber( count ) or 1
@@ -4804,7 +4803,7 @@ function actionAddSensor( pdev, count )
 			local dd = tonumber( string.match( v.id, "s(%d+)" ) )
 			if dd == nil then highd = highd + 1 elseif dd > highd then highd = dd end
 		end
-		luup.chdev.append( pdev, ptr, v.id, v.description, v.device_type, 
+		luup.chdev.append( pdev, ptr, v.id, v.description, v.device_type,
 			luup.attr_get( 'device_file', k ) or "",
 			luup.attr_get( 'impl_file', k ) or "", "", false )
 	end
@@ -4855,7 +4854,7 @@ end
 -- Set enabled state of ReactorSensor
 function actionSetEnabled( enabled, tdev )
 	D("setEnabled(%1,%2)", enabled, tdev)
-	if getVarNumeric( "Enabled", 1, pluginDevice, MYSID ) == 0 then 
+	if getVarNumeric( "Enabled", 1, pluginDevice, MYSID ) == 0 then
 		setMessage( "Reactor plugin is disabled.", tdev )
 		error "Cannot perform this operation when Reactor is disabled"
 	end
@@ -5732,7 +5731,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		luup.variable_set( MYSID, "runscene", "{}", pluginDevice )
 		sceneData = {}
 		luup.variable_set( MYSID, "scenedata", "{}", pluginDevice )
-		luup.variable_set( MYSID, "isHome", "{}", pluginDevice )
+		luup.variable_set( MYSID, "IsHome", "{}", pluginDevice )
 		luaFunc = {}
 		L"Plugin state cleared; restarting sensors."
 		for _,n in ipairs( children ) do
@@ -5911,13 +5910,13 @@ SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 									function( kk )
 										local dd = split( kk, '/' )
 										r = r .. string.format("        Device #%s %s service %s variable %s%s",
-											dd[1] or "nil", 
+											dd[1] or "nil",
 											( luup.devices[tonumber(dd[1]) or -1] or {} ).description or "(deleted/unknown",
-											dd[2] or "nil", dd[3] or nil, 
+											dd[2] or "nil", dd[3] or nil,
 											EOL )
 									end, key )
 								then
-									r = r .. "        Error formatting " .. tostring(key) .. "=" .. 
+									r = r .. "        Error formatting " .. tostring(key) .. "=" ..
 										tostring(dev) .. EOL
 								end
 								break
