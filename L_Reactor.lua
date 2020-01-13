@@ -790,10 +790,7 @@ end
 -- takes place.
 local function sensor_runOnce( tdev )
 	local s = getVarNumeric("Version", 0, tdev, RSSID)
-	if s == _CONFIGVERSION then
-		-- Up to date.
-		return
-	elseif s == 0 then
+	if s == 0 then
 		L("Sensor %1 (%2) first run, setting up new instance...", tdev, luup.devices[tdev].description)
 		initVar( "Enabled", "1", tdev, RSSID )
 		initVar( "Retrigger", "0", tdev, RSSID )
@@ -878,10 +875,7 @@ end
 -- takes place.
 local function plugin_runOnce( pdev )
 	local s = getVarNumeric("Version", 0, pdev, MYSID)
-	if s == _CONFIGVERSION then
-		-- Up to date.
-		return
-	elseif s == 0 then
+	if s == 0 then
 		L("First run, setting up new plugin instance...")
 		initVar( "Enabled", 1, pdev, MYSID )
 		initVar( "Message", "", pdev, MYSID )
@@ -957,6 +951,9 @@ local function plugin_runOnce( pdev )
 	-- Remove old/deprecated values
 	deleteVar( RSSID, "Scenes", pdev )
 	deleteVar( MYSID, "isHome", pdev )
+	deleteVar( RSSID, "cstate", pdev )
+	deleteVar( RSSID, "cdata", pdev )
+	deleteVar( RSSID, "NotifyQueue", pdev )
 
 	-- Update version last.
 	if s ~= _CONFIGVERSION then
@@ -1252,7 +1249,7 @@ local function runNotifyTask( pdev, taskid )
 		D("runNotifyTask() empty queue")
 	end
 	-- Persist queue.
-	setVar( RSSID, "NotifyQueue", json.encode( notifyQueue ), pluginDevice )
+	setVar( MYSID, "NotifyQueue", json.encode( notifyQueue ), pluginDevice )
 end
 
 local function queueNotification( nid, tdev )
@@ -1260,7 +1257,7 @@ local function queueNotification( nid, tdev )
 	table.insert( notifyQueue, { id=nid, owner=tdev, timestamp=os.time() } )
 	local maxqueue = getVarNumeric( "NoticeQueueLimit", 20, pluginDevice, MYSID )
 	while #notifyQueue > 0 and #notifyQueue > maxqueue do table.remove( notifyQueue, 1 ) end
-	setVar( RSSID, "NotifyQueue", json.encode( notifyQueue ), pluginDevice )
+	setVar( MYSID, "NotifyQueue", json.encode( notifyQueue ), pluginDevice )
 	scheduleDelay( 'notifier', 5 )
 end
 
@@ -2613,6 +2610,12 @@ local function execScene( scd, tdev, options )
 	local taskid = string.format("ctx%s.sc%s", tostring(ctx), tostring(scd.id))
 	if options.stopPriorScenes then
 		stopScene( ctx, nil, tdev )
+	end
+
+	if ( not scd.isReactorScene ) and ( scd.paused or 0 ) ~= 0 then
+		addEvent{ dev=tdev, msg="Launch of %(sceneName)s (#%(scene)s) blocked; scene is paused.",
+			event="startscene", scene=scd.id, sceneName=scd.name or scd.id}
+		return nil
 	end
 
 	-- And here ve go...
@@ -4617,7 +4620,7 @@ function startPlugin( pdev )
 	geofenceMode = getVarNumeric( "ForceGeofenceMode", 0, pdev, MYSID )
 	geofenceEvent = 0
 	usesHouseMode = false
-	maxEvents = getVarNumeric( "MaxEvents", debugMode and 250 or 50, pdev, MYSID )
+	maxEvents = getVarNumeric( "MaxEvents", debugMode and 250 or 100, pdev, MYSID )
 
 	math.randomseed( os.time() )
 
