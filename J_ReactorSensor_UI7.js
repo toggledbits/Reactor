@@ -146,6 +146,7 @@ var ReactorSensor = (function(api, $) {
 		$head.append( '\
 <style id="reactor-core-styles">\
 	div.reactortab { background-color: white; color: black; } \
+	div.re-alertbox { border: 3px solid #ff3; border-radius: 8px; padding: 8px 8px; box-shadow: #333 2px 2px; background-color: #fff; color: #000; } \
 	div.reactortab input.narrow { max-width: 6em; } \
 	div.reactortab input.tbfullwidth { width: 100%; } \
 	div.reactortab input.tiny { max-width: 4em; text-align: center; } \
@@ -988,6 +989,7 @@ var ReactorSensor = (function(api, $) {
 			}
 		}
 		configModified = false;
+		moduleReady = false;
 	}
 
 	function conditionValueText( v, forceNumber ) {
@@ -1682,6 +1684,14 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 			inStatusPanel = false; /* stop updates */
 			console.log( e );
 			alert( e.stack );
+		}
+
+		var ud = api.getUserData();
+		var unsafeLua = ud.UnsafeLua || "";
+		if ( !isOpenLuup && unsafeLua != "1" ) {
+			console.log( "UnsafeLua = " + String(unsafeLua) );
+			$( '<div class="re-alertbox"><strong>Warning!</strong> "Unsafe Lua" is not enabled, which will prevent the successful operation of some Reactor features. You can turn this setting on under <em>Users &amp; Account Info &gt; Security</em>.</div>' )
+				.insertBefore( $('div#reactorstatus') );
 		}
 	}
 
