@@ -64,12 +64,6 @@ local ARRAYMAX = 100 -- maximum size of an unbounded (luaxp) array (override by 
 
 local defaultLogLevel = false -- or a number, which is (uh...) the default log level for messages
 
--- These are the types of children we create, and their associated device file.
-local dfMap = {
-	["urn:schemas-toggledbits-com:device:ReactorSensor:1"] = { device_file="D_ReactorSensor.xml" },
-	["urn:schemas-micasaverde-com:device:DoorSensor:1"] = { device_file="D_DoorSensor1.xml" }
-}
-
 local json = require "dkjson"
 local mime = require "mime"
 local luaxp -- will only be loaded if needed
@@ -4082,16 +4076,9 @@ end
 -- which is what Vera should have done in the first place.
 local function getHouseModeTracker( createit, pdev )
 	if not isOpenLuup then
-		local children = {}
 		for k,v in childDevices( pdev ) do
 			if v.id == "hmt" then
 				return k, v -- got it
-			end
-			table.insert( children, k )
-			if dfMap[v.device_type] == nil then
-				-- Early detection and error exit prevents accidental destruction of children.
-				error( "Device " .. tostring( v.description ) .. " (#" .. k ..
-					") type "..v.device_type.." not found in dfMap!" )
 			end
 		end
 		-- Didn't find it. At this point, we have a list of children.
@@ -4100,11 +4087,11 @@ local function getHouseModeTracker( createit, pdev )
 			L{level=2,msg="Did not find house mode tracker; creating. This will cause a Luup reload."}
 			local ptr = luup.chdev.start( pdev )
 			luup.variable_set( MYSID, "Message", "Adding house mode tracker, please wait...", pdev )
-			for _,k in ipairs( children ) do
-				local v = luup.devices[ k ]
-				local df = dfMap[ v.device_type ]
+			for k,v in childDevices( pdev ) do
 				D("getHouseModeTracker() appending existing device %1 (%2)", v.id, v.description)
-				luup.chdev.append( pdev, ptr, v.id, v.description, "", df.device_file, "", "", false )
+				luup.chdev.append( pdev, ptr, v.id, v.description, v.device_type,
+					luup.attr_get( 'device_file', k ) or "",
+					luup.attr_get( 'impl_file', k ) or "", "", false )
 			end
 			D("getHouseModeTracker() creating hmt child; final step before reload.")
 			luup.chdev.append( pdev, ptr, "hmt", "Reactor Internal HMT", "", "D_DoorSensor1.xml", "", "", false )
@@ -4797,35 +4784,29 @@ function startPlugin( pdev )
 end
 
 -- Check enabled state for actions
-function assertEnabled( dev ) return isEnabled( dev ) or error "Cannot perform this operation on a disabled device" end
+function assertEnabled( dev ) return isEnabled( dev ) or error "Cannot perform this action on a disabled ReactorSensor" end
 
 -- Add a child (used as both action and local function)
 function actionAddSensor( pdev, count )
 	D("addSensor(%1)", pdev)
-	assertEnabled( pdev )
+	if getVarNumeric( "Enabled", 1, pluginDevice, MYSID ) == 0 then 
+		error "Cannot perform this operation when Reactor is disabled"
+	end
 	count = tonumber( count ) or 1
 	if count < 1 then count = 1 elseif count > 16 then count = 16 end
 	luup.variable_set( MYSID, "Message", "Adding sensor, please hard-refresh your browser.", pdev )
-	-- Safe child add.
-	local children = {}
-	for k,v in childDevices( pdev ) do
-		if dfMap[ v.device_type ] == nil then
-			error( "Device " .. tostring( v.description ) .. " (#" .. k ..
-				") type "..v.device_type.." not found in dfMap!" )
-		end
-		table.insert( children, k )
-	end
+
 	local ptr = luup.chdev.start( pdev )
 	local highd = 0
-	for _,k in ipairs( children ) do
-		local v = luup.devices[ k ]
+	for k,v in childDevices( pdev ) do
 		D("addSensor() appending existing device %1 (%2)", v.id, v.description)
 		if v.device_type == RSTYPE then
 			local dd = tonumber( string.match( v.id, "s(%d+)" ) )
 			if dd == nil then highd = highd + 1 elseif dd > highd then highd = dd end
 		end
-		local df = dfMap[ v.device_type ]
-		luup.chdev.append( pdev, ptr, v.id, v.description, "", df.device_file, "", "", false )
+		luup.chdev.append( pdev, ptr, v.id, v.description, v.device_type, 
+			luup.attr_get( 'device_file', k ) or "",
+			luup.attr_get( 'impl_file', k ) or "", "", false )
 	end
 	local vv = string.format( "%s,Enabled=1\n,room=%s", RSSID, luup.attr_get( "room", pdev ) or "0" )
 	for k = 1,count do
@@ -4874,6 +4855,10 @@ end
 -- Set enabled state of ReactorSensor
 function actionSetEnabled( enabled, tdev )
 	D("setEnabled(%1,%2)", enabled, tdev)
+	if getVarNumeric( "Enabled", 1, pluginDevice, MYSID ) == 0 then 
+		setMessage( "Reactor plugin is disabled.", tdev )
+		error "Cannot perform this operation when Reactor is disabled"
+	end
 	if type(enabled) == "string" then
 		if enabled:lower() == "false" or enabled:lower() == "disabled" or enabled == "0" then
 			enabled = false
@@ -4885,7 +4870,7 @@ function actionSetEnabled( enabled, tdev )
 	elseif type(enabled) ~= "boolean" then
 		return
 	end
-	local wasEnabled = isEnabled( tdev )
+	local wasEnabled = getVarBool( "Enabled", true, tdev, RSSID )
 	if wasEnabled ~= enabled then
 		-- changing
 		addEvent{ dev=tdev,
