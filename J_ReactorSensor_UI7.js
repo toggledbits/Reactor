@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.5develop-20011';
+	var pluginVersion = '3.5develop-20013';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -69,7 +69,7 @@ var ReactorSensor = (function(api, $) {
 		"weekday": { },
 		"sun": { sequence: true },
 		"trange": { },
-		"interval": { latch: false },
+		"interval": { pulse: false, latch: false },
 		"ishome": { sequence: true, duration: true },
 		"reload": { },
 		"grpstate": { sequence: true, duration: true, repeat: true },
@@ -245,7 +245,8 @@ var ReactorSensor = (function(api, $) {
 
 	/* Find a value in an array using a function to match; returns value, not index. */
 	function arrayFindValue( arr, func, start ) {
-		for ( var k=(start || 0); k<arr.length; ++k ) {
+		var l = arr.length;
+		for ( var k=(start || 0); k<l; ++k ) {
 			if ( func( arr[k] ) ) return arr[k];
 		}
 		return null;
@@ -287,7 +288,8 @@ var ReactorSensor = (function(api, $) {
 			"alt": "Link to Reactor Wiki for topic help",
 			"title": "Link to Reactor Wiki for topic help",
 			"target": "_blank",
-			"href": "https://github.com/toggledbits/Reactor/wiki/" + String(where || "")
+			// "href": "https://github.com/toggledbits/Reactor/wiki/" + String(where || "")
+			"href": "https://www.toggledbits.com/static/reactor/docs/" + String(where || "")
 		} );
 		$v.append( '<i class="material-icons">help_outline</i>' );
 		return $v;
@@ -491,7 +493,8 @@ var ReactorSensor = (function(api, $) {
 			op( node, args );
 		}
 		if ( "group" === ( node.type || "group" ) ) {
-			for ( var ix=0; ix<(node.conditions||[]).length; ix++ ) {
+			var l = node.conditions ? node.conditions.length : 0;
+			for ( var ix=0; ix<l; ix++ ) {
 				DOtraverse( node.conditions[ix], op, args, filter );
 			}
 		}
@@ -513,7 +516,8 @@ var ReactorSensor = (function(api, $) {
 		var c = getConditionIndex( myid )[grp];
 		/* Fast exit if our anchor condition isn't a group (only groups have descendents) */
 		if ( "group" !== ( c.type || "group" ) ) return false;
-		for ( var k=0; k<( c.conditions || [] ).length; k++ ) {
+		var l = c.conditions ? c.conditions.length : 0;
+		for ( var k=0; k<l; k++ ) {
 			if ( node === c.conditions[k].id ) return true;
 			if ( "group" === ( c.conditions[k].type || "group" ) &&
 				isDescendent( node, c.conditions[k].id, myid ) ) return true;
@@ -571,7 +575,8 @@ var ReactorSensor = (function(api, $) {
 			});
 
 			/* User and geofence pre-processing */
-			for ( var ix=0; ix<(ud.users || []).length; ++ix ) {
+			var l = ud.users ? ud.users.length : 0;
+			for ( var ix=0; ix<l; ++ix ) {
 				userIx[ud.users[ix].id] = { name: ud.users[ix].Name || ud.users[ix].id };
 				userNameIx[ud.users[ix].Name || ud.users[ix].id] = ud.users[ix].id;
 			}
@@ -662,7 +667,8 @@ var ReactorSensor = (function(api, $) {
 			}
 			return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1;
 		});
-		for (var i=0; i<dd.length; i+=1) {
+		var l = dd.length;
+		for (var i=0; i<l; ++i) {
 			var devobj = api.cloneObject( dd[i] );
 			var roomid = devobj.room || 0;
 			var roomObj = roomIx[String(roomid)];
@@ -670,7 +676,7 @@ var ReactorSensor = (function(api, $) {
 				roomObj = api.cloneObject( api.getRoomObject(roomid) );
 				roomObj.devices = [];
 				roomIx[String(roomid)] = roomObj;
-				rooms[rooms.length] = roomObj;
+				rooms.push( roomObj );
 			}
 			roomObj.devices.push( devobj );
 		}
@@ -691,7 +697,8 @@ var ReactorSensor = (function(api, $) {
 		if ( "string" !== typeof(s) ) {
 			s = String(s);
 		}
-		while ( s.length < n ) {
+		var l = s.length;
+		while ( l < n ) {
 			s = (p || "0") + s;
 		}
 		return s;
@@ -803,7 +810,8 @@ var ReactorSensor = (function(api, $) {
 		if ( undefined == myinfo ) return;
 		/* N.B. ixCond will be present in the condition editor only */
 		var ixCond = getConditionIndex( myid );
-		for ( var ix=0; ix<myinfo.states.length; ix++ ) {
+		var l = myinfo.states.length;
+		for ( var ix=0; ix<l; ix++ ) {
 			var st = myinfo.states[ix];
 			var vname;
 			if ( st.service === "urn:toggledbits-com:serviceId:ReactorValues" ) {
@@ -1253,7 +1261,8 @@ var ReactorSensor = (function(api, $) {
 		getSortedDeviceList().forEach( function( roomObj ) {
 			var haveItem = false;
 			var xg = $( '<optgroup />' ).attr( 'label', roomObj.name );
-			for ( var j=0; j<roomObj.devices.length; j++ ) {
+			var l = roomObj.devices.length;
+			for ( var j=0; j<l; j++ ) {
 				var devobj = roomObj.devices[j];
 				if ( filter && !filter( devobj ) ) {
 					continue;
@@ -1438,7 +1447,8 @@ var ReactorSensor = (function(api, $) {
 		container.append( grpel );
 
 		grpel = $( 'div.grpcond', grpel );
-		for ( var i=0; i<(grp.conditions || []).length; i++ ) {
+		var l = grp.conditions ? grp.conditions.length : 0;
+		for ( var i=0; i<l; i++ ) {
 			var cond = grp.conditions[i];
 
 			if ( "group" === ( cond.type || "group" ) ) {
@@ -1574,7 +1584,8 @@ var ReactorSensor = (function(api, $) {
 			grpel.append( '<div class="grouptitle"><span class="re-title">Expressions</span></div>' );
 			var body = $( '<div class="groupbody" />' );
 			grpel.append( body );
-			for ( var ix=0; ix<vix.length; ix++ ) {
+			var l = vix.length;
+			for ( var ix=0; ix<l; ix++ ) {
 				var vd = vix[ix];
 				var vs = ( cstate.vars || {} )[vd.name] || {};
 				el = $( '<div class="row var" />' ).attr( 'id', vd.name );
@@ -1774,7 +1785,8 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 				if ( i1 === i2 ) return 0;
 				return ( i1 < i2 ) ? -1 : 1;
 			});
-			for ( var ix=0; ix<vix.length; ix++ ) {
+			var l = vix.length;
+			for ( var ix=0; ix<l; ix++ ) {
 				$( '<option/>' ).val( vix[ix].name ).text( vix[ix].name ).appendTo( $el );
 			}
 			if ( currExpr && 0 === $( "option[value=" + JSON.stringify( currExpr ) + "]", $el ) ) {
@@ -1799,7 +1811,8 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 			var devobj = api.getDeviceObject( device );
 			if ( devobj ) {
 				var mm = {}, ms = [];
-				for ( var k=0; k<( devobj.states || []).length; ++k ) {
+				var l = devobj.states ? devobj.states.length : 0;
+				for ( var k=0; k<l; ++k ) {
 					var st = devobj.states[k];
 					if ( isEmpty( st.variable ) || isEmpty( st.service ) ) continue;
 					/* For self-reference, only allow variables created from configured expressions */
@@ -1851,7 +1864,8 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 
 		function makeServiceOpMenu( cond ) {
 			var el = $('<select class="opmenu form-control form-control-sm"></select>');
-			for ( var ix=0; ix<serviceOps.length; ix++ ) {
+			var l = serviceOps.length;
+			for ( var ix=0; ix<l; ix++ ) {
 				el.append( $('<option/>').val(serviceOps[ix].op).text(serviceOps[ix].desc || serviceOps[ix].op) );
 			}
 
@@ -1906,7 +1920,8 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 						}
 						/* Don't scan siblings or anything below. */
 						if ( myself && grp.id == pg.id ) return;
-						for ( var ix=0; ix<(grp.conditions || []).length; ix++ ) {
+						var l = grp.conditions ? grp.conditions.length : 0;
+						for ( var ix=0; ix<l; ix++ ) {
 							if ( "group" === ( grp.conditions[ix].type || "group" ) ) {
 								appendgrp( grp.conditions[ix], sel, pg );
 							}
@@ -2890,7 +2905,8 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 			mm.empty();
 			if ( "" !== user ) {
 				var ud = api.getUserData();
-				for ( var k=0; k<(ud.usergeofences || []).length; ++k ) {
+				var l = ud.usergeofences ? ud.usergeofences.length : 0;
+				for ( var k=0; k<l; ++k ) {
 					if ( ud.usergeofences[k].iduser == user ) {
 						mm.append( $( '<option/>' ).val( "" ).text( '--choose location--' ) );
 						$.each( ud.usergeofences[k].geotags || [], function( ix, v ) {
@@ -2993,7 +3009,8 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 				var reptext = function( s ) {
 					return ( s || "?" ).replace( /_DEVICE_NAME_/g, "device" ).replace( /_ARGUMENT_VALUE_/g, "<i>value</i>" );
 				};
-				for ( var ix=0; ix<events.length; ix++ ) {
+				var lx = events.length;
+				for ( var ix=0; ix<lx; ix++ ) {
 					var cx = events[ix];
 					var item, txt, k;
 					if ( cx.serviceStateTable ) {
@@ -3010,10 +3027,12 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 						mm.append( item );
 						item.on( 'click.reactor', wrapAction( cx, cond, $row ) );
 					} else { /* argumentList */
-						for ( var iy=0; iy<(cx.argumentList || {}).length; iy++ ) {
+						var ly = cx.argumentList ? cx.argumentList.length : 0;
+						for ( var iy=0; iy<ly; iy++ ) {
 							var arg = cx.argumentList[iy];
 							if ( arg.allowedValueList ) {
-								for ( var iz=0; iz<arg.allowedValueList.length; iz++ ) {
+								var lz = arg.allowedValueList.length;
+								for ( var iz=0; iz<lz; iz++ ) {
 									var av = api.cloneObject( arg.allowedValueList[iz] );
 									item = $( '<a href="#" class="dropdown-item"></a>' );
 									item.attr( 'id', cx.id );
@@ -3359,7 +3378,8 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 								  'fieldset.re-endfields input.year','fieldset.re-endfields select.monthmenu', 'fieldset.re-endfields select.daymenu',
 								  'fieldset.re-endfields select.hourmenu','fieldset.re-endfields select.minmenu'
 					];
-					for ( var fx=0; fx<flist.length; fx++ ) {
+					var lfx = flist.length;
+					for ( var fx=0; fx<lfx; fx++ ) {
 						if ( fx >= vlist.length ) {
 							vlist[fx] = "";
 						}
@@ -3751,7 +3771,8 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 
 			/* If this condition is a group, delete all subconditions (recursively) */
 			if ( "group" === ( cond.type || "group" ) ) {
-				for ( ix=0; ix<(cond.conditions || []).length; ix++ ) {
+				var lx = cond.conditions ? cond.conditions.length : 0;
+				for ( ix=0; ix<lx; ix++ ) {
 					deleteCondition( cond.conditions[ix].id, ixCond, cdata, cond, false );
 				}
 				delete cond.conditions;
@@ -3816,10 +3837,10 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 			var ixCond = getConditionIndex();
 			var grp = ixCond[ parentId ];
 			var newgrp = { id: newId, name: newId, operator: "and", type: "group", conditions: [] };
-			grp.conditions.push( newgrp );
 			newgrp.__parent = grp;
-			newgrp.__index = grp.conditions.length - 1; /* ??? for now */
+			newgrp.__index = grp.conditions.length;
 			newgrp.__depth = ( grp.__depth || 0 ) + 1;
+			grp.conditions.push( newgrp );
 			ixCond[ newId ] = newgrp;
 
 			/* Append the new condition group to the container */
@@ -3949,7 +3970,8 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 				grp.disabled = $el.hasClass( "checked" );
 			} else {
 				var opScan = [ "re-op-and", "re-op-or", "re-op-xor", "re-op-nul" ];
-				for ( var ix=0; ix < opScan.length; ix++ ) {
+				var lx = opScan.length;
+				for ( var ix=0; ix < lx; ix++ ) {
 					var cls = opScan[ix];
 					if ( $el.hasClass( cls ) && $el.hasClass( "checked" ) ) {
 						/* Special case handling for NUL--remove activities */
@@ -4112,7 +4134,8 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 
 			container = $( 'div.cond-list', el );
 
-			for ( var ix=0; ix<(grp.conditions || []).length; ix++ ) {
+			var lx = grp.conditions ? grp.conditions.length : 0;
+			for ( var ix=0; ix<lx; ix++ ) {
 				var cond = grp.conditions[ix];
 				if ( "group" !== ( cond.type || "group" ) ) {
 					var row = getConditionTemplate( cond.id );
@@ -4573,7 +4596,8 @@ div#tab-conds.reactortab input.re-comment { width: 100% !important; } \
 			if ( i1 === i2 ) return 0;
 			return ( i1 < i2 ) ? -1 : 1;
 		});
-		for ( var ix=0; ix<vix.length; ix++ ) {
+		var lx = vix.length;
+		for ( var ix=0; ix<lx; ix++ ) {
 			var vd = vix[ix];
 			var el = getVariableRow();
 			el.attr( 'id', vd.name );
@@ -4726,11 +4750,12 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 		var scenes = api.cloneObject( ud.scenes || [] );
 		var menu = $( '<select class="form-control form-control-sm re-scene" />' );
 		/* If lots of scenes, sort by room; otherwise, use straight as-is */
-		var i;
+		var i, l;
 		if ( true || scenes.length > 10 ) {
 			var rooms = api.cloneObject( ud.rooms );
 			var rid = {};
-			for ( i=0; i<rooms.length; ++i ) {
+			l = rooms.length;
+			for ( i=0; i<l; ++i ) {
 				rid[rooms[i].id] = rooms[i];
 			}
 			rid[0] = { id: 0, name: "(no room)" };
@@ -4744,7 +4769,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 			});
 			var lastRoom = -1;
 			var xg = false;
-			for ( i=0; i<scenes.length; i++ ) {
+			l = scenes.length;
+			for ( i=0; i<l; i++ ) {
 				if ( scenes[i].notification_only || scenes[i].hidden ) {
 					continue;
 				}
@@ -4768,7 +4794,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 		} else {
 			/* Simple alpha list */
 			scenes.sort( function(a, b) { return ( a.name || "" ).toLowerCase() < ( b.name || "" ).toLowerCase() ? -1 : 1; } );
-			for ( i=0; i<scenes.length; i++ ) {
+			l = scenes.length;
+			for ( i=0; i<l; i++ ) {
 				if ( scenes[i].notification_only || scenes[i].hidden ) {
 					continue;
 				}
@@ -4830,7 +4857,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 							console.log('validateActionRow: no info for ' + sact + ' for device ' + devnum);
 							return; /* If we don't know, we don't check */
 						}
-						for ( var k=0; k < (ai.parameters || [] ).length; k++ ) {
+						var lk = ai.parameters ? ai.parameters.length : 0;
+						for ( var k=0; k<lk; k++ ) {
 							var p = ai.parameters[k];
 							if ( undefined === p.value ) { /* ignore fixed value */
 								/* Fetch value */
@@ -4932,7 +4960,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				if ( isEmpty( dev.val() ) ) {
 					dev.addClass( 'tberror' );
 				}
-				for ( var f=0; f<(ninfo.extra || []).length; f++ ) {
+				var lf = ninfo.extra ? ninfo.extra.length : 0;
+				for ( var f=0; f<lf; f++ ) {
 					dev = $( '#' + idSelector( ninfo.extra[f].id ), row );
 					var vv = dev.val() || "";
 					var fails = isEmpty( vv ) && !ninfo.extra[f].optional;
@@ -4951,7 +4980,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 	/* Find notification scene by notification ID */
 	function findNotificationScene( myid, nid ) {
 		var ud = api.getUserData();
-		for ( var k=0; k<ud.scenes.length; k++ ) {
+		var lk = ud.scenes ? ud.scenes.length : 0;
+		for ( var k=0; k<lk; k++ ) {
 			if ( String(ud.scenes[k].notification_only) === String(myid) &&
 				String((ud.scenes[k].triggers || [])[0].template) === "10" && /* magic */
 				String(ud.scenes[k].triggers[0].arguments[0].value) == String(nid) ) {
@@ -4988,7 +5018,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				/* custom array, Lua-ish, not JSON */
 				var md = mo.match( /'([^']*)',?/g );
 				var vad = new RegExp( "^'" + String(scid) + "_0'", "i" );
-				for ( var k=0; k<md.length; k+=2 ) {
+				var lk = md.length;
+				for ( var k=0; k<lk; k+=2 ) {
 					if ( vad.test( md[k] ) && !isEmpty( md[k+1] ) ) {
 						vad = decodeURIComponent( md[k+1].replace( /',?$/, "" ).replace( /^'/, "" ) );
 						if ( !isEmpty( vad ) ) {
@@ -5074,14 +5105,15 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 
 	/* Removes unused notification scenes from the RS */
 	function cleanNotificationScenes( myid ) {
-		var k, deletes = [];
+		var k, lk, deletes = [];
 		myid = myid || api.getCpanelDeviceId();
 		var cf = getConfiguration( myid );
 
 		/* First, make map of all notification keys */
 		var nots = {};
 		var nk = Object.keys( cf.notifications || {} );
-		for ( k=0; k<nk.length; k++ ) {
+		lk = nk.length;
+		for ( k=0; k<lk; k++ ) {
 			nots[nk[k]] = true;
 		}
 		delete nots.nextid; /* reserved key */
@@ -5090,8 +5122,10 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 		var valids = {};
 		for ( var act in (cf.activities || {}) ) {
 			if ( ! cf.activities.hasOwnProperty(act) ) continue;
-			for ( k=0; k<(cf.activities[act].groups || []).length; k++ ) {
-				for ( var l=0; l<(cf.activities[act].groups[k].actions || []).length; l++) {
+			lk = cf.activities[act].groups ? cf.activities[act].groups.length : 0;
+			for ( k=0; k<lk; k++ ) {
+				var ll = cf.activities[act].groups[k].actions ? cf.activities[act].groups[k].actions.length : 0;
+				for ( var l=0; l<ll; l++) {
 					var action = cf.activities[act].groups[k].actions[l];
 					if ( "notify" === action.type ) {
 						var key = String(action.notifyid);
@@ -5125,7 +5159,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 		/* Now find and remove any notification scenes that are not associated
 		   with known notify actions remaining. */
 		var scenes = api.cloneObject( api.getUserData().scenes || [] );
-		for ( k=0; k<scenes.length; ++k ) {
+		lk = scenes.length;
+		for ( k=0; k<lk; ++k ) {
 			if ( String(scenes[k].notification_only) === String(myid) &&
 					String((scenes[k].triggers || [])[0].template) === "10" ) { /* template id from static JSON, never changes */
 				/* This is a notification scene for this RS */
@@ -5228,7 +5263,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					}
 					action.parameters = [];
 					if ( ai ) {
-						for ( k=0; k < (ai.parameters || [] ).length; k++ ) {
+						var lk = ai.parameters ? ai.parameters.length : 0;
+						for ( k=0; k < lk; k++ ) {
 							pt = { name: ai.parameters[k].name };
 							if ( undefined !== ai.parameters[k].value ) {
 								/* Fixed value */
@@ -5390,7 +5426,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					}
 					action.notifyid = nid;
 					var ninfo = arrayFindValue( notifyMethods, function( v ) { return v.id === action.method; } ) || notifyMethods[0];
-					for ( var f=0; f<(ninfo.extra || []).length; ++f ) {
+					var lf = ninfo.extra ? ninfo.extra.length : 0;
+					for ( var f=0; f<lf; ++f ) {
 						var fld = ninfo.extra[f];
 						var fv = $( '#' + idSelector( fld.id ), row ).val() || "";
 						if ( fv !== ( fld.default || "" ) ) {
@@ -5541,16 +5578,18 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 		$( 'div.vanotice', $row ).hide();
 		$( 'div.notifynotice', $row ).remove();
 		/*  Do not clear message or users (even if we don't use them) */
-		var f, fld;
+		var f, lf, fld;
 		if ( ninfo.extra ) {
 			var $extra = $( '<fieldset class="re-extrafields" />' )
 				.insertAfter( $( "input.re-message", $row ) );
-			for ( f=0; f<ninfo.extra.length; f++ ) {
+			lf = ninfo.extra.length;
+			for ( f=0; f<lf; f++ ) {
 				fld = ninfo.extra[f];
 				var xf;
 				if ( "select" === fld.type ) {
 					xf = $( '<select class="form-control form-control-sm" />' );
-					for ( var vi=0; vi<(fld.values || []).length; vi++ ) {
+					var lv = fld.values ? fld.values.length : 0;
+					for ( var vi=0; vi<lv; vi++ ) {
 						var pm = fld.values[vi].match( "^([^=]*)=(.*)$" );
 						if ( pm ) {
 							$( '<option/>' ).val( pm[1] ).text( pm[2] )
@@ -5595,7 +5634,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				var ua = note.users || "";
 				if ( "" !== ua ) {
 					ua = ua.split( /,/ );
-					for ( f=0; f<ua.length; f++ ) {
+					lf = ua.length;
+					for ( f=0; f<lf; f++ ) {
 						var $c = $( 'fieldset.re-users input[value="' + ua[f] + '"]', $row );
 						if ( 0 === $c.length ) {
 							$c = getCheckbox( getUID( 'chk' ), ua[f], ua[f] + '?&nbsp;(unknown&nbsp;user)' );
@@ -5605,7 +5645,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					}
 				}
 			}
-			for ( f=0; f<(ninfo.extra || []).length; f++ ) {
+			lf = ninfo.extra ? ninfo.extra.length : 0;
+			for ( f=0; f<lf; f++ ) {
 				fld = ninfo.extra[f];
 				$( '#' + idSelector( fld.id ), $row ).val( action[fld.id] || "" );
 			}
@@ -5637,6 +5678,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 
 	function changeActionAction( row, newVal ) {
 		// assert( row.hasClass( 'actionrow' ) );
+		var j, lj;
 		var pfx = row.attr( 'id' );
 		var ct = $( 'div.actiondata', row );
 		$( 'label,.argument', ct ).remove();
@@ -5657,8 +5699,9 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 		}
 		if ( undefined !== action ) {
 			/* Info assist from our enhancement data */
-			for ( var k=0; k<( action.parameters || [] ).length; ++k ) {
-				var opt, j, z;
+			var lk = action.parameters ? action.parameters.length : 0;
+			for ( var k=0; k<lk; ++k ) {
+				var opt, z;
 				var parm = action.parameters[k];
 				if ( "out" === parm.direction ) continue; /* Don't display output params */
 				if ( parm.hidden ) continue; /* or hidden parameters */
@@ -5675,7 +5718,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						if ( 0 == $( 'datalist#' + idSelector( dlid ) ).length ) {
 							/* Datalist doesn't exist yet, create it */
 							inp = $('<datalist class="argdata" id="' + dlid + '"/>');
-							for ( j=0; j<parm.values.length; j++ ) {
+							lj = parm.values.length;
+							for ( j=0; j<lj; j++ ) {
 								opt = $( '<option/>' );
 								if ( "object" === typeof(parm.values[j]) ) {
 									for ( z in parm.values[j] ) {
@@ -5704,7 +5748,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						if ( parm.optional ) {
 							inp.append( '<option value="">(unspecified)</option>' );
 						}
-						for ( j=0; j<parm.values.length; j++ ) {
+						lj = parm.values.length;
+						for ( j=0; j<lj; j++ ) {
 							opt = $( '<option/>' );
 							if ( "object" === typeof(parm.values[j]) ) {
 								for ( z in parm.values[j] ) {
@@ -5766,7 +5811,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					}
 					if ( undefined !== parm.extraValues ) {
 						if ( Array.isArray( parm.extraValues ) ) {
-							for ( j=0; j<parm.extraValues.length; j++ ) {
+							lj = parm.extraValues.length;
+							for ( j=0; j<lj; j++ ) {
 								opt = $( '<option/>' ).val( parm.extraValues[j] ).text( parm.extraValues[j] );
 								opt.insertAfter( topItem );
 							}
@@ -5888,11 +5934,13 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				return base;
 			}
 			/* Attempt to find a match condition */
-			for ( var im=0; im<(base.match || []).length; im++ ) {
+			var lm = base.match ? base.match.length : 0;
+			for ( var im=0; im<lm; im++ ) {
 				/* Conditions separated by ";", all must be met. for match to succeed */
 				var cond = (base.match[im].condition || "").split( /;/ );
 				var match = true;
-				for ( var ic=0; ic<cond.length; ++ic ) {
+				var lc = cond.length;
+				for ( var ic=0; ic<lc; ++ic ) {
 					/* Each condition uses simple RPN script */
 					var pt = cond[ic].split( /,/ );
 					var stack = []; /* Start off */
@@ -6027,12 +6075,14 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 		if ( -1 === dev ) dev = api.getCpanelDeviceId();
 		actionMenu.empty();
 		var hasAction = false;
-		var i, j, key;
-		for ( i=0; i<(data.serviceList || []).length; i++ ) {
+		var i, j, lj, key;
+		var l = data.serviceList ? data.serviceList.length : 0;
+		for ( i=0; i<l; i++ ) {
 			var section = $( "<select/>" );
 			var service = data.serviceList[i];
 			var opt;
-			for ( j=0; j<(service.actionList || []).length; j++ ) {
+			lj = service.actionList ? service.actionList.length : 0;
+			for ( j=0; j<lj; j++ ) {
 				var nodata = false;
 				var actname = service.actionList[j].name;
 				var ai;
@@ -6043,7 +6093,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					/* No extended data; copy what we got from lu_actions */
 					nodata = true;
 					ai = { service: service.serviceId, action: actname, parameters: service.actionList[j].arguments, noddb: true };
-					for ( var ip=0; ip < (service.actionList[j].arguments || []).length; ++ip ) {
+					var lp = service.actionList[j].arguments ? service.actionList[j].arguments.length : 0;
+					for ( var ip=0; ip<lp; ++ip ) {
 						var p = service.actionList[j].arguments[ip];
 						p.type = p.dataType || "string";
 						p.optional = 1; /* In this case, all are assumed optional */
@@ -6078,7 +6129,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 			var over = getDeviceOverride( dev );
 			if ( over ) {
 				var known = $( '<optgroup />' ).attr( 'label', 'Common Actions' );
-				for ( j=0; j<over.length; j++ ) {
+				lj = over.length;
+				for ( j=0; j<lj; j++ ) {
 					var thisover = over[j];
 					key = thisover.service + "/" + thisover.action;
 					var el = $( '<option/>' ).val( key );
@@ -6405,7 +6457,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					}
 					return ( i1 < i2 ) ? -1 : 1;
 				});
-				for ( var iv=0; iv<vix.length; iv++ ) {
+				var lv = vix.length;
+				for ( var iv=0; iv<lv; iv++ ) {
 					$( '<option/>' ).val( vix[iv].name ).text( vix[iv].name )
 						.appendTo( $m );
 				}
@@ -6453,7 +6506,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 			case "notify":
 				$('<input type="hidden" class="re-notifyid" value="">').appendTo( ct );
 				$m = $( '<select class="form-control form-control-sm re-method" />' );
-				for ( k=0; k<notifyMethods.length; ++k ) {
+				var lk = notifyMethods.length;
+				for ( k=0; k<lk; ++k ) {
 					if ( "VA" === notifyMethods[k].id && !devVeraAlerts ) continue;
 					if ( "" === notifyMethods[k].id && isOpenLuup ) continue;
 					$( '<option/>' ).val( notifyMethods[k].id )
@@ -6550,7 +6604,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					var param = {};
 					var actionText = s + "(";
 					if ( act ) {
-						for ( var k=0; k<(act.parameters || []).length; ++k ) {
+						var lk = act.parameters ? act.parameters.length : 0;
+						for ( var k=0; k<lk; ++k ) {
 							var p = act.parameters[k];
 							if ( undefined !== p.value ) {
 								/* Fixed value */
@@ -6665,7 +6720,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 							/* Sort groups by delay ascending */
 							data.groups = data.groups || [];
 							data.groups.sort( function( a, b ) { return (a.delay||0) - (b.delay||0); });
-							for ( var ig=0; ig<(data.groups || []).length; ig++ ) {
+							var lg = data.groups ? data.groups.length : 0;
+							for ( var ig=0; ig<lg; ig++ ) {
 								var pfx;
 								var gr = data.groups[ig];
 								if ( 0 != (gr.delay || 0) ) {
@@ -6679,7 +6735,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 									$( "select.re-delaytype", newRow ).val( "start" );
 									pred = newRow.addClass( "tbmodified" ).insertAfter( pred );
 								}
-								for ( var k=0; k < (gr.actions || []).length; k++ ) {
+								var lk = gr.actions ? gr.actions.length : 0;
+								for ( var k=0; k<lk; k++ ) {
 									var act = gr.actions[k];
 									newRow = getActionRow();
 									pfx = container.attr( 'id' ) + ns++;
@@ -6702,7 +6759,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 										}
 										$( 'select.re-actionmenu', row ).val( key );
 										changeActionAction( row, key );
-										for ( var j=0; j<(action.arguments || []).length; j++ ) {
+										var lj = action.arguments ? action.arguments.length : 0;
+										for ( var j=0; j<lj; j++ ) {
 											var a = action.arguments[j];
 											if ( 0 === $( '#' + idSelector( pfx + '-' + a.name ), row ).length ) {
 												var inp = $( '<input class="argument form-control form-control-sm">' ).attr('id', a.name);
@@ -6780,7 +6838,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 		var insertionPoint = $( 'div.buttonrow', section );
 		var newRow;
 		var ns = Date.now();
-		for ( var i=0; i < (scene.groups || []).length; i++ ) {
+		var l = scene.groups ? scene.groups.length : 0;
+		for ( var i=0; i<l; i++ ) {
 			var gr = scene.groups[i];
 			if ( 0 !== (gr.delay || 0) ) {
 				newRow = getActionRow();
@@ -6791,7 +6850,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				$( "select.re-delaytype", newRow ).val( gr.delaytype || "inline" );
 				newRow.insertBefore( insertionPoint );
 			}
-			for ( var k=0; k < (gr.actions || []).length; k++ ) {
+			var lk = gr.actions ? gr.actions.length : 0;
+			for ( var k=0; k<lk; k++ ) {
 				var $m;
 				var act = gr.actions[k];
 				newRow = getActionRow();
@@ -6820,7 +6880,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 							}
 							$( 'select.re-actionmenu', row ).val( key );
 							changeActionAction( row, key );
-							for ( var j=0; j<(action.parameters || []).length; j++ ) {
+							var lj = action.parameters ? action.parameters.length : 0;
+							for ( var j=0; j<lj; j++ ) {
 								var fld = $( '#' + idSelector( pfx + action.parameters[j].name ), row );
 								if ( false && 0 === fld.length ) {
 									var inp = $( '<input class="argument form-control form-control-sm">' )
@@ -7052,7 +7113,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 		var scanActivities = function( grp ) {
 			decide( grp.id + ".true" );
 			decide( grp.id + ".false" );
-			for ( var ix=0; ix<(grp.conditions || []).length; ix++ ) {
+			var lx = grp.conditions ? grp.conditions.length : 0;
+			for ( var ix=0; ix<lx; ix++ ) {
 				if ( "group" === ( grp.conditions[ix].type || "group" ) ) {
 					scanActivities( grp.conditions[ix] );
 				}
@@ -7114,7 +7176,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 			}
 
 			/* Handle children of this group */
-			for ( var ix=0; ix<(gr.conditions || []).length; ix++ ) {
+			var lx = gr.conditions ? gr.conditions.length : 0;
+			for ( var ix=0; ix<lx; ix++ ) {
 				var cond = gr.conditions[ix];
 				if ( "group" === ( cond.type || "group" ) ) {
 					orderly( cond );
@@ -7343,7 +7406,8 @@ div#tab-actions.reactortab ul.dropdown-menu li:hover { color: white; background-
 			var nmax = parseInt( api.getDeviceState( api.getCpanelDeviceId(), serviceId, "MaxLogSnippet" ) || "" );
 			if ( isNaN( nmax ) || nmax < 500 ) nmax = 500;
 			var $f = $( 'div#rslogdata pre' );
-			while ( n < nmax && k<lines.length ) {
+			var ln = lines.length;
+			while ( n < nmax && k < ln ) {
 				var l = lines[k].replace( /<span\s+[^>]*>/i, "" ).replace( /<\/span>/i, "" );
 				if ( ! l.match( /^(06)/ ) ) {
 					$f.append( l + "\n" );
@@ -7589,7 +7653,8 @@ div#tab-actions.reactortab ul.dropdown-menu li:hover { color: white; background-
 		var typs = {};
 		/* ??? only one level deep */
 		var ud = api.getUserData();
-		for ( var ix=0; ix<ud.devices.length; ix++ ) {
+		var lx = ud.devices.length;
+		for ( var ix=0; ix<lx; ix++ ) {
 			if ( ud.devices[ix].id_parent == device && undefined === typs[ ud.devices[ix].device_type ] ) {
 				sendDeviceData( ud.devices[ix].id, chain );
 				typs[ ud.devices[ix].device_type ] = true;
@@ -7639,7 +7704,8 @@ div#tab-actions.reactortab ul.dropdown-menu li:hover { color: white; background-
 	function spyDeviceChangeHandler( args ) {
 		if ( ! spyDevice ) return;
 		if ( args.id == spyDevice ) {
-			for ( var i=0; i<args.states.length; i++ ) {
+			var l = args.states.length;
+			for ( var i=0; i<l; i++ ) {
 				var txt =
 					args.states[i].service + " / " + args.states[i].variable + " = " +
 						String( args.states[i].value ) + "\n";
