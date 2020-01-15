@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.5develop-20013';
+	var pluginVersion = '3.5develop-20015';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -697,9 +697,10 @@ var ReactorSensor = (function(api, $) {
 		if ( "string" !== typeof(s) ) {
 			s = String(s);
 		}
-		var l = s.length;
-		while ( l < n ) {
-			s = (p || "0") + s;
+		p = p || "0";
+		var l = n - s.length;
+		while ( l-- > 0 ) {
+			s = p + s;
 		}
 		return s;
 	}
@@ -6962,6 +6963,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						}
 						$( 'select.devicemenu', newRow ).val( act.device || "-1" );
 						$m = $( 'select.re-group', newRow );
+						$( 'option.groupoption', $m ).remove();
 						makeDeviceGroupMenu( act.device || -1, $m );
 						if ( 0 === $( 'option[value=' + quot(act.group) + ']', $m ).length ) {
 							$( '<option/>' ).val( act.group || "undef" )
