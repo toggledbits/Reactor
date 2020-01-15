@@ -2640,6 +2640,9 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 					if ( op.optional ) {
 						$inp.attr( 'placeholder', 'blank=any value' );
 						$in2.attr( 'placeholder', 'blank=any value' );
+					} else {
+						$inp.attr( 'placeholder', "" );
+						$in2.attr( 'placeholder', "" );
 					}
 					/* Labels */
 					$( 'label.re-secondaryinput', $row ).remove();
