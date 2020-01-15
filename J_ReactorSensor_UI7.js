@@ -115,17 +115,17 @@ var ReactorSensor = (function(api, $) {
 		, { id: "SM", name: "SMTP Mail", users: false, extra: [
 				{ id: "recipient", label: "Recipient(s):", placeholder: "blank=default recipient; comma-separate multiple", optional: true },
 				{ id: "subject", label: "Subject:", placeholder: "blank=default subject (RS name)", optional: true }
-			], config: { name: "SMTPServer", warning: "This method requires additional configuration before use." } }
+			], config: { name: "SMTPServer" } }
 		, { id: "PR", name: "Prowl", users: false, extra: [
 				{ id: "priority", label: "Priority:", type: "select", default: "0", values: [ "-2=Very low", "-1=Low", "0=Normal", "1=High", "2=Emergency" ] }
-			], config: { name: "ProwlAPIKey", warning: "This method requires additional configuration before use." } }
+			], config: { name: "ProwlAPIKey" } }
 		, { id: "SD", name: "Syslog", users: false, extra: [
 				{ id: "hostip", label: "Syslog Server IP:", placeholder: "Host IP4 Address", validpattern: "^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}$" },
 				{ id: "facility", label: "Facility:", type: "select", default: "23", values: [ "0=kern","1=user","2=mail","3-daemon","4=auth","5=syslog","6=lp","7=news","8=uucp","9=clock","10=security","11=FTP","12=NTP","13=audit","14=alert","16=local0","17=local1","18=local2","19=local3","20=local4","21=local5","22=local6","23=local7" ] },
 				{ id: "severity", label: "Severity:", type: "select", default: "5", values: [ "0=emerg","1=alert","2=crit","3=err","4=warn","5=notice","6=info","7-debug" ] }
 			] }
 		, { id: "UU", name: "User URL", users: false, extra: [
-				{ id: "url", label: "URL:", placeholder: "URL", validpattern: "^https?://", default: "http://localhost/alert?message={message}" }
+				{ id: "url", label: "URL:", type: "textarea", placeholder: "URL", validpattern: "^https?://", default: "http://localhost/alert?message={message}" }
 			] }
 		, { id: "VA", name: "VeraAlerts" }
 	];
@@ -148,10 +148,10 @@ var ReactorSensor = (function(api, $) {
 	div.reactortab { background-color: white; color: black; } \
 	div.re-alertbox { border: 3px solid #ff3; border-radius: 8px; padding: 8px 8px; box-shadow: #333 2px 2px; background-color: #fff; color: #000; } \
 	div.reactortab input.narrow { max-width: 6em; } \
-	div.reactortab input.tbfullwidth { width: 100%; } \
+	div.reactortab input.re-fullwidth { width: 100%; } \
 	div.reactortab input.tiny { max-width: 4em; text-align: center; } \
 	div.reactortab label { font-weight: normal; padding: 0 2px; } \
-	div.reactortab label.tbsecondaryinput { margin-left: 0.5em; margin-right: 0.5em; } \
+	div.reactortab label.re-secondaryinput { margin-left: 0.5em; margin-right: 0.5em; } \
 	div.reactortab .tbinline { display: inline-block; } \
 	div.reactortab .tbhidden { display: none !important; } /* workaround for show/hide bug in jquery restoring wrong display mode */ \
 	div.reactortab .checkbox { padding-left: 20px; } \
@@ -2019,10 +2019,10 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 						cond.value = $( 'input#' + idSelector( cond.id + '-val1' ), $row ).val() || "";
 						val = $( 'input#' + idSelector( cond.id + '-val2' ), $row ).val() || "";
 						if ( ( isEmpty( cond.value ) || isEmpty( val ) ) && ! op.optional ) {
-							$( 'input.tbsecondaryinput', $row ).addClass( 'tberror' );
+							$( 'input.re-secondaryinput', $row ).addClass( 'tberror' );
 						}
 						if ( 1 === op.optional && ( isEmpty( cond.value ) && isEmpty( val ) ) ) {
-							$( 'input.tbsecondaryinput', $row ).addClass( 'tberror' );
+							$( 'input.re-secondaryinput', $row ).addClass( 'tberror' );
 						}
 						/* Other possibility is 2 === op.optional, allows both fields blank */
 						if ( ! isEmpty( val ) ) {
@@ -2642,24 +2642,24 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 						$in2.attr( 'placeholder', 'blank=any value' );
 					}
 					/* Labels */
-					$( 'label.tbsecondaryinput', $row ).remove();
+					$( 'label.re-secondaryinput', $row ).remove();
 					var fmt = op.format || "%1,%2";
 					var lbl = fmt.match( /^([^%]*)%\d+([^%]*)%\d+(.*)$/ );
 					if ( null !== lbl ) {
 						if ( !isEmpty( lbl[1] ) ) {
 							$( '<label for="' + idSelector( cond.id + '-val1' ) +
-								'" class="tbsecondaryinput"/>' )
+								'" class="re-secondaryinput"/>' )
 								.text( lbl[1] )
 								.insertBefore( $inp );
 						}
 						if ( !isEmpty( lbl[2] ) ) {
 							$( '<label for="' + idSelector( cond.id + '-val2' ) +
-								'" class="tbsecondaryinput">' )
+								'" class="re-secondaryinput">' )
 								.text( lbl[2] )
 								.insertBefore( $in2 );
 						}
 						if ( !isEmpty( lbl[3] ) ) {
-							$( '<label class="tbsecondaryinput">' )
+							$( '<label class="re-secondaryinput">' )
 								.text( lbl[3] )
 								.insertAfter( $in2 );
 						}
@@ -2673,7 +2673,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 						$inp = $( 'input#' + idSelector( cond.id + '-val1' ), $row )
 							.attr( 'id', cond.id + '-value' )
 							.attr( 'placeholder', '' );
-						$( 'input#' + idSelector( cond.id + '-val2' ) + ',label.tbsecondaryinput', $row ).remove();
+						$( 'input#' + idSelector( cond.id + '-val2' ) + ',label.re-secondaryinput', $row ).remove();
 					}
 					$inp.val( vv.length > 0 ? String(vv[0]) : "" );
 					if ( 0 === op.args ) {
@@ -4963,10 +4963,11 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				}
 				var lf = ninfo.extra ? ninfo.extra.length : 0;
 				for ( var f=0; f<lf; f++ ) {
-					dev = $( '#' + idSelector( ninfo.extra[f].id ), row );
-					var vv = dev.val() || "";
+					dev = $( '.re-extra-' + ninfo.extra[f].id, row );
+					var vv = (dev.val() || "").trim();
 					var fails = isEmpty( vv ) && !ninfo.extra[f].optional;
-					fails = fails || ( undefined !== ninfo.extra[f].validpattern && null === vv.match( ninfo.extra[f].validpattern ) );
+					fails = fails || ( undefined !== ninfo.extra[f].validpattern && 
+						null === vv.match( ninfo.extra[f].validpattern ) );
 					dev.toggleClass( 'tberror', fails );
 				}
 				break;
@@ -5430,7 +5431,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					var lf = ninfo.extra ? ninfo.extra.length : 0;
 					for ( var f=0; f<lf; ++f ) {
 						var fld = ninfo.extra[f];
-						var fv = $( '#' + idSelector( fld.id ), row ).val() || "";
+						var fv = $( '.re-extra-' + fld.id, row ).val() || "";
 						if ( fv !== ( fld.default || "" ) ) {
 							action[fld.id] = fv;
 						} else {
@@ -5582,7 +5583,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 		var f, lf, fld;
 		if ( ninfo.extra ) {
 			var $extra = $( '<fieldset class="re-extrafields" />' )
-				.insertAfter( $( "input.re-message", $row ) );
+				.appendTo( $( 'div.actiondata', $row ) );
 			lf = ninfo.extra.length;
 			for ( f=0; f<lf; f++ ) {
 				fld = ninfo.extra[f];
@@ -5597,15 +5598,21 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 								.appendTo( xf );
 						}
 					}
+				} else if ( "textarea" === fld.type ) {
+					xf = $( '<textarea class="form-control form-control-sm" />' )
+						.attr( 'placeholder', fld.placeholder || "" );
 				} else {
 					xf = $( '<input class="form-control form-control-sm" />' )
 						.attr( 'placeholder', fld.placeholder || "" );
 				}
-				xf.attr( 'id', fld.id ).val( "" )
+				if ( fld.default ) {
+					xf.val( fld.default );
+				}
+				xf.addClass( 're-extra-' + fld.id )
 					.on( 'change.reactor', handleActionValueChange );
 				if ( fld.label ) {
 					/* Wrap the field in a label */
-					xf = $( '<label/>' ).attr( 'for', fld.id )
+					xf = $( '<label/>' )
 						.text( fld.label )
 						.append( xf );
 				}
@@ -5649,13 +5656,13 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 			lf = ninfo.extra ? ninfo.extra.length : 0;
 			for ( f=0; f<lf; f++ ) {
 				fld = ninfo.extra[f];
-				$( '#' + idSelector( fld.id ), $row ).val( action[fld.id] || "" );
+				$( '.re-extra-' + fld.id, $row ).val( action[fld.id] || "" );
 			}
 			if ( devVeraAlerts ) {
 				$( '<div class="vanotice"/>' )
 					.text("NOTE: This notification has been modified by VeraAlerts. The message text can only be changed there. You may change recipients here, but you must go into VeraAlerts \"Edit\" mode after so that it updates its data. Delivery and filtering of this message is under control of VeraAlerts.")
 					.toggle( isVA )
-					.insertAfter( $( 'input.re-message', $row ) );
+					.appendTo( $( 'div.actionfooter', $row ) );
 				$( 'input.re-message', $row ).prop( 'disabled', isVA );
 			}
 		}
@@ -5663,8 +5670,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 			var s = getParentState( ninfo.config.name );
 			if ( isEmpty(s) ) {
 				$( '<div class="notifynotice"/>' )
-					.text( ninfo.config.warning || ninfo.config.message || "This method requires additional configuration that has not yet been completed." )
-					.insertBefore( $( 'input.re-message', $row ) );
+					.text( ninfo.config.warning || ninfo.config.message || "This method requires additional configuration that has not been completed." )
+					.appendTo( $( 'div.actionfooter', $row ) );
 				$( 'div.notifynotice', $row ).append( getWiki( 'Notify-Action' ) );
 			}
 		}
@@ -6351,8 +6358,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 	function changeActionType( row, newVal ) {
 		var ct = $('div.actiondata', row);
 		var pfx = row.attr( 'id' ) + '-';
-		var $m;
-		ct.empty().addClass( "form-inline" );
+		var $m, $fs;
+		ct.empty();
 		$( 'button.re-tryaction,button.re-import', row ).hide();
 
 		switch ( newVal ) {
@@ -6362,39 +6369,43 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				break;
 
 			case "device":
-				ct.append( makeDeviceMenu( "", "" ) );
-				ct.append('<select class="form-control form-control-sm re-actionmenu"></select>');
-				$( 'select.devicemenu', ct ).on( 'change.reactor', handleActionDeviceChange );
-				$( 'select.re-actionmenu', ct ).on( 'change.reactor', handleActionActionChange );
+				$fs = $( '<fieldset class="form-inline"/>' ).appendTo( ct );
+				$fs.append( makeDeviceMenu( "", "" ) );
+				$fs.append('<select class="form-control form-control-sm re-actionmenu"></select>');
+				$( 'select.devicemenu', $fs ).on( 'change.reactor', handleActionDeviceChange );
+				$( 'select.re-actionmenu', $fs ).on( 'change.reactor', handleActionActionChange );
 				$( 'button.re-tryaction', row ).show();
 				break;
 
 			case "housemode":
+				$fs = $( '<fieldset class="form-inline"/>' ).appendTo( ct );
 				$m = $( '<select class="form-control form-control-sm re-mode">')
 					.append( '<option value="1">Home</option>' ).append( '<option value="2">Away</option>' )
 					.append( '<option value="3">Night</option>' ).append( '<option value="4">Vacation</option>' )
-					.on( 'change.reactor', handleActionValueChange );
-				ct.append( $m );
+					.on( 'change.reactor', handleActionValueChange )
+					.appendTo( $fs );
 				break;
 
 			case "delay":
-				ct.append('<label>for <input type="text" id="' +
+				$fs = $( '<fieldset class="form-inline"/>' ).appendTo( ct );
+				$fs.append('<label>for <input type="text" id="' +
 					pfx + 'delay" class="argument narrow form-control form-control-sm" title="Enter delay time as seconds, MM:SS, or HH:MM:SS" placeholder="delay time" list="reactorvarlist"></label>');
-				ct.append('<select class="form-control form-control-sm re-delaytype"><option value="inline">from this point</option><option value="start">from start of actions</option></select>');
-				$( 'input', ct ).on( 'change.reactor', handleActionValueChange );
-				$( 'select', ct ).on( 'change.reactor', handleActionValueChange );
+				$fs.append('<select class="form-control form-control-sm re-delaytype"><option value="inline">from this point</option><option value="start">from start of actions</option></select>');
+				$( 'input', $fs ).on( 'change.reactor', handleActionValueChange );
+				$( 'select', $fs ).on( 'change.reactor', handleActionValueChange );
 				break;
 
 			case "runscene":
+				$fs = $( '<fieldset class="form-inline"/>' ).appendTo( ct );
 				$m = makeSceneMenu()
 					.prepend('<option value="" selected>--choose--</option>')
 					.val("")
-					.on( 'change.reactor', handleActionValueChange );
-				ct.append( $m );
+					.on( 'change.reactor', handleActionValueChange )
+					.appendTo( $fs );
 				$( '<select class="form-control form-control-sm re-method"><option value="" selected">Use Reactor to run scene</option><option value="V">Hand off to Luup</option></select>' )
 					.on( 'change.reactor', handleActionValueChange )
-					.appendTo( ct );
-				getWiki( "Run-Scene-Action" ).appendTo( ct );
+					.appendTo( $fs );
+				getWiki( "Run-Scene-Action" ).appendTo( $fs );
 				$( 'button.re-import', row ).show();
 				break;
 
@@ -6410,6 +6421,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				break;
 
 			case "rungsa":
+				$fs = $( '<fieldset class="form-inline"/>' ).appendTo( ct );
 				makeDeviceMenu( "", "", function( devobj ) {
 						return devobj.device_type === deviceType;
 					})
@@ -6426,17 +6438,18 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 							$m.addClass( "tberror" );
 						}
 						handleActionValueChange( ev );
-					}).appendTo( ct );
+					}).appendTo( $fs );
 				$m = $( '<select/>', { class: "form-control form-control-sm re-activity" } )
-					.appendTo( ct );
+					.appendTo( $fs );
 				makeDeviceActivityMenu( -1, $m )
 					.val( "root.true" )
 					.on( 'change.reactor', handleActionValueChange );
 				break;
 
 			case "setvar":
+				$fs = $( '<fieldset class="form-inline"/>' ).appendTo( ct );
 				$m = $( '<select/>', { class: "form-control form-control-sm re-variable" } )
-					.appendTo( ct );
+					.appendTo( $fs );
 				var cdata = getConfiguration();
 				var vix = [];
 				for ( var vn in ( cdata.variables || {} ) ) {
@@ -6465,18 +6478,19 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				}
 				$( '<option/>' ).val( "" ).text( '--choose--' ).prependTo( $m );
 				$m.val("").on( 'change.reactor', handleActionValueChange );
-				ct.append( " = " );
+				$fs.append( "<span> = </span>" );
 				$( '<input class="form-control form-control-sm" list="reactorvarlist">' )
 					.attr( 'id', pfx + "value" )
 					.on( 'change.reactor', handleActionValueChange )
-					.appendTo( ct );
+					.appendTo( $fs );
 				$m = getCheckbox( getUID("reeval"), "1", "Force re-evaluation of expressions and conditions", "" );
 				$( 'input', $m ).addClass("tbreeval")
 					.on( 'change.reactor', handleActionValueChange );
-				$m.appendTo( ct );
+				$m.appendTo( $fs );
 				break;
 
 			case "resetlatch":
+				$fs = $( '<fieldset class="form-inline"/>' ).appendTo( ct );
 				makeDeviceMenu( "", "", function( devobj ) {
 						return devobj.device_type === deviceType;
 					})
@@ -6494,9 +6508,9 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 							$m.addClass( "tberror" );
 						}
 						handleActionValueChange( ev );
-					}).appendTo( ct );
+					}).appendTo( $fs );
 				$m = $( '<select class="form-control form-control-sm re-group" />' )
-					.appendTo( ct );
+					.appendTo( $fs );
 				makeDeviceGroupMenu( -1, $m )
 					.prepend( '<option value="*">(all groups)</option>' )
 					.prepend( '<option value="" selected>(this group)</option>' )
@@ -6505,7 +6519,9 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				break;
 
 			case "notify":
-				$('<input type="hidden" class="re-notifyid" value="">').appendTo( ct );
+				$fs = $( '<fieldset class="form-inline"/>' ).appendTo( ct );
+				$( '<div class="actionfooter" />' ).appendTo( ct );
+				$('<input type="hidden" class="re-notifyid" value="">').appendTo( $fs );
 				$m = $( '<select class="form-control form-control-sm re-method" />' );
 				var lk = notifyMethods.length;
 				for ( k=0; k<lk; ++k ) {
@@ -6516,19 +6532,21 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						.appendTo( $m );
 				}
 				menuSelectDefaultFirst( $m, "" );
-				$m.on( 'change.reactor', handleNotifyActionMethodChange ).appendTo( ct );
-				var fs = $('<fieldset class="tbinline re-users" />').appendTo( ct );
+				$m.on( 'change.reactor', handleNotifyActionMethodChange )
+					.appendTo( $fs );
+				$('<input class="form-control form-control-sm re-fullwidth re-message" value="">')
+					.attr( 'placeholder', 'Enter notification message' )
+					.on( 'change.reactor', handleActionValueChange )
+					.appendTo( $fs );
+				/* User FS appends as separate group, so message field can grow max */
+				var $ufs = $('<fieldset class="form-inline re-users" />').appendTo( ct );
 				for ( var k in userIx ) {
 					if ( userIx.hasOwnProperty( k ) ) {
 						getCheckbox( getUID( "chk" ), k, userIx[k].name || k )
 							.on( 'change.reactor', handleActionValueChange )
-							.appendTo( fs );
+							.appendTo( $ufs );
 					}
 				}
-				$('<input class="tbfullwidth form-control form-control-sm re-message" value="">')
-					.attr( 'placeholder', 'Enter message' )
-					.on( 'change.reactor', handleActionValueChange )
-					.appendTo( ct );
 				changeNotifyActionMethod( ct, $m.val() );
 				break;
 
@@ -6807,7 +6825,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 			'<option value="setvar">Set Variable</option>' +
 			'<option value="resetlatch">Reset Latched</option>' +
 			'</select></div>' );
-		row.append('<div class="actiondata col-xs-12 col-sm-12 col-md-6 col-lg-8 form-inline"></div>');
+		row.append('<div class="actiondata col-xs-12 col-sm-12 col-md-6 col-lg-8"></div>');
 		var controls = $('<div class="controls col-xs-12 col-sm-12 col-md-2 col-lg-2 text-right"></div>');
 		controls.append( '<button class="btn md-btn re-tryaction" data-action="try" title="Try this action"><i class="material-icons">directions_run</i></button>' );
 		controls.append( '<button class="btn md-btn re-import" data-action="import" title="Import scene to actions"><i class="material-icons">save_alt</i></button>' );
@@ -7302,6 +7320,8 @@ div#tab-actions.reactortab div.actionlist div.actionrow:nth-child(odd) { backgro
 div#tab-actions.reactortab div.actionrow.tbmodified:not(.tberror) { border-left: 4px solid green; } \
 div#tab-actions.reactortab div.actionrow.tberror { border-left: 4px solid red; } \
 div#tab-actions.reactortab input.re-comment { width: 100% !important; } \
+div#tab-actions.reactortab select.re-actionmenu { max-width: 16em; } \
+div#tab-actions.reactortab textarea.re-extra-url { resize: both; } \
 div#tab-actions.reactortab textarea.re-luacode { font-family: monospace; resize: vertical; width: 100% !important; } \
 div#tab-actions.reactortab div.editor { width: 100%; min-height: 240px; } \
 div#tab-actions.reactortab div.tbhint { font-size: 90%; font-weight: normal; } \
