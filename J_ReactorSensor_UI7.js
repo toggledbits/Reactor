@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.5develop-20015';
+	var pluginVersion = '3.5develop-20016';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -565,9 +565,9 @@ var ReactorSensor = (function(api, $) {
 					timeFormat = ( "12hr" === ud.timeFormat ) ? "%I:%M:%S%p" : "%T";
 				}
 			}
-			
-			/* Check UnsafeLua flag
-//			unsafeLua = "1" == ud.UnsafeLua
+
+			/* Check UnsafeLua flag */
+			unsafeLua = 1 === parseInt( ud.UnsafeLua )
 
 			/* Take a pass over devices and see what we discover */
 			var dl = api.getListOfDevices();
@@ -3510,7 +3510,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 					fs.append( '<select class="form-control form-control-sm re-location"/>' );
 					container.append( fs );
 					if ( !unsafeLua ) {
-						$( '<div class="re-alertbox">It is recommended that "Unsafe Lua" (<em>Users &amp; Account Info &gt; Security</em>) be enabled when using this condition. Otherwise, alternate methods of accessing the geofence data must be used and may impact system performance. This setting is currently disabled.</div>' )
+						$( '<div class="re-alertbox">It is recommended that "Allow Unsafe Lua" (<em>Users &amp; Account Info &gt; Security</em>) be enabled when using this condition. Otherwise, less efficient methods of acquiring the geofence data must be used and may impact system performance. This setting is currently disabled.</div>' )
 							.appendTo( container );
 					}
 					$("input.useropt", container).on( 'change.reactor', handleConditionRowChange );
@@ -4087,6 +4087,9 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 				/* For root group, remove all elements with class noroot */
 				$( '.noroot', el ).remove();
 			}
+
+			$( 'button.re-focus' ).prop( 'disabled', true ).hide(); /* TODO: for now */
+
 			$( 'button.re-addcond', el ).on( 'click.reactor', handleAddConditionClick );
 			$( 'button.re-addgroup', el ).on( 'click.reactor', handleAddGroupClick );
 			$( 'button.re-delgroup', el ).on( 'click.reactor', handleDeleteGroupClick );
@@ -4970,7 +4973,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					dev = $( '.re-extra-' + ninfo.extra[f].id, row );
 					var vv = (dev.val() || "").trim();
 					var fails = isEmpty( vv ) && !ninfo.extra[f].optional;
-					fails = fails || ( undefined !== ninfo.extra[f].validpattern && 
+					fails = fails || ( undefined !== ninfo.extra[f].validpattern &&
 						null === vv.match( ninfo.extra[f].validpattern ) );
 					dev.toggleClass( 'tberror', fails );
 				}
@@ -5680,7 +5683,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 			}
 		}
 		if ( ninfo.requiresUnsafeLua && ! unsafeLua ) {
-			$( '<div class="re-alertbox">This notification method requires that "Unsafe Lua" (<em>Users &amp; Account Info &gt; Security</em>) be enabled to operate. It is currently disabled.</div>' )
+			$( '<div class="re-alertbox">This notification method requires that "Allow Unsafe Lua" (<em>Users &amp; Account Info &gt; Security</em>) be enabled to operate. It is currently disabled.</div>' )
 				.appendTo( $( 'div.actionfooter', $row ) );
 		}
 	}
@@ -6415,7 +6418,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					.appendTo( $fs );
 				getWiki( "Run-Scene-Action" ).appendTo( $fs );
 				if ( !unsafeLua ) {
-					$( '<div class="re-alertbox">This action requires that "Unsafe Lua" (<em>Users &amp; Account Info &gt; Security</em>) be enabled to operate. It is currently disabled.</div>' )
+					$( '<div class="re-alertbox">This action requires that "Allow Unsafe Lua" (<em>Users &amp; Account Info &gt; Security</em>) be enabled to operate. It is currently disabled.</div>' )
 						.insertAfter( $fs );
 				}
 				$( 'button.re-import', row ).show();
@@ -7931,13 +7934,6 @@ textarea#devspyoutput { width: 100%; font-family: monospace; } \
 		updateToolsVersionDisplay();
 
 		api.registerEventHandler('on_ui_deviceStatusChanged', ReactorSensor, 'spyDeviceChangeHandler');
-
-		var ud = api.getUserData();
-		if ( ! ( isOpenLuup || unsafeLua ) ) {
-			console.log( "UnsafeLua = " + String(unsafeLua) );
-			$( '<div class="re-alertbox"><strong>Warning!</strong> "Unsafe Lua" is not enabled, which will prevent the successful operation of some Reactor features. You can turn this setting on under <em>Users &amp; Account Info &gt; Security</em>.</div>' )
-				.prependTo( $('div#reactortools') );
-		}
 	}
 
 /** ***************************************************************************
