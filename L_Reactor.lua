@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.5develop-20015unsafelua"
+local _PLUGIN_VERSION = "3.5develop-20016"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION	= 19362
@@ -3160,16 +3160,21 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		local stamp = ndt.year * 1000 + ndt.yday
 		local sundata = getVarJSON( "sundata", {}, pluginDevice, MYSID )
 		if ( sundata.stamp or 0 ) ~= stamp or sst.timetest then
-			if getVarBool( "UseLuupSunrise", true, pluginDevice, MYSID ) then
+			if getVarBool( "UseLuupSunrise", false, pluginDevice, MYSID ) then
 				L({level=2,msg="Reactor is configured to use Luup's sunrise/sunset calculations; twilight times cannot be correctly evaluated and will evaluate as dawn=sunrise, dusk=sunset"})
 				addEvent{ dev=tdev, event="condition", condition=cond.id,
 					['warning']="TROUBLE: configured to use Luup sunrise/sunset; twilights not available" }
 				sst.trouble = true
 				sundata = { sunrise=luup.sunrise(), sunset=luup.sunset() }
+				sundata.civdawn = sundata.sunrise sundata.civdusk=sundata.sunset
+				sundata.nautdawn = sundata.sunrise sundata.nautdusk = sundata.sunset
+				sundata.astrodawn = sundata.sunrise sundata.astrodusk = sundata.sunset
+				sundata.source = "luup"
 			else
 				-- Compute sun data
 				sundata = sun( luup.longitude, luup.latitude,
 					getVarNumeric( "Elevation", 0.0, pluginDevice, MYSID ), now )
+				sundata.source = "int"
 				D("evaluationCondition() location (%1,%2) computed %3", luup.longitude, luup.latitude, sundata)
 			end
 			sundata.longitude = luup.longitude
@@ -4023,7 +4028,7 @@ local function processSensorUpdate( tdev, sst )
 	-- No need to reschedule timer if no demand. Condition may have rescheduled
 	-- itself (no need to set hasTimer), so at the moment, hasTimer is only used
 	-- for throttle recovery.
-	if hasTimer or getVarBool( "ContinuousTimer", true, tdev, RSSID ) then
+	if hasTimer or getVarBool( "ContinuousTimer", false, tdev, RSSID ) then
 		D("processSensorUpdate() hasTimer or ContinuousTimer, scheduling update")
 		local v = ( 60 - ( os.time() % 60 ) ) + TICKOFFS
 		scheduleDelay( tdev, v )
@@ -4129,7 +4134,7 @@ local function updateGeofences( pdev )
 		ishome = { version=2, users={} }
 	end
 	local rc,rs,ra
-	if getVarBool( "UserDataWget", true, pdev, MYSID ) and unsafeLua then
+	if unsafeLua and getVarBool( "UserDataWget", true, pdev, MYSID ) then
 		-- As of 3.4, we wget() with ns=1 to shorten response, faster.
 		-- URL with port sub is OK here because geofencing is not on openLuup
 		rc,ra,rs = luup.inet.wget( 'http://127.0.0.1/port_3480/data_request?id=user_data&ns=1' )
@@ -4374,7 +4379,7 @@ local function masterTick(pdev)
 end
 
 -- Clean up sensor variables
--- TODO: GetState seems to be faster than the request; test and verify.
+-- TODO: GetState seems to be faster than the request; test and verify, particularly openLuup
 local function cleanSensorState( tdev )
 	D("cleanSensorState(%1)", tdev)
 	local content
@@ -4750,8 +4755,8 @@ function startPlugin( pdev )
 	if failmsg then
 		return false, failmsg, _PLUGIN_NAME
 	end
-	
-	unsafeLua = isOpenLuup or ( luup.attr_get( "UnsafeLua", 0 ) == "1" )
+
+	unsafeLua = isOpenLuup or ( tonumber((luup.attr_get( "UnsafeLua", 0 ))) == 1 )
 
 	-- Check UI version
 	if not checkVersion( pdev ) then
