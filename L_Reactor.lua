@@ -5802,6 +5802,7 @@ SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 		pcall( function()
 			if json then r = r .. "; JSON " .. (json.version or "unknown") .. (json.using_lpeg and "+LPeg" or "" ) end
 		end )
+		r = r .. "; UnsafeLua=" .. tostring(luup.attr_get( "UnsafeLua", 0 ))
 		r = r .. EOL
 		r = r .. "Local time: " .. os.date("%Y-%m-%dT%H:%M:%S%z") ..
 			"; DST=" .. getReactorVar( "LastDST", "?" ) ..
