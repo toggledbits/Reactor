@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.5develop-20015"
+local _PLUGIN_VERSION = "3.5develop-20015unsafelua"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION	= 19362
@@ -53,6 +53,7 @@ local runStamp = 0
 local pluginDevice = false
 local isALTUI = false
 local isOpenLuup = false
+local unsafeLua = false
 local devVeraAlerts = false
 local installPath
 
@@ -99,7 +100,7 @@ local function L(msg, ...) -- luacheck: ignore 212
 	local str
 	local level = defaultLogLevel or 50
 	if type(msg) == "table" then
-		str = tostring(msg.prefix or _PLUGIN_NAME) .. ": " .. tostring(msg.msg)
+		str = tostring(msg.prefix or _PLUGIN_NAME) .. ": " .. tostring(msg.msg or msg[1])
 		level = msg.level or level
 	else
 		str = _PLUGIN_NAME .. ": " .. tostring(msg)
@@ -4128,7 +4129,7 @@ local function updateGeofences( pdev )
 		ishome = { version=2, users={} }
 	end
 	local rc,rs,ra
-	if getVarBool( "UserDataWget", true, pdev, MYSID ) then
+	if getVarBool( "UserDataWget", true, pdev, MYSID ) and unsafeLua then
 		-- As of 3.4, we wget() with ns=1 to shorten response, faster.
 		-- URL with port sub is OK here because geofencing is not on openLuup
 		rc,ra,rs = luup.inet.wget( 'http://127.0.0.1/port_3480/data_request?id=user_data&ns=1' )
@@ -4373,12 +4374,25 @@ local function masterTick(pdev)
 end
 
 -- Clean up sensor variables
+-- TODO: GetState seems to be faster than the request; test and verify.
 local function cleanSensorState( tdev )
 	D("cleanSensorState(%1)", tdev)
-	local sc,content,httpStatus = luup.inet.wget( 'http://127.0.0.1:3480/data_request?id=status&DeviceNum='..tdev..'&output_format=json' )
-	if sc ~= 0 then
-		L({level=2,msg="Failed to complete status request for #%1 (%2, %3)"}, tdev, sc, httpStatus)
-		return
+	local content
+	if unsafeLua then
+		local sc, httpStatus
+		sc,content,httpStatus = luup.inet.wget( 'http://127.0.0.1:3480/data_request?id=status&DeviceNum='..tdev..'&output_format=json' )
+		if sc ~= 0 then
+			L({level=2,msg="Failed to complete status request for #%1 (%2, %3)"}, tdev, sc, httpStatus)
+			content = false
+		end
+	end
+	if not content then
+		local rc,rs,_,ra = luup.call_action( "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "GetStatus", { DeviceNum=tdev, DataFormat="json" }, 0 ) -- luacheck: ignore 211
+		-- D("cleanSensorState() Status action returned rc=%1, rs=%2, ra=%3", rc, rs, ra)
+		if rc ~= 0 or (ra or {}).Status == nil then
+			L({level=2,msg="GetStatus action failed for #%1; rc=%2, ra=%3"}, tdev, rc, ra)
+		end
+		content = (ra or {}).Status
 	end
 	local data = json.decode( content )
 	if data and data['Device_Num_'..tdev] then
@@ -4403,6 +4417,7 @@ local function cleanSensorState( tdev )
 	else
 		D("cleanSensorState() return data unusable: %1", data or content)
 	end
+	-- clearTask( ... ) -- TODO: for >3.5; test, use taskid arg
 end
 
 -- Start an instance
@@ -4605,6 +4620,7 @@ function startPlugin( pdev )
 	systemReady = false
 	isALTUI = false
 	isOpenLuup = false
+	unsafeLua = false
 	devVeraAlerts = false
 	sensorState = {}
 	watchData = {}
@@ -4734,6 +4750,8 @@ function startPlugin( pdev )
 	if failmsg then
 		return false, failmsg, _PLUGIN_NAME
 	end
+	
+	unsafeLua = isOpenLuup or ( luup.attr_get( "UnsafeLua", 0 ) == "1" )
 
 	-- Check UI version
 	if not checkVersion( pdev ) then
@@ -5331,7 +5349,7 @@ local function getDevice( dev, pdev, v )
 	end
 	rc,t,httpStatus = luup.inet.wget(uri, 15)
 	if httpStatus ~= 200 or rc ~= 0 then
-		devinfo['_comment'] = string.format( 'State info could not be retrieved, rc=%s, http=%s', tostring(rc), tostring(httpStatus) )
+		devinfo['_comment'] = string.format( 'State info could not be retrieved, rc=%s, http=%s, UnsafeLua=%s', tostring(rc), tostring(httpStatus), tostring(unsafeLua) )
 		return devinfo
 	end
 	local d = json.decode(t)

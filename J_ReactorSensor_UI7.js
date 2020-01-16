@@ -46,6 +46,7 @@ var ReactorSensor = (function(api, $) {
 	var isOpenLuup = false;
 	var isALTUI = false;
 	var devVeraAlerts = false;
+	var unsafeLua = false;
 	var lastx = 0;
 	var condTypeName = {
 		"comment": "Comment",
@@ -116,7 +117,7 @@ var ReactorSensor = (function(api, $) {
 				{ id: "recipient", label: "Recipient(s):", placeholder: "blank=default recipient; comma-separate multiple", optional: true },
 				{ id: "subject", label: "Subject:", placeholder: "blank=default subject (RS name)", optional: true }
 			], config: { name: "SMTPServer" } }
-		, { id: "PR", name: "Prowl", users: false, extra: [
+		, { id: "PR", name: "Prowl", users: false, requiresUnsafeLua: true, extra: [
 				{ id: "priority", label: "Priority:", type: "select", default: "0", values: [ "-2=Very low", "-1=Low", "0=Normal", "1=High", "2=Emergency" ] }
 			], config: { name: "ProwlAPIKey" } }
 		, { id: "SD", name: "Syslog", users: false, extra: [
@@ -124,7 +125,7 @@ var ReactorSensor = (function(api, $) {
 				{ id: "facility", label: "Facility:", type: "select", default: "23", values: [ "0=kern","1=user","2=mail","3-daemon","4=auth","5=syslog","6=lp","7=news","8=uucp","9=clock","10=security","11=FTP","12=NTP","13=audit","14=alert","16=local0","17=local1","18=local2","19=local3","20=local4","21=local5","22=local6","23=local7" ] },
 				{ id: "severity", label: "Severity:", type: "select", default: "5", values: [ "0=emerg","1=alert","2=crit","3=err","4=warn","5=notice","6=info","7-debug" ] }
 			] }
-		, { id: "UU", name: "User URL", users: false, extra: [
+		, { id: "UU", name: "User URL", users: false, requiresUnsafeLua: true, extra: [
 				{ id: "url", label: "URL:", type: "textarea", placeholder: "URL", validpattern: "^https?://", default: "http://localhost/alert?message={message}" }
 			] }
 		, { id: "VA", name: "VeraAlerts" }
@@ -548,6 +549,7 @@ var ReactorSensor = (function(api, $) {
 			inStatusPanel = false;
 			isOpenLuup = false;
 			isALTUI = "undefined" !== typeof(MultiBox);
+			unsafeLua = false;
 			lastx = 0;
 
 			/* Try to establish date format */
@@ -563,6 +565,9 @@ var ReactorSensor = (function(api, $) {
 					timeFormat = ( "12hr" === ud.timeFormat ) ? "%I:%M:%S%p" : "%T";
 				}
 			}
+			
+			/* Check UnsafeLua flag
+//			unsafeLua = "1" == ud.UnsafeLua
 
 			/* Take a pass over devices and see what we discover */
 			var dl = api.getListOfDevices();
@@ -3504,6 +3509,10 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 					fs.append( mm );
 					fs.append( '<select class="form-control form-control-sm re-location"/>' );
 					container.append( fs );
+					if ( !unsafeLua ) {
+						$( '<div class="re-alertbox">It is recommended that "Unsafe Lua" (<em>Users &amp; Account Info &gt; Security</em>) be enabled when using this condition. Otherwise, alternate methods of accessing the geofence data must be used and may impact system performance. This setting is currently disabled.</div>' )
+							.appendTo( container );
+					}
 					$("input.useropt", container).on( 'change.reactor', handleConditionRowChange );
 					$("select.geofencecond", container)
 						.on( 'change.reactor', handleGeofenceOperatorChange );
@@ -5670,6 +5679,10 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				$( 'div.notifynotice', $row ).append( getWiki( 'Notify-Action' ) );
 			}
 		}
+		if ( ninfo.requiresUnsafeLua && ! unsafeLua ) {
+			$( '<div class="re-alertbox">This notification method requires that "Unsafe Lua" (<em>Users &amp; Account Info &gt; Security</em>) be enabled to operate. It is currently disabled.</div>' )
+				.appendTo( $( 'div.actionfooter', $row ) );
+		}
 	}
 
 	function handleNotifyActionMethodChange( ev ) {
@@ -6401,6 +6414,10 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					.on( 'change.reactor', handleActionValueChange )
 					.appendTo( $fs );
 				getWiki( "Run-Scene-Action" ).appendTo( $fs );
+				if ( !unsafeLua ) {
+					$( '<div class="re-alertbox">This action requires that "Unsafe Lua" (<em>Users &amp; Account Info &gt; Security</em>) be enabled to operate. It is currently disabled.</div>' )
+						.insertAfter( $fs );
+				}
 				$( 'button.re-import', row ).show();
 				break;
 
@@ -7916,8 +7933,7 @@ textarea#devspyoutput { width: 100%; font-family: monospace; } \
 		api.registerEventHandler('on_ui_deviceStatusChanged', ReactorSensor, 'spyDeviceChangeHandler');
 
 		var ud = api.getUserData();
-		var unsafeLua = ud.UnsafeLua || "";
-		if ( !isOpenLuup && unsafeLua != "1" ) {
+		if ( ! ( isOpenLuup || unsafeLua ) ) {
 			console.log( "UnsafeLua = " + String(unsafeLua) );
 			$( '<div class="re-alertbox"><strong>Warning!</strong> "Unsafe Lua" is not enabled, which will prevent the successful operation of some Reactor features. You can turn this setting on under <em>Users &amp; Account Info &gt; Security</em>.</div>' )
 				.prependTo( $('div#reactortools') );
