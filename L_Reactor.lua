@@ -14,7 +14,7 @@ local _PLUGIN_NAME = "Reactor"
 local _PLUGIN_VERSION = "3.5develop-20016"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
-local _CONFIGVERSION	= 19362
+local _CONFIGVERSION	= 20017
 local _CDATAVERSION		= 19305	-- must coincide with JS
 local _UIVERSION		= 19349	-- must coincide with JS
 	  _SVCVERSION		= 19202	-- must coincide with impl file (not local)
@@ -947,6 +947,11 @@ local function plugin_runOnce( pdev )
 	end
 	if s < 19362 then
 		initVar( "MaxLogSnippet", "", pdev, MYSID )
+	end
+
+	-- ??? TEMPORARY -- TODO: Remove before general release
+	if s < 20017 then
+		setVar( MYSID, "sundata", "{}", pdev )
 	end
 
 	-- Remove old/deprecated values
