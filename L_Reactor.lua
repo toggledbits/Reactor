@@ -6102,17 +6102,41 @@ SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 		end
 		local bdata = json.encode( st )
 		if action == "backup" then
-			local bfile = getInstallPath() .. "reactor-config-backup.json"
+			local bfile = getInstallPath() .. "reactor-config-backup.tmp"
 			local f = io.open( bfile, "w" )
 			if f then
 				f:write( bdata )
 				f:close()
+				os.execute( "pluto-lzo c '" .. getInstallPath() .. "reactor-config-backup.tmp' '" ..
+					getInstallPath() .. "reactor-config-backup.json.lzo'" )
+				-- Remove uncompressed file, which would now rot and interfere with download of new
+				os.execute( "rm -f -- '" .. getInstallPath() .. "reactor-config-backup.json'" )
 			else
 				error("ERROR can't write " .. bfile)
 			end
 			return json.encode( { status=true, message="Done!", file=bfile } ), "application/json"
 		end
 		return bdata, "application/json"
+
+	elseif action == "getcurrentbackup" then
+		local bfile = getInstallPath() .. "reactor-config-backup.json"
+		local tfile = getInstallPath() .. "reactor-config-backup.tmp"
+		local f = io.open( bfile .. ".lzo", "r" )
+		if f then
+			f:close()
+			os.execute( "pluto-lzo d '" .. bfile .. ".lzo' '" .. tfile .. "'" )
+			bfile = tfile
+			f = false
+		end
+		if not f then f = io.open( bfile, "r" ) end
+		if not f then
+			return '{"backupstatus":false}', "application/json"
+		else
+			local r = f:read( "*a" )
+			f:close()
+			os.execute( "rm -f -- '" .. tfile .. "'" )
+			return r, "application/json"
+		end
 
 	elseif action == "status" then
 		local st = {
