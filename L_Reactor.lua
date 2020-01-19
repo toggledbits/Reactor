@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.5develop-20016"
+local _PLUGIN_VERSION = "3.5develop-20019"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION	= 20017
@@ -2433,7 +2433,7 @@ local function execSceneGroups( tdev, taskid, scd )
 						D("execSceneGroups() overriding Vera RunScene with our own!")
 						action.service = RSSID
 						devnum = tdev
-						param.Options = { contextDevice=sst.options.contextDevice, stopPriorScenes=false }
+						param.Options = json.encode( { contextDevice=sst.options.contextDevice, stopPriorScenes=false } )
 					end
 					luup.call_action( action.service, action.action, param, devnum )
 				end
@@ -2539,8 +2539,15 @@ local function execSceneGroups( tdev, taskid, scd )
 					if device == -1 then
 						device = tdev
 					end
-					local opts = json.encode( { contextDevice=device } )
-					luup.call_action( RSSID, "RunScene", { SceneNum=action.activity or "error", Options=opts }, device )
+					local opts = { contextDevice=device }
+					if ( action.stopall or 0 ) ~= 0 then opts.stopPriorScenes = true end
+					luup.call_action( RSSID, "RunScene", { SceneNum=action.activity or "error", Options=json.encode(opts) }, device )
+				elseif action.type == "stopgsa" then
+					local device = action.device or -1
+					if device == -1 then
+						device = tdev
+					end
+					luup.call_action( RSSID, "StopScene", { SceneNum=action.activity or "" }, device )
 				elseif action.type == "setvar" then
 					local success, oldval, newval = doSetVar( action.variable, action.value, tdev )
 					if success then
@@ -5384,6 +5391,7 @@ local function getLuaSummary( lua, encoded, fmt )
 end
 
 local function getReactorScene( t, s, tdev, runscenes, cf )
+	D("getReactorScene(%1,%2,%3,%4,%5)", t, s, tdev, runscenes, tostring(cf))
 	local resp = "    Activity " .. t .. ( s and "" or " (none)" ) .. EOL
 	local pfx = "        "
 	if s then
@@ -5392,6 +5400,7 @@ local function getReactorScene( t, s, tdev, runscenes, cf )
 				resp = resp .. pfx .. "Delay " .. gr.delay .. " " .. (gr.delaytype or "inline") .. EOL
 			end
 			for _,act in ipairs( gr.actions or {} ) do
+				D("getReactorScene() action %1", act)
 				if act.type == "comment" then
 					resp = resp .. pfx .. "Comment: " .. tostring(act.comment) .. EOL
 				elseif act.type == "runlua" then
@@ -5421,13 +5430,15 @@ local function getReactorScene( t, s, tdev, runscenes, cf )
 					end
 				elseif act.type == "housemode" then
 					resp = resp .. pfx .. "Change house mode to " .. tostring(act.housemode) .. EOL
-				elseif act.type == "rungsa" then
-					resp = resp .. pfx .. "Run activity " .. tostring( act.activity )
+				elseif act.type == "rungsa" or act.type == "stopgsa" then
+					resp = resp .. pfx .. ( act.type == "stopgsa" and "Stop" or "Run" )
+					resp = resp .. " " .. tostring( act.activity or "all activities" )
 					if ( act.device or -1 ) ~= -1 then
 						resp = resp .. " on " ..
 							( (luup.devices[act.device or -1] or {}).description or ( (act.deviceName or "unknown") .. "?" ) ) ..
 							" (" .. tostring(act.device) .. ")"
 					end
+					if ( act.stopall or 0 ) ~= 0 then resp = resp .. " (after stopping all others)" end
 					resp = resp .. EOL
 				elseif act.type == "resetlatch" then
 					resp = resp .. pfx .. "Reset latched conditions in "
@@ -5451,7 +5462,7 @@ local function getReactorScene( t, s, tdev, runscenes, cf )
 					end
 					resp = resp .. EOL
 				else
-					resp = resp .. pfx .. "Action type " .. act.type .. "?"
+					resp = resp .. pfx .. "Action type " .. tostring(act.type) .. "?"
 					local arr = {}
 					for k,v in pairs(act) do
 						if k ~= "type" then
@@ -5468,6 +5479,7 @@ local function getReactorScene( t, s, tdev, runscenes, cf )
 end
 
 local function getEvents( deviceNum )
+	D("getEvents(%1)", deviceNum)
 	if deviceNum == nil or luup.devices[deviceNum] == nil or luup.devices[deviceNum].device_type ~= RSTYPE then
 		return "no events: device does not exist or is not ReactorSensor"
 	end
@@ -5708,6 +5720,226 @@ function RG( grp, condState, level, r )
 	return r
 end
 
+function requestSummary( lul_request, lul_parameters, lul_outputformat, deviceNum ) -- luacheck: ignore 212
+	local r = ([[
+INSTRUCTIONS FOR POSTING TO VERA COMMUNITY FORUMS:
+	* COPY/PASTE ALL lines AFTER the ===== separator below, INCLUDING the ``` lines.
+	* DO NOT omit the ``` lines! They must be included to preserve report formatting!
+	* DO NOT edit or redact this report. If you have privacy concerns about posting it to the forums, send via email, below.
+
+INSTRUCTIONS FOR EMAILING (BETTER PRIVACY):
+	> Use this method if you have concerns about posting the report contents publicly.
+	* Right-click in this pane and choose "Save as..." to save this entire report to a file.
+	* ATTACH the file in an email to: reactor@toggledbits.com
+	* DO NOT copy/paste the report text into the email body! Attachments only please.
+	* Include your forum name in the body of the email, so I know who you are.
+	* Please let me know via the community forums that you've emailed a report.
+	* Please DO NOT use this email address for any other communication. It's for report attachments only.
+
+THANK YOU IN ADVANCE FOR READING AND FOLLOWING THESE INSTRUCTIONS! ALTHOUGH MY TIME IS FREE, I DON'T ALWAYS HAVE A LOT OF IT,
+SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
+
+=====
+
+]]):gsub("\t","  ")
+	r = r .. "```" .. EOL
+	r = r .. string.rep("*", 51) .. " REACTOR LOGIC SUMMARY REPORT " .. string.rep("*", 51) .. EOL
+	luaxp = require "L_LuaXP_Reactor" -- make sure loaded
+	r = r .. "   Version: " .. tostring(_PLUGIN_VERSION) ..
+		" config " .. tostring(_CONFIGVERSION) ..
+		" cdata " .. tostring(_CDATAVERSION) ..
+		" ui " .. tostring(_UIVERSION) ..
+		" pluginDevice " .. pluginDevice ..
+		" LuaXP " .. tostring(luaxp._VERSION) ..
+		EOL
+	r = r .. "    System: "
+	if isOpenLuup then
+		local v = getVarNumeric( "Vnumber", 0, isOpenLuup, "openLuup" )
+		r = r .. "openLuup version " .. tostring(v)
+		local p = io.popen( "uname -a" )
+		if p then
+			v = p:read("*l")
+			p:close()
+			r = r .. " on " .. tostring(v)
+		end
+	else
+		r = r .. "Vera version " .. tostring(luup.version) .. " (" ..
+			(luup.short_version or "pre-7.30") ..
+			") on ".. tostring(luup.attr_get("model",0)) ..
+			" ID " .. tostring(luup.modelID) ..
+			" (" .. ( ({["35"]="Vera Edge", ["36"]="Vera Plus", ["37"]="Vera Secure"})[tostring(luup.modelID or "X")] or "unknown" ) .. ")"
+	end
+	r = r .. "; loadtime " .. tostring( luup.attr_get('LoadTime',0) or "" )
+	r = r .. "; systemReady " .. tostring( systemReady )
+	if isALTUI then
+		r = r .. "; ALTUI"
+		local v = luup.variable_get( "urn:upnp-org:serviceId:altui1", "Version", isALTUI )
+		r = r .. " " .. tostring(v)
+	end
+	r = r .. "; " .. tostring((_G or {})._VERSION)
+	pcall( function()
+		if json then r = r .. "; JSON " .. (json.version or "unknown") .. (json.using_lpeg and "+LPeg" or "" ) end
+	end )
+	r = r .. "; UnsafeLua=" .. tostring(luup.attr_get( "UnsafeLua", 0 ))
+	r = r .. EOL
+	r = r .. "Local time: " .. os.date("%Y-%m-%dT%H:%M:%S%z") ..
+		"; DST=" .. getReactorVar( "LastDST", "?" ) ..
+		"; " .. tostring(luup.attr_get("City_description",0)) ..
+		", " .. tostring(luup.attr_get("Region_description",0)) ..
+		" " .. tostring(luup.attr_get("Country_description",0)) ..
+		"; formats " .. tostring(dateFormat) .. " " .. tostring(timeFormat) ..
+		EOL
+	r = r .. "House mode: plugin " .. getReactorVar( "HouseMode", "?") ..
+		"; system " .. tostring( luup.attr_get('Mode',0) or "" ) ..
+		"; tracking " .. ( usesHouseMode and "on" or "off" ) .. EOL
+	r = r .. "  Sun data: " .. getReactorVar( "sundata", "" ) .. EOL
+	if geofenceMode ~= 0 then
+		local status, p = pcall( showGeofenceData )
+		if status then
+			r = r .. p
+		else
+			r = r .. "  Geofence: parse error, " .. tostring(p) .. EOL
+		end
+	else
+		r = r .. "  Geofence: not running" .. EOL
+	end
+	if hasBattery then
+		r = r .. "     Power: " .. getReactorVar( "SystemPowerSource", "?")
+		r = r .. ", battery level " .. getReactorVar( "SystemBatteryLevel", "?") .. EOL
+	end
+	for n,d in pairs( luup.devices ) do
+		local scenesUsed = {}
+		summaryDevices = {}
+		if d.device_type == RSTYPE and ( deviceNum==nil or n==deviceNum ) then
+			D("requestSummary() handling device %1 %2", n, d.description)
+			local status = ( ( getVarNumeric( "Armed", 0, n, SENSOR_SID ) ~= 0 ) and " armed" or "" )
+			status = status .. ( ( getVarNumeric("Tripped", 0, n, SENSOR_SID ) ~= 0 ) and " tripped" or "" )
+			status = status .. ( ( getVarNumeric("Trouble", 0, n, RSSID ) ~= 0 ) and " TROUBLE" or "" )
+			r = r .. string.rep( "*", 132 ) .. EOL
+			r = r .. string.format("%s (#%d)%s", tostring(d.description), n, status) .. EOL
+			local cdata = getSensorConfig( n )
+			if not cdata then
+				r = r .. "    **** UNPARSEABLE CONFIGURATION ****" .. EOL
+			else
+				r = r .. string.format("    Version %s.%s %s", cdata.version or 0, cdata.serial or 0, os.date("%x %X", cdata.timestamp or 0)) .. EOL
+				r = r .. string.format("    Message/status: %s", getVar( "Message", "", n ) ) .. EOL
+				local s = getVarNumeric( "TestTime", 0, n, RSSID )
+				if s ~= 0 then
+					r = r .. string.format("    Test time set: %s", os.date("%Y-%m-%d %H:%M", s)) .. EOL
+				end
+				s = getVarNumeric( "TestHouseMode", 0, n, RSSID )
+				if s ~= 0 then
+					r = r .. string.format("    Test house mode set: %d", s) .. EOL
+				end
+				local condState = loadCleanState( n )
+				local first = true
+				for _,vv in variables( cdata ) do
+					if first then
+						r = r .. "    Variable/expressions" .. EOL
+						first = false
+					end
+					local vs = (condState.vars or {})[vv.name] or {}
+					local lv = vs.lastvalue
+					local vt = type(lv)
+					if vt == "table" and lv.__type == "null" then lv = "null" vt = "luaxp.null"
+					elseif vt == "string" or vt == "table" then lv = json.encode( lv )
+					elseif lv == nil then lv = "(no value)"
+					else lv = tostring( lv ) end
+					r = r .. string.format("     %3d: %-24s %s [last %s(%s)]", vv.index or 0, vv.name or "?", vv.expression or "?", lv, vt) ..
+						( (vv.export or 1) ~= 0 and " (exported)" or "" ) ..
+						EOL
+					if vs.err then r = r .. "          *** Error: " .. tostring(vs.err) .. EOL end
+				end
+				r = r .. "    Condition group " .. RG( cdata.conditions.root or {}, condState )
+
+				for k,v in pairs( cdata.activities or {} ) do
+					r = r .. getReactorScene( k, v, n, scenesUsed, cdata )
+				end
+
+				r = r .. getEvents( n )
+			end
+
+			D("requestSummary() summaryDevices")
+			if next( summaryDevices ) then
+				r = r .. "    Devices" .. EOL
+				for kd in pairs( summaryDevices ) do
+					local nd = tonumber( kd ) or -1
+					local sd = luup.devices[nd]
+					if sd == nil then
+						r = r .. string.format( "        *** UNKNOWN DEVICE #%s%s", kd, EOL )
+					else
+						local pn = luup.attr_get( 'plugin', nd ) or ""
+						r = r .. string.format( "        %s (%d) %s (%s/%s); parent %d; plugin %s; mfg %s model %s; dev %s impl %s%s",
+							sd.description or "?", nd,
+							sd.device_type or "?",
+							sd.category_num or "?", sd.subcategory_num or "?",
+							sd.device_num_parent or -1,
+							(pn == "") and "-" or pn,
+							luup.attr_get( 'manufacturer', nd ) or "-",
+							luup.attr_get( 'model', nd ) or "-",
+							luup.attr_get( 'device_file', nd ) or "-",
+							luup.attr_get( 'impl_file', nd ) or "-",
+							EOL )
+					end
+				end
+			end
+			summaryDevices = nil
+
+			D("requestSummary() watchData")
+			if next(watchData) then
+				r = r .. "    Watches" .. EOL
+				for key,devs in pairs( watchData or {} ) do
+					for dev in pairs( devs or {} ) do
+						if tonumber(dev) == deviceNum then
+							if not pcall(
+								function( kk )
+									local dd = split( kk, '/' )
+									r = r .. string.format("        Device #%s %s service %s variable %s%s",
+										dd[1] or "nil",
+										( luup.devices[tonumber(dd[1]) or -1] or {} ).description or "(deleted/unknown",
+										dd[2] or "nil", dd[3] or nil,
+										EOL )
+								end, key )
+							then
+								r = r .. "        Error formatting " .. tostring(key) .. "=" ..
+									tostring(dev) .. EOL
+							end
+							break
+						end
+					end
+				end
+			end
+
+			D("requestSummary() special config")
+			local first = true
+			for _,v in ipairs( { "UseReactorScenes", "LogEventsToFile", "EventLogMaxKB", "Retrigger", "AutoUntrip", "MaxUpdateRate", "MaxChangeRate", "FailOnTrouble", "ContinuousTimer", "ForceGeofenceMode", "StateCacheExpiry", "SuppressLuupRestartUpdate", "UseLegacyTripBehavior" } ) do
+				local val = luup.variable_get( RSSID, v, deviceNum ) or ""
+				if val ~= "" then
+					if first then first=false r = r .. "    Special Configuration" .. EOL end
+					r = r .. "        " .. v .. " = " .. val .. EOL
+				end
+			end
+
+			D("requestSummary() scenesUsed")
+			if next( scenesUsed ) then
+				r = r .. "    Scenes" .. EOL
+				for scid, scd in pairs( scenesUsed ) do
+					r = r .. '        Scene #' .. scid .. " " .. tostring(scd.name)
+					local success, t = pcall( getLuupSceneSummary, scd )
+					if success and t then
+						r = r .. t
+					else
+						r = r .. " - summary not available: " .. tostring(t) .. EOL
+					end
+				end
+			end
+		end
+	end
+	r = r .. "```" .. EOL
+	D("requestSummary() done")
+	return r
+end
+
 function request( lul_request, lul_parameters, lul_outputformat )
 	D("request(%1,%2,%3) luup.device=%4", lul_request, lul_parameters, lul_outputformat, luup.device)
 	local action = lul_parameters['action'] or lul_parameters['command'] or ""
@@ -5771,216 +6003,9 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		return '{"status":true,"message":"Plugin state cleared"}', "application/json"
 
 	elseif action == "summary" then
-		local r = ([[
-INSTRUCTIONS FOR POSTING TO VERA COMMUNITY FORUMS:
-	* COPY/PASTE ALL lines AFTER the ===== separator below, INCLUDING the ``` lines.
-	* DO NOT omit the ``` lines! They must be included to preserve report formatting!
-	* DO NOT edit or redact this report. If you have privacy concerns about posting it to the forums, send via email, below.
-
-INSTRUCTIONS FOR EMAILING (BETTER PRIVACY):
-	> Use this method if you have concerns about posting the report contents publicly.
-	* Right-click in this pane and choose "Save as..." to save this entire report to a file.
-	* ATTACH the file in an email to: reactor@toggledbits.com
-	* DO NOT copy/paste the report text into the email body! Attachments only please.
-	* Include your forum name in the body of the email, so I know who you are.
-	* Please let me know via the community forums that you've emailed a report.
-	* Please DO NOT use this email address for any other communication. It's for report attachments only.
-
-THANK YOU IN ADVANCE FOR READING AND FOLLOWING THESE INSTRUCTIONS! ALTHOUGH MY TIME IS FREE, I DON'T ALWAYS HAVE A LOT OF IT,
-SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
-
-=====
-
-]]):gsub("\t","  ")
-		r = r .. "```" .. EOL
-		r = r .. string.rep("*", 51) .. " REACTOR LOGIC SUMMARY REPORT " .. string.rep("*", 51) .. EOL
-		luaxp = require "L_LuaXP_Reactor" -- make sure loaded
-		r = r .. "   Version: " .. tostring(_PLUGIN_VERSION) ..
-			" config " .. tostring(_CONFIGVERSION) ..
-			" cdata " .. tostring(_CDATAVERSION) ..
-			" ui " .. tostring(_UIVERSION) ..
-			" pluginDevice " .. pluginDevice ..
-			" LuaXP " .. tostring(luaxp._VERSION) ..
-			EOL
-		r = r .. "    System: "
-		if isOpenLuup then
-			local v = getVarNumeric( "Vnumber", 0, isOpenLuup, "openLuup" )
-			r = r .. "openLuup version " .. tostring(v)
-			local p = io.popen( "uname -a" )
-			if p then
-				v = p:read("*l")
-				p:close()
-				r = r .. " on " .. tostring(v)
-			end
-		else
-			r = r .. "Vera version " .. tostring(luup.version) .. " (" ..
-				(luup.short_version or "pre-7.30") ..
-				") on ".. tostring(luup.attr_get("model",0)) ..
-				" ID " .. tostring(luup.modelID) ..
-				" (" .. ( ({["35"]="Vera Edge", ["36"]="Vera Plus", ["37"]="Vera Secure"})[tostring(luup.modelID or "X")] or "unknown" ) .. ")"
-		end
-		r = r .. "; loadtime " .. tostring( luup.attr_get('LoadTime',0) or "" )
-		r = r .. "; systemReady " .. tostring( systemReady )
-		if isALTUI then
-			r = r .. "; ALTUI"
-			local v = luup.variable_get( "urn:upnp-org:serviceId:altui1", "Version", isALTUI )
-			r = r .. " " .. tostring(v)
-		end
-		r = r .. "; " .. tostring((_G or {})._VERSION)
-		pcall( function()
-			if json then r = r .. "; JSON " .. (json.version or "unknown") .. (json.using_lpeg and "+LPeg" or "" ) end
-		end )
-		r = r .. "; UnsafeLua=" .. tostring(luup.attr_get( "UnsafeLua", 0 ))
-		r = r .. EOL
-		r = r .. "Local time: " .. os.date("%Y-%m-%dT%H:%M:%S%z") ..
-			"; DST=" .. getReactorVar( "LastDST", "?" ) ..
-			"; " .. tostring(luup.attr_get("City_description",0)) ..
-			", " .. tostring(luup.attr_get("Region_description",0)) ..
-			" " .. tostring(luup.attr_get("Country_description",0)) ..
-			"; formats " .. tostring(dateFormat) .. " " .. tostring(timeFormat) ..
-			EOL
-		r = r .. "House mode: plugin " .. getReactorVar( "HouseMode", "?") ..
-			"; system " .. tostring( luup.attr_get('Mode',0) or "" ) ..
-			"; tracking " .. ( usesHouseMode and "on" or "off" ) .. EOL
-		r = r .. "  Sun data: " .. getReactorVar( "sundata", "" ) .. EOL
-		if geofenceMode ~= 0 then
-			local status, p = pcall( showGeofenceData )
-			if status then
-				r = r .. p
-			else
-				r = r .. "  Geofence: parse error, " .. tostring(p) .. EOL
-			end
-		else
-			r = r .. "  Geofence: not running" .. EOL
-		end
-		if hasBattery then
-			r = r .. "     Power: " .. getReactorVar( "SystemPowerSource", "?")
-			r = r .. ", battery level " .. getReactorVar( "SystemBatteryLevel", "?") .. EOL
-		end
-		for n,d in pairs( luup.devices ) do
-			local scenesUsed = {}
-			summaryDevices = {}
-			if d.device_type == RSTYPE and ( deviceNum==nil or n==deviceNum ) then
-				local status = ( ( getVarNumeric( "Armed", 0, n, SENSOR_SID ) ~= 0 ) and " armed" or "" )
-				status = status .. ( ( getVarNumeric("Tripped", 0, n, SENSOR_SID ) ~= 0 ) and " tripped" or "" )
-				status = status .. ( ( getVarNumeric("Trouble", 0, n, RSSID ) ~= 0 ) and " TROUBLE" or "" )
-				r = r .. string.rep( "*", 132 ) .. EOL
-				r = r .. string.format("%s (#%d)%s", tostring(d.description), n, status) .. EOL
-				local cdata = getSensorConfig( n )
-				if not cdata then
-					r = r .. "    **** UNPARSEABLE CONFIGURATION ****" .. EOL
-				else
-					r = r .. string.format("    Version %s.%s %s", cdata.version or 0, cdata.serial or 0, os.date("%x %X", cdata.timestamp or 0)) .. EOL
-					r = r .. string.format("    Message/status: %s", getVar( "Message", "", n ) ) .. EOL
-					local s = getVarNumeric( "TestTime", 0, n, RSSID )
-					if s ~= 0 then
-						r = r .. string.format("    Test time set: %s", os.date("%Y-%m-%d %H:%M", s)) .. EOL
-					end
-					s = getVarNumeric( "TestHouseMode", 0, n, RSSID )
-					if s ~= 0 then
-						r = r .. string.format("    Test house mode set: %d", s) .. EOL
-					end
-					local condState = loadCleanState( n )
-					local first = true
-					for _,vv in variables( cdata ) do
-						if first then
-							r = r .. "    Variable/expressions" .. EOL
-							first = false
-						end
-						local vs = (condState.vars or {})[vv.name] or {}
-						local lv = vs.lastvalue
-						local vt = type(lv)
-						if vt == "table" and lv.__type == "null" then lv = "null" vt = "luaxp.null"
-						elseif vt == "string" or vt == "table" then lv = json.encode( lv )
-						elseif lv == nil then lv = "(no value)"
-						else lv = tostring( lv ) end
-						r = r .. string.format("     %3d: %-24s %s [last %s(%s)]", vv.index or 0, vv.name or "?", vv.expression or "?", lv, vt) ..
-							( (vv.export or 1) ~= 0 and " (exported)" or "" ) ..
-							EOL
-						if vs.err then r = r .. "          *** Error: " .. tostring(vs.err) .. EOL end
-					end
-					r = r .. "    Condition group " .. RG( cdata.conditions.root or {}, condState )
-
-					for k,v in pairs( cdata.activities or {} ) do
-						r = r .. getReactorScene( k, v, n, scenesUsed, cdata )
-					end
-
-					r = r .. getEvents( n )
-				end
-
-				if next( summaryDevices ) then
-					r = r .. "    Devices" .. EOL
-					for kd in pairs( summaryDevices ) do
-						local nd = tonumber( kd ) or -1
-						local sd = luup.devices[nd]
-						if sd == nil then
-							r = r .. string.format( "        *** UNKNOWN DEVICE #%s%s", kd, EOL )
-						else
-							local pn = luup.attr_get( 'plugin', nd ) or ""
-							r = r .. string.format( "        %s (%d) %s (%s/%s); parent %d; plugin %s; mfg %s model %s; dev %s impl %s%s",
-								sd.description or "?", nd,
-								sd.device_type or "?",
-								sd.category_num or "?", sd.subcategory_num or "?",
-								sd.device_num_parent or -1,
-								(pn == "") and "-" or pn,
-								luup.attr_get( 'manufacturer', nd ) or "-",
-								luup.attr_get( 'model', nd ) or "-",
-								luup.attr_get( 'device_file', nd ) or "-",
-								luup.attr_get( 'impl_file', nd ) or "-",
-								EOL )
-						end
-					end
-				end
-				summaryDevices = nil
-
-				if next(watchData) then
-					r = r .. "    Watches" .. EOL
-					for key,devs in pairs( watchData or {} ) do
-						for dev in pairs( devs or {} ) do
-							if tonumber(dev) == deviceNum then
-								if not pcall(
-									function( kk )
-										local dd = split( kk, '/' )
-										r = r .. string.format("        Device #%s %s service %s variable %s%s",
-											dd[1] or "nil",
-											( luup.devices[tonumber(dd[1]) or -1] or {} ).description or "(deleted/unknown",
-											dd[2] or "nil", dd[3] or nil,
-											EOL )
-									end, key )
-								then
-									r = r .. "        Error formatting " .. tostring(key) .. "=" ..
-										tostring(dev) .. EOL
-								end
-								break
-							end
-						end
-					end
-				end
-
-				local first = true
-				for _,v in ipairs( { "UseReactorScenes", "LogEventsToFile", "EventLogMaxKB", "Retrigger", "AutoUntrip", "MaxUpdateRate", "MaxChangeRate", "FailOnTrouble", "ContinuousTimer", "ForceGeofenceMode", "StateCacheExpiry", "SuppressLuupRestartUpdate", "UseLegacyTripBehavior" } ) do
-					local val = luup.variable_get( RSSID, v, deviceNum )
-					if ( val or "" ) ~= "" then
-						if first then first=false r = r .. "    Special Configuration" .. EOL end
-						r = r .. "        " .. v .. " = " .. val .. EOL
-					end
-				end
-
-				if next( scenesUsed ) then
-					r = r .. "    Scenes" .. EOL
-					for scid, scd in pairs( scenesUsed ) do
-						r = r .. '        Scene #' .. scid .. " " .. tostring(scd.name)
-						local success, t = pcall( getLuupSceneSummary, scd )
-						if success and t then
-							r = r .. t
-						else
-							r = r .. " - summary not available: " .. tostring(t) .. EOL
-						end
-					end
-				end
-			end
-		end
-		r = r .. "```" .. EOL
+		D("request() generating summary for %1", deviceNum )
+		local ok, r = pcall( requestSummary, lul_request, lul_parameters, lul_outputformat, deviceNum )
+		if not ok then return "ERROR\nHandler error: "..tostring(r), "text/plain" end
 		return r, "text/plain"
 
 	elseif action == "tryexpression" then
