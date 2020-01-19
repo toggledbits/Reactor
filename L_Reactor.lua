@@ -1870,7 +1870,7 @@ local function getValue( val, ctx, tdev )
 		return tostring(val), val, val
 	end
 	local result = val
-	val = tostring(val or ""):gsub("%s+$", "")
+	val = tostring(val or ""):gsub("^%s+", ""):gsub("%s+$", "")
 	if #val >= 2 and val:byte(1) == 34 and val:byte(-1) == 34 then
 		-- Dequote quoted string and return
 		result = val:sub( 2, -2 )
@@ -5744,13 +5744,12 @@ SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 ]]):gsub("\t","  ")
 	r = r .. "```" .. EOL
 	r = r .. string.rep("*", 51) .. " REACTOR LOGIC SUMMARY REPORT " .. string.rep("*", 51) .. EOL
-	luaxp = require "L_LuaXP_Reactor" -- make sure loaded
 	r = r .. "   Version: " .. tostring(_PLUGIN_VERSION) ..
 		" config " .. tostring(_CONFIGVERSION) ..
 		" cdata " .. tostring(_CDATAVERSION) ..
 		" ui " .. tostring(_UIVERSION) ..
 		" pluginDevice " .. pluginDevice ..
-		" LuaXP " .. tostring(luaxp._VERSION) ..
+		" LuaXP " .. tostring(luaxp and luaxp._VERSION or "not loaded") ..
 		EOL
 	r = r .. "    System: "
 	if isOpenLuup then
