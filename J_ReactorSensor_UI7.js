@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.5develop-20016';
+	var pluginVersion = '3.5develop-20019.2';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -567,7 +567,7 @@ var ReactorSensor = (function(api, $) {
 			}
 
 			/* Check UnsafeLua flag */
-			unsafeLua = 1 === parseInt( ud.UnsafeLua )
+			unsafeLua = 1 === parseInt( ud.UnsafeLua );
 
 			/* Take a pass over devices and see what we discover */
 			var dl = api.getListOfDevices();
@@ -4947,6 +4947,11 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				dev.toggleClass( 'tberror', isEmpty( dev.val() ) );
 				break;
 
+			case "stopgsa":
+				dev = $( 'select.devicemenu', row );
+				dev.toggleClass( 'tberror', isEmpty( dev.val() ) );
+				break;
+
 			case "setvar":
 				var vname = $( 'select.re-variable', row );
 				vname.toggleClass( 'tberror', isEmpty( vname.val() ) );
@@ -5365,6 +5370,25 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						action.deviceName = devobj.name;
 					}
 					action.activity = $( 'select.re-activity', row ).val() || "";
+					if ( $( 'input.re-stopall', row ).prop( 'checked' ) ) {
+						action.stopall = 1;
+					} else {
+						delete action.stopall;
+					}
+					break;
+
+				case "stopgsa":
+					devnum = parseInt( $( 'select.devicemenu', row ).val() || "-1" );
+					if ( isNaN( devnum ) || devnum < 0 ) {
+						delete action.device;
+						delete action.deviceName;
+					} else {
+						action.device = devnum;
+						devobj = api.getDeviceObject( devnum < 0 ? api.getCpanelDeviceId() : devnum );
+						action.deviceName = devobj.name;
+					}
+					action.activity = $( 'select.re-activity', row ).val() || "";
+					if ( isEmpty( action.activity ) ) { delete action.activity; }
 					break;
 
 				case "setvar":
@@ -6441,7 +6465,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						return devobj.device_type === deviceType;
 					})
 					.val( "-1" )
-					.on( 'change', function( ev ) {
+					.on( 'change.reactor', function( ev ) {
 						var $el = $( ev.currentTarget );
 						var newVal = parseInt( $el.val() || -1 );
 						var $row = $el.closest( '.actionrow' );
@@ -6458,6 +6482,38 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					.appendTo( $fs );
 				makeDeviceActivityMenu( -1, $m )
 					.val( "root.true" )
+					.on( 'change.reactor', handleActionValueChange );
+				getCheckbox( getUID( "stopall" ), "1", "Stop all other running activities first", "re-stopall" )
+					.on( 'change.reactor', handleActionValueChange )
+					.appendTo( $fs );
+				break;
+
+			case "stopgsa":
+				$fs = $( '<fieldset class="form-inline"/>' ).appendTo( ct );
+				makeDeviceMenu( "", "", function( devobj ) {
+						return devobj.device_type === deviceType;
+					})
+					.val( "-1" )
+					.on( 'change.reactor', function( ev ) {
+						var $el = $( ev.currentTarget );
+						var newVal = parseInt( $el.val() || -1 );
+						var $row = $el.closest( '.actionrow' );
+						var $m = $( 'select.re-activity', $row ).empty();
+						if ( !isNaN( newVal ) ) {
+							makeDeviceActivityMenu( newVal, $m )
+								.prepend( '<option value="">(all activities)</option>' )
+								.val( "" );
+						} else {
+							$(this).addClass( "tberror" );
+							$m.addClass( "tberror" );
+						}
+						handleActionValueChange( ev );
+					}).appendTo( $fs );
+				$m = $( '<select/>', { class: "form-control form-control-sm re-activity" } )
+					.appendTo( $fs );
+				makeDeviceActivityMenu( -1, $m )
+					.prepend( '<option value="">(all activities)</option>' )
+					.val( "" )
 					.on( 'change.reactor', handleActionValueChange );
 				break;
 
@@ -6837,6 +6893,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 			'<option value="runlua">Run Lua</option>' +
 			'<option value="runscene">Run Scene</option>' +
 			'<option value="rungsa">Run Group Activity</option>' +
+			'<option value="stopgsa">Stop Group Activity</option>' +
 			'<option value="setvar">Set Variable</option>' +
 			'<option value="resetlatch">Reset Latched</option>' +
 			'</select></div>' );
@@ -6965,7 +7022,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 							newRow.addClass( "tberror" );
 						}
 						$( 'select.devicemenu', newRow ).val( act.device || "-1" );
-						$m = $( 'select.re-activity', newRow );
+						$m = $( 'select.re-activity', newRow ).empty();
 						makeDeviceActivityMenu( act.device || -1, $m );
 						if ( 0 === $( 'option[value=' + quot(act.activity) + ']', $m ).length ) {
 							$( '<option/>' ).val( act.activity || "undef" )
@@ -6973,6 +7030,26 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 								.prependTo( $m.addClass( 'tberror' ) );
 						}
 						$m.val( act.activity || "undef" );
+						$( 'input.re-stopall', newRow ).prop( 'checked', 0 !== ( act.stopall || 0 ) );
+						break;
+
+					case "stopgsa":
+						if ( undefined !== act.device && 0 === $( 'select.devicemenu option[value="' + act.device + '"]', newRow ).length ) {
+							$( '<option/>' ).val( act.device )
+								.text( '#' + act.device + ' ' + ( act.deviceName || 'name?' ) + ' (missing)' )
+								.prependTo( $( 'select.devicemenu', newRow )
+								.addClass( "tberror" ) );
+							newRow.addClass( "tberror" );
+						}
+						$( 'select.devicemenu', newRow ).val( act.device || "-1" );
+						$m = $( 'select.re-activity', newRow ).empty();
+						makeDeviceActivityMenu( act.device || -1, $m );
+						if ( 0 === $( 'option[value=' + quot(act.activity || "") + ']', $m ).length ) {
+							$( '<option/>' ).val( act.activity || "undef" )
+								.text( ( act.activity || "name?" ) + " (missing)" )
+								.prependTo( $m.addClass( 'tberror' ) );
+						}
+						$m.val( act.activity || "" );
 						break;
 
 					case "setvar":

@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.5develop-20019"
+local _PLUGIN_VERSION = "3.5develop-20019.2"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION	= 20017
@@ -5765,7 +5765,7 @@ SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 	else
 		r = r .. "Vera version " .. tostring(luup.version) .. " (" ..
 			(luup.short_version or "pre-7.30") ..
-			") on ".. tostring(luup.attr_get("model",0)) ..
+			") on ".. tostring(luup.attr_get("model",0) or "") ..
 			" ID " .. tostring(luup.modelID) ..
 			" (" .. ( ({["35"]="Vera Edge", ["36"]="Vera Plus", ["37"]="Vera Secure"})[tostring(luup.modelID or "X")] or "unknown" ) .. ")"
 	end
@@ -5780,13 +5780,13 @@ SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 	pcall( function()
 		if json then r = r .. "; JSON " .. (json.version or "unknown") .. (json.using_lpeg and "+LPeg" or "" ) end
 	end )
-	r = r .. "; UnsafeLua=" .. tostring(luup.attr_get( "UnsafeLua", 0 ))
+	r = r .. "; UnsafeLua=" .. tostring(luup.attr_get( "UnsafeLua", 0 ) or "nil")
 	r = r .. EOL
 	r = r .. "Local time: " .. os.date("%Y-%m-%dT%H:%M:%S%z") ..
 		"; DST=" .. getReactorVar( "LastDST", "?" ) ..
-		"; " .. tostring(luup.attr_get("City_description",0)) ..
-		", " .. tostring(luup.attr_get("Region_description",0)) ..
-		" " .. tostring(luup.attr_get("Country_description",0)) ..
+		"; " .. tostring(luup.attr_get("City_description",0) or "") ..
+		", " .. tostring(luup.attr_get("Region_description",0) or "") ..
+		" " .. tostring(luup.attr_get("Country_description",0) or "") ..
 		"; formats " .. tostring(dateFormat) .. " " .. tostring(timeFormat) ..
 		EOL
 	r = r .. "House mode: plugin " .. getReactorVar( "HouseMode", "?") ..
