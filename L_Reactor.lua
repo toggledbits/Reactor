@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.5develop-20019.2"
+local _PLUGIN_VERSION = "3.5develop-20020"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION	= 20017
@@ -5424,9 +5424,11 @@ local function getReactorScene( t, s, tdev, runscenes, cf )
 						  " (" .. tostring(act.device) .. ")" ) )
 					resp = resp .. " action " .. (act.service or "?") .. "/" .. (act.action or "?") .. "( " .. p .. " )"
 					resp = resp .. EOL
-					summaryDevices[tostring(act.device)] = true
-					if ( ( luup.devices[act.device] or {} ).device_num_parent or 0 ) ~= 0 then
-						summaryDevices[tostring(luup.devices[act.device].device_num_parent)] = true
+					if act.device ~= -1 then
+						summaryDevices[tostring(act.device)] = true
+						if ( ( luup.devices[act.device] or {} ).device_num_parent or 0 ) ~= 0 then
+							summaryDevices[tostring(luup.devices[act.device].device_num_parent)] = true
+						end
 					end
 				elseif act.type == "housemode" then
 					resp = resp .. pfx .. "Change house mode to " .. tostring(act.housemode) .. EOL
