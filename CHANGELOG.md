@@ -11,6 +11,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 * Enhancement: "Pulse" output mode for conditions now allows repeat pulses with a configurable *off/false* period between and a limit on the number of pulses.
 * Enhancement: The new *Expression Variable* condition type allows direct condition testing of an expression's most recent result value without using a self-referencing *Device State* condition.
 * Enhancement: The new *Set Variable* activity allows direct setting of a variable without using a self-directed *Device State* activity with a *SetVariable* service action. The target variable must be "expression-less" (that is, its configured expression is blank/empty).
+* Enhancement: New "Run Activity" button on each activity allows the entire activity to be tested. This does not stop other running activities, including contra-activities (i.e. if you run the "is TRUE" activity for a group it does not stop the group's "is FALSE" activity if it is currently running).
 * Enhancement: Make event log entries more human-readable.
 * Enhancement: `Reactor` table in "Run Lua" actions now publishes state for all conditions (in table `Reactor.conditions`; keys are condition IDs). This makes the current condition states and values accessible directly in Lua without additional "gets".
 * Enhancement: `Reactor` table in "Run Lua" actions now publishes group states (in `Reactor.groups`) by name as well as by ID. Previously the keys were group IDs. Now you can use either in "Run Lua" actions.
