@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.5develop-20020';
+	var pluginVersion = '3.5develop-20021';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -5552,6 +5552,9 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 			$('div.actionrow:last div.controls button.re-movedown', section).prop('disabled', true);
 		});
 
+		/* Run activity button only when saved/unmodified */
+		$( 'div.actionlist button.re-tryactivity' ).prop( 'disabled', configModified );
+
 		/* Save and revert buttons */
 		updateSaveControls();
 	}
@@ -7168,6 +7171,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 		row.append( '\
 <div class="tblisttitle col-xs-9 col-sm-9 col-lg-10"> \
   <span class="re-title">?title?</span> \
+  <button class="btn md-btn re-tryactivity" title="Run activity now"><i class="material-icons">directions_run</i></button> \
   <button class="btn md-btn re-collapse" title="Collapse action"><i class="material-icons">expand_less</i></button> \
   <span class="re-titlemessage" /> \
 </div> \
@@ -7253,6 +7257,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				)
 			);
 		container.append( el );
+
+		/* Showing all rows now; we'll apply filter later below */
 		var showWhich = getParentState( "showactivities", myid ) || "";
 		$( 'select#whatshow', container ).on( 'change.reactor', handleActivityVisChange )
 			.val( showWhich );
@@ -7281,9 +7287,6 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					( gr.name || gr.id ) + ' is FALSE' );
 				container.append( el );
 				loadActions( el, cd.activities[scene] || {} );
-				if ( "inuse" === showWhich && isEmptyActivity( cd.activities[scene] ) ) {
-					el.hide();
-				}
 
 				showedAny = true;
 			}
@@ -7303,11 +7306,37 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 			container.append( $( '<div/>' )
 				.html( '<em>There are no groups eligible for activities.</em>' ) );
 		} else if ( "" !== showWhich ) {
-			container.append( $( '<div/>' )
+			$( 'select#whatshow', container ).trigger( 'change.reactor' );
+			container.append( $( '<div class="re-alertbox" />' )
 				.text( 'Not all possible activities are being shown. Choose "All" from the "Show Activities" menu at top to see everything.' ) );
 		}
 
 		$("div#tab-actions.reactortab button.re-collapse").on( 'click.reactor', handleActivityCollapseClick );
+		$("div#tab-actions.reactortab button.re-tryactivity").on( 'click.reactor', function( ev ) {
+			var $ct = $( ev.target ).closest( 'div.actionlist' );
+			var act = $ct.attr( 'id' );
+			var dev = api.getCpanelDeviceId();
+			/* Pass UI version to bypass disabled check on RS */
+			var param = { SceneNum: act,
+				Options: JSON.stringify({ contextDevice: dev, stopRunningScenes: true }) };
+			api.performActionOnDevice( dev, serviceId, "RunScene", {
+				actionArguments: param,
+				onSuccess: function( xhr ) {
+					/* Briefly highlight button and restore as UI feedback */
+					/* TODO: Eventually, actual status? */
+					function crestore( $el ) {
+						$el.addClass( 're-activemode' );
+						window.setTimeout( function() {
+							$el.removeClass( 're-activemode' );
+						}, 2000 );
+					}
+					crestore( $( ev.currentTarget ) );
+				},
+				onFailure: function( xhr ) {
+					alert( "An error occurred. Try again in a moment; Vera may be busy or reloading." );
+				}
+			} );
+		});
 		$("div#tab-actions.reactortab button.addaction").on( 'click.reactor', handleAddActionClick );
 		$("div#tab-actions.reactortab ul.re-activities-list").empty().append( ul.children() );
 		$("div#tab-actions.reactortab ul.re-activities-list li").on( 'click.reactor', handleActionCopyClick );
@@ -7426,6 +7455,7 @@ div#tab-actions.reactortab .tbslider .ui-slider-handle { background: url("/cmh/s
 div#tab-actions.reactortab .tbslider .ui-slider-range-min { background-color: #12805b !important; } \
 div#tab-actions.reactortab ul.dropdown-menu { color: #333; background-color: white; border: 1px solid #333; text-align: initial; padding: 4px 4px; width: 320px; max-height: 320px; overflow: auto; } \
 div#tab-actions.reactortab ul.dropdown-menu li:hover { color: white; background-color: #333; } \
+div#tab-actions.reactortab button.re-activemode { color: #6f6; } \
 </style>');
 		}
 
