@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.5develop-20019.2';
+	var pluginVersion = '3.5develop-20020';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -2825,6 +2825,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 				$( '.followopts', out ).prop( 'disabled', false );
 				$( 'input#' + idSelector(rid) + '[value=""]', out ).prop( 'checked', true );
 				$( '.latchopts,.pulseopts', out ).prop( 'disabled', true );
+				$( 'input.re-holdtime', out ).val( 0 !== (condOpts.holdtime || 0) ? condOpts.holdtime : "" );
 			}
 
 			/* Restrictions */
