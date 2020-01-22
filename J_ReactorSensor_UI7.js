@@ -932,6 +932,7 @@ var ReactorSensor = (function(api, $) {
 			handleSaveClick( undefined );
 		}
 		configModified = false;
+		moduleReady = false;
 	}
 
 	function conditionValueText( v, forceNumber ) {
