@@ -2208,10 +2208,22 @@ local function doActionNotify( action, scid, tdev )
 									local r, e = sock:connect( hh, pp )
 									if not r then return r, e end
 									local ssl = require "ssl"
-									D("SMTP send wrapping %1 using SSL version %2", sock, ssl._VERSION)
-									sock = ssl.wrap( sock, getSSLParams( "SMTP" ) )
-									D("SMTP after wrapping, sock is %1", sock)
-									return sock:dohandshake()
+									D("doActionNotify() SMTP send wrapping %1 using SSL version %2", sock, ssl._VERSION)
+									local params = getSSLParams( "SMTP" )
+									sock = ssl.wrap( sock, params )
+									D("doActionNotify() SMTP after wrapping with %2, sock is %1", sock, params)
+									if not sock then
+										L({level=2,msg="Failed to wrap socket on %1:%2 for SMTP+SSL; check SSL param configuration %3"},
+											server, port, params)
+										error "Failed SSL wrap"
+									end
+									local ret = sock:dohandshake()
+									if not ret then
+										L({level=2,msg="SSL handshake (for SMTP notification) with %1:%2 failed; check server config and parameters %3"},
+											server, port, params)
+										error "Failed SSL handshake"
+									end
+									return ret
 								end
 							}, {
 								__index = function( t, n ) -- luacheck: ignore 212
@@ -2257,13 +2269,13 @@ local function doActionNotify( action, scid, tdev )
 					baseurl = baseurl .. "&event=" .. urlencode( subject )
 					baseurl = baseurl .. "&description=" .. urlencode( msg )
 					st,_,ht = luup.inet.wget( baseurl )
-					D("execSceneGroup() Prowl wget returned %1,%2 [%3]", st, ht, baseurl)
+					D("doActionNotify() Prowl wget returned %1,%2 [%3]", st, ht, baseurl)
 				else
 					local data = { apikey=apikey, application=host, event=subject, description=msg }
 					if provider ~= "" then data.provider = provider end
 					if action.priority then data.priority = action.priority end
 					st,_,ht = luup.inet.request{ url=baseurl, data=data, follow=false, timeout=5 }
-					D("execSceneGroup() Prowl request returned %1,%2", st, ht)
+					D("doActionNotify() Prowl request returned %1,%2", st, ht)
 				end
 				if st ~= 0 or ht ~= 200 then
 					L({level=2,msg="Prowl send returned %1 httpStatus=%2 [%3]"}, st, ht, baseurl)
@@ -2283,6 +2295,7 @@ local function doActionNotify( action, scid, tdev )
 			local socket = require "socket"
 			local udp = socket.udp()
 			if udp then
+				D("doActionNotify() sending SysLog UDP datagram to %1", action.hostip)
 				udp:setsockname("*", 0)
 				local stat,err = udp:sendto( datagram, action.hostip, 514 )
 				udp:close()
@@ -2296,12 +2309,13 @@ local function doActionNotify( action, scid, tdev )
 			baseurl = baseurl .. "&users=" .. urlencode( cf.notifications[nid].users )
 			baseurl = baseurl .. "&description=" .. urlencode( msg )
 			--[[ local st,_,ht = --]]
-			luup.inet.wget( baseurl )
+			local st,_,ht = luup.inet.wget( baseurl )
+			D("doActionNotify() AddAlert request returned %1,%2 [%3]", st, ht, baseurl)
 		elseif action.method == "UU" then -- User URL
 			local baseurl = action.url or ""
 			baseurl = baseurl:gsub( "%{message%}", urlencode( msg ):gsub("%%", "%%%%") )
 			local st,_,ht = luup.inet.wget( baseurl )
-			D("doActionNotify User URL notification returned %1,%2 [%3]", st, ht, baseurl)
+			D("doActionNotify() User URL notification returned %1,%2 [%3]", st, ht, baseurl)
 			if st ~= 0 or ht ~= 200 then
 				L({level=2,msg="User URL notification returned %1 httpStatus=%2 [%3]"}, st, ht, baseurl)
 				error("User HTTP notification failed (" .. tostring(st) .. ", " .. tostring(ht) .. ")")
@@ -5458,12 +5472,26 @@ local function getReactorScene( t, s, tdev, runscenes, cf )
 					end
 					resp = resp .. EOL
 				elseif act.type == "notify" then
-					resp = resp .. pfx .. "Notify nid " .. act.notifyid .. ":"
+					resp = resp .. pfx .. "Notify method " .. tostring(act.method) .. " nid " .. tostring(act.notifyid) .. ":"
 					if cf.notifications and cf.notifications[tostring(act.notifyid)] then
 						local nn = cf.notifications[tostring(act.notifyid)]
 						if nn.scene then resp = resp .. " sid " .. nn.scene end
-						resp = resp .. " users " .. tostring(nn.users)
+						if nn.users then resp = resp .. " users " .. tostring(nn.users) end
 						resp = resp .. " message " .. string.format("%q", tostring(nn.message))
+					end
+					local mv = {
+						SM={"SMTPServer","SMTPPort","SMTPSender","SMTPDefaultRecipient","SMTPDefaultSubject","SMTPUsername","*SMTPPassword"},
+						PR={"ProwlProvider","ProwlSubject","ProwlURL","*ProwlAPIKey"}
+					}
+					for _,v in ipairs( mv[tostring(act.method)] or {} ) do
+						local m,n = v:match("^(%*)(.*)")
+						n = n or v
+						local vv = getVar( n, "", pluginDevice, MYSID )
+						if m and vv ~= "" then vv = "****" end
+						resp = resp .. string.format("; %s=%q", n, tostring(vv))
+					end
+					if act.method == "SM" then
+						resp = resp .. "; SSL opt " .. json.encode( getSSLParams( "SMTP" ) )
 					end
 					resp = resp .. EOL
 				else
