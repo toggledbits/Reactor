@@ -2,7 +2,7 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
-## Version 3.5 (development)
+## Version 3.5 (released) [20045]
 
 * POTENTIAL BREAKING: ReactorSensors no longer support the "Invert" state variable to reverse the sense of logic output to the Tripped state of the ReactorSensor. The better (and now required) choice is to apply "NOT" to the "root" group if needed. I double anybody has used the "Invert" flag, though.
 * POTENTIAL BREAKING: Until 3.5, tripping the ReactorSensor "manually" (e.g. with the UI buttons, or calling the "Trip" or "Reset" actions on the ReactorSensor, would run the root group's corresponding activity. This is a legacy behavior from before Reactor had groups. As of 3.5, "Tripped" state is just a flag, and will no longer stimulate any action when changed. However, changes in the root group's logic state will still drive the "Tripped" value ("root" true == Tripped, "root" false == Not Tripped/Reset), and the root group's activities will run in response to logic changes as they would for any other group. The reverse path, however, is no longer true--forcing the ReactorSensor to trip or untrip doesn't run the root's activities. I doubt anybody actually relies on this behavior, and it actually creates more problems than it solves, which is why I'm removing it. If you must have the behavior, you should redo your logic, but while you're figuring out how, you can set `UseLegacyTripBehavior` = 1 on any ReactorSensor that requires it. This flag and the ability to use the legacy behavior will be removed for 4.0.

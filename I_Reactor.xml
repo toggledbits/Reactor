@@ -18,7 +18,7 @@
 			luup.log("Reactor START-UP!")
 			luup.variable_set( "urn:toggledbits-com:serviceId:Reactor", "Message", "Booting...", devNum )
 			Reactor = require("L_Reactor")
-			if Reactor._SVCVERSION ~= 19202 then
+			if Reactor._SVCVERSION ~= 20045 then
 				-- luup.log(tostring(Reactor._SVCVERSION))
 				luup.log("Reactor install error: the implementation XML and implementation Lua are not in sync. Please reinstall.",1)
 				luup.set_failure( 1, devNum )

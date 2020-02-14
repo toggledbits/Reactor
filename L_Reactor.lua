@@ -11,13 +11,13 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.5develop-20021"
+local _PLUGIN_VERSION = "3.5"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION	= 20017
-local _CDATAVERSION		= 19305	-- must coincide with JS
-local _UIVERSION		= 19349	-- must coincide with JS
-	  _SVCVERSION		= 19202	-- must coincide with impl file (not local)
+local _CDATAVERSION		= 20045	-- must coincide with JS
+local _UIVERSION		= 20045	-- must coincide with JS
+	  _SVCVERSION		= 20045	-- must coincide with impl file (not local)
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -333,11 +333,14 @@ local function getSSLParams( prefix, pdev, sid )
 	-- Repititious, but expeditous. If more in future, go table-driven.
 	local sslLib = require "ssl"
 	sslLib = sslLib or {}
+	for _,v in ipairs{ "SSLProtocol", "SSLMode", "SSLVerify", "SSLOptions" } do
+		initVar( prefix..v, "", pdev, sid )
+	end
 	local s = getVar( prefix.."SSLProtocol", ( sslLib._VERSION == "0.5" ) and "tlsv1" or "any", pdev, sid )
 	params.protocol = s ~= "" and s or nil
 	s = getVar( prefix.."SSLMode", "client", pdev, sid )
 	params.mode = s ~= "" and s or nil
-	s = getVar( prefix.."SSLVerify", "", pdev, sid )
+	s = getVar( prefix.."SSLVerify", "none", pdev, sid )
 	params.verify = getSSLListParam(s)
 	s = getVar( prefix.."SSLOptions", "", pdev, sid )
 	params.options = getSSLListParam(s)
