@@ -168,8 +168,8 @@ var ReactorSensor = (function(api, $) {
 	div.reactortab .tb-about { margin-top: 24px; } \
 	div.reactortab .tberror { border: 1px solid red; } \
 	div.reactortab .tbwarn { border: 1px solid yellow; background-color: yellow; } \
-	div.reactortab .tbwikilink { margin-left: 4px; } \
-	div.reactortab .tbwikilink i.material-icons { font-size: 18px; position: relative; top: 4px; } \
+	div.reactortab .tbdocslink { margin-left: 4px; } \
+	div.reactortab .tbdocslink i.material-icons { font-size: 18px; position: relative; top: 4px; } \
 	div.reactortab button.md-btn:disabled { color: #ccc; cursor: not-allowed; } \
 	div.reactortab button.md-btn[disabled] { color: #ccc; cursor: not-allowed; } \
 	div.reactortab button.md-btn { line-height: 1em; cursor: pointer; color: #333; background-color: #fff; padding: 1px 0px 0px 0px; border: 1px solid transparent; border-radius: 4px; box-shadow: #ccc 2px 2px; background-image: linear-gradient( to bottom, #fff, #e6e6e6 ); background-repeat: repeat-x; } \
@@ -285,12 +285,11 @@ var ReactorSensor = (function(api, $) {
 	/** getWiki - Get (as jQuery) a link to Wiki for topic */
 	function getWiki( where ) {
 		var $v = $( '<a/>', {
-			"class": "tbwikilink",
+			"class": "tbdocslink",
 			"alt": "Link to Reactor Wiki for topic help",
 			"title": "Link to Reactor Wiki for topic help",
 			"target": "_blank",
-			// "href": "https://github.com/toggledbits/Reactor/wiki/" + String(where || "")
-			"href": "https://www.toggledbits.com/static/reactor/docs/" + String(where || "")
+			"href": "https://www.toggledbits.com/static/reactor/docs/3.5/" + String(where || "")
 		} );
 		$v.append( '<i class="material-icons">help_outline</i>' );
 		return $v;
