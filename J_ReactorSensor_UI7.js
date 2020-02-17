@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.5';
+	var pluginVersion = '3.5hotfix-20048';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -193,8 +193,8 @@ var ReactorSensor = (function(api, $) {
 		html += '<div class="clearfix">';
 		html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
 		html += '<div id="tbcopyright">Reactor ver ' + pluginVersion + ' &copy; 2018,2019 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
-			' All Rights Reserved. Please check out the <a href="https://github.com/toggledbits/Reactor/wiki" target="_blank">online documentation</a>' +
-			' and <a href="https://community.getvera.com/c/plugins-amp-plugin-development/reactor" target="_blank">community forums</a> for support.</div>';
+			' All Rights Reserved. Please check out the <a href="https://www.toggledbits.com/static/reactor/docs/3.5/" target="_blank">online documentation</a>' +
+			' and <a href="https://community.getvera.com/c/plugins-and-plugin-development/reactor" target="_blank">community forums</a> for support.</div>';
 		try {
 			html += '<div id="browserident">' + navigator.userAgent + '</div>';
 		} catch( e ) {}
@@ -3097,7 +3097,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 					container.append('<input type="text" class="form-control form-control-sm re-comment" autocomplete="off">');
 					$('input', container).on( 'change.reactor', handleConditionRowChange ).val( cond.comment || "" );
 					if ( "cond0" === cond.id && ( cond.comment || "").match( /^Welcome to your new Reactor/i ) ) {
-						$( '<div><strong>New to Reactor?</strong> Check out the <a href="https://youtu.be/wkdFjwEuF58" target="_blank">tutorial videos</a>. There\'s also <a href="https://github.com/toggledbits/Reactor/wiki" target="_blank">the Reactor Wiki</a> and <a href="https://community.getvera.com/c/plugins-and-plugin-development/reactor" target="_blank">Community Forum Category</a>.</div>' )
+						$( '<div><strong>New to Reactor?</strong> Check out the <a href="https://youtu.be/wkdFjwEuF58" target="_blank">tutorial videos</a>. There\'s also <a href="https://www.toggledbits.com/static/reactor/docs/3.5/" target="_blank">the Reactor Documentation</a> and <a href="https://community.getvera.com/c/plugins-and-plugin-development/reactor" target="_blank">Community Forum Category</a>.</div>' )
 							.appendTo( container );
 					}
 					break;
@@ -4088,7 +4088,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 				$( '.noroot', el ).remove();
 			}
 
-			$( 'button.re-focus' ).prop( 'disabled', true ).hide(); /* TODO: for now */
+			$( 'button.re-focus', el ).prop( 'disabled', true ).hide(); /* TODO: for now */
 
 			$( 'button.re-addcond', el ).on( 'click.reactor', handleAddConditionClick );
 			$( 'button.re-addgroup', el ).on( 'click.reactor', handleAddGroupClick );
@@ -4633,7 +4633,7 @@ div#tab-conds.reactortab input.re-comment { width: 100% !important; } \
 
 		/* Add "Add" button */
 		gel.append('<div class="row buttonrow">' +
-			'<div class="col-xs-12 col-sm-12"><button id="addvar" class="btn btn-sm btn-success">Add Variable/Expression</button> Need help? Check out the <a href="https://github.com/toggledbits/Reactor/wiki/Expressions-&-Variables" target="_blank">documentation</a> or ask in the <a href="https://community.getvera.com/c/plugins-amp-plugin-development/reactor" target="_blank">Vera community forums</a>.</div>' +
+			'<div class="col-xs-12 col-sm-12"><button id="addvar" class="btn btn-sm btn-success">Add Variable/Expression</button> Need help? Check out the <a href="https://www.toggledbits.com/static/reactor/docs/3.5/Expressions-&-Variables" target="_blank">documentation</a> or ask in the <a href="https://community.getvera.com/c/plugins-and-plugin-development/reactor" target="_blank">Vera community forums</a>.</div>' +
 			'</div>');
 
 		/* Append the group */
@@ -7928,7 +7928,7 @@ textarea#devspyoutput { width: 100%; font-family: monospace; } \
 		}
 
 		html += '<div id="troubleshooting"><h3>Troubleshooting &amp; Support</h3>If you are having trouble working out your condition logic, or you think you have found a bug, here are some steps and tools you can use:';
-		html += '<ul><li>Check the documentation in the <a href="https://github.com/toggledbits/Reactor/wiki" target="_blank">Reactor Wiki</a>.</li>\
+		html += '<ul><li>Check the <a href="https://www.toggledbits.com/static/reactor/docs/3.5/" target="_blank">Reactor Documentation</a>.</li>\
 <li>Generate and examine a <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=summary&device=' + api.getCpanelDeviceId() + '" target="_blank">Logic&nbsp;Summary</a> report. This text-based report shows your ReactorSensor\'s current state, and its event list, which may tell you a lot about what it\'s doing.</li>\
 <li>If the logic summary is not helping you, please post it to the <a href="https://community.getvera.com/c/plugins-and-plugin-development/reactor/178" target="_blank">Reactor Board in the Vera Community Forums</a>. <strong>Be sure to read the instructions in the report header before posting.</strong>. In your post, describe what you are trying to accomplish and/or the problem you are having. <strong>Please do not post screenshots unless asked to do so.</strong>.</li>';
 		if ( ! isOpenLuup ) {

@@ -2,6 +2,11 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
+## Version 3.5 Hotfixes
+
+* 20048-01: Make sure "focus" group button is disabled and hidden everywhere (experimental as yet);
+* 20048-02: Fix doc/help links to Vera forums.
+
 ## Version 3.5 (released) [20045]
 
 * POTENTIAL BREAKING: ReactorSensors no longer support the "Invert" state variable to reverse the sense of logic output to the Tripped state of the ReactorSensor. The better (and now required) choice is to apply "NOT" to the "root" group if needed. I doubt anybody has used the "Invert" flag, though.
