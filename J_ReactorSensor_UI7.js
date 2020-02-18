@@ -913,7 +913,9 @@ var ReactorSensor = (function(api, $) {
 			api.setDeviceStateVariablePersistent( myid, serviceId, "cdata", jsstr,
 				{
 					'onSuccess' : function() {
-						api.setDeviceState( myid, serviceId, "cdata", jsstr ); /* force local/lu_status */
+						if ( ! isALTUI ) {
+							api.setDeviceState( myid, serviceId, "cdata", jsstr ); /* force local/lu_status */
+						}
 						configModified = false;
 						updateSaveControls();
 						console.log("handleSaveClick(): SUCCESS, serial " + String(cdata.serial) + ", timestamp " + String(cdata.timestamp));
