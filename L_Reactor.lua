@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.5"
+local _PLUGIN_VERSION = "3.5hotfix-20049"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION	= 20017
@@ -336,7 +336,7 @@ local function getSSLParams( prefix, pdev, sid )
 	for _,v in ipairs{ "SSLProtocol", "SSLMode", "SSLVerify", "SSLOptions" } do
 		initVar( prefix..v, "", pdev, sid )
 	end
-	local s = getVar( prefix.."SSLProtocol", ( sslLib._VERSION == "0.5" ) and "tlsv1" or "any", pdev, sid )
+	local s = getVar( prefix.."SSLProtocol", ( ( sslLib._VERSION or "0.5" ):match( "^0%.5" ) ) and "tlsv1" or "any", pdev, sid )
 	params.protocol = s ~= "" and s or nil
 	s = getVar( prefix.."SSLMode", "client", pdev, sid )
 	params.mode = s ~= "" and s or nil
