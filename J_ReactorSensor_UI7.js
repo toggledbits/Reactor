@@ -12,12 +12,14 @@
 
 //"use strict"; // fails on UI7, works fine with ALTUI
 
+console.log("*** Loading J_ReactorSensor_UI7");
 var ReactorSensor = (function(api, $) {
+console.log("*** Invoked J_ReactorSensor_UI7");
 
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.6develop-20049';
+	var pluginVersion = '3.6develop-20050';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -40,16 +42,18 @@ var ReactorSensor = (function(api, $) {
 	var deviceInfo = {};
 	var userIx = {};
 	var userNameIx = {};
-	var dateFormat = "%F"; /* ISO8601 defaults */
-	var timeFormat = "%T";
 	var configModified = false;
 	var inStatusPanel = false;
 	var spyDevice = false;
+	var lastx = 0;
+
 	var isOpenLuup = false;
 	var isALTUI = false;
 	var devVeraAlerts = false;
+	var dateFormat = "%F"; /* ISO8601 defaults */
+	var timeFormat = "%T";
 	var unsafeLua = false;
-	var lastx = 0;
+
 	var condTypeName = {
 		"comment": "Comment",
 		"service": "Device State",
@@ -527,31 +531,40 @@ var ReactorSensor = (function(api, $) {
 		return false;
 	}
 
+	/* Clear module's per-device data and cached info */
+	function clearModule() {
+		iData = [];
+		actions = {};
+		deviceActionData = {};
+		deviceInfo = {};
+		userIx = {};
+		userNameIx = {};
+		configModified = false;
+		inStatusPanel = false;
+		spyDevice = false;
+		lastx = 0;
+		moduleReady = false;
+	}
+
 	/* Initialize the module */
 	function initModule( myid ) {
 		myid = myid || api.getCpanelDeviceId();
 		if ( !moduleReady ) {
 
 			/* Initialize module data */
-			console.log("Initializing module data for ReactorSensor_UI7");
+			console.log("Initializing module data for ReactorSensor_UI7, device " + myid);
 			try {
 				console.log("initModule() using jQuery " + String($.fn.jquery) + "; jQuery-UI " + String($.ui.version));
 			} catch( e ) {
 				console.log("initModule() error reading jQuery/UI versions: " + String(e));
 			}
 
-			iData = [];
-			actions = {};
-			deviceActionData = {};
-			deviceInfo = {};
-			userIx = {};
-			userNameIx = {};
-			configModified = false;
-			inStatusPanel = false;
+			clearModule();
+
 			isOpenLuup = false;
 			isALTUI = "undefined" !== typeof(MultiBox);
 			unsafeLua = false;
-			lastx = 0;
+			devVeraAlerts = false;
 
 			/* Try to establish date format */
 			var ud = api.getUserData();
@@ -639,7 +652,7 @@ var ReactorSensor = (function(api, $) {
 		}
 
 		/* Initialize for instance */
-		console.log("Initializing ReactorSensor_UI7 instance data for " + myid);
+		console.log("initModule() initializing instance data for " + myid);
 		iData[myid] = iData[myid] || {};
 		getConfiguration( myid );
 
@@ -995,18 +1008,15 @@ var ReactorSensor = (function(api, $) {
 	}
 
 	/* Closing the control panel. */
-	function onBeforeCpanelClose( args ) {
-		console.log( 'onBeforeCpanelClose args: ' ); console.log( args );
+	function onBeforeCpanelClose( dev ) {
+		console.log( 'onBeforeCpanelClose ' + String(dev) );
 		if ( configModified ) {
 			if ( confirm( msgUnsavedChanges ) ) {
 				handleSaveClick( undefined );
-			} else {
-				/* Force reload last saved config (safe) */
-				getConfiguration( false, true );
 			}
 		}
 		configModified = false;
-		moduleReady = false;
+		clearModule();
 	}
 
 	function conditionValueText( v, forceNumber ) {
