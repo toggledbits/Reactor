@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.5hotfix-20049';
+	var pluginVersion = '3.5hotfix-20051';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -5538,6 +5538,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					$( 'div.actionlist.tbmodified' ).removeClass( "tbmodified" );
 					$( 'div.actionlist .tbmodified' ).removeClass( "tbmodified" );
 				}
+
+				$( 'div.actionlist button.re-tryactivity' ).prop( 'disabled', configModified );
 			}, [] ); /* pass up */
 			return;
 		}

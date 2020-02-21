@@ -4,10 +4,11 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 3.5 Hotfixes
 
-* 20049-02: Address incompatibility in APIs between Vera UI and ALTUI causing "Save" to abort post-save cleanup.
-* 20049-01: Improve test for old LuaSec
-* 20048-01: Make sure "focus" group button is disabled and hidden everywhere (experimental as yet);
-* 20048-02: Fix doc/help links to Vera forums.
+* Hotfix 20051-01: Make sure "action try" button re-enables after save.
+* Hotfix 20049-02: Address incompatibility in APIs between Vera UI and ALTUI causing "Save" to abort post-save cleanup.
+* Hotfix 20049-01: Improve test for certain older version of LuaSec in fetching SSL param defaults for SMTP notifications.
+* Hotfix 20048-01: Make sure group focus button stays hidden while experimental.
+* Hotfix 20048-02: Fix broken links to Vera community forum.
 
 ## Version 3.5 (released) [20045]
 
