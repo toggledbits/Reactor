@@ -10,8 +10,8 @@
 
 module("L_LuaXP_Reactor", package.seeall)
 
-_VERSION = "1.0.1"
-_VNUMBER = 10001
+_VERSION = "1.0.2"
+_VNUMBER = 10002
 _DEBUG = false -- Caller may set boolean true or function(msg)
 
 -- Binary operators and precedence (lower prec is higher precedence)
@@ -146,7 +146,7 @@ end
 
 local function xp_pow( argv )
     local b,x = unpack( argv or {} )
-    return math.exp(x * math.log(b))
+    return b^x
 end
 
 local function xp_select( argv )
@@ -490,6 +490,20 @@ local function xp_join( argv )
     return table.concat( a, d )
 end
 
+local function xp_indexof( args )
+    local arr, item, start = base.unpack( args )
+    start = start or 1
+    if isNull( arr ) then return 0 end
+    if base.type(arr) ~= "table" then evalerror("Array/table required") end
+    for k,v in base.ipairs( arr ) do
+        if k >= start then
+            if isNull( v ) and isNull( item ) then return k end
+            if v == item then return k end
+        end
+    end
+    return 0
+end
+
 local function xp_min( argv )
     local res = NULLATOM
     for _,v in ipairs( argv ) do
@@ -556,6 +570,7 @@ local nativeFuncs = {
     , ['format'] = { nargs = 1, impl = function( argv ) return string.format( unpack(argv) ) end }
     , ['split'] = { nargs = 1, impl = xp_split }
     , ['join'] = { nargs = 1, impl = xp_join }
+    , ['indexof'] = { nargs = 2, impl = xp_indexof }
     , ['time']  = { nargs = 0, impl = function( argv ) return xp_parse_time( argv[1] ) end }
     , ['timepart'] = { nargs = 0, impl = function( argv ) return os.date( argv[2] and "!*t" or "*t", argv[1] ) end }
     , ['date'] = { nargs = 0, impl = function( argv ) return xp_mktime( unpack(argv) ) end }
