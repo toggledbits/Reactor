@@ -19,7 +19,7 @@ console.log("*** Invoked J_ReactorSensor_UI7");
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.6develop-20051';
+	var pluginVersion = '3.6develop-20057';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -493,6 +493,11 @@ console.log("*** Invoked J_ReactorSensor_UI7");
 		return { vars: {} };
 	}
 
+	/* Generic filter for DOtraverse to return groups only */
+	function groupFilter( node ) {
+		return "group" === ( node.type || "group" );
+	}
+
 	/* Traverse - Depth Order */
 	function DOtraverse( node, op, args, filter ) {
 		if ( ( !filter ) || filter( node ) ) {
@@ -645,7 +650,7 @@ console.log("*** Invoked J_ReactorSensor_UI7");
 		}
 
 		/* Load ACE. */
-		s = getParentState( "UseACE" ) || "1";
+		s = getParentState( "UseACE", myid ) || "1";
 		if ( "1" === s && ! window.ace ) {
 			s = getParentState( "ACEURL" ) || "https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.2/ace.js";
 			$( "head" ).append( '<script src="' + s + '"></script>' );
@@ -4200,13 +4205,23 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 			clearUnusedStateVariables( myid, cdata );
 		}
 
+		function startCondBuilder() {
+			var myid = api.getCpanelDeviceId();
+
+			redrawConditions( myid );
+
+			if ( 0 !== parseInt( api.getParentState( "DefaultCollapseConditions", myid ) || "0" ) ) {
+				$( 'div.reactortab .cond-group-title button.re-collapse').trigger( 'click' );
+			}
+		}
+
 		/* Public interface */
 		console.log("Initializing ConditionBuilder module");
 		myModule = {
 			init: function( dev ) {
 				return initModule( dev );
 			},
-			start: redrawConditions,
+			start: startCondBuilder,
 			redraw: redrawConditions,
 			makeVariableMenu: makeVariableMenu
 		};

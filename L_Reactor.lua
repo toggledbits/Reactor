@@ -11,10 +11,10 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.6develop-20049"
+local _PLUGIN_VERSION = "3.6develop-20057"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
-local _CONFIGVERSION	= 20017
+local _CONFIGVERSION	= 20057
 local _CDATAVERSION		= 20045	-- must coincide with JS
 local _UIVERSION		= 20045	-- must coincide with JS
 	  _SVCVERSION		= 20045	-- must coincide with impl file (not local)
@@ -298,9 +298,8 @@ local function getReactorVar( name, dflt, dev ) return getVar( name, dflt, dev o
 local function getVarNumeric( name, dflt, dev, sid )
 	assert ( name ~= nil and dev ~= nil )
 	DA( dflt==nil or type(dflt)=="number", "Supplied default is not numeric or nil" )
-	local s = luup.variable_get( sid or RSSID, name, dev )
-	if s == nil or s == "" then return dflt end
-	return tonumber(s) or dflt
+	local s = getVar( name, dflt, dev, sid )
+	return type(s)=="number" and s or tonumber(s) or dflt
 end
 
 local function getVarBool( name, dflt, dev, sid ) DA(type(dflt)=="boolean", "Supplied default is not boolean") return getVarNumeric( name, dflt and 1 or 0, dev, sid ) ~= 0 end
@@ -796,32 +795,6 @@ local function sensor_runOnce( tdev )
 	local s = getVarNumeric("Version", 0, tdev, RSSID)
 	if s == 0 then
 		L("Sensor %1 (%2) first run, setting up new instance...", tdev, luup.devices[tdev].description)
-		initVar( "Enabled", "1", tdev, RSSID )
-		initVar( "Retrigger", "0", tdev, RSSID )
-		initVar( "Message", "", tdev, RSSID )
-		initVar( "Trouble", "0", tdev, RSSID )
-		initVar( "cdata", "", tdev, RSSID )
-		initVar( "cstate", "", tdev, RSSID )
-		initVar( "Runtime", 0, tdev, RSSID )
-		initVar( "TripCount", 0, tdev, RSSID )
-		initVar( "RuntimeSince", os.time(), tdev, RSSID )
-		initVar( "lastacc", os.time(), tdev, RSSID )
-		initVar( "ContinuousTimer", 0, tdev, RSSID )
-		initVar( "MaxUpdateRate", "", tdev, RSSID )
-		initVar( "MaxChangeRate", "", tdev, RSSID )
-		initVar( "UseReactorScenes", 1, tdev, RSSID )
-		initVar( "FailOnTrouble", "0", tdev, RSSID )
-		initVar( "WatchResponseHoldOff", "-1", tdev, RSSID )
-		initVar( "LogEventsToFile", "0", tdev, RSSID )
-
-		initVar( "Armed", 0, tdev, SENSOR_SID )
-		initVar( "Tripped", 0, tdev, SENSOR_SID )
-		initVar( "ArmedTripped", 0, tdev, SENSOR_SID )
-		initVar( "LastTrip", 0, tdev, SENSOR_SID )
-		initVar( "AutoUntrip", 0, tdev, SENSOR_SID )
-
-		initVar( "Target", 0, tdev, SWITCH_SID )
-		initVar( "Status", 0, tdev, SWITCH_SID )
 
 		-- Force this value.
 		luup.variable_set( "urn:micasaverde-com:serviceId:HaDevice1", "ModeSetting", "1:;2:;3:;4:", tdev )
@@ -834,35 +807,38 @@ local function sensor_runOnce( tdev )
 		return
 	end
 
+	initVar( "Enabled", "1", tdev, RSSID )
+	initVar( "Retrigger", "", tdev, RSSID )
+	initVar( "Message", "", tdev, RSSID )
+	initVar( "Trouble", "0", tdev, RSSID )
+	initVar( "cdata", "", tdev, RSSID )
+	initVar( "cstate", "", tdev, RSSID )
+	initVar( "Runtime", 0, tdev, RSSID )
+	initVar( "TripCount", 0, tdev, RSSID )
+	initVar( "RuntimeSince", os.time(), tdev, RSSID )
+	initVar( "lastacc", os.time(), tdev, RSSID )
+	initVar( "ContinuousTimer", "", tdev, RSSID )
+	initVar( "MaxUpdateRate", "", tdev, RSSID )
+	initVar( "MaxChangeRate", "", tdev, RSSID )
+	initVar( "UseReactorScenes", "", tdev, RSSID )
+	initVar( "FailOnTrouble", "", tdev, RSSID )
+	initVar( "WatchResponseHoldOff", "", tdev, RSSID )
+	initVar( "LogEventsToFile", "", tdev, RSSID )
+
+	initVar( "Armed", 0, tdev, SENSOR_SID )
+	initVar( "Tripped", 0, tdev, SENSOR_SID )
+	initVar( "ArmedTripped", 0, tdev, SENSOR_SID )
+	initVar( "LastTrip", 0, tdev, SENSOR_SID )
+	initVar( "AutoUntrip", 0, tdev, SENSOR_SID )
+
+	local currState = getVarNumeric( "Tripped", 0, tdev, SENSOR_SID )
+	initVar( "Target", currState, tdev, SWITCH_SID )
+	initVar( "Status", currState, tdev, SWITCH_SID )
+
 	-- Consider per-version changes.
 	if s < 00206 then
-		initVar( "ContinuousTimer", 0, tdev, RSSID ) -- 106
-		initVar( "Runtime", 0, tdev, RSSID )
-		initVar( "TripCount", 0, tdev, RSSID )
-		initVar( "MaxUpdateRate", "", tdev, RSSID )
-		initVar( "MaxChangeRate", "", tdev, RSSID )
-		initVar( "AutoUntrip", 0, tdev, SENSOR_SID )
-		initVar( "UseReactorScenes", 1, tdev, RSSID ) -- 107
-		initVar( "RuntimeSince", os.time(), tdev, RSSID )
-		initVar( "lastacc", os.time(), tdev, RSSID )
 		deleteVar( RSSID, "sundata", tdev ) -- moved to master
-		local currState = getVarNumeric( "Tripped", 0, tdev, SENSOR_SID )
-		initVar( "Target", currState, tdev, SWITCH_SID )
-		initVar( "Status", currState, tdev, SWITCH_SID )
 	end
-
-	if s < 301 then
-		initVar( "Trouble", "0", tdev, RSSID )
-		initVar( "FailOnTrouble", "0", tdev, RSSID )
-	end
-
-	if s < 19178 then
-		initVar( "WatchResponseHoldOff", "-1", tdev, RSSID )
-	end
-
-	-- Remove leftover development stuff that leaked out in beta (3.5)
-	deleteVar( RSSID, "NONSENSENAME", tdev) -- ??? remove after 3.6
-	deleteVar( VARSID, "NONSENSENAME", tdev) -- ??? remove after 3.6
 
 	-- Remove old and deprecated values
 	deleteVar( RSSID, "Invert", tdev )
@@ -870,7 +846,7 @@ local function sensor_runOnce( tdev )
 	deleteVar( RSSID, "ReloadConditionHoldTime", tdev )
 
 	-- Update version last.
-	if s ~= _CONFIGVERSION then
+	if s < _CONFIGVERSION then
 		luup.variable_set(RSSID, "Version", _CONFIGVERSION, tdev)
 	end
 end
@@ -881,80 +857,47 @@ local function plugin_runOnce( pdev )
 	local s = getVarNumeric("Version", 0, pdev, MYSID)
 	if s == 0 then
 		L("First run, setting up new plugin instance...")
-		initVar( "Enabled", 1, pdev, MYSID )
-		initVar( "Message", "", pdev, MYSID )
-		initVar( "DebugMode", 0, pdev, MYSID )
-		initVar( "MaxEvents", "", pdev, MYSID )
-		initVar( "MaxLogSnippet", "", pdev, MYSID )
-		initVar( "StateCacheExpiry", 600, pdev, MYSID )
-		initVar( "UseACE", "1", pdev, MYSID )
-		initVar( "ACEURL", "", pdev, MYSID )
-		initVar( "NumChildren", 0, pdev, MYSID )
-		initVar( "NumRunning", 0, pdev, MYSID )
-		initVar( "HouseMode", luup.attr_get( "Mode", 0 ) or "1", pdev, MYSID )
-		initVar( "LastDST", "0", pdev, MYSID )
-		initVar( "IsHome", "", pdev, MYSID )
-		initVar( "MaxRestartCount", "", pdev, MYSID )
-		initVar( "MaxRestartPeriod", "", pdev, MYSID )
-		initVar( "SMTPServer", "", pdev, MYSID )
-		initVar( "SMTPSender", "", pdev, MYSID )
-		initVar( "SMTPDefaultRecipient", "", pdev, MYSID )
-		initVar( "SMTPDefaultSubject", "", pdev, MYSID )
-		initVar( "SMTPUsername", "", pdev, MYSID )
-		initVar( "SMTPPassword", "", pdev, MYSID )
-		initVar( "SMTPPort", "", pdev, MYSID )
-		initVar( "ProwlAPIKey", "", pdev, MYSID )
-		initVar( "ProwlProvider", "", pdev, MYSID )
 
 		luup.attr_set('category_num', 1, pdev)
-
-		luup.variable_set( MYSID, "Version", _CONFIGVERSION, pdev )
-		return
 	end
+
+	initVar( "Enabled", 1, pdev, MYSID )
+	initVar( "DebugMode", 0, pdev, MYSID )
+	initVar( "Message", "", pdev, MYSID )
+	initVar( "MaxEvents", "", pdev, MYSID )
+	initVar( "MaxLogSnippet", "", pdev, MYSID )
+	initVar( "StateCacheExpiry", 600, pdev, MYSID )
+	initVar( "UseACE", "", pdev, MYSID )
+	initVar( "ACEURL", "", pdev, MYSID )
+	initVar( "NumChildren", 0, pdev, MYSID )
+	initVar( "NumRunning", 0, pdev, MYSID )
+	initVar( "HouseMode", luup.attr_get( "Mode", 0 ) or "1", pdev, MYSID )
+	initVar( "LastDST", "0", pdev, MYSID )
+	initVar( "IsHome", "", pdev, MYSID )
+	initVar( "MaxRestartCount", "", pdev, MYSID )
+	initVar( "MaxRestartPeriod", "", pdev, MYSID )
+	initVar( "SMTPServer", "", pdev, MYSID )
+	initVar( "SMTPSender", "", pdev, MYSID )
+	initVar( "SMTPDefaultRecipient", "", pdev, MYSID )
+	initVar( "SMTPDefaultSubject", "", pdev, MYSID )
+	initVar( "SMTPUsername", "", pdev, MYSID )
+	initVar( "SMTPPassword", "", pdev, MYSID )
+	initVar( "SMTPPort", "", pdev, MYSID )
+	initVar( "ProwlAPIKey", "", pdev, MYSID )
+	initVar( "ProwlProvider", "", pdev, MYSID )
+	initVar( "DefaultCollapseConditions", "", pdev, MYSID )
+
+	initVar( "rs", "", pdev, MYSID )
 
 	-- Consider per-version changes.
 	if s < 00206 then
-		initVar( "DebugMode", 0, pdev, MYSID )
 		deleteVar( RSSID, "runscene", pdev ) -- correct SID/device mismatch
-		initVar( "StateCacheExpiry", 600, pdev, MYSID )
-		initVar( "MaxEvents", "", pdev, MYSID )
-		initVar( "UseACE", "", pdev, MYSID )
-		initVar( "ACEURL", "", pdev, MYSID )
-		initVar( "IsHome", "", pdev, MYSID ) -- 00205
 	end
-
-	if s < 00301 then
-		initVar( "Enabled", 1, pdev, MYSID )
-	end
-
-	if s < 19226 then
-		if getReactorVar( "UseACE", "", pdev ) == "" then
-			setVar( MYSID, "UseACE", "1", pdev )
-		end
-		initVar( "MaxRestartCount", "", pdev, MYSID )
-		initVar( "MaxRestartPeriod", "", pdev, MYSID )
-		initVar( "rs", "", pdev, MYSID )
-		initVar( "SMTPServer", "", pdev, MYSID )
-		initVar( "SMTPSender", "", pdev, MYSID )
-		initVar( "SMTPDefaultRecipient", "", pdev, MYSID )
-		initVar( "SMTPDefaultSubject", "", pdev, MYSID )
-		initVar( "SMTPUsername", "", pdev, MYSID )
-		initVar( "SMTPPassword", "", pdev, MYSID )
-		initVar( "SMTPPort", "", pdev, MYSID )
-		initVar( "ProwlAPIKey", "", pdev, MYSID )
-		initVar( "ProwlProvider", "", pdev, MYSID )
-	end
-
 	if s < 19245 then
 		os.execute("rm -f /etc/cmh-ludl/Reactor.log")
 	end
-	if s < 19362 then
-		initVar( "MaxLogSnippet", "", pdev, MYSID )
-	end
-
-	-- ??? TEMPORARY -- TODO: Remove before general release
-	if s < 20017 then
-		setVar( MYSID, "sundata", "{}", pdev )
+	if s < 20057 and getReactorVar( "UseACE", "", pdev ) == "1" then
+		setVar( MYSID, "UseACE", "", pdev )
 	end
 
 	-- Remove old/deprecated values
@@ -965,7 +908,7 @@ local function plugin_runOnce( pdev )
 	deleteVar( RSSID, "NotifyQueue", pdev )
 
 	-- Update version last.
-	if s ~= _CONFIGVERSION then
+	if s < _CONFIGVERSION then
 		luup.variable_set( MYSID, "Version", _CONFIGVERSION, pdev )
 	end
 end
