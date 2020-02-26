@@ -4210,7 +4210,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 
 			redrawConditions( myid );
 
-			if ( 0 !== parseInt( api.getParentState( "DefaultCollapseConditions", myid ) || "0" ) ) {
+			if ( 0 !== parseInt( getParentState( "DefaultCollapseConditions", myid ) || "0" ) ) {
 				$( 'div.reactortab .cond-group-title button.re-collapse').trigger( 'click' );
 			}
 		}
