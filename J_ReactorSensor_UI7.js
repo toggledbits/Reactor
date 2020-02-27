@@ -111,6 +111,7 @@ console.log("*** Invoked J_ReactorSensor_UI7");
 		{ op: 'notin', desc: 'not in', args: 1 },
 		{ op: 'istrue', desc: 'is TRUE', args: 0, nocase: false },
 		{ op: 'isfalse', desc: 'is FALSE', args: 0, nocase: false },
+		{ op: 'isnull', desc: 'is NULL', args: 0, nocase: false },
 		{ op: 'change', desc: 'changes', args: 2, format: "from %1 to %2", optional: 2, blank: "(any)" },
 		{ op: 'update', desc: 'updates', args: 0, nocase: false }
 	];
@@ -3177,6 +3178,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 						$( "select.opmenu option[value='update']", container ).remove();
 						$( "div.currval", container ).text("");
 					} else {
+						$( "select.opmenu option[value='isnull']", container ).remove();
 						updateCurrentServiceValue( row );
 					}
 					break;

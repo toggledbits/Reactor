@@ -1497,8 +1497,14 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
 		end
 		ctx[vname] = result -- update context for future evals
 	else
-		result = ( ctx[vname] == nil ) and luaxp.NULL or ctx[vname] -- special form, don't change false to NULL!
+		D("evaluateVariable() luaxp.NULL is %1, tostring %2", luaxp.NULL, tostring(luaxp.NULL))
+		if ctx[vname] == nil then
+			result = luaxp.NULL
+		else
+			result = ctx[vname]
+		end
 		err = nil
+		D("evaluateVariable() expressionless %1 = %2", vname, result)
 	end
 
 	-- Store in cstate. This will make them persistent (with some help).
@@ -1514,7 +1520,11 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
 			event="variable", variable=vname, newval=result }
 	else
 		local changed
-		if type(vs.lastvalue) == "table" and type(result) == "table" then
+		-- Make sure lastvalue luaxp.NULL is the true current luaxp.NULL
+		if luaxp.isNull( vs.lastvalue ) then vs.lastvalue = luaxp.NULL end
+		if luaxp.isNull( result ) and not luaxp.isNull( vs.lastvalue ) then
+			changed = true
+		elseif type(vs.lastvalue) == "table" and type(result) == "table" then
 			changed = not compareTables( vs.lastvalue, result )
 			-- Store shallow copy, so later changes don't interfere with comparison,
 			-- as tables are stored by reference and not by value (this vs.lastvalue and result
@@ -1523,11 +1533,13 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
 		else
 			changed = vs.lastvalue ~= result
 		end
+		D("evaluateVariable() %4 result=%1; vs.lastvalue=%2; changed=%3", result, vs.lastvalue, changed, vname)
+		D("evaluateVariable() %1 result %2 %3 meta %4", vname, tostring(result), result, type(result)=="table" and dump(getmetatable(result)) or "n/a")
 		if changed then
-			D("evaluateVariable() updating value for %1 from %2 to %3", vname, cstate.vars[vname].lastvalue, result)
+			D("evaluateVariable() updating value for %1 from %2 to %3", vname, vs.lastvalue, result)
 			addEvent{ dev=tdev,
 				msg="Variable %(variable)s value changed from %(oldval)q to %(newval)q",
-				event="variable", variable=vname, oldval=cstate.vars[vname].lastvalue, newval=result }
+				event="variable", variable=vname, oldval=tostring(vs.lastvalue), newval=tostring(result) }
 			vs.lastvalue = result
 			vs.valuestamp = getSensorState( tdev ).timebase
 			vs.changed = 1
@@ -1574,7 +1586,7 @@ local function getExpressionContext( cdata, tdev )
 	-- Make sure LuaXP null renders as "null" in JSON
 	local mt = getmetatable( luaxp.NULL ) or {}
 	mt.__tojson = function() return "null" end
-	mt.__tostring = function() return "(luaxp.NULL)" end
+	mt.__tostring = function() return "null" end
 	setmetatable( luaxp.NULL, mt )
 
 	-- Define all-caps NULL as synonym for null
@@ -1795,20 +1807,22 @@ local function getExpressionContext( cdata, tdev )
 	-- Add previous values to Luaxp context. We use the cstate versions rather
 	-- than the state variables to preserve original data type. Every defined
 	-- variable must have an entry in ctx.
-	local cstate = loadCleanState( tdev )
+	local cstate = loadCleanState( tdev, true )
+	D("getExpressionContext() luaxp.NULL is %1 string %2", luaxp.NULL, tostring(luaxp.NULL))
 	for n in pairs( cdata.variables or {} ) do
-		if (cstate.vars or {})[n] then
-			ctx[n] = cstate.vars[n].lastvalue or luaxp.NULL
-		else
+		local lastval = (cstate.vars[n] or {}).lastvalue
+		if lastval == nil or luaxp.isNull( lastval ) then
 			ctx[n] = luaxp.NULL
+		else
+			ctx[n] = lastval
 		end
-		D("getExpressionContext() set starting value for %1 to %2", n, ctx[n])
+		D("getExpressionContext() set starting value for %1 to %2 (%3)", n, ctx[n], tostring(ctx[n]))
 	end
 	return ctx
 end
 
 -- Get a value (works as constant or expression (including simple variable ref).
--- Returns result as string, number, unmodified, error message (when non-nil)
+-- Returns result as string, number, raw (unmodified), error message (when non-nil)
 local function getValue( val, ctx, tdev )
 	D("getValue(%1,%2,%3)", val, ctx, tdev)
 	local err
@@ -2805,8 +2819,8 @@ end
 -- Perform comparison between condition value (whatever it may be) and operand.
 -- This supports the common/generic operators. Each condition type may separately
 -- handle its special cases.
-local function doComparison( cond, op, vv, vn, cv, cn, tdev )
-	D("doComparison(%1,%2,%3,%4,%5,%6, %7)", cond, op, vv, vn, cv, cn, tdev )
+local function doComparison( cond, op, vv, vn, rv, cv, cn, tdev )
+	D("doComparison(%1,%2,%3,%4,%5,%6,%7,%8)", cond, op, vv, vn, rv, cv, cn, tdev )
 	local now = os.time()
 	if op == "=" then
 		if vv ~= cv then return vv,false end
@@ -2851,6 +2865,11 @@ local function doComparison( cond, op, vv, vn, cv, cn, tdev )
 		if (vn or 0) == 0 and not TRUESTRINGS:find( ":" .. vv:lower() .. ":" ) then return vv,false end
 	elseif op == "isfalse" then
 		if (vn or 0) ~= 0 or TRUESTRINGS:find( ":" .. vv:lower() .. ":" ) then return vv,false end
+	elseif op == "isnull" then
+		-- Loading the context ensures that LuaXP is loaded (in case the test is invoked without
+		-- first having created variables)
+		local ctx = getSensorState( tdev ).ctx or getExpressionContext( getSensorConfig( tdev ), tdev )
+		return tostring( rv ), luaxp.isNull( rv ) -- the only place we use rv so far
 	elseif op == "change" then
 		local cs = getSensorState( tdev ).condState[ cond.id ]
 		if cv ~= "" and cv ~= "," then
@@ -2963,7 +2982,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 			end
 			scheduleDelay( { id=tdev, info="update "..cond.id }, hold )
 		else
-			return doComparison( cond, op, vv, vn, cv, cn, tdev )
+			return doComparison( cond, op, vv, vn, vv, cv, cn, tdev )
 		end
 		D("evaluateCondition() default true exit for cond %1, new value=%2", cond.id, vv)
 		return vv,true
@@ -3033,13 +3052,13 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 
 	elseif cond.type == "var" then
 		D("evaluationCondition() variable %1", cond.var)
-		local vv,vn = getValue( "{"..tostring(cond.var or "").."}", nil, tdev ) -- ??? FIXME
+		local vv,vn,rv = getValue( "{"..tostring(cond.var or "null").."}", nil, tdev )
 		local cv,cn = getValue( cond.value, nil, tdev )
 		if ( cond.nocase or 1 ) ~= 0 then
 			vv = tostring(vv or ""):lower()
 			cv = tostring(cv or ""):lower()
 		end
-		return doComparison( cond, cond.operator or "=", vv, vn, cv, cn, tdev )
+		return doComparison( cond, cond.operator or "=", vv, vn, rv, cv, cn, tdev )
 
 	elseif cond.type == "housemode" then
 		-- Add watch on parent if we don't already have one.
