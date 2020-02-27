@@ -4109,7 +4109,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 				$( '.noroot', el ).remove();
 			}
 
-			$( 'button.re-focus' ).prop( 'disabled', true ).hide(); /* TODO: for now */
+			$( 'button.re-focus', el ).prop( 'disabled', true ).hide(); /* TODO: for now */
 
 			$( 'button.re-addcond', el ).on( 'click.reactor', handleAddConditionClick );
 			$( 'button.re-addgroup', el ).on( 'click.reactor', handleAddGroupClick );
