@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.6develop-20057"
+local _PLUGIN_VERSION = "3.6develop-20058"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION	= 20057
@@ -66,6 +66,7 @@ local ARRAYMAX = 100 -- maximum size of an unbounded (luaxp) array (override by 
 local defaultLogLevel = false -- or a number, which is (uh...) the default log level for messages
 
 local json = require "dkjson"
+local socket = require "socket"
 local mime = require "mime"
 local luaxp -- will only be loaded if needed
 
@@ -876,6 +877,7 @@ local function plugin_runOnce( pdev )
 	initVar( "IsHome", "", pdev, MYSID )
 	initVar( "MaxRestartCount", "", pdev, MYSID )
 	initVar( "MaxRestartPeriod", "", pdev, MYSID )
+	initVar( "RescanDelay", "", pdev, MYSID )
 	initVar( "SMTPServer", "", pdev, MYSID )
 	initVar( "SMTPSender", "", pdev, MYSID )
 	initVar( "SMTPDefaultRecipient", "", pdev, MYSID )
@@ -2158,7 +2160,7 @@ local function doActionNotify( action, scid, tdev )
 					sendt.port = port
 					if port == 465 or getVarNumeric( "SMTPConnectSSLTLS", 0, pluginDevice, MYSID ) ~= 0 then
 						sendt.create = function()
-							local socket = require "socket"
+							-- local socket = require "socket"
 							local sock = socket.tcp()
 							return setmetatable({
 								connect = function(_, hh, pp)
@@ -2249,7 +2251,7 @@ local function doActionNotify( action, scid, tdev )
 				luup.devices[tdev].description:gsub( "%s+", "_" ), -- application
 				scid:gsub( "%s+", "_" ), -- process id
 				msg ):sub( 1, 1023 )
-			local socket = require "socket"
+			-- local socket = require "socket"
 			local udp = socket.udp()
 			if udp then
 				D("doActionNotify() sending SysLog UDP datagram to %1", action.hostip)
@@ -3880,6 +3882,8 @@ end
 
 local function processSensorUpdate( tdev, sst )
 	D("processSensorUpdate(%1)", tdev)
+	local t1 = socket.gettime()
+	addEvent{dev=tdev,event='update',msg="Sensor update starting"}
 
 	-- Check throttling for update rate
 	local hasTimer = false -- luacheck: ignore 311/hasTimer
@@ -4027,6 +4031,10 @@ local function processSensorUpdate( tdev, sst )
 
 	sst.isRestart = nil -- not false, remove it
 
+	local t2 = socket.gettime()
+	addEvent{dev=tdev,event='update',msg="Sensor update completed; %(dtime)ss",
+		dtime=string.format("%.3f", t2-t1)}
+
 	D("processSensorUpdate() finished")
 end
 
@@ -4045,7 +4053,7 @@ local function updateSensor( tdev )
 	if sst.updating then
 		-- If already updating, schedule deferred update; each attempt extends.
 		D("updateSensor() update in progress; queueing deferred update")
-		scheduleDelay( tdev, 1, { replace=true } )
+		scheduleDelay( tdev, getVarNumeric( "RescanDelay", 0, pluginDevice, MYSID ), { replace=true } )
 		return
 	end
 	sst.updating = true
