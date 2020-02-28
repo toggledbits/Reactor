@@ -32,7 +32,7 @@ for large numbers of sensors and logic conditions.
 
 ## Installation, Configuration, etc. ##
 
-Documentation for Reactor can be found in the wiki for the project: https://github.com/toggledbits/Reactor/wiki
+Documentation for Reactor can be found in the wiki for the project: https://www.toggledbits.com/static/reactor/docs/
 
 ## Revision History ##
 

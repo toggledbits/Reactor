@@ -21,6 +21,8 @@ var Reactor = (function(api, $) {
 
 	var _UIVERSION = 20045;     /* must coincide with Lua core */
 
+	var _DOCURL = "https://www.toggledbits.com/static/reactor/docs/3.5/";
+
 	var myModule = {};
 
 	var serviceId = "urn:toggledbits-com:serviceId:Reactor";
@@ -107,7 +109,7 @@ var Reactor = (function(api, $) {
 		html += '<div class="clearfix">';
 		html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
 		html += '<div id="tbcopyright">Reactor ver ' + pluginVersion + ' &copy; 2018,2019 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
-			' All Rights Reserved. Please check out the <a href="https://github.com/toggledbits/Reactor/wiki" target="_blank">online documentation</a>' +
+			' All Rights Reserved. Please check out the <a href="' + _DOCURL + '" target="_blank">online documentation</a>' +
 			' and <a href="https://community.getvera.com/c/plugins-amp-plugin-development/reactor" target="_blank">Vera Community Forum</a> for support. Double-ring spinner by <a href="https://loading.io/spinner/double-ring" target="_blank">loading.io</a>.</div>';
 		html += '<div id="supportlinks">Support links: ' +
 			' <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=debug" target="_blank">Toggle&nbsp;Debug</a>' +
