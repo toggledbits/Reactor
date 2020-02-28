@@ -1812,7 +1812,7 @@ local function getExpressionContext( cdata, tdev )
 	local cstate = loadCleanState( tdev, true )
 	D("getExpressionContext() luaxp.NULL is %1 string %2", luaxp.NULL, tostring(luaxp.NULL))
 	for n in pairs( cdata.variables or {} ) do
-		local lastval = (cstate.vars[n] or {}).lastvalue
+		local lastval = ((cstate.vars or {})[n] or {}).lastvalue
 		if lastval == nil or luaxp.isNull( lastval ) then
 			ctx[n] = luaxp.NULL
 		else
