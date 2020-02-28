@@ -19,7 +19,7 @@ console.log("*** Invoked J_ReactorSensor_UI7");
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.6develop-20058';
+	var pluginVersion = '3.6develop-20059';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -389,8 +389,8 @@ console.log("*** Invoked J_ReactorSensor_UI7");
 		var cdata;
 		try {
 			cdata = JSON.parse( s );
-			/* Luup's json library doesn't seem to support __jsontype metadata,
-			   so fixup empty objects, which it renders as empty arrays. */
+			/* Old Luup's json library doesn't support __jsontype metadata,
+			   so fix up empty objects, which it renders as empty arrays. */
 			if ( cdata.variables && Array.isArray( cdata.variables ) && cdata.variables.length == 0 ) {
 				console.log("Fixing cdata.variables from array to object");
 				cdata.variables = {};
@@ -495,7 +495,7 @@ console.log("*** Invoked J_ReactorSensor_UI7");
 	}
 
 	/* Generic filter for DOtraverse to return groups only */
-	function groupFilter( node ) {
+	function isGroup( node ) {
 		return "group" === ( node.type || "group" );
 	}
 
@@ -513,26 +513,27 @@ console.log("*** Invoked J_ReactorSensor_UI7");
 	}
 
 	/* Return true if the grp (id) is an ancestor of condition (id) */
-	function isAncestor( grp, cond, myid ) {
+	function isAncestor( groupID, condID, myid ) {
 		myid = myid || api.getCpanelDeviceId();
-		var c = getConditionIndex( myid )[cond];
-		if ( c.__parent.id === grp ) return true;
+		var c = getConditionIndex( myid )[condID];
+		if ( c.__parent.id === groupID ) return true;
 		if ( "root" === c.__parent.id ) return false; /* Can't go more */
 		/* Move up tree looking for matching group */
-		return isAncestor( grp, c.__parent.id, myid );
+		return isAncestor( groupID, c.__parent.id, myid );
 	}
 
-	/* Return true if node (id) is a descendent of grp (id) */
-	function isDescendent( node, grp, myid ) {
+	/* Return true if node (id) is a descendent of group (id) */
+	function isDescendent( nodeID, groupID, myid ) {
 		myid = myid || api.getCpanelDeviceId();
-		var c = getConditionIndex( myid )[grp];
+		var g = getConditionIndex( myid )[groupID];
 		/* Fast exit if our anchor condition isn't a group (only groups have descendents) */
-		if ( "group" !== ( c.type || "group" ) ) return false;
-		var l = c.conditions ? c.conditions.length : 0;
+		if ( ! isGroup( g ) ) return false;
+		var l = g.conditions ? g.conditions.length : 0;
 		for ( var k=0; k<l; k++ ) {
-			if ( node === c.conditions[k].id ) return true;
-			if ( "group" === ( c.conditions[k].type || "group" ) &&
-				isDescendent( node, c.conditions[k].id, myid ) ) return true;
+			if ( nodeID === g.conditions[k].id ) return true;
+			if ( isGroup( g.conditions[k] ) && isDescendent( nodeID, g.conditions[k].id, myid ) ) {
+				return true;
+			}
 		}
 		return false;
 	}
@@ -3736,7 +3737,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 			}
 
 			function hasCollapsedParent( grp ) {
-				var parent = grp.__parent;
+				// var parent = grp.__parent;
 				return false;
 			}
 
@@ -3768,7 +3769,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 				false,
 				function( node ) {
 					/* Filter out non-groups, focusGrp, and nodes that are neither ancestors nor descendents of focusGrp */
-					return groupFilter( node ) &&
+					return isGroup( node ) &&
 						node.id !== focusGrp.id &&
 						! ( isAncestor( node.id, focusGrp.id ) || isDescendent( node.id, focusGrp.id ) );
 				}
@@ -5880,7 +5881,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 									}
 								},
 								false,
-								groupFilter
+								isGroup
 							);
 							if ( $('option', grp).length > 0 ) {
 								grp.insertAfter( topItem );
@@ -5944,15 +5945,16 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					if ( ! parm.novars ) {
 						inp.attr( 'list', 'reactorvarlist' );
 					}
-					inp.attr( 'placeholder', action.parameters[k].name );
+					inp.attr( 'placeholder', parm.name );
 					inp.val( parm.optional ? "" : ( parm.default || parm.min || 0 ) );
 				} else {
-					console.log("J_ReactorSensor_UI7.js: using default field presentation for type " + String(parm.type));
+					console.log("changeActionAction: using default (string) presentation for type " +
+						String(parm.type) + " " + String(parm.name) );
 					inp = $( '<input class="argument form-control form-control-sm">' );
 					if ( ! parm.novars ) {
 						inp.attr( 'list', 'reactorvarlist' );
 					}
-					inp.attr( 'placeholder', action.parameters[k].name );
+					inp.attr( 'placeholder', parm.name );
 					inp.val( ( undefined===parm.default || parm.optional ) ? "" : parm.default );
 				}
 				inp.attr('id', pfx + '-' + parm.name ).addClass( 'argument' );
@@ -6397,7 +6399,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				.text( makeConditionDescription( node ) ) );
 		}, false, function( node ) {
 			/* If node is not ancestor (line to root) or descendent of cond, allow as predecessor */
-			return groupFilter( node ) && "nul" !== node.operator;
+			return isGroup( node ) && "nul" !== node.operator;
 		});
 		return $m;
 	}
@@ -6419,7 +6421,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				$m.append( $( '<option/>' ).val( node.id + ".true" ).text( (node.name || node.id ) + " is true" ) )
 					.append( $( '<option/>' ).val( node.id + ".false" ).text( (node.name || node.id ) + " is false" ) );
 			}, false, function( node ) {
-				return node.id !== grp && groupFilter( node ) && "nul" !== node.operator;
+				return node.id !== grp && isGroup( node ) && "nul" !== node.operator;
 			}
 		);
 		return $m;
