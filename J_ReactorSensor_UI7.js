@@ -1414,7 +1414,8 @@ console.log("*** Invoked J_ReactorSensor_UI7");
 			}
 			if ( ( cs.pulsecount || 0 ) > 0 ) {
 				var lim = ( cond.options||{} ).pulsecount || 0;
-				el.append( " (pulsed " + cs.pulsecount +
+				el.append( " (pulsed " +
+					(cs.pulsecount < 1000 ? cs.pulsecount : "&gt;999" ) +
 					( lim > 0 ? ( " of max " + lim ) : "" ) +
 					" times)" );
 			}
@@ -1629,8 +1630,8 @@ console.log("*** Invoked J_ReactorSensor_UI7");
 				if ( vv && vv.length > 256 ) {
 					vv = vv.substring( 0, 253 ) + "...";
 				}
-				el.append( $('<div class="col-sm-6 col-md-2" />').text( vd.name ) );
-				el.append( $('<div class="col-sm-12 col-md-7 tb-sm" />').text( isEmpty( vd.expression ) ? "(no expression)" : vd.expression ) );
+				el.append( $('<div class="col-sm-6 col-md-2 tb-hardwrap" />').text( vd.name ) );
+				el.append( $('<div class="col-sm-12 col-md-7 tb-sm tb-hardwrap" />').text( isEmpty( vd.expression ) ? "(no expression)" : vd.expression ) );
 				el.append( $('<div class="col-sm-6 col-md-3 tb-hardwrap" />').text( "" !== ve ? ve : vv ) );
 				if ( "" !== ve ) {
 					el.addClass( 'tb-exprerr' );
