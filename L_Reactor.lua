@@ -1325,11 +1325,13 @@ local function loadWaitingScenes( pdev, ptask )
 				L({level=2,msg="Failed to load scene %1 in %2 attempts"},
 					sw.id, sw.tries)
 				table.insert( done, sk )
+			-- else -- will retry, so don't mark done
 			end
 		else
 			-- Scene no longer exists. Remove from refresh queue and cache.
 			L({level=2,msg="Load scene #%1 failed, scene no longer exists."}, sw.id)
 			sceneData[sk] = nil
+			luup.variable_set( MYSID, "scenedata", json.encode(sceneData), pdev )
 			table.insert( done, sk )
 		end
 	end

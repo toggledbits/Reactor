@@ -7,6 +7,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 * Enhancement: Turnaround rescans, the rescans of conditions and expressions that are requested while a scan is already in progress (usually caused by a watched device being modified by an activity), are now scheduled more aggressively. Huh? Reactor is even faster.
 * Enhancement: Some users have asked that all conditions start collapsed in the Conditions editor; I view this as a behavior for advanced users, so it's now available by setting `DefaultCollapseConditions` on the Reactor master device to 1 (default 0).
 * Enhancement: Add "is NULL" operator for Expression Variable condition to test specifically for null; this improves over the prior recommendation (test for empty string, which meant you could not differntiate between empty string and null).
+* Fix: Make sure non-existent scene is removed from scene cache, so we don't try to refetch it on subsequent reloads.
 * Fix: Update LuaXP to 1.0.2 for access to `indexof()` function; also fixes `pow()` with negative base (first argument).
 * Fix: Fix "leak" of LuaXP null atom structure on Status display.
 * Hotfix 20051-01: Make sure "action try" button re-enables after save.
