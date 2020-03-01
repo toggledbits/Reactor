@@ -17,7 +17,7 @@ var Reactor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '72acc6ea-f24d-11e8-bd87-74d4351650de';
 
-	var pluginVersion = '3.6develop-20059';
+	var pluginVersion = '3.6develop-20061';
 
 	var _UIVERSION = 20045;     /* must coincide with Lua core */
 

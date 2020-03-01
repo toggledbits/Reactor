@@ -813,10 +813,9 @@ console.log("*** Invoked J_ReactorSensor_UI7");
 				DeviceNum: devnum,
 				serviceId: serviceId,
 				Variable: variable,
-				Value: "",
-				output_format: "json"
+				Value: ""
 			},
-			dataType: "json",
+			dataType: "text",
 			timeout: 5000
 		}).fail( function( /* jqXHR, textStatus, errorThrown */ ) {
 			console.log( "deleteStateVariable: failed, maybe try again later" );
@@ -830,7 +829,7 @@ console.log("*** Invoked J_ReactorSensor_UI7");
 	 * Attempt to remove state variables that are no longer used.
 	 */
 	function clearUnusedStateVariables( myid, cdata ) {
-		if ( isOpenLuup ) return;
+		if ( isOpenLuup ) return; /* Can't delete state vars on openLuup */
 		var ud = api.getUserData();
 		var dx = api.getDeviceIndex( myid );
 		var deletes = [];
@@ -1587,11 +1586,6 @@ console.log("*** Invoked J_ReactorSensor_UI7");
 
 		var cstate = getConditionStates( pdev );
 
-		/* If starting from scratch (first call), purge unused state */
-		if ( 0 === stel.children( 'div' ).length ) {
-			clearUnusedStateVariables( pdev, cdata );
-		}
-
 		stel.empty();
 
 		var vix = [];
@@ -1725,6 +1719,8 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 
 		try {
 			updateStatus( myid );
+
+			setTimeout( function() { clearUnusedStateVariables( myid, getConfiguration( myid ) ) }, 2000 );
 		}
 		catch ( e ) {
 			inStatusPanel = false; /* stop updates */
