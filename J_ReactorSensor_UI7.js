@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.5hotfix-20051';
+	var pluginVersion = '3.5hotfix-20061';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -808,6 +808,7 @@ var ReactorSensor = (function(api, $) {
 	 * Attempt to remove state variables that are no longer used.
 	 */
 	function clearUnusedStateVariables( myid, cdata ) {
+		if ( isOpenLuup ) return; /* workaround */
 		var ud = api.getUserData();
 		var dx = api.getDeviceIndex( myid );
 		var deletes = [];
