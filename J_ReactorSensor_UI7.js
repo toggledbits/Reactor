@@ -19,7 +19,7 @@ console.log("*** Invoked J_ReactorSensor_UI7");
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.6develop-20059';
+	var pluginVersion = '3.6develop-20061';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -830,6 +830,7 @@ console.log("*** Invoked J_ReactorSensor_UI7");
 	 * Attempt to remove state variables that are no longer used.
 	 */
 	function clearUnusedStateVariables( myid, cdata ) {
+		if ( isOpenLuup ) return;
 		var ud = api.getUserData();
 		var dx = api.getDeviceIndex( myid );
 		var deletes = [];
