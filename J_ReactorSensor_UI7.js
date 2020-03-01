@@ -1427,22 +1427,27 @@ console.log("*** Invoked J_ReactorSensor_UI7");
 			var id;
 			if ( cs.laststate && cs.waituntil ) {
 				id = getUID();
+				el.closest('div.cond').addClass('reactor-timing');
 				el.append( $('<span class="timer"/>').attr( 'id', id ) );
 				(function( c, t, l ) {
 					setTimeout( function() { updateTime( c, t, "; sustained", false, l ); }, 20 );
 				})( id, cs.statestamp, ( cond.options || {} ).duration );
 			} else if (cs.evalstate && cs.holduntil) {
 				id = getUID();
+				el.closest('div.cond').addClass('reactor-timing');
 				el.append( $('<span class="timer"/>').attr( 'id', id ) );
 				(function( c, t, l ) {
 					setTimeout( function() { updateTime( c, t, "; reset delayed", true, l ); }, 20 );
 				})( id, cs.holduntil, 0 );
 			} else if ( cs.pulseuntil) {
 				id = getUID();
+				el.closest('div.cond').addClass('reactor-timing');
 				el.append( $('<span class="timer"/>').attr( 'id', id ) );
 				(function( c, t, l ) {
 					setTimeout( function() { updateTime( c, t, "; pulse ", true, l ); }, 20 );
 				})( id, cs.pulseuntil, 0 );
+			} else {
+				el.closest('div.cond').removeClass('reactor-timing');
 			}
 		}
 	}
@@ -1708,6 +1713,8 @@ div#reactorstatus span.timer { } \
 .grpcond > *:last-child::after { display: none; } \
 div#reactorstatus .var { min-height: 2em; color: #003399; padding: 2px 4px; } \
 div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size: 0.9em; } \
+div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
+@keyframes pulse { 0% { background-color: #fff; } 50% { background-color: #cfc; } 100% { background-color: #fff; } } \
 </style>');
 		}
 
