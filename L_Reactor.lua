@@ -1723,6 +1723,13 @@ local function getExpressionContext( cdata, tdev )
 		end
 		return val
 	end
+	ctx.__functions.urlencode = function( args )
+		return urlencode( args[1] or "" )
+	end
+	ctx.__functions.urldecode = function( args )
+		local str = string.lower( args[1] or "" ):gsub( "%+", " " )
+		return str:gsub( "%%([a-f0-9][a-f0-9])", function( m ) return string.char( tonumber( m, 16 ) or 49 ) end )
+	end
 	-- Append an element to an array, returns the array.
 	ctx.__functions.arraypush = function( args )
 		local arr, newel, nmax = unpack( args )
@@ -2125,11 +2132,7 @@ local function doActionNotify( action, scid, tdev )
 	local cf = getSensorConfig( tdev )
 	if ( cf.notifications or {} )[nid] then
 		local host = "Vera-" .. (luup.pk_accesspoint or "?")
-		local msg = cf.notifications[nid].message or ""
-		msg = msg:gsub( "(%{[^}]+%})", function( mm )
-			local vv = getValue( mm, nil, tdev )
-			return vv
-		end )
+		local msg = getValue( cf.notifications[nid].message or "", nil, tdev )
 		if action.method == "VA" then -- VeraAlerts
 			if devVeraAlerts then
 				luup.call_action( "urn:richardgreen:serviceId:VeraAlert1", "SendAlert",
@@ -2148,8 +2151,8 @@ local function doActionNotify( action, scid, tdev )
 				local authuser = getReactorVar( "SMTPUsername", "" )
 				local authpass = getReactorVar( "SMTPPassword", "" )
 				local from = getReactorVar( "SMTPSender", "unconfigured@localhost" )
-				local to = action.recipient or getReactorVar( "SMTPDefaultRecipient", "unconfigured@localhost" )
-				local subj = action.subject or getReactorVar( "SMTPDefaultSubject", luup.devices[tdev].description .. " Notification" )
+				local to = getValue( action.recipient or getReactorVar( "SMTPDefaultRecipient", "unconfigured@localhost" ), nil, tdev )
+				local subj = getValue( action.subject or getReactorVar( "SMTPDefaultSubject", luup.devices[tdev].description .. " Notification" ), nil, tdev )
 				local sendt = { from = "<"..from:gsub( "^[^<]+<([^>]+)>.*$", "%1" )..">", rcpt = {}, server = server }
 				local msgt = { headers = { From=from, To={}, Subject=subj }, body = msg }
 				to = split( to ) or { from }
@@ -2274,7 +2277,11 @@ local function doActionNotify( action, scid, tdev )
 			D("doActionNotify() AddAlert request returned %1,%2 [%3]", st, ht, baseurl)
 		elseif action.method == "UU" then -- User URL
 			local baseurl = action.url or ""
-			baseurl = baseurl:gsub( "%{message%}", urlencode( msg ):gsub("%%", "%%%%") )
+			baseurl = baseurl:gsub( "%{message%}", urlencode( msg ):gsub("%%", "%%%%") ) -- special
+			baseurl = baseurl:gsub( "%{[^}]+%}", function( ref ) 
+				local vv = getValue( ref, nil, tdev )
+				return ( vv ~= nil ) and vv or ref
+			end )
 			local st,_,ht = luup.inet.wget( baseurl )
 			D("doActionNotify() User URL notification returned %1,%2 [%3]", st, ht, baseurl)
 			if st ~= 0 or ht ~= 200 then
@@ -2872,7 +2879,7 @@ local function doComparison( cond, op, vv, vn, rv, cv, cn, tdev )
 	elseif op == "isnull" then
 		-- Loading the context ensures that LuaXP is loaded (in case the test is invoked without
 		-- first having created variables)
-		local ctx = getSensorState( tdev ).ctx or getExpressionContext( getSensorConfig( tdev ), tdev )
+		local _ = getSensorState( tdev ).ctx or getExpressionContext( getSensorConfig( tdev ), tdev )
 		return tostring( rv ), luaxp.isNull( rv ) -- the only place we use rv so far
 	elseif op == "change" then
 		local cs = getSensorState( tdev ).condState[ cond.id ]

@@ -4,6 +4,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 3.6 (development)
 
+* Enhancement: Notify action fields now allow variable references in more places: SMTP recipient and subject, UserURL URL parameters.
 * Enhancement: Turnaround rescans, the rescans of conditions and expressions that are requested while a scan is already in progress (usually caused by a watched device being modified by an activity), are now scheduled more aggressively. Huh? Reactor is even faster.
 * Enhancement: Some users have asked that all conditions start collapsed in the Conditions editor; I view this as a behavior for advanced users, so it's now available by setting `DefaultCollapseConditions` on the Reactor master device to 1 (default 0).
 * Enhancement: Add "is NULL" operator for Expression Variable condition to test specifically for null; this improves over the prior recommendation (test for empty string, which meant you could not differntiate between empty string and null).
