@@ -6141,10 +6141,12 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			if f then
 				f:write( bdata )
 				f:close()
-				os.execute( "pluto-lzo c '" .. getInstallPath() .. "reactor-config-backup.tmp' '" ..
-					getInstallPath() .. "reactor-config-backup.json.lzo'" )
-				-- Remove uncompressed file, which would now rot and interfere with download of new
-				os.execute( "rm -f -- '" .. getInstallPath() .. "reactor-config-backup.json'" )
+				if not isOpenLuup then
+					os.execute( "pluto-lzo c '" .. getInstallPath() .. "reactor-config-backup.tmp' '" ..
+						getInstallPath() .. "reactor-config-backup.json.lzo'" )
+					-- Remove uncompressed file, which would now rot and interfere with download of new
+					os.execute( "rm -f -- '" .. getInstallPath() .. "reactor-config-backup.json'" )
+				end
 			else
 				error("ERROR can't write " .. bfile)
 			end
