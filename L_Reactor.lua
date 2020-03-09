@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.5hotfix-20049"
+local _PLUGIN_VERSION = "3.5hotfix-20069"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION	= 20017
@@ -6169,10 +6169,12 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			if f then
 				f:write( bdata )
 				f:close()
-				os.execute( "pluto-lzo c '" .. getInstallPath() .. "reactor-config-backup.tmp' '" ..
-					getInstallPath() .. "reactor-config-backup.json.lzo'" )
-				-- Remove uncompressed file, which would now rot and interfere with download of new
-				os.execute( "rm -f -- '" .. getInstallPath() .. "reactor-config-backup.json'" )
+				if not isOpenLuup then
+					os.execute( "pluto-lzo c '" .. getInstallPath() .. "reactor-config-backup.tmp' '" ..
+						getInstallPath() .. "reactor-config-backup.json.lzo'" )
+					-- Remove uncompressed file, which would now rot and interfere with download of new
+					os.execute( "rm -f -- '" .. getInstallPath() .. "reactor-config-backup.json'" )
+				end
 			else
 				error("ERROR can't write " .. bfile)
 			end

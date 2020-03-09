@@ -4,6 +4,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 3.5 Hotfixes
 
+* Hotfix 20069-01: Do not attempt compression of backup files on openLuup (L_Reactor.lua)
 * Hotfix 20061-01: openLuup only: skip delete of unused state vars, which is causing ALTUI to reload the JS module.
 * Hotfix 20051-01: Make sure "action try" button re-enables after save.
 * Hotfix 20049-02: Address incompatibility in APIs between Vera UI and ALTUI causing "Save" to abort post-save cleanup.
