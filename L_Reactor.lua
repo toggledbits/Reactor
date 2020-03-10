@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.6develop-20061"
+local _PLUGIN_VERSION = "3.6develop-20070"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION	= 20057
@@ -4344,11 +4344,14 @@ local function masterTick(pdev)
 	local lastdst = getReactorVar( "LastDST", "", pdev )
 	D("masterTick() current DST %1, last %2", dot, lastdst)
 	if dot ~= lastdst then
-		L({level=2,msg="DST change detected! Re-evaluating all children."})
+		L({level=2,msg="DST change detected! Re-evaluating children."})
 		luup.variable_set( MYSID, "LastDST", dot, pdev )
 		for k,v in pairs(luup.devices) do
-			if v.device_type == RSTYPE then
-				luup.call_action( RSSID, "Restart", {}, k ) -- runs as job
+			if v.device_type == RSTYPE and v.device_num_parent == pdev then
+				if isEnabled( k ) then
+					-- Use tick rather than Restart action to preserve state. It's just a re-eval.
+					scheduleDelay( { id=tostring(k), info="DST_Change" } , 0, { replace=true } )
+				end
 			end
 		end
 	end
