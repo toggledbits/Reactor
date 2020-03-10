@@ -5,13 +5,16 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 ## Version 3.6 (development)
 
 * Enhancement: Notify action fields now allow variable references in more places: SMTP recipient and subject, UserURL URL parameters.
+* Enhancement: functions `urlencode(string)` and `urldecode(string)` added to expressions.
 * Enhancement: Turnaround rescans, the rescans of conditions and expressions that are requested while a scan is already in progress (usually caused by a watched device being modified by an activity), are now scheduled more aggressively. Huh? Reactor is even faster.
 * Enhancement: Some users have asked that all conditions start collapsed in the Conditions editor; I view this as a behavior for advanced users, so it's now available by setting `DefaultCollapseConditions` on the Reactor master device to 1 (default 0).
 * Enhancement: Add "is NULL" operator for Expression Variable condition to test specifically for null; this improves over the prior recommendation (test for empty string, which meant you could not differntiate between empty string and null).
 * Enhancement: Conditions with running timing (delay reset, sustained, etc.) will show green pulsing animated highlight, to draw attention.
+* Fix: Make DST change "softer" by using scheduled sensor tick rather than Refresh action.
 * Fix: Make sure non-existent scene is removed from scene cache, so we don't try to refetch it on subsequent reloads.
 * Fix: Update LuaXP to 1.0.2 for access to `indexof()` function; also fixes `pow()` with negative base (first argument).
 * Fix: Fix "leak" of LuaXP null atom structure on Status display.
+* Hotfix 20070-01: Fix display of floating point values in condition descriptions on Status tab.
 * Hotfix 20069-01: Do not attempt compression of backup files on openLuup (L_Reactor.lua)
 * Hotfix 20051-01: Make sure "action try" button re-enables after save.
 * Hotfix 20049-02: Address incompatibility in APIs between Vera UI and ALTUI causing "Save" to abort post-save cleanup.
