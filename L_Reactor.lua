@@ -14,7 +14,7 @@ local _PLUGIN_NAME = "Reactor"
 local _PLUGIN_VERSION = "3.6develop-20070"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
-local _CONFIGVERSION	= 20057
+local _CONFIGVERSION	= 20070
 local _CDATAVERSION		= 20045	-- must coincide with JS
 local _UIVERSION		= 20045	-- must coincide with JS
 	  _SVCVERSION		= 20045	-- must coincide with impl file (not local)
@@ -72,7 +72,7 @@ local luaxp -- will only be loaded if needed
 
 local function dump(t, seen)
 	if t == nil then return "nil" end
-	if seen == nil then seen = {} end
+	seen = seen or {}
 	local sep = ""
 	local str = "{ "
 	for k,v in pairs(t) do
@@ -336,7 +336,7 @@ local function getSSLParams( prefix, pdev, sid )
 	for _,v in ipairs{ "SSLProtocol", "SSLMode", "SSLVerify", "SSLOptions" } do
 		initVar( prefix..v, "", pdev, sid )
 	end
-	local s = getVar( prefix.."SSLProtocol", ( ( sslLib._VERSION or "0.5" ):match( "^0.5" ) ) and "tlsv1" or "any", pdev, sid )
+	local s = getVar( prefix.."SSLProtocol", ( ( sslLib._VERSION or "0.5" ):match( "^0%.5" ) ) and "tlsv1" or "any", pdev, sid )
 	params.protocol = s ~= "" and s or nil
 	s = getVar( prefix.."SSLMode", "client", pdev, sid )
 	params.mode = s ~= "" and s or nil
@@ -825,6 +825,7 @@ local function sensor_runOnce( tdev )
 	initVar( "FailOnTrouble", "", tdev, RSSID )
 	initVar( "WatchResponseHoldOff", "", tdev, RSSID )
 	initVar( "LogEventsToFile", "", tdev, RSSID )
+	initVar( "EventLogMaxKB", "", tdev, RSSID )
 
 	initVar( "Armed", 0, tdev, SENSOR_SID )
 	initVar( "Tripped", 0, tdev, SENSOR_SID )
@@ -4451,7 +4452,7 @@ local function startSensor( tdev, pdev, isReload )
 			if not sst.eventLog then
 				L("Failed to open event log for %1 (%2): %4 (%5) %3", luup.devices[tdev].description, tdev, path, err, errno)
 			else
-				if sst.eventLog:seek("end") > ( 1024*1024*getVarNumeric( "EventLogMaxMB", 8, tdev, RSSID ) ) then
+				if sst.eventLog:seek("end") > ( 1024*getVarNumeric( "EventLogMaxKB", 256, tdev, RSSID ) ) then
 					L("Rotating event log...")
 					sst.eventLog:close()
 					os.execute( "pluto-lzo c '" .. path .. "' '" .. path .. ".lzo'" )
