@@ -430,15 +430,18 @@ var Reactor = (function(api, $) {
 				'<div id="mostrecent"/>' +
 				'</div></div>';
 			html += '<div class="row"><div class="col-xs-12 col-sm-12"><h4>Back Up Current Configuration</h4>Press this button to back up your current Reactor configuration: <button id="dobackup" class="btn btn-sm btn-success">Back Up Now</button></div></div>';
-			html += '<div class="row"><div class="col-xs-12 col-sm-12"><h4>Restore from Backup</h4><div class="form-inline">To restore from the current backup (info above), select the item to restore (or ALL to restore everything), and then press the "Begin Restore" button. <b>WARNING:</b> Restoring will overwrite the configuration of any current ReactorSensor having the same name(s). If you want to restore from another backup file, upload it first, using the uploader at <em>Apps &gt; Develop apps &gt; Luup files</em>. <strong>Do not</strong> use <em>scp</em> or other similar tools to upload the file &mdash; the Luup Uploader is the only supported mechanism.</div><div class="form-inline"><label>Restore: <select id="restoreitem" class="form-control form-control-sm" disabled><option value="">ALL</option></select></label> <label>to device: <select id="restoretarget" class="form-control form-control-sm" disabled><option value="">with matching name</option></select> <button id="dorestore" class="btn btn-sm btn-warning">Begin Restore</button></div><div id="renameblock"><label><input id="renamers" type="checkbox" class="form-checkbox form-checkbox-sm"> Rename target ReactorSensor to match restored configuration</label></div><div id="restorestatus"/></div></div>';
+			html += '<div class="row"><div class="col-xs-12 col-sm-12"><h4>Restore from Backup</h4><p>Tip: Read the <a href="' +
+				_DOCURL + 'Backup-&-Restore" target="_blank">online documentation</a>.</p><p>To restore from the current backup (info above), select the item to restore (or ALL to restore everything), and then press the "Begin Restore" button. <b>WARNING:</b> Restoring will overwrite the configuration of any current ReactorSensor having the same name(s). If you want to restore from another backup file (e.g. one you downloaded previously from this or another system), please read the linked documentation above before proceeding.</p><div class="form-inline"><label>Restore: <select id="restoreitem" class="form-control form-control-sm" disabled><option value="">ALL</option></select></label> <label>to device: <select id="restoretarget" class="form-control form-control-sm" disabled><option value="">with matching name</option></select> <button id="dorestore" class="btn btn-sm btn-warning">Begin Restore</button></div><div id="renameblock"><label><input id="renamers" type="checkbox" class="form-checkbox form-checkbox-sm"> Rename target ReactorSensor to match restored configuration</label></div><div id="restorestatus"/></div></div>';
 
 			html += '\
 <div class="row"> \
   <div class="col-xs-12 col-sm-12"> \
-	<h4>Bulk Create New ReactorSensors</h4> \
-	<div class="form-inline">To create multiple ReactorSensors at once, select the number of sensors and click "Create ReactorSensors". This operation causes a Luup reload, and you will need to hard-refresh your browser. \
-	  <label>Count: <select id="countrs" class="form-control form-control-sm"></select></label> \
-	  <button id="creaters" class="btn btn-sm btn-warning">Create ReactorSensors</button> \
+	<h3>Bulk Create New ReactorSensors</h3> \
+	<div>To create multiple ReactorSensors at once, select the number of sensors and click "Create ReactorSensors". This operation causes a Luup reload, and you will need to hard-refresh your browser. \
+	  <div class="form-inline"> \
+		<label>Count: <select id="countrs" class="form-control form-control-sm"></select></label> \
+		<button id="creaters" class="btn btn-sm btn-warning">Create ReactorSensors</button> \
+	  </div> \
 	</div>\
   </div>\
 </div>';
