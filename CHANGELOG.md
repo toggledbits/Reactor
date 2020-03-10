@@ -4,6 +4,8 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 3.5 Hotfixes
 
+* Hotfix 20070-03: openLuup only: fix backup file handling (uncompressed files on openLuup)
+* Hotfix 20070-02: Make sure deviceinfo updates are compressed, remove any conflicting uncompressed devinfo file.
 * Hotfix 20070-01: Fix display of floating point values in condition descriptions on Status tab.
 * Hotfix 20069-01: Do not attempt compression of backup files on openLuup (L_Reactor.lua)
 * Hotfix 20061-01: openLuup only: skip delete of unused state vars, which is causing ALTUI to reload the JS module.
