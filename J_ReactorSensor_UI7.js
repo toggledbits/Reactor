@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.5hotfix-20061';
+	var pluginVersion = '3.5hotfix-20070';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -1010,12 +1010,17 @@ var ReactorSensor = (function(api, $) {
 
 	function conditionValueText( v, forceNumber ) {
 		if ( "number" === typeof(v) ) return v;
-		v = String(v);
+		v = String(v).trim();
 		if ( v.match( varRefPattern ) ) return v;
 		if ( forceNumber ) {
-			var n = parseInt( v );
-			if ( isNaN( n ) ) return JSON.stringify(v) + "(NaN)";
-			return String(n);
+			var n;
+			if ( v.match( /^[+-]?[0-9]+$/ ) ) {
+				n = parseInt( v );
+			} else {
+				n = parseFloat( v );
+			}
+			if ( isNaN( n ) ) return JSON.stringify( v ) + "(invalid)";
+			return String( n );
 		}
 		return JSON.stringify( v );
 	}
