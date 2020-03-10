@@ -6055,9 +6055,10 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		local targetPath = getInstallPath() .. "D_ReactorDeviceInfo.json"
 		local tmpPath = "/tmp/D_ReactorDeviceInfo.tmp"
 		if isOpenLuup then
-			tmpPath = targetPath:gsub( ".json.*$", ".tmp" )
+			tmpPath = targetPath:gsub( "%.json.*$", ".tmp" )
 		end
 		local http = require("socket.http")
+		local ssl = require "ssl"
 		local https = require("ssl.https")
 		local ltn12 = require("ltn12")
 		local f = io.open( tmpPath , "w" )
@@ -6071,7 +6072,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			source = ltn12.source.string( body ),
 			sink = ltn12.sink.file( f ),
 			verify = getReactorVar( "SSLVerify", "none" ),
-			protocol = getReactorVar( "SSLProtocol", "tlsv1" ),
+			protocol = getReactorVar( "SSLProtocol", (ssl._VERSION or "0.5"):match( "^0%.5") and "tlsv1" or "any" ),
 			options = getReactorVar( "SSLOptions", "all" )
 		}
 		http.TIMEOUT = 30
@@ -6085,17 +6086,25 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			httpStatus = 500
 		end
 		if httpStatus == 200 then
-			os.execute( "rm -f -- " .. targetPath .. ".lzo" )
-			local es = os.execute( "mv -f " .. tmpPath .. " " .. targetPath )
+			local es
+			if isOpenLuup then
+				-- openLuup just copies file, no compression.
+				es = os.execute( "mv -f '" .. tmpPath .. "' '" .. targetPath .. "'" )
+			else
+				-- Save to compressed (LZO) file on Vera Luup.
+				os.execute( "rm -f -- '" .. targetPath .. "'" ) -- remove uncompressed if present
+				es = os.execute( string.format( "pluto-lzo c '%s' '%s.lzo'", tmpPath, targetPath ) )
+			end
 			if es ~= 0 then
 				return json.encode{ status=false, exitStatus=es,
 					message="The download was successful but the updated file could not be installed;" ..
 					" please move " .. tmpPath .. " to " .. targetPath },
 					"application/json"
 			end
+			os.execute( "rm -f -- '" .. tmpPath .. "'" )
 			return json.encode{ status=true, message="Device info updated" }, "application/json"
 		end
-		os.execute( "rm -f " .. tmpPath )
+		os.execute( "rm -f -- '" .. tmpPath .. "'" )
 		return json.encode{ status=false, message="Download failed (" .. tostring(httpStatus) .. ")" }, "application/json"
 
 	elseif action == "submitdevice" then
@@ -6156,6 +6165,8 @@ function request( lul_request, lul_parameters, lul_outputformat )
 						getInstallPath() .. "reactor-config-backup.json.lzo'" )
 					-- Remove uncompressed file, which would now rot and interfere with download of new
 					os.execute( "rm -f -- '" .. getInstallPath() .. "reactor-config-backup.json'" )
+				else
+					os.execute( "mv -f '" .. bfile .. "' '" .. getInstallPath() .. "reactor-config-backup.json'" )
 				end
 			else
 				error("ERROR can't write " .. bfile)
