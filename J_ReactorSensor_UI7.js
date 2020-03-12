@@ -19,7 +19,7 @@ console.log("*** Invoked J_ReactorSensor_UI7");
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.6develop-20070';
+	var pluginVersion = '3.6develop-20072';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
