@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.5hotfix-20070';
+	var pluginVersion = '3.5hotfix-20071';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -548,7 +548,7 @@ var ReactorSensor = (function(api, $) {
 			inStatusPanel = false;
 			isOpenLuup = false;
 			isALTUI = "undefined" !== typeof(MultiBox);
-			unsafeLua = false;
+			unsafeLua = true;
 			lastx = 0;
 
 			/* Try to establish date format */
@@ -565,9 +565,6 @@ var ReactorSensor = (function(api, $) {
 				}
 			}
 
-			/* Check UnsafeLua flag */
-			unsafeLua = 1 === parseInt( ud.UnsafeLua );
-
 			/* Take a pass over devices and see what we discover */
 			var dl = api.getListOfDevices();
 			dl.forEach( function( devobj ) {
@@ -577,6 +574,9 @@ var ReactorSensor = (function(api, $) {
 					devVeraAlerts = devobj.id;
 				}
 			});
+
+			/* Check UnsafeLua flag; old firmware doesn't have it so default OK (openLuup is always OK) */
+			unsafeLua = ( false !== isOpenLuup ) || ( 0 !== parseInt( ud.UnsafeLua || "1" ) );
 
 			/* User and geofence pre-processing */
 			var l = ud.users ? ud.users.length : 0;

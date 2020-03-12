@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.5hotfix-20070"
+local _PLUGIN_VERSION = "3.5hotfix-20071"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION	= 20017
@@ -53,7 +53,7 @@ local runStamp = 0
 local pluginDevice = false
 local isALTUI = false
 local isOpenLuup = false
-local unsafeLua = false
+local unsafeLua = true
 local devVeraAlerts = false
 local installPath
 
@@ -4654,7 +4654,7 @@ function startPlugin( pdev )
 	systemReady = false
 	isALTUI = false
 	isOpenLuup = false
-	unsafeLua = false
+	unsafeLua = true
 	devVeraAlerts = false
 	sensorState = {}
 	watchData = {}
@@ -4785,7 +4785,7 @@ function startPlugin( pdev )
 		return false, failmsg, _PLUGIN_NAME
 	end
 
-	unsafeLua = isOpenLuup or ( tonumber((luup.attr_get( "UnsafeLua", 0 ))) == 1 )
+	unsafeLua = isOpenLuup or ( tonumber( luup.attr_get( "UnsafeLua", 0 ) or 1 ) == 1 )
 
 	-- Check UI version
 	if not checkVersion( pdev ) then
