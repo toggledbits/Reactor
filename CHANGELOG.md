@@ -15,6 +15,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 * Fix: Make sure non-existent scene is removed from scene cache, so we don't try to refetch it on subsequent reloads.
 * Fix: Update LuaXP to 1.0.2 for access to `indexof()` function; also fixes `pow()` with negative base (first argument).
 * Fix: Fix "leak" of LuaXP null atom structure on Status display.
+* Hotfix 20072-01: openLuup only: Suppress "unsafe lua" warnings correctly on openLuup.
 * Hotfix 20070-02: Deviceinfo updates now stored as compressed, and remove any uncompressed file found, to remove ambiguity as to which file may be loaded.
 * Hotfix 20070-01: Fix display of floating point values in condition descriptions on Status tab.
 * Hotfix 20069-01: openLuup only: do not attempt compression of backup files on openLuup (L_Reactor.lua)
