@@ -52,7 +52,7 @@ console.log("*** Invoked J_ReactorSensor_UI7");
 	var devVeraAlerts = false;
 	var dateFormat = "%F"; /* ISO8601 defaults */
 	var timeFormat = "%T";
-	var unsafeLua = false;
+	var unsafeLua = true;
 
 	var condTypeName = {
 		"comment": "Comment",
@@ -570,7 +570,7 @@ console.log("*** Invoked J_ReactorSensor_UI7");
 
 			isOpenLuup = false;
 			isALTUI = "undefined" !== typeof(MultiBox);
-			unsafeLua = false;
+			unsafeLua = true;
 			devVeraAlerts = false;
 
 			/* Try to establish date format */
@@ -587,9 +587,6 @@ console.log("*** Invoked J_ReactorSensor_UI7");
 				}
 			}
 
-			/* Check UnsafeLua flag */
-			unsafeLua = 1 === parseInt( ud.UnsafeLua );
-
 			/* Take a pass over devices and see what we discover */
 			var dl = api.getListOfDevices();
 			dl.forEach( function( devobj ) {
@@ -599,6 +596,9 @@ console.log("*** Invoked J_ReactorSensor_UI7");
 					devVeraAlerts = devobj.id;
 				}
 			});
+
+			/* Check UnsafeLua flag; old firmware doesn't have it so default OK (openLuup is always OK) */
+			unsafeLua = ( false !== isOpenLuup ) || ( 0 !== parseInt( ud.UnsafeLua || "1" ) );
 
 			/* User and geofence pre-processing */
 			var l = ud.users ? ud.users.length : 0;

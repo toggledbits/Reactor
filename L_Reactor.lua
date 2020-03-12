@@ -53,7 +53,7 @@ local runStamp = 0
 local pluginDevice = false
 local isALTUI = false
 local isOpenLuup = false
-local unsafeLua = false
+local unsafeLua = true
 local devVeraAlerts = false
 local installPath
 
@@ -4637,7 +4637,7 @@ function startPlugin( pdev )
 	systemReady = false
 	isALTUI = false
 	isOpenLuup = false
-	unsafeLua = false
+	unsafeLua = true
 	devVeraAlerts = false
 	sensorState = {}
 	watchData = {}
@@ -4768,7 +4768,7 @@ function startPlugin( pdev )
 		return false, failmsg, _PLUGIN_NAME
 	end
 
-	unsafeLua = isOpenLuup or ( tonumber((luup.attr_get( "UnsafeLua", 0 ))) == 1 )
+	unsafeLua = isOpenLuup or ( tonumber( luup.attr_get( "UnsafeLua", 0 ) or 1 ) ~= 0 )
 
 	-- Check UI version
 	if not checkVersion( pdev ) then
