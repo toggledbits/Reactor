@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.6develop-20070"
+local _PLUGIN_VERSION = "3.6develop-20072"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION	= 20070
@@ -121,7 +121,7 @@ local function L(msg, ...) -- luacheck: ignore 212
 		end
 	)
 	luup.log(str, math.max(1,level))
---[[ ???dev --]] if level <= 2 then local f = io.open( "/etc/cmh-ludl/Reactor.log", "a" ) if f then f:write( str .. "\n" ) f:close() end end
+--[[ ???dev if level <= 2 then local f = io.open( "/etc/cmh-ludl/Reactor.log", "a" ) if f then f:write( str .. "\n" ) f:close() end end --]]
 	if level == 0 then if debug and debug.traceback then luup.log( debug.traceback(), 1 ) end error(str, 2) end
 end
 
@@ -542,12 +542,13 @@ local function openEventLogFile( tdev )
 			sst.eventLog = false -- stop trying
 		else
 			sst.eventLogName = path
+			sst.eventLog:write(string.format("%s Event log opened\n", os.date("%x %X")))
 		end
 	else
 		D("openEventLogFile() event log file disabled for this RS %1", tdev)
 		sst.eventLog = false
 		sst.eventLogName = nil
-		os.execute("rm -f -- '" .. path .. "'")
+		os.remove( path )
 	end
 end
 
@@ -584,7 +585,7 @@ local function addEvent( t )
 				os.execute("mv '" .. sst.eventLogName .. "' '" .. sst.eventLogName .. ".old'")
 			else
 				os.execute("pluto-lzo c '" .. sst.eventLogName .. "' '" .. sst.eventLogName .. ".lzo'")
-				os.execute("rm -f -- '" .. sst.eventLogName .. "'")
+				os.remove( sst.eventLogName )
 			end
 			sst.eventLog = nil
 			sst.eventLogName = nil
@@ -896,9 +897,6 @@ local function plugin_runOnce( pdev )
 	if s < 00206 then
 		deleteVar( RSSID, "runscene", pdev ) -- correct SID/device mismatch
 	end
-	if s < 19245 then
-		os.execute("rm -f /etc/cmh-ludl/Reactor.log")
-	end
 	if s < 20057 and getReactorVar( "UseACE", "", pdev ) == "1" then
 		setVar( MYSID, "UseACE", "", pdev )
 	end
@@ -912,6 +910,7 @@ local function plugin_runOnce( pdev )
 
 	-- Update version last.
 	if s < _CONFIGVERSION then
+		os.remove( "/etc/cmh-ludl/Reactor.log" )
 		luup.variable_set( MYSID, "Version", _CONFIGVERSION, pdev )
 	end
 end
@@ -4466,7 +4465,7 @@ local function startSensor( tdev, pdev, isReload )
 			end
 		end
 	else
-		os.execute("rm -f -- '" .. path .. "'")
+		os.remove( path )
 		D("startSensor() event log file disabled for this RS")
 	end
 
@@ -6093,7 +6092,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 				es = os.execute( "mv -f '" .. tmpPath .. "' '" .. targetPath .. "'" )
 			else
 				-- Save to compressed (LZO) file on Vera Luup.
-				os.execute( "rm -f -- '" .. targetPath .. "'" ) -- remove uncompressed if present
+				os.remove( targetPath ) -- remove uncompressed if present
 				es = os.execute( string.format( "pluto-lzo c '%s' '%s.lzo'", tmpPath, targetPath ) )
 			end
 			if es ~= 0 then
@@ -6102,10 +6101,10 @@ function request( lul_request, lul_parameters, lul_outputformat )
 					" please move " .. tmpPath .. " to " .. targetPath },
 					"application/json"
 			end
-			os.execute( "rm -f -- '" .. tmpPath .. "'" )
+			os.remove( tmpPath )
 			return json.encode{ status=true, message="Device info updated" }, "application/json"
 		end
-		os.execute( "rm -f -- '" .. tmpPath .. "'" )
+		os.remove( tmpPath )
 		return json.encode{ status=false, message="Download failed (" .. tostring(httpStatus) .. ")" }, "application/json"
 
 	elseif action == "submitdevice" then
@@ -6165,7 +6164,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 					os.execute( "pluto-lzo c '" .. getInstallPath() .. "reactor-config-backup.tmp' '" ..
 						getInstallPath() .. "reactor-config-backup.json.lzo'" )
 					-- Remove uncompressed file, which would now rot and interfere with download of new
-					os.execute( "rm -f -- '" .. getInstallPath() .. "reactor-config-backup.json'" )
+					os.remove( getInstallPath() .. "reactor-config-backup.json" )
 				else
 					os.execute( "mv -f '" .. bfile .. "' '" .. getInstallPath() .. "reactor-config-backup.json'" )
 				end
@@ -6192,7 +6191,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		else
 			local r = f:read( "*a" )
 			f:close()
-			os.execute( "rm -f -- '" .. tfile .. "'" )
+			os.remove( tfile )
 			return r, "application/json"
 		end
 
@@ -6260,7 +6259,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			else
 				inf.files[fn] = { notice="No data" }
 			end
-			os.execute( "rm -f /tmp/reactorfile.tmp" )
+			os.remove( "/tmp/reactorfile.tmp" )
 		end
 		return alt_json_encode( inf ), "application/json"
 
