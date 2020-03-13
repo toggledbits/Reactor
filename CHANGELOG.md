@@ -4,6 +4,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 3.6 (development)
 
+* Enhancement: The Activity editor now works much harder to preserve data when (a) a missing device is fixed to a new device, (b) the device is changed to another that supports the same action. This addresses the issue where having a missing device in an action would cause the action and parameters to be lost when you try to fix it--they are now preserved.
 * Enhancement: Notify action fields now allow variable references in more places: SMTP recipient and subject, UserURL URL parameters.
 * Enhancement: functions `urlencode(string)` and `urldecode(string)` added to expressions.
 * Enhancement: Turnaround rescans, the rescans of conditions and expressions that are requested while a scan is already in progress (usually caused by a watched device being modified by an activity), are now scheduled more aggressively. Huh? Reactor is even faster.

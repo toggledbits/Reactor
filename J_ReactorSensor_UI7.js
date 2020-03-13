@@ -1725,7 +1725,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 		try {
 			updateStatus( myid );
 
-			setTimeout( function() { clearUnusedStateVariables( myid, getConfiguration( myid ) ) }, 2000 );
+			setTimeout( function() { clearUnusedStateVariables( myid, getConfiguration( myid ) ); }, 2000 );
 		}
 		catch ( e ) {
 			inStatusPanel = false; /* stop updates */
@@ -5769,7 +5769,12 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 
 	function changeActionAction( row, newVal ) {
 		// assert( row.hasClass( 'actionrow' ) );
+		/* If action isn't changing, don't obliterate filled fields (i.e. device changes, same action) */
+		var prev = row.data( 'prev-action' ) || "";
+		if ( !isEmpty(prev) && prev == newVal ) return;
+		/* Load em up... */
 		var j, lj;
+		row.data( 'prev-action', newVal ); /* save for next time */
 		var pfx = row.attr( 'id' );
 		var ct = $( 'div.actiondata', row );
 		$( 'label,.argument', ct ).remove();
@@ -6270,7 +6275,16 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 		var lopt = $( '<option selected/>' ).val( "" ).text( hasAction ? "--choose action--" : "(invalid device--no actions)" );
 		actionMenu.prepend( lopt );
 		actionMenu.prop( 'disabled', false );
-		$( 'option:first', actionMenu ).prop( 'selected' );
+
+		/* Try to reselect the previous action, if available. This help preserve the fields when
+		   the device is changed to another that supports that action. */
+		var prev = row.data( 'prev-action' ) || "";
+		lopt = $( 'option[value="' + prev + '"]', actionMenu );
+		if ( lopt.length > 0 ) {
+			actionMenu.val( prev );
+		} else {
+			$( 'option:first', actionMenu ).prop( 'selected' );
+		}
 	}
 
 	function changeActionDevice( row, newVal, fnext, fargs, retries ) {
@@ -6278,9 +6292,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 		var actionMenu = $( 'select.re-actionmenu', ct );
 
 		// Clear the action menu and remove all arguments.
-		actionMenu.empty().prop( 'disabled', true )
+		actionMenu.empty().prop( 'disabled', true ).show()
 			.append( $( '<option/>' ).val("").text( '(loading...)' ) );
-		$('label,.argument', ct).remove();
 		if ( "number" !== typeof(newVal) ) return;
 
 		/**
@@ -6293,7 +6306,11 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 		 */
 		if ( -1 === newVal ) newVal = api.getCpanelDeviceId();
 		var devobj = api.getDeviceObject( newVal );
-		if ( !devobj ) return;
+		if ( !devobj ) {
+			actionMenu.empty().show();
+			if ( fnext ) fnext.apply( null, fargs );
+			return;
+		}
 		if ( undefined === deviceActionData[devobj.device_type] ) {
 			deviceActionData[devobj.device_type] = Promise.resolve( $.ajax(
 				{
@@ -6314,9 +6331,9 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 			if ( undefined !== fnext ) {
 				fnext.apply( null, fargs );
 			}
-		}, function( jqXHR, textStatus, errorThrown ) {
+		}).catch( function( jqXHR, textStatus, errorThrown ) {
 			/* Failed. And deviceinfo as a fallback isn't really appropriate here (only lists exceptions) */
-			console.log("changeActionDevice: failed to load service data: " + textStatus + "; " + String(errorThrown));
+			console.log("changeActionDevice: failed to load service data: " + String(textStatus) + "; " + String(errorThrown));
 			console.log(jqXHR);
 			retries = ( undefined === retries ? 0 : retries ) + 1;
 			if ( retries > 10 ) {
@@ -6341,8 +6358,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 		var el = $( ev.currentTarget );
 		var newVal = parseInt( el.val() );
 		if ( ! isNaN( newVal ) ) {
-			var row = el.closest( 'div.actionrow' );
-			changeActionDevice( row, newVal, changeActionRow, [ row ] );
+			var $row = el.closest( 'div.actionrow' );
+			changeActionDevice( $row, newVal, changeActionRow, [ $row ] );
 		}
 	}
 
@@ -6746,7 +6763,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 							var p = act.parameters[k];
 							if ( undefined !== p.value ) {
 								/* Fixed value */
-								param[p.name] = p.value;
+								param[p.name] = encodeURIComponent(p.value);
 								actionText += "{" + p.name + "=" + String(p.value) + "}, ";
 							} else {
 								var v = ($( '#' + idSelector( pfx + p.name ), row ).val() || "").trim();
@@ -6769,7 +6786,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 										v = p.default;
 									}
 								}
-								param[p.name] = String(v);
+								param[p.name] = encodeURIComponent(String(v));
 								actionText += p.name + "=" + quot(v) + ", ";
 							}
 						}
@@ -6778,7 +6795,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						$( '.argument', row ).each( function() {
 							var val = $( this ).val();
 							var vname = $( this ).attr( 'id' ).replace( pfx, "" );
-							param[ vname ] = val;
+							param[ vname ] = encodeURIComponent(val);
 							actionText += vname + "=" + quot(val) + ", ";
 						});
 					}
@@ -6995,6 +7012,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				newRow = getActionRow();
 				var rid = section.attr( 'id' ) + ns++;
 				newRow.attr( 'id', rid );
+				act.__rid = rid;
 				$( 'select.re-actiontype', newRow).val( act.type || "comment" );
 				changeActionType( newRow, act.type || "comment" );
 				switch ( act.type ) {
@@ -7016,7 +7034,13 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 								var opt = $( '<option/>' ).val( key ).text( key );
 								$( 'select.re-actionmenu', row ).prepend( opt );
 							}
-							$( 'select.re-actionmenu', row ).val( key );
+							$( 'select.re-actionmenu', row ).val( key ).prop( 'disabled', false );
+							/* If selected action is not already know, pre-populate extended data if it exists.
+							   This assists full display and preservation of params if device is remove/replaced. */
+							if ( undefined === actions[key] && undefined != deviceInfo.services[action.service || ""] &&
+									deviceInfo.services[action.service || ""].actions[action.action || ""] ) {
+								actions[key] = deviceInfo.services[action.service || ""].actions[action.action || ""];
+							}
 							changeActionAction( row, key );
 							var lj = action.parameters ? action.parameters.length : 0;
 							for ( var j=0; j<lj; j++ ) {
