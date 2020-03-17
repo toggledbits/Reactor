@@ -2306,13 +2306,38 @@ local function doActionNotify( action, scid, tdev )
 	return false
 end
 
+-- Returns LTN12 filter that stops passing data after limit bytes
+local function getCountFilter( limit )
+	local count = 0
+	return function( chunk )
+		if chunk == nil then
+			return nil
+		elseif chunk == "" then
+			return ""
+		else
+			local accept = limit - count
+			if accept <= 0 then
+				-- can't accept any
+				return ""
+			elseif accept >= #chunk then
+				-- accept more than chunk
+				count = count + #chunk
+				return chunk
+			end
+			-- accept partial chunk
+			count = count + accept
+			return chunk:sub(1, accept)
+		end
+	end
+end
+
 local function doActionRequest( action, scid, tdev )
 	local http = require "socket.http"
 	local ltn12 = require "ltn12"
 
 	local method = action.method or "GET"
-	local timeout = 30
-	local maxResp = 8192
+	local timeout = action.timeout or getVarNumeric( "RequestActionTimeout", 15, tdev, RSSID )
+	local maxResp = getVarNumeric( "RequestActionResponseLimit", 2048, tdev, RSSID )
 
 	-- Perform on-the-fly substitution of request values
 	local url = tostring( action.url or "" ):gsub( "%{[^}]+%}", function( ref ) 
@@ -2385,10 +2410,12 @@ local function doActionRequest( action, scid, tdev )
 	else
 		local httpStatus
 		-- Set up the request table
+		local tsink = ltn12.sink.table( r )
+
 		local req = {
 			url = url,
 			source = src,
-			sink = ltn12.sink.table(r),
+			sink = ltn12.sink.chain( getCountFilter( maxResp ), tsink ),
 			method = method,
 			headers = tHeaders,
 			redirect = false
@@ -2419,7 +2446,7 @@ local function doActionRequest( action, scid, tdev )
 		if tonumber(httpStatus) and httpStatus >= 200 and httpStatus <= 299 then
 			D("doRequest() request returned httpStatus=%1, respBody=%2, respHeaders=%3, status=%4", httpStatus, respBody, rh, st)
 			-- Since we're using the table sink, concatenate chunks to single string.
-			respBody = table.concat(r):sub(1, maxResp)
+			respBody = table.concat(r)
 			L("Request succeeded, response body %1 bytes", #respBody)
 			addEvent{ dev=tdev, msg="Request response status %(status)s body %(bodylen)s bytes",
 				status=httpStatus, bodylen=#respBody }
@@ -2437,7 +2464,7 @@ local function doActionRequest( action, scid, tdev )
 
 	-- Store response, maybe
 	if ( action.target or "" ) ~= "" then
-		doSetVar( action.target, respBody, tdev, false, false ) -- no reparse or save (yet)
+		doSetVar( action.target, respBody, tdev, false ) -- no reparse (raw data)
 	end
 
 	return true

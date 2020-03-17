@@ -133,7 +133,7 @@ console.log("*** Invoked J_ReactorSensor_UI7");
 				{ id: "severity", label: "Severity:", type: "select", default: "5", values: [ "0=emerg","1=alert","2=crit","3=err","4=warn","5=notice","6=info","7-debug" ] }
 			] }
 		, { id: "UU", name: "User URL", users: false, requiresUnsafeLua: true, extra: [
-				{ id: "url", label: "URL:", type: "textarea", placeholder: "URL", validpattern: "^https?://", default: "http://localhost/alert?message={message}" }
+				{ id: "url", label: "URL:", type: "textarea", placeholder: "URL", validpattern: "^https?://", default: "http://localhost/alert?message={message}", fullwidth: true }
 			] }
 		, { id: "VA", name: "VeraAlerts" }
 	];
@@ -5737,6 +5737,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					/* Wrap the field in a label */
 					xf = $( '<label/>' )
 						.text( fld.label )
+						.toggleClass( "re-fullwidth", fld.fullwidth )
 						.append( xf );
 				}
 				xf.appendTo( $extra );
@@ -6771,7 +6772,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				}
 				$m.appendTo( $lb );
 
-				$('<div/>').html("Substitutions are available in all request fields using <tt>{expr}</tt> syntax. Response capture is limited to first 8K bytes.")
+				$('<div/>').html("Substitutions are available in all request fields using <tt>{expr}</tt> syntax.")
 					.appendTo( ct );
 				break;
 
