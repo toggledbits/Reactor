@@ -4,6 +4,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 3.6 (development)
 
+* Enhancement: The *Request* action has been added to activities to make an HTTP GET or POST request to a remove service as an action. The URL, headers, and (for POST) body data may be specified, and variable substitutions using the usual `{expr}` syntax work. When using POST, it is highly recommended that a correct "Content-Type" header be included.
 * Enhancement: The Activity editor now works much harder to preserve data when (a) a missing device is fixed to a new device, (b) the device is changed to another that supports the same action. This addresses the issue where having a missing device in an action would cause the action and parameters to be lost when you try to fix it--they are now preserved.
 * Enhancement: Notify action fields now allow variable references in more places: SMTP recipient and subject, UserURL URL parameters.
 * Enhancement: functions `urlencode(string)` and `urldecode(string)` added to expressions.

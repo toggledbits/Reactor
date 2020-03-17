@@ -11,12 +11,12 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.6develop-20073"
+local _PLUGIN_VERSION = "3.6develop-20077"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION	= 20070
 local _CDATAVERSION		= 20045	-- must coincide with JS
-local _UIVERSION		= 20045	-- must coincide with JS
+local _UIVERSION		= 20077	-- must coincide with JS
 	  _SVCVERSION		= 20045	-- must coincide with impl file (not local)
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
@@ -2085,7 +2085,7 @@ end
 local runScene -- forward declaration
 
 -- Set variable action (use by scene action and device action)
-local function doSetVar( varname, value, tdev )
+local function doSetVar( varname, value, tdev, reparse, savestate )
 	local cdata = getSensorConfig( tdev )
 	if ( cdata.variables or {} )[varname] == nil then
 		return false, "variable not defined"
@@ -2103,7 +2103,13 @@ local function doSetVar( varname, value, tdev )
 	end
 
 	local ctx = getSensorState( tdev ).ctx or getExpressionContext( getSensorConfig( tdev ), tdev )
-	local sv, _, vv, err = getValue( value, ctx, tdev )
+	local sv, vv, err
+	if reparse == nil or reparse then -- default true
+		sv, _, vv, err = getValue( value, ctx, tdev )
+	else
+		sv = tostring( value )
+		vv = value
+	end
 	local oldVal = vs.lastvalue
 	if oldVal ~= vv then
 		vs.lastvalue = vv
@@ -2121,7 +2127,9 @@ local function doSetVar( varname, value, tdev )
 		end
 		-- Save updated state.
 		cstate.lastUsed = os.time()
-		luup.variable_set( RSSID, "cstate", json.encode( cstate ), tdev )
+		if savestate == nil or savestate then -- default true
+			luup.variable_set( RSSID, "cstate", json.encode( cstate ), tdev )
+		end
 	end
 	return true, oldVal, vv
 end
@@ -2296,6 +2304,143 @@ local function doActionNotify( action, scid, tdev )
 		error( "Unable to find notification config #" .. tostring(nid) )
 	end
 	return false
+end
+
+local function doActionRequest( action, scid, tdev )
+	local http = require "socket.http"
+	local ltn12 = require "ltn12"
+
+	local method = action.method or "GET"
+	local timeout = 30
+	local maxResp = 8192
+
+	-- Perform on-the-fly substitution of request values
+	local url = tostring( action.url or "" ):gsub( "%{[^}]+%}", function( ref ) 
+		local vv = getValue( ref, nil, tdev )
+		return ( vv ~= nil ) and vv or ref
+	end )
+
+	-- Headers
+	local tHeaders = {}
+	for _,line in ipairs( action.headers or {} ) do
+		local key,val = line:match( "^([^:]+):%s*(.*)" )
+		if key and val then
+			val = (val or ""):gsub( "%{[^}]+%}", function( ref ) 
+				local vv = getValue( ref, nil, tdev )
+				return ( vv ~= nil ) and vv or ref
+			end )
+			tHeaders[key] = val 
+		end
+	end
+
+	local src
+	local body = tostring(action.data or "" ):gsub( "%{[^}]+%}", function( ref ) 
+		local vv = getValue( ref, nil, tdev )
+		return ( vv ~= nil ) and vv or ref
+	end )
+	if body == "" then
+		src = nil
+	else
+		src = ltn12.source.string( body )
+		tHeaders["Content-Length"] = string.len( body )
+		D("doActionRequest() body is %1", body)
+	end
+
+	local respBody
+	local r = {}
+	if action.usecurl or getVarNumeric( "RequestUseCurl", 0, tdev, RSSID ) ~= 0 then
+		local req = "curl -o -"
+		for k,v in pairs( tHeaders or {} ) do
+			req = req .. " -H '" .. k .. ": " .. v:gsub( "'", "''" ) .. "'"
+		end
+		local s = action.curlopts or luup.variable_get( RSSID, "RequestCurlOptions", tdev ) or ""
+		if s ~= "" then req = req .. " " .. s end
+		req = req .. " '" .. url .. "'"
+		L("%1 (#%2) request action: %3", luup.devices[tdev].description, tdev, req)
+		addEvent{ dev=tdev, msg="Request via curl: %(req)s", req=req }
+		local count = 0
+		local f = io.popen( req )
+		if f then
+			repeat
+				local chunk = f:read(1024)
+				if chunk then
+					count = count + #chunk
+					table.insert( r, chunk )
+				end
+			until count >= maxResp
+			f:close()
+			respBody = table.concat( r, "" ):sub(1, maxResp)
+			L("%1 (#%2) request completed, response body %3 bytes", luup.devices[tdev].description, tdev, 
+				#respBody)
+			addEvent{ dev=tdev, msg="Request completed, response body %(bodylen)s bytes",
+				bodylen=#respBody }
+		else
+			respBody = "ERROR 599"
+			L{level=2,msg="%1 (#%2) request failed!"}
+			addEvent{ dev=tdev, msg="TROUBLE: Request failed (curl)" }
+			if ( action.trouble or 1 ) ~= 0 then
+				getSensorState( tdev ).trouble = true
+			end
+		end
+	else
+		local httpStatus
+		-- Set up the request table
+		local req = {
+			url = url,
+			source = src,
+			sink = ltn12.sink.table(r),
+			method = method,
+			headers = tHeaders,
+			redirect = false
+		}
+
+		-- HTTP or HTTPS?
+		local requestor
+		if url:lower():find("^https:") then
+			local https = require "ssl.https"
+			requestor = https
+			local rp = getSSLParams( "Request" )
+			for k,v in pairs( rp ) do
+				req[k] = v
+			end
+		else
+			requestor = http
+		end
+
+		-- Make the request.
+		http.TIMEOUT = timeout -- N.B. http not https, regardless
+		L("%1 (#%2) request action: %3 %4", luup.devices[tdev].description, tdev, method, url)
+		if next(tHeaders) then L("Request headers: %1", tHeaders) end
+		if body and #body then L("Request body: "..body) end
+		addEvent{ dev=tdev, msg="Request action: %(method)s %(url)s", url=url, method=method }
+		D("doRequest() request %1", req)
+		local rh, st
+		respBody, httpStatus, rh, st = requestor.request(req)
+		if tonumber(httpStatus) and httpStatus >= 200 and httpStatus <= 299 then
+			D("doRequest() request returned httpStatus=%1, respBody=%2, respHeaders=%3, status=%4", httpStatus, respBody, rh, st)
+			-- Since we're using the table sink, concatenate chunks to single string.
+			respBody = table.concat(r):sub(1, maxResp)
+			L("Request succeeded, response body %1 bytes", #respBody)
+			addEvent{ dev=tdev, msg="Request response status %(status)s body %(bodylen)s bytes",
+				status=httpStatus, bodylen=#respBody }
+		else
+			L({level=2,msg="Request %1 %2 returned [%3, %4, %5, %6]"}, respBody, httpStatus, rh, st)
+			addEvent{ dev=tdev, msg="TROUBLE: Request failed, response status %(status)s body %(bodylen)s bytes",
+				status=httpStatus, bodylen=#respBody }
+			if ( action.trouble or 1 ) ~= 0 then
+				getSensorState( tdev ).trouble = true
+			end
+			respBody = "ERROR "..tostring(httpStatus) -- Canonical body for errors
+		end
+	end
+	r = nil -- luacheck: ignore 311
+
+	-- Store response, maybe
+	if ( action.target or "" ) ~= "" then
+		doSetVar( action.target, respBody, tdev, false, false ) -- no reparse or save (yet)
+	end
+
+	return true
 end
 
 -- Run the next scene group(s), until we run out of groups or a group delay
@@ -2568,6 +2713,16 @@ local function execSceneGroups( tdev, taskid, scd )
 					local success,err = pcall( doActionNotify, action, scd.id, tdev )
 					if not success then
 						L({level=2,msg="Notify action failed: " .. err .. " (%1 group %2 action %3)"},
+							scd.id, nextGroup, ix)
+						local ev = { dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, index=ix }
+						ev.warning = err
+						addEvent(ev)
+						getSensorState( tdev ).trouble = true
+					end
+				elseif action.type == "request" then
+					local success,err = pcall( doActionRequest, action, scd.id, tdev )
+					if not success then
+						L({level=2,msg="Request action failed: " .. err .. " (%1 group %2 action %3)"},
 							scd.id, nextGroup, ix)
 						local ev = { dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, index=ix }
 						ev.warning = err
