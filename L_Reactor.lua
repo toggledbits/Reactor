@@ -6072,7 +6072,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			source = ltn12.source.string( body ),
 			sink = ltn12.sink.file( f ),
 			verify = getReactorVar( "SSLVerify", "none" ),
-			protocol = getReactorVar( "SSLProtocol", (ssl._VERSION or "0.5"):match( "^0%.5") and "tlsv1" or "any" ),
+			protocol = getReactorVar( "SSLProtocol", (ssl._VERSION or "0.5"):match( "^0%.[45]") and "tlsv1" or "any" ),
 			options = getReactorVar( "SSLOptions", "all" )
 		}
 		http.TIMEOUT = 30

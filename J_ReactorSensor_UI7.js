@@ -8089,11 +8089,15 @@ textarea#devspyoutput { width: 100%; font-family: monospace; } \
 				},
 				dataType: 'json',
 				timeout: 30000
-			}).done( function( /* respData, respText, jqXHR */ ) {
-				msg.text( "Update successful! The changes take effect immediately; no restart necessary." );
-				// don't call updateToolsVersionDisplay() again because we'd need to reload devinfo to
-				// get the right message.
-				$( 'span#di-ver-info', container ).html( "Your database is up to date!" );
+			}).done( function( respData /* , respText, jqXHR */ ) {
+				if ( respData && respData.status ) {
+					msg.text( "Update successful! The changes take effect immediately; no restart necessary." );
+					// don't call updateToolsVersionDisplay() again because we'd need to reload devinfo to
+					// get the right message.
+					$( 'span#di-ver-info', container ).html( "Your database is up to date!" );
+				} else {
+					msg.text( "The update could not be retrieved. If this problem persists, consult the documentation." );
+				}
 			}).fail( function( /* jqXHR, textStatus, errorThrown */ ) {
 				msg.text( "The update failed; Vera busy/restarting. Try again in a moment." );
 			});

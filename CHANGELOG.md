@@ -11,6 +11,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 * Enhancement: Some users have asked that all conditions start collapsed in the Conditions editor; I view this as a behavior for advanced users, so it's now available by setting `DefaultCollapseConditions` on the Reactor master device to 1 (default 0).
 * Enhancement: Add "is NULL" operator for Expression Variable condition to test specifically for null; this improves over the prior recommendation (test for empty string, which meant you could not differntiate between empty string and null).
 * Enhancement: Conditions with running timing (delay reset, sustained, etc.) will show green pulsing animated highlight, to draw attention.
+* Fix: Downloading of updated device information databases for Vera3/Lite works again (TLS issue).
 * Fix: Formatting improvements and doc links on master's "Backup and Restore" tab.
 * Fix: Make DST change "softer" by using scheduled sensor tick rather than Refresh action.
 * Fix: Make sure non-existent scene is removed from scene cache, so we don't try to refetch it on subsequent reloads.
