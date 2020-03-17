@@ -19,11 +19,11 @@ console.log("*** Invoked J_ReactorSensor_UI7");
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.6develop-20073';
+	var pluginVersion = '3.6develop-20077';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
-	var _UIVERSION = 20045;     /* must coincide with Lua core */
+	var _UIVERSION = 20077;     /* must coincide with Lua core */
 
 	var _CDATAVERSION = 20045;  /* must coincide with Lua core */
 
@@ -156,7 +156,7 @@ console.log("*** Invoked J_ReactorSensor_UI7");
 	div.reactortab { background-color: white; color: black; } \
 	div.re-alertbox { border: 3px solid #ff3; border-radius: 8px; padding: 8px 8px; box-shadow: #999 2px 2px; background-color: #fff; color: #000; } \
 	div.reactortab input.narrow { max-width: 6em; } \
-	div.reactortab input.re-fullwidth { width: 100%; } \
+	div.reactortab .re-fullwidth { width: 100%; } \
 	div.reactortab input.tiny { max-width: 4em; text-align: center; } \
 	div.reactortab label { font-weight: normal; padding: 0 2px; } \
 	div.reactortab label.re-secondaryinput { margin-left: 0.5em; margin-right: 0.5em; } \
@@ -1620,7 +1620,7 @@ console.log("*** Invoked J_ReactorSensor_UI7");
 			for ( var ix=0; ix<l; ix++ ) {
 				var vd = vix[ix];
 				var vs = ( cstate.vars || {} )[vd.name] || {};
-				el = $( '<div class="row var" />' ).attr( 'id', vd.name );
+				el = $( '<div class="row var" />' );
 				var vv = ((cstate.vars || {})[vd.name] || {}).lastvalue;
 				if ( null === vv ) {
 					vv = "(null)";
@@ -5027,6 +5027,32 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				}
 				break;
 
+			case "request":
+				var method = $( 'select.re-method', row ).val() || "GET";
+				var url = $( '.re-url', row ).val() || "";
+				if ( ! url.match( "^https?://" ) ) {
+					$( '.re-url', row ).addClass( "tberror" );
+				}
+				/* Header format check */
+				var pd = $( '.re-reqheads', row ).val() || "";
+				if ( ! isEmpty( pd ) ) {
+					var heads = pd.trim().split( /\n/ );
+					var lh = heads.length;
+					for ( var k=0; k<lh; ++k ) {
+						/* Must be empty or "Header-Name: stuff" */
+						if ( ! ( isEmpty( heads[k] ) || heads[k].match( /^([A-Z0-9-]+):\s*/ ) ) ) {
+							$( 're-reqheads', row ).addClass( "tberror" );
+							break;
+						}
+					}
+				}
+				if ( "POST" === method && ! pd.match( /content-type:/i ) ) {
+					$( '.re-reqheads', row ).val( "Content-Type: application/x-www-form-urlencoded\n" + pd );
+				}
+				/* We don't validate post data */
+				$( 'fieldset.re-reqdatafs', row ).toggle( "POST" === method );
+				break;
+
 			default:
 				/* Do nothing */
 		}
@@ -5511,6 +5537,24 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						} else {
 							delete action[fld.id]; /* eco, don't store default */
 						}
+					}
+					break;
+
+				case "request":
+					action.method = $( 'select.re-method', row ).val() || "GET";
+					action.url = $( 'textarea.re-requrl', row ).val() || "";
+					t = $( 'textarea.re-reqheads', row ).val() || "";
+					if ( ! isEmpty(t) ) {
+						action.headers = t.trim().split(/\n/);
+					} else {
+						delete action.headers;
+					}
+					action.target = $( 'select.re-reqtarget', row ).val() || "";
+					t = $( 'textarea.re-reqdata', row ).val() || "";
+					if ( "POST" !== action.method || isEmpty( t ) ) {
+						delete action.data;
+					} else {
+						action.data = t;
 					}
 					break;
 
@@ -6685,6 +6729,52 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				changeNotifyActionMethod( ct, $m.val() );
 				break;
 
+			case "request":
+				$fs = $( '<fieldset class="form-inline"/>' ).appendTo( ct );
+				$m = $( '<select class="form-control form-control-sm re-method" />' );
+				$( '<option/>' ).val( "GET" ).text( "GET" ).appendTo( $m );
+				$( '<option/>' ).val( "POST" ).text( "POST" ).appendTo( $m );
+				menuSelectDefaultFirst( $m, "GET" );
+				$m.on( 'change.reactor', handleActionValueChange )
+					.appendTo( $fs );
+
+				$fs = $( '<fieldset class="re-fullwidth" />' ).appendTo( ct );
+				var $lb = $( '<label class="re-fullwidth" />' ).text( "Request URL:" ).appendTo( $fs );
+				$( '<textarea class="form-control re-reqfield re-requrl"></textarea>' )
+					.attr( 'placeholder', "Request URL")
+					.on( 'change.reactor', handleActionValueChange )
+					.appendTo( $lb );
+
+				$fs = $( '<fieldset/>' ).appendTo( ct );
+				$lb = $( '<label class="re-fullwidth" />' ).text( "Request Headers:" ).appendTo( $fs );
+				$( '<textarea class="form-control re-reqfield re-reqheads"></textarea>' )
+					.on( 'change.reactor', handleActionValueChange )
+					.appendTo( $lb );
+
+				$fs = $( '<fieldset class="re-reqdatafs" />' ).hide().appendTo( ct );
+				$lb = $( '<label class="re-fullwidth" />' ).text( "POST data:" ).appendTo( $fs );
+				$( '<textarea class="form-control re-reqfield re-reqdata"></textarea>' )
+					.on( 'change.reactor', handleActionValueChange )
+					.appendTo( $lb );
+
+				$fs = $( '<fieldset class="form-inline"/>' ).appendTo( ct );
+				$lb = $( '<label />' ).text( "Capture response to:" ).appendTo( $fs );
+				$m = $( '<select class="form-control re-reqtarget"/>' )
+					.on( "change.reactor", handleActionValueChange );
+				$( '<option/>' ).val( "" ).text( "(ignore/discard response)" )
+					.appendTo( $m );
+				var cd = getConfiguration();
+				for ( var vname in ( cd.variables || {} ) ) {
+					if ( cd.variables.hasOwnProperty( vname ) && isEmpty( cd.variables[vname].expression ) ) {
+						$( '<option/>' ).val( vname ).text( vname ).appendTo( $m );
+					}
+				}
+				$m.appendTo( $lb );
+
+				$('<div/>').html("Substitutions are available in all request fields using <tt>{expr}</tt> syntax. Response capture is limited to first 8K bytes.")
+					.appendTo( ct );
+				break;
+
 			default:
 				$( '<input type="hidden">' ).attr( 'id', pfx + 'unrecdata' )
 					.appendTo( ct );
@@ -6960,6 +7050,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 			'<option value="stopgsa">Stop Group Activity</option>' +
 			'<option value="setvar">Set Variable</option>' +
 			'<option value="resetlatch">Reset Latched</option>' +
+			'<option value="request">HTTP Request</option>' +
 			'</select></div>' );
 		row.append('<div class="actiondata col-xs-12 col-sm-12 col-md-6 col-lg-8"></div>');
 		var controls = $('<div class="controls col-xs-12 col-sm-12 col-md-2 col-lg-2 text-right"></div>');
@@ -7171,6 +7262,21 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						}
 						$m.val( act.method || "" );
 						changeNotifyActionMethod( newRow, act.method, act );
+						break;
+
+					case "request":
+						$( 'select.re-method', newRow ).val( act.method || "GET" );
+						$( 'textarea.re-requrl', newRow ).val( act.url || "http://" );
+						$( 'textarea.re-reqheads', newRow )
+							.val( Array.isArray( act.headers ) ? act.headers.join("\n") : "" );
+						$( 'textarea.re-reqdata', newRow ).val( act.data || "" );
+						$( 'fieldset.re-reqdatafs', newRow ).toggle( "POST" === act.method );
+						var $opt = $( 'select.re-reqtarget option[value="' + (act.target || "") + '"]', newRow );
+						if ( 0 === $opt.length ) {
+							$( '<option/>' ).val( act.target ).text( act.target + " ?")
+								.appendTo( $( 'select.re-reqtarget', newRow ) );
+						}
+						$( 'select.re-reqtarget', newRow ).val( act.target || "" );
 						break;
 
 					default:
@@ -7511,7 +7617,8 @@ div#tab-actions.reactortab div.actionrow.tberror { border-left: 4px solid red; }
 div#tab-actions.reactortab input.re-comment { width: 100% !important; } \
 div#tab-actions.reactortab select.re-actionmenu { max-width: 16em; } \
 div#tab-actions.reactortab textarea.re-extra-url { resize: both; } \
-div#tab-actions.reactortab textarea.re-luacode { font-family: monospace; resize: vertical; width: 100% !important; } \
+div#tab-actions.reactortab textarea.re-luacode { font-family: monospace; resize: vertical; width: 100% !important; white-space: nowrap; } \
+div#tab-actions.reactortab textarea.re-reqfield { font-family: monospace; resize: vertical; height: auto; width: 100% !important; white-space: nowrap; } \
 div#tab-actions.reactortab div.editor { width: 100%; min-height: 240px; } \
 div#tab-actions.reactortab div.tbhint { font-size: 90%; font-weight: normal; } \
 div#tab-actions.reactortab div.warning { color: red; } \
@@ -8089,11 +8196,15 @@ textarea#devspyoutput { width: 100%; font-family: monospace; } \
 				},
 				dataType: 'json',
 				timeout: 30000
-			}).done( function( /* respData, respText, jqXHR */ ) {
-				msg.text( "Update successful! The changes take effect immediately; no restart necessary." );
-				// don't call updateToolsVersionDisplay() again because we'd need to reload devinfo to
-				// get the right message.
-				$( 'span#di-ver-info', container ).html( "Your database is up to date!" );
+			}).done( function( respData /* , respText, jqXHR */ ) {
+				if ( respData && respData.status ) {
+					msg.text( "Update successful! The changes take effect immediately; no restart necessary." );
+					// don't call updateToolsVersionDisplay() again because we'd need to reload devinfo to
+					// get the right message.
+					$( 'span#di-ver-info', container ).html( "Your database is up to date!" );
+				} else {
+					msg.text( "The update could not be retrieved. If this problem persists, consult the documentation." );
+				}
 			}).fail( function( /* jqXHR, textStatus, errorThrown */ ) {
 				msg.text( "The update failed; Vera busy/restarting. Try again in a moment." );
 			});
