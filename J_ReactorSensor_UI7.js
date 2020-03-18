@@ -7102,7 +7102,6 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				newRow = getActionRow();
 				var rid = section.attr( 'id' ) + ns++;
 				newRow.attr( 'id', rid );
-				act.__rid = rid;
 				$( 'select.re-actiontype', newRow).val( act.type || "comment" );
 				changeActionType( newRow, act.type || "comment" );
 				switch ( act.type ) {
