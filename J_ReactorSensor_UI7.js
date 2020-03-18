@@ -7744,9 +7744,10 @@ div#tab-actions.reactortab button.re-activemode { color: #6f6; } \
 	function handleTestChange( ev ) {
 		var container = $('div#reactortools.reactortab');
 		var el = $('input#testdateenable', container);
+		var $ct = el.closest( 'div.row' );
 		var vv = "";
 		if ( el.prop('checked') ) {
-			$('select,input#testtime', el.closest('div.row')).prop('disabled', false);
+			$('select,input#testtime', $ct).prop('disabled', false);
 			var t = new Date();
 			t.setFullYear( $('select#testyear', container).val() );
 			t.setMonth( parseInt( $('select#testmonth', container).val() ) - 1 );
@@ -7767,7 +7768,7 @@ div#tab-actions.reactortab button.re-activemode { color: #6f6; } \
 				vv = "";
 			}
 		} else {
-			$('select,input#testtime', el.closest('div.row')).prop('disabled', true);
+			$('select,input#testtime', $ct).prop('disabled', true);
 		}
 		api.setDeviceStateVariablePersistent( api.getCpanelDeviceId(), serviceId, "TestTime", vv );
 
