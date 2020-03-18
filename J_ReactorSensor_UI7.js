@@ -12,9 +12,7 @@
 
 //"use strict"; // fails on UI7, works fine with ALTUI
 
-console.log("*** Loading J_ReactorSensor_UI7");
 var ReactorSensor = (function(api, $) {
-console.log("*** Invoked J_ReactorSensor_UI7");
 
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
@@ -7007,12 +7005,12 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 										var lj = action.arguments ? action.arguments.length : 0;
 										for ( var j=0; j<lj; j++ ) {
 											var a = action.arguments[j];
-											if ( 0 === $( '#' + idSelector( pfx + '-' + a.name ), row ).length ) {
+											if ( 0 === $( '#' + idSelector( pfx + a.name ), row ).length ) {
 												var inp = $( '<input class="argument form-control form-control-sm">' ).attr('id', a.name);
 												var lbl = $( '<label/>' ).attr('for', a.name).text(a.name).addClass('tbrequired').append(inp);
 												$( 'div.actiondata', row ).append( lbl );
 											}
-											$( '#' + idSelector( pfx + '-' + a.name ), row ).val( a.value || "" );
+											$( '#' + idSelector( pfx + a.name ), row ).val( a.value || "" );
 										}
 									}, [ newRow, act ]);
 								}
