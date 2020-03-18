@@ -19,11 +19,11 @@ console.log("*** Invoked J_ReactorSensor_UI7");
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.6develop-20077';
+	var pluginVersion = '3.6develop-20078';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
-	var _UIVERSION = 20077;     /* must coincide with Lua core */
+	var _UIVERSION = 20078;     /* must coincide with Lua core */
 
 	var _CDATAVERSION = 20045;  /* must coincide with Lua core */
 

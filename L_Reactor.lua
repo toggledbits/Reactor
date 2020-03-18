@@ -11,12 +11,12 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.6develop-20077"
+local _PLUGIN_VERSION = "3.6develop-20078"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION	= 20070
 local _CDATAVERSION		= 20045	-- must coincide with JS
-local _UIVERSION		= 20077	-- must coincide with JS
+local _UIVERSION		= 20078	-- must coincide with JS
 	  _SVCVERSION		= 20045	-- must coincide with impl file (not local)
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"

@@ -17,9 +17,9 @@ var Reactor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '72acc6ea-f24d-11e8-bd87-74d4351650de';
 
-	var pluginVersion = '3.6develop-20077';
+	var pluginVersion = '3.6develop-20078';
 
-	var _UIVERSION = 20077;     /* must coincide with Lua core */
+	var _UIVERSION = 20078;     /* must coincide with Lua core */
 
 	var _DOCURL = "https://www.toggledbits.com/static/reactor/docs/3.5/";
 
