@@ -6927,6 +6927,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 							}
 							if ( 501 === xhr.status ) {
 								alert(actionText + "The requested action may not be implemented by the selected device.");
+							} else if ( 401 === xhr.status ) {
+								alert(actionText + "The requested action's service is unrecognized or not supported by the device.");
 							} else if ( 503 === xhr.status || 500 === xhr.status ) {
 								alert(actionText + "Luup appears to be reloading; wait a moment and try again.");
 							} else {
