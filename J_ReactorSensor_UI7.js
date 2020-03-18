@@ -5342,37 +5342,31 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					if ( ai && ai.deviceOverride && ai.deviceOverride[devnum] ) {
 						ai = ai.deviceOverride[devnum];
 					}
+					/* Make LUT of known fields (if we know any) */
+					var ap = {};
+					var lk = ( ai && ai.parameters ) ? ai.parameters.length : 0;
+					for ( k=0; k < lk; k++ ) ap[ai.parameters[k].name] = ai.parameters[k];
+					/* We always use the on-page fields as the reference list of parameters. What
+					   the user sees is what we store. */
 					action.parameters = [];
-					if ( ai ) {
-						var lk = ai.parameters ? ai.parameters.length : 0;
-						for ( k=0; k < lk; k++ ) {
-							pt = { name: ai.parameters[k].name };
-							if ( undefined !== ai.parameters[k].value ) {
-								/* Fixed value */
-								pt.value = ai.parameters[k].value;
-							} else {
-								/* Ignore default here, it's assumed to be valid when needed */
-								t = $( '#' + idSelector( pfx + ai.parameters[k].name ), row ).val() || "";
-								if ( isEmpty( t ) ) {
-									if ( ai.parameters[k].optional ) {
-										continue; /* skip it, not even put on the list */
-									}
-									/* fall through and accept empty */
-								}
-								pt.value = t;
-							}
-							action.parameters.push( pt );
+					$( '.argument', row ).each( function() {
+						var val = $( this ).val() || "";
+						var pname = ($( this ).attr( 'id' ) || "unnamed").replace( pfx, '' );
+						if ( ! isEmpty( val ) || ( ap[pname] && !ap[pname].optional ) ) {
+							action.parameters.push( { name: pname, value: val } );
 						}
-					} else {
-						/* No action info; build using fields directly */
-						console.log( "Can't find actioninfo for " + t );
-						$( '.argument', row ).each( function() {
-							var val = $( this ).val();
-							if ( ! isEmpty( val ) ) {
-								var pname = ($( this ).attr( 'id' ) || "unnamed").replace( pfx, '' );
-								action.parameters.push( { name: pname, value: val } );
+						delete ap[pname];
+					});
+					/* Known fields that remain... */
+					for ( k in ap ) {
+						if ( ap.hasOwnProperty(k) ) {
+							if ( ap[k].value ) {
+								/* Supply fixed value field */
+								action.parameters.push( { name: k, value: ap[k].value } );
+							} else if ( ! ap[k].optional ) {
+								action.parameters.push( { name: k, value: "" } );
 							}
-						});
+						}
 					}
 					break;
 
@@ -6016,8 +6010,10 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					inp.attr( 'placeholder', parm.name );
 					inp.val( parm.optional ? "" : ( parm.default || parm.min || 0 ) );
 				} else {
-					console.log("changeActionAction: using default (string) presentation for type " +
-						String(parm.type) + " " + String(parm.name) );
+					if ( "string" !== parm.type ) {
+						console.log("changeActionAction: using default (string) presentation for type " +
+							String(parm.type) + " " + String(parm.name) );
+					}
 					inp = $( '<input class="argument form-control form-control-sm">' );
 					if ( ! parm.novars ) {
 						inp.attr( 'list', 'reactorvarlist' );
@@ -6854,51 +6850,53 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					if ( act && (act.deviceOverride || {})[d] ) {
 						act = act.deviceOverride[d];
 					}
+					/* Make LUT of known fields */
+					var ap = {};
+					var lk = ( act && act.parameters ) ? act.parameters.length : 0;
+					for ( var k=0; k < lk; k++ ) ap[act.parameters[k].name] = act.parameters[k];
+					/* Use on-page fields as list */
 					var param = {};
-					var actionText = s + "(";
-					if ( act ) {
-						var lk = act.parameters ? act.parameters.length : 0;
-						for ( var k=0; k<lk; ++k ) {
-							var p = act.parameters[k];
-							if ( undefined !== p.value ) {
-								/* Fixed value */
-								param[p.name] = encodeURIComponent(p.value);
-								actionText += "{" + p.name + "=" + String(p.value) + "}, ";
-							} else {
-								var v = ($( '#' + idSelector( pfx + p.name ), row ).val() || "").trim();
-								var vn = v.match( varRefPattern );
-								if ( vn && vn.length == 2 ) {
-									/* Variable reference, get current value. */
-									if ( ! cvars ) {
-										var cstate = getConditionStates();
-										cvars = cstate.vars || {};
-									}
-									if ( undefined !== cvars[vn[1]] ) {
-										v = cvars[vn[1]].lastvalue || "";
-									}
-								}
-								if ( "" === v ) {
-									if ( p.optional ) {
-										continue;
-									}
-									if ( undefined !== p.default ) {
-										v = p.default;
-									}
-								}
-								param[p.name] = encodeURIComponent(String(v));
-								actionText += p.name + "=" + quot(v) + ", ";
+					var actionText = s + "( ";
+					$( '.argument', row ).each( function() {
+						var val = $( this ).val() || "";
+						var pname = ($( this ).attr( 'id' ) || "unnamed").replace( pfx, '' );
+						var vn = val.match( varRefPattern );
+						if ( vn && vn.length == 2 ) {
+							/* Variable reference, get current value. */
+							if ( ! cvars ) {
+								var cstate = getConditionStates();
+								cvars = cstate.vars || {};
+							}
+							if ( undefined !== cvars[vn[1]] ) {
+								val = cvars[vn[1]].lastvalue || "";
 							}
 						}
-					} else {
-						/* No action info whatsoever, build from fields */
-						$( '.argument', row ).each( function() {
-							var val = $( this ).val();
-							var vname = ($( this ).attr( 'id' ) || "unnamed").replace( pfx, "" );
-							param[ vname ] = encodeURIComponent(val);
-							actionText += vname + "=" + quot(val) + ", ";
-						});
+						if ( ! isEmpty( val ) || ( ap[pname] && !ap[pname].optional ) ) {
+							param[pname] = val;
+						}
+						delete ap[pname];
+					});
+					/* Known fields that remain... */
+					for ( k in ap ) {
+						if ( ap.hasOwnProperty(k) ) {
+							if ( ap[k].value ) {
+								/* Supply fixed value field */
+								param[k] = ap.value;
+							} else if ( ! ap[k].optional ) {
+								param[k] = "";
+							}
+						}
 					}
-					actionText += '): ';
+					/* Build string and prep for action */
+					ap = [];
+					for ( k in param ) {
+						if ( param.hasOwnProperty( k ) ) {
+							ap.push( k + "=" + quot( param[k] ) );
+							param[k] = encodeURIComponent( param[k] ); /* prep for action */
+						}
+					}
+					actionText += ap.join(", ");
+					actionText += " )\n\n";
 
 					api.performActionOnDevice( d, pt[0], pt[1], {
 						actionArguments: param,
@@ -6927,7 +6925,13 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 										console.log("xhr." + k + "=" + String(xhr[k]));
 								}
 							}
-							alert( "An error occurred. Try again in a moment; Vera may be busy." );
+							if ( 501 === xhr.status ) {
+								alert(actionText + "The requested action may not be implemented by the selected device.");
+							} else if ( 503 === xhr.status || 500 === xhr.status ) {
+								alert(actionText + "Luup appears to be reloading; wait a moment and try again.");
+							} else {
+								alert(actionText + String(xhr.status) + " " + String(xhr.errorThrown) );
+							}
 						}
 					} );
 				} else {
@@ -7134,24 +7138,27 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 								$( 'select.re-actionmenu', row ).prepend( opt );
 							}
 							$( 'select.re-actionmenu', row ).val( key ).prop( 'disabled', false );
-							/* If selected action is not already know, pre-populate extended data if it exists.
+							/* If selected action is not already known, pre-populate extended data if it exists.
 							   This assists full display and preservation of params if device is remove/replaced. */
 							if ( undefined === actions[key] && undefined != deviceInfo.services[action.service || ""] &&
 									deviceInfo.services[action.service || ""].actions[action.action || ""] ) {
 								actions[key] = deviceInfo.services[action.service || ""].actions[action.action || ""];
+								actions[key].deviceOverride = {};
+								actions[key].service = action.service || "";
 							}
 							changeActionAction( row, key );
 							var lj = action.parameters ? action.parameters.length : 0;
 							for ( var j=0; j<lj; j++ ) {
 								var fld = $( '#' + idSelector( pfx + action.parameters[j].name ), row );
-								if ( false && 0 === fld.length ) {
-									var inp = $( '<input class="argument form-control form-control-sm">' )
-										.attr( 'id', pfx + action.parameters[j].name );
+								if ( 0 === fld.length ) {
+									fld = $( '<input class="argument form-control form-control-sm">' )
+										.attr( 'id', pfx + action.parameters[j].name )
+										.on( "change.reactor", handleActionValueChange );
 									var lbl = $( '<label/>' )
 										.attr( 'for', pfx + action.parameters[j].name )
 										.addClass( 'optarg' )
-										.text( action.parameters[j].name + '[X]:' )
-										.append( inp );
+										.text( action.parameters[j].name + ' (unrecognized parameter):' )
+										.append( fld );
 									$( 'div.actiondata', row ).append( lbl );
 								}
 								fld.val( coalesce( action.parameters[j].value, "" ) );
