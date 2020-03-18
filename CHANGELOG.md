@@ -15,6 +15,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 * Enhancement: Add "is NULL" operator for Expression Variable condition to test specifically for null; this improves over the prior recommendation (test for empty string, which meant you could not differntiate between empty string and null).
 * Enhancement: Conditions with running timing (delay reset, sustained, etc.) will show green pulsing animated highlight, to draw attention.
 * Enhancement: Upgraded LuaXP to 1.0.2, which adds the missing `replace()` string function, and provides `indexof()` and the new `push()`, `pop()`, `unshift()`, and `shift()` functions. The Reactor-specific `arrayPush()`, `arrayPop()`, `arrayUnshift()` and `arrayShift()` functions are now deprecated.
+* Enhancement: Warning icons are now displayed in the Activities tab if any activity/action has an error or warning highlight.
 * Fix: Downloading of updated device information databases for Vera3/Lite works again (TLS issue).
 * Fix: Formatting improvements and doc links on master's "Backup and Restore" tab.
 * Fix: Make DST change "softer" by using scheduled sensor tick rather than Refresh action.
