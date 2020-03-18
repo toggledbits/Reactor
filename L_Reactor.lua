@@ -2249,7 +2249,7 @@ local function doActionNotify( action, scid, tdev )
 		elseif action.method == "UU" then -- User URL
 			local baseurl = action.url or ""
 			baseurl = baseurl:gsub( "%{message%}", urlencode( msg ):gsub("%%", "%%%%") ) -- special
-			baseurl = baseurl:gsub( "%{[^}]+%}", function( ref ) 
+			baseurl = baseurl:gsub( "%{[^}]+%}", function( ref )
 				local vv = getValue( ref, nil, tdev )
 				return ( vv ~= nil ) and vv or ref
 			end )
@@ -2303,7 +2303,7 @@ local function doActionRequest( action, scid, tdev )
 	local maxResp = getVarNumeric( "RequestActionResponseLimit", 2048, tdev, RSSID )
 
 	-- Perform on-the-fly substitution of request values
-	local url = tostring( action.url or "" ):gsub( "%{[^}]+%}", function( ref ) 
+	local url = tostring( action.url or "" ):gsub( "%{[^}]+%}", function( ref )
 		local vv = getValue( ref, nil, tdev )
 		return ( vv ~= nil ) and vv or ref
 	end )
@@ -2313,16 +2313,16 @@ local function doActionRequest( action, scid, tdev )
 	for _,line in ipairs( action.headers or {} ) do
 		local key,val = line:match( "^([^:]+):%s*(.*)" )
 		if key and val then
-			val = (val or ""):gsub( "%{[^}]+%}", function( ref ) 
+			val = (val or ""):gsub( "%{[^}]+%}", function( ref )
 				local vv = getValue( ref, nil, tdev )
 				return ( vv ~= nil ) and vv or ref
 			end )
-			tHeaders[key] = val 
+			tHeaders[key] = val
 		end
 	end
 
 	local src
-	local body = tostring(action.data or "" ):gsub( "%{[^}]+%}", function( ref ) 
+	local body = tostring(action.data or "" ):gsub( "%{[^}]+%}", function( ref )
 		local vv = getValue( ref, nil, tdev )
 		return ( vv ~= nil ) and vv or ref
 	end )
@@ -2358,7 +2358,7 @@ local function doActionRequest( action, scid, tdev )
 			until count >= maxResp
 			f:close()
 			respBody = table.concat( r, "" ):sub(1, maxResp)
-			L("%1 (#%2) request completed, response body %3 bytes", luup.devices[tdev].description, tdev, 
+			L("%1 (#%2) request completed, response body %3 bytes", luup.devices[tdev].description, tdev,
 				#respBody)
 			addEvent{ dev=tdev, msg="Request completed, response body %(bodylen)s bytes",
 				bodylen=#respBody }
