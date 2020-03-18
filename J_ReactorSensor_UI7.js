@@ -2489,7 +2489,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 							configModified = true;
 						}
 					}
-					var repeats = "repeat" === $( 'select.re-pulsemode' ).val();
+					var repeats = "repeat" === $( 'select.re-pulsemode', $ct ).val();
 					$( "span.re-pulsebreakopts", $ct ).toggle( repeats );
 					if ( repeats ) {
 						$f = $( 'input.re-pulsebreak', $ct );
@@ -6885,7 +6885,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						/* No action info whatsoever, build from fields */
 						$( '.argument', row ).each( function() {
 							var val = $( this ).val();
-							var vname = $( this ).attr( 'id' ).replace( pfx, "" );
+							var vname = ($( this ).attr( 'id' ) || "unnamed").replace( pfx, "" );
 							param[ vname ] = encodeURIComponent(val);
 							actionText += vname + "=" + quot(val) + ", ";
 						});
@@ -7776,7 +7776,7 @@ div#tab-actions.reactortab button.re-activemode { color: #6f6; } \
 		el = $('input#testhousemode', container);
 		if ( el.prop('checked') ) {
 			$('select#mode', container).prop('disabled', false);
-			vv = $('select#mode').val();
+			vv = $('select#mode', container).val();
 		} else {
 			$('select#mode', container).prop('disabled', true);
 			vv = "";
