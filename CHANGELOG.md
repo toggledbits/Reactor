@@ -4,6 +4,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 3.5 Hotfixes
 
+* Hotfix 20078-01: Fix a missing selector constraint that may affect conditions when pulse mode is used.
 * Hotfix 20071-01: openLuup only: Suppress "unsafe lua" warnings correctly on openLuup.
 * Hotfix 20070-03: openLuup only: fix backup file handling (uncompressed files on openLuup)
 * Hotfix 20070-02: Make sure deviceinfo updates are compressed, remove any conflicting uncompressed devinfo file.

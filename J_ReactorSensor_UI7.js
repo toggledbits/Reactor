@@ -2467,7 +2467,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 							configModified = true;
 						}
 					}
-					var repeats = "repeat" === $( 'select.re-pulsemode' ).val();
+					var repeats = "repeat" === $( 'select.re-pulsemode', $ct ).val();
 					$( "span.re-pulsebreakopts", $ct ).toggle( repeats );
 					if ( repeats ) {
 						$f = $( 'input.re-pulsebreak', $ct );
