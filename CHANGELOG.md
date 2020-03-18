@@ -2,6 +2,8 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11.21 or higher.
 
+**DEPRECATION NOTICE:** The expression functions `arraypush()`, `arraypop()`, `arrayunshift()` and `arrayshift()` have been made first-class functions in the LuaXP module under the names `push()`, `pop()`, `unshift()` and `shift()` respectively. The `array...()` versions are now deprecated, and will be removed from a future release. Please convert to the new functions, which for all practical purposes are identical (so you just need to change the names in your expressions and it's done).
+
 ## Version 3.6 (development)
 
 * Enhancement: The *Request* action has been added to activities to make an HTTP GET or POST request to a remove service as an action. The URL, headers, and (for POST) body data may be specified, and variable substitutions using the usual `{expr}` syntax work. When using POST, it is highly recommended that a correct "Content-Type" header be included.
@@ -12,6 +14,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 * Enhancement: Some users have asked that all conditions start collapsed in the Conditions editor; I view this as a behavior for advanced users, so it's now available by setting `DefaultCollapseConditions` on the Reactor master device to 1 (default 0).
 * Enhancement: Add "is NULL" operator for Expression Variable condition to test specifically for null; this improves over the prior recommendation (test for empty string, which meant you could not differntiate between empty string and null).
 * Enhancement: Conditions with running timing (delay reset, sustained, etc.) will show green pulsing animated highlight, to draw attention.
+* Enhancement: Upgraded LuaXP to 1.0.2, which adds the missing `replace()` string function, and provides `indexof()` and the new `push()`, `pop()`, `unshift()`, and `shift()` functions. The Reactor-specific `arrayPush()`, `arrayPop()`, `arrayUnshift()` and `arrayShift()` functions are now deprecated.
 * Fix: Downloading of updated device information databases for Vera3/Lite works again (TLS issue).
 * Fix: Formatting improvements and doc links on master's "Backup and Restore" tab.
 * Fix: Make DST change "softer" by using scheduled sensor tick rather than Refresh action.
