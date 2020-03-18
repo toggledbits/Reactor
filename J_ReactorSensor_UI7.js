@@ -5641,6 +5641,16 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 		/* Run activity button only when saved/unmodified */
 		$( 'div.actionlist button.re-tryactivity' ).prop( 'disabled', configModified );
 
+		if ( 0 !== $( '.tberror' ).length ) {
+			$( '.re-titlewarning' )
+				.html( '<i class="material-icons" title="Correct errors before saving!" style="color: #f00; background-color: white;">report</i>' );
+		} else if ( 0 !== $( '.tbwarn' ).length ) {
+			$( '.re-titlewarning' )
+				.html( '<i class="material-icons" title="Check warnings!" style="color: #ff0;">warning</i>' );
+		} else {
+			$( '.re-titlewarning' ).html( "" );
+		}
+
 		/* Save and revert buttons */
 		updateSaveControls();
 	}
@@ -7347,6 +7357,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
   <span class="re-titlemessage" /> \
 </div> \
 <div class="tblisttitle col-xs-3 col-sm-3 col-lg-2 text-right"> \
+  <div class="re-titlewarning" /> \
   <div class="btn-group"> \
 	<button class="btn btn-xs btn-success saveconf">Save</button> \
 	<button class="btn btn-xs btn-danger revertconf">Revert</button> \
@@ -7605,6 +7616,8 @@ div#tab-actions.reactortab div.actionlist { border-radius: 8px; border: 2px soli
 div#tab-actions.reactortab div.actionlist .row { margin-right: 0px; margin-left: 0px; } \
 div#tab-actions.reactortab div.tblisttitle { background-color: #428BCA; color: #fff; padding: 4px 8px; min-height: 45px; } \
 div#tab-actions.reactortab div.tblisttitle span.re-title { font-size: 16px; font-weight: bold; margin-right: 1em; } \
+div#tab-actions.reactortab span.re-titlemessage { padding-left: 8px; } \
+div#tab-actions.reactortab div.re-titlewarning { float: left !important; } \
 div#tab-actions.reactortab div.actionlist label:not(.required) { font-weight: normal; } \
 div#tab-actions.reactortab div.actionlist label.required { font-weight: bold; } \
 div#tab-actions.reactortab div.actionlist.tbmodified div.tblisttitle span.re-title:after { content: " (unsaved)" } \
