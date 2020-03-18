@@ -238,5 +238,12 @@
 				return true
 			</run>
 		</action>
+		<action>
+			<serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
+			<name>SendSMTP</name>
+			<job>
+				return Reactor.actionSendSMTP( lul_device, lul_settings )
+			</job>
+		</action>
 	</actionList>
 </implementation>

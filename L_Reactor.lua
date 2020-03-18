@@ -2097,6 +2097,102 @@ local function doSetVar( varname, value, tdev, reparse, savestate )
 	return true, oldVal, vv
 end
 
+-- Send SMTP message
+local function doSMTPSend( from, to, subject, body, cc, bcc )
+	D("doSMTPSend(%1,%2,%3,%4,%5,%6)", from, to, subject, body, cc, bcc)
+
+	local ok,smtp = pcall( require, "socket.smtp" )
+	if not ok or type(smtp) ~= "table" then
+		error "socket.smtp is not installed"
+	end
+
+	local server = getReactorVar( "SMTPServer", "localhost" )
+	local port = getVarNumeric( "SMTPPort", 0, pluginDevice, MYSID )
+	local authuser = getReactorVar( "SMTPUsername", "" )
+	local authpass = getReactorVar( "SMTPPassword", "" )
+
+	local sendt = { from = "<"..from:gsub( "^[^<]+<([^>]+)>.*$", "%1" )..">", rcpt = {}, server = server }
+	local msgt = { headers = { From=from, To={}, Subject=subject or "" }, body=body or "(no message)" }
+	to = split( to )
+	if #to == 0 then to = { from } end
+	for _,rr in ipairs( to ) do
+		local rc = rr:gsub( "^[^<]+<([^>]+)>.*$", "%1" ):gsub("^%s+", ""):gsub("%s+$", "") -- remove human readables, if present
+		table.insert( sendt.rcpt, "<" .. rc .. ">" )
+		table.insert( msgt.headers.To, rr )
+	end
+	msgt.headers.To = table.concat( msgt.headers.To, ", " )
+	cc = split( cc or "" )
+	if #cc > 0 then
+		msgt.headers.Cc = {}
+		for _,rr in ipairs( cc ) do
+			local rc = rr:gsub( "^[^<]+<([^>]+)>.*$", "%1" ):gsub("^%s+", ""):gsub("%s+$", "") -- remove human readables, if present
+			table.insert( sendt.rcpt, "<" .. rc .. ">" )
+			table.insert( msgt.headers.Cc, rr )
+		end
+		msgt.headers.Cc = table.concat( msgt.headers.Cc, ", " )
+	end
+	bcc = split( bcc or "" )
+	if #bcc > 0 then
+		-- Note: no header! don't expose recipient on bcc
+		for _,rr in ipairs( bcc ) do
+			local rc = rr:gsub( "^[^<]+<([^>]+)>.*$", "%1" ):gsub("^%s+", ""):gsub("%s+$", "") -- remove human readables, if present
+			table.insert( sendt.rcpt, "<" .. rc .. ">" )
+		end
+	end
+	D("doSMTPSend() msgt=%1", msgt)
+	if port > 0 then
+		sendt.port = port
+		if port == 465 or getVarNumeric( "SMTPConnectSSLTLS", 0, pluginDevice, MYSID ) ~= 0 then
+			sendt.create = function()
+				-- local socket = require "socket"
+				local sock = socket.tcp()
+				return setmetatable({
+					connect = function(_, hh, pp)
+						local r, e = sock:connect( hh, pp )
+						if not r then return r, e end
+						local ssl = require "ssl"
+						D("doSMTPSend() SMTP send wrapping %1 using SSL version %2", sock, ssl._VERSION)
+						local params = getSSLParams( "SMTP" )
+						sock = ssl.wrap( sock, params )
+						D("doSMTPSend() SMTP after wrapping with %2, sock is %1", sock, params)
+						if not sock then
+							L({level=2,msg="Failed to wrap socket on %1:%2 for SMTP+SSL; check SSL param configuration %3"},
+								server, port, params)
+							error "Failed SSL wrap"
+						end
+						local ret = sock:dohandshake()
+						if not ret then
+							L({level=2,msg="SSL handshake (for SMTP notification) with %1:%2 failed; check server config and parameters %3"},
+								server, port, params)
+							error "Failed SSL handshake"
+						end
+						return ret
+					end
+				}, {
+					__index = function( t, n ) -- luacheck: ignore 212
+						return function( _, ... )
+							return sock[n](sock, ...)
+						end
+					end
+				})
+			end
+		end
+	end
+	if authuser ~= "" then sendt.user = authuser end
+	if authpass ~= "" then sendt.password = authpass end
+	sendt.source = smtp.message( msgt )
+	D("doSMTPSend() sendt=%1", sendt)
+	local r,e = smtp.send( sendt )
+	D("doSMTPSend() SMTP send returned %1, %2", r, e)
+	if r == nil then
+		if sendt.user then sendt.user = "****" end
+		if sendt.password then sendt.password = "****" end
+		L({level=2,msg="SMTP Send failed, %1; package %2; message %3"}, e, sendt, msgt)
+		error("SMTP send failed, " .. tostring(e))
+	end
+	return
+end
+
 -- Perform notify action
 local function doActionNotify( action, scid, tdev )
 	local nid = action.notifyid
@@ -2113,78 +2209,10 @@ local function doActionNotify( action, scid, tdev )
 				error "VeraAlerts is not available"
 			end
 		elseif action.method == "SM" then -- SMTP Mail
-			local ok,smtp = pcall( require, "socket.smtp" )
-			if not ok or type(smtp) ~= "table" then
-				error "socket.smtp is not installed"
-			else
-				local server = getReactorVar( "SMTPServer", "localhost" )
-				local port = getVarNumeric( "SMTPPort", 0, pluginDevice, MYSID )
-				local authuser = getReactorVar( "SMTPUsername", "" )
-				local authpass = getReactorVar( "SMTPPassword", "" )
-				local from = getReactorVar( "SMTPSender", "unconfigured@localhost" )
-				local to = getValue( action.recipient or getReactorVar( "SMTPDefaultRecipient", "unconfigured@localhost" ), nil, tdev )
-				local subj = getValue( action.subject or getReactorVar( "SMTPDefaultSubject", luup.devices[tdev].description .. " Notification" ), nil, tdev )
-				local sendt = { from = "<"..from:gsub( "^[^<]+<([^>]+)>.*$", "%1" )..">", rcpt = {}, server = server }
-				local msgt = { headers = { From=from, To={}, Subject=subj }, body = msg }
-				to = split( to ) or { from }
-				for _,rr in ipairs( to ) do
-					local rc = rr:gsub( "^[^<]+<([^>]+)>.*$", "%1" ) -- remove human readables, if present
-					table.insert( sendt.rcpt, "<" .. rc .. ">" )
-					table.insert( msgt.headers.To, rr )
-				end
-				if port > 0 then
-					sendt.port = port
-					if port == 465 or getVarNumeric( "SMTPConnectSSLTLS", 0, pluginDevice, MYSID ) ~= 0 then
-						sendt.create = function()
-							-- local socket = require "socket"
-							local sock = socket.tcp()
-							return setmetatable({
-								connect = function(_, hh, pp)
-									local r, e = sock:connect( hh, pp )
-									if not r then return r, e end
-									local ssl = require "ssl"
-									D("doActionNotify() SMTP send wrapping %1 using SSL version %2", sock, ssl._VERSION)
-									local params = getSSLParams( "SMTP" )
-									sock = ssl.wrap( sock, params )
-									D("doActionNotify() SMTP after wrapping with %2, sock is %1", sock, params)
-									if not sock then
-										L({level=2,msg="Failed to wrap socket on %1:%2 for SMTP+SSL; check SSL param configuration %3"},
-											server, port, params)
-										error "Failed SSL wrap"
-									end
-									local ret = sock:dohandshake()
-									if not ret then
-										L({level=2,msg="SSL handshake (for SMTP notification) with %1:%2 failed; check server config and parameters %3"},
-											server, port, params)
-										error "Failed SSL handshake"
-									end
-									return ret
-								end
-							}, {
-								__index = function( t, n ) -- luacheck: ignore 212
-									return function( _, ... )
-										return sock[n](sock, ...)
-									end
-								end
-							})
-						end
-					end
-				end
-				if authuser ~= "" then sendt.user = authuser end
-				if authpass ~= "" then sendt.password = authpass end
-				msgt.headers.To = table.concat( msgt.headers.To, ", " )
-				D("doActionNotify msgt=%1", msgt)
-				sendt.source = smtp.message( msgt )
-				D("doActionNotify sendt=%1", sendt)
-				local r,e = smtp.send( sendt )
-				D("doActionNotify SMTP send returned %1, %2", r, e)
-				if r == nil then
-					if sendt.user then sendt.user = "****" end
-					if sendt.password then sendt.password = "****" end
-					L({level=2,msg="SMTP Send failed, %1; package %2; message %3"}, e, sendt, msgt)
-					error("SMTP send failed, " .. tostring(e))
-				end
-			end
+			local from = getReactorVar( "SMTPSender", "unconfigured@localhost" )
+			local to = getValue( action.recipient or getReactorVar( "SMTPDefaultRecipient", "unconfigured@localhost" ), nil, tdev )
+			local subj = getValue( action.subject or getReactorVar( "SMTPDefaultSubject", luup.devices[tdev].description .. " Notification" ), nil, tdev )
+			doSMTPSend( from, to, subj, msg )
 		elseif action.method == "PR" then -- Prowl
 			local apikey = getReactorVar( "ProwlAPIKey", "" )
 			if apikey == "" or apikey == "X" then
@@ -5151,6 +5179,24 @@ function actionClearLatched( dev, group )
 		scheduleDelay( { id=tostring(dev), owner=dev, func=sensorTick }, 0 )
 	end
 	return true
+end
+
+function actionSendSMTP( lul_device, lul_settings )
+	D("actionNotifySMTP(%1,%2)", lul_device, lul_settings)
+
+	local from = lul_settings.From or "<Vera@localhost>"
+	local to = lul_settings.To or error("Missing 'To' parameter")
+	local subject = lul_settings.Subject or ""
+	local body = lul_settings.Body or error("Missing 'Body' parameter")
+
+	local success, err = pcall( doSMTPSend, from, to, subject, body, lul_settings.Cc, lul_settings.Bcc )
+	if success then
+		L("SendSMTP action succeeded to %1 subject %2", to, subject)
+		return 4,0
+	else
+		L{level=1,msg=err}
+	end
+	return 2,0
 end
 
 local function findSceneOrActivity( scene, dev )

@@ -107,6 +107,41 @@
 			<argumentList/>
 		</action>
 		<action>
+			<name>SendSMTP</name>
+			<argumentList>
+				<argument>
+					<name>From</name>
+					<direction>in</direction>
+					<relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
+				</argument>
+				<argument>
+					<name>To</name>
+					<direction>in</direction>
+					<relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
+				</argument>
+				<argument>
+					<name>Subject</name>
+					<direction>in</direction>
+					<relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
+				</argument>
+				<argument>
+					<name>Body</name>
+					<direction>in</direction>
+					<relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
+				</argument>
+				<argument>
+					<name>Cc</name>
+					<direction>in</direction>
+					<relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
+				</argument>
+				<argument>
+					<name>Bcc</name>
+					<direction>in</direction>
+					<relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
+				</argument>
+			</argumentList>
+		</action>
+		<action>
 			<name>GetPluginVersion</name>
 			<argumentList>
 				<argument>
