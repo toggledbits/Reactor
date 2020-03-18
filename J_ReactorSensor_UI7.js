@@ -4864,7 +4864,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 		$( 'div.tberrmsg', row ).remove();
 		var pfx = row.attr( 'id' ) + '-';
 
-		var dev;
+		var dev, k;
 		switch ( actionType ) {
 			case "comment":
 				break;
@@ -4907,7 +4907,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 							return; /* If we don't know, we don't check */
 						}
 						var lk = ai.parameters ? ai.parameters.length : 0;
-						for ( var k=0; k<lk; k++ ) {
+						for ( k=0; k<lk; k++ ) {
 							var p = ai.parameters[k];
 							if ( undefined === p.value ) { /* ignore fixed value */
 								/* Fetch value */
@@ -5026,7 +5026,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				break;
 
 			case "request":
-				var method = $( 'select.re-method', row ).val() || "GET";
+				var rmethod = $( 'select.re-method', row ).val() || "GET";
 				var url = $( '.re-url', row ).val() || "";
 				if ( ! url.match( "^https?://" ) ) {
 					$( '.re-url', row ).addClass( "tberror" );
@@ -5036,7 +5036,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				if ( ! isEmpty( pd ) ) {
 					var heads = pd.trim().split( /\n/ );
 					var lh = heads.length;
-					for ( var k=0; k<lh; ++k ) {
+					for ( k=0; k<lh; ++k ) {
 						/* Must be empty or "Header-Name: stuff" */
 						if ( ! ( isEmpty( heads[k] ) || heads[k].match( /^([A-Z0-9-]+):\s*/ ) ) ) {
 							$( 're-reqheads', row ).addClass( "tberror" );
@@ -5044,11 +5044,11 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						}
 					}
 				}
-				if ( "POST" === method && ! pd.match( /content-type:/i ) ) {
+				if ( "POST" === rmethod && ! pd.match( /content-type:/i ) ) {
 					$( '.re-reqheads', row ).val( "Content-Type: application/x-www-form-urlencoded\n" + pd );
 				}
 				/* We don't validate post data */
-				$( 'fieldset.re-reqdatafs', row ).toggle( "POST" === method );
+				$( 'fieldset.re-reqdatafs', row ).toggle( "POST" === rmethod );
 				break;
 
 			default:
