@@ -65,9 +65,9 @@ local ARRAYMAX = 100 -- maximum size of an unbounded (luaxp) array (override by 
 
 local defaultLogLevel = false -- or a number, which is (uh...) the default log level for messages
 
-local json = require "dkjson"
-local socket = require "socket"
-local mime = require "mime"
+local _,json = pcall( require, "dkjson" )
+local _,socket = pcall( require, "socket" )
+local _,mime = pcall( require, "mime" )
 local luaxp -- will only be loaded if needed
 
 local function dump(t, seen)
@@ -1586,7 +1586,7 @@ local function getExpressionContext( cdata, tdev )
 	-- This should be the ONLY place that LuaXP is loaded. It additionally
 	-- defines metadata that must exist in all use.
 	luaxp = require "L_LuaXP_Reactor"
-	L({level=2,"loaded LuaXP %s version %s"}, luaxp, (luaxp or {})._VERSION)
+	L({level=2,"loaded LuaXP %1 version %2"}, luaxp, (luaxp or {})._VERSION)
 	-- Make sure LuaXP null renders as "null" in JSON
 	local mt = getmetatable( luaxp.NULL ) or {}
 	mt.__tojson = function() return "null" end
@@ -4677,7 +4677,7 @@ local function startSensor( tdev, pdev, isReload )
 		-- Start tick
 		scheduleDelay( { id=tostring(tdev), owner=tdev, func=sensorTick }, 1, { replace=true } )
 	else
-		L("%1 (#%2) is disabled.", luup.devices[tdev].description, tdev)
+		L({level=2,"%1 (#%2) is disabled"}, luup.devices[tdev].description, tdev)
 		addEvent{ dev=tdev, msg="Aborting; disabled", event='disabled at start-up' }
 		showDisabled( tdev )
 	end
@@ -4843,6 +4843,26 @@ function startPlugin( pdev )
 	if getVarNumeric( "DebugMode", 0, pdev, MYSID ) ~= 0 then
 		debugMode = true
 		D("startPlugin() debug enabled by state variable DebugMode")
+	end
+
+	-- Check required packages
+	for _,v in ipairs{ "dkjson", "socket", "mime" } do
+		if not package.loaded[v] then
+			L({level=1,"Required system module %1 cannot be loaded"}, v)
+			luup.variable_set( MYSID, "Message", "Required package missing (see log)", pdev )
+			markChildrenDown( "Required package missing (see log)", pdev )
+			return false, "Required package missing", _PLUGIN_NAME
+		end
+	end
+	-- These are needed for notifications other actions
+	for _,v in ipairs{ "socket.http", "socket.smtp", "ssl", "ssl.https", "ltn12" } do
+		local st,p = pcall( require, v )
+		if not st or type(p) ~= "table" then
+			L({level=2,"Warning: the %1 module cannot be loaded, but is required for some action types."})
+		elseif isOpenLuup and v == "ssl" and tostring( package.loaded.ssl or "" )._VERSION:match( "^0%.[1234567]" ) then
+			L({level=2,'Warning: the "ssl" module (LuaSec) is out of date and should be upgraded.'})
+		end
+		package.loaded[v] = nil
 	end
 
 	-- Check for hard system restart loop; stand off if it's happening. Not
@@ -5532,7 +5552,6 @@ local summaryDevices
 
 local function getDevice( dev, pdev, v )
 	if v == nil then v = luup.devices[dev] end
-	if json == nil then json = require("dkjson") end
 	local devinfo = {
 		  devNum=dev
 		, ['type']=v.device_type
@@ -6221,7 +6240,6 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		local sst = getSensorState( deviceNum )
 		local cdata = getSensorConfig( deviceNum )
 		local ctx = sst.ctx or getExpressionContext( cdata, deviceNum )
-		-- luaxp = require "L_LuaXP_Reactor" -- done by getExpressionContext()
 		-- if debugMode then luaxp._DEBUG = D end
 		D("request() tryexpression expr=%1", expr)
 		if expr:match( "^%s*$" ) then
