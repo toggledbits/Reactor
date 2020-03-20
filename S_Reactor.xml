@@ -55,6 +55,24 @@
 			<name>A_ARG_TYPE_ui4</name>
 			<dataType>ui4</dataType>
 		</stateVariable>
+		<stateVariable sendEvents="no">
+			<name>A_ARG_TYPE_SyslogFacility</name>
+			<dataType>ui1</dataType>
+			<defaultValue>23</defaultValue>
+			<allowedValueRange>
+				<minimum>0</minimum>
+				<maximum>23</maximum>
+			</allowedValueRange>
+		</stateVariable>
+		<stateVariable sendEvents="no">
+			<name>A_ARG_TYPE_SyslogSeverity</name>
+			<dataType>ui1</dataType>
+			<defaultValue>5</defaultValue>
+			<allowedValueRange>
+				<minimum>0</minimum>
+				<maximum>7</maximum>
+			</allowedValueRange>
+		</stateVariable>
 	</serviceStateTable>
 	<actionList>
 		<action>
@@ -136,6 +154,36 @@
 				</argument>
 				<argument>
 					<name>Bcc</name>
+					<direction>in</direction>
+					<relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
+				</argument>
+			</argumentList>
+		</action>
+		<action>
+			<name>SendSyslog</name>
+			<argumentList>
+				<argument>
+					<name>Facility</name>
+					<direction>in</direction>
+					<relatedStateVariable>A_ARG_TYPE_SyslogFacility</relatedStateVariable>
+				</argument>
+				<argument>
+					<name>Severity</name>
+					<direction>in</direction>
+					<relatedStateVariable>A_ARG_TYPE_SyslogSeverity</relatedStateVariable>
+				</argument>
+				<argument>
+					<name>ServerIP</name>
+					<direction>in</direction>
+					<relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
+				</argument>
+				<argument>
+					<name>Application</name>
+					<direction>in</direction>
+					<relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
+				</argument>
+				<argument>
+					<name>Message</name>
 					<direction>in</direction>
 					<relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
 				</argument>

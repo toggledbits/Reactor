@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.6develop-20078"
+local _PLUGIN_VERSION = "3.6develop-20080"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION	= 20070
@@ -2097,6 +2097,34 @@ local function doSetVar( varname, value, tdev, reparse, savestate )
 	return true, oldVal, vv
 end
 
+-- Send Syslog datagram
+local function doSyslogDatagram( pack, tdev )
+	D("doSyslogDatagram(%1,%2)", pack, tdev)
+	local pri = 8 * (tonumber(pack.facility) or 23) + (tonumber(pack.severity) or 5)
+	local datagram = string.format( "<%s>1 %s %s %s %s - - %s",
+		pri, -- priority
+		os.date("!%Y-%m-%dT%H:%M:%SZ"), -- timestamp
+		(pack.hostname or string.format("Vera-%s", luup.pk_accesspoint)):gsub("%s+", "_"), -- hostname
+		(pack.application or luup.devices[tdev].description):gsub( "%s+", "_" ), -- application
+		(pack.procid or "0"):gsub( "%s+", "_" ), -- process id
+		pack.message or "" ):sub( 1, 1023 )
+	-- local socket = require "socket"
+	local udp = socket.udp()
+	if udp then
+		D("doActionNotify() sending SysLog UDP datagram to %1", pack.hostip)
+		udp:setsockname("*", 0)
+		local stat,err = udp:sendto( datagram, pack.hostip, 514 )
+		udp:close()
+		if stat == nil then
+			L({level=2,msg="Failed to send SYSLOG message to %1: %2"}, pack.hostip, err)
+			error( "Syslog notification to " .. tostring(pack.hostip) .. " failed, " .. tostring(err) )
+		end
+		return
+	end
+	L{level=1,msg="Failed to get UDP socket for Syslog datagram"}
+	error("Syslog notification to " .. tostring(pack.hostip) .. " failed, can't get UDP socket")
+end
+
 -- Send SMTP message
 local function doSMTPSend( from, to, subject, body, cc, bcc )
 	D("doSMTPSend(%1,%2,%3,%4,%5,%6)", from, to, subject, body, cc, bcc)
@@ -2247,26 +2275,11 @@ local function doActionNotify( action, scid, tdev )
 			end
 		elseif action.method == "SD" then -- Syslog Datagram
 			-- See https://tools.ietf.org/html/rfc5424#page-9
-			local pri = 8 * (tonumber(action.facility) or 23) + (tonumber(action.severity) or 5)
-			local datagram = string.format( "<%s>1 %s %s %s %s - - %s",
-				pri, -- priority
-				os.date("!%Y-%m-%dT%H:%M:%SZ"), -- timestamp
-				host:gsub("%s+", "_"), -- hostname
-				luup.devices[tdev].description:gsub( "%s+", "_" ), -- application
-				scid:gsub( "%s+", "_" ), -- process id
-				msg ):sub( 1, 1023 )
-			-- local socket = require "socket"
-			local udp = socket.udp()
-			if udp then
-				D("doActionNotify() sending SysLog UDP datagram to %1", action.hostip)
-				udp:setsockname("*", 0)
-				local stat,err = udp:sendto( datagram, action.hostip, 514 )
-				udp:close()
-				if stat == nil then
-					L({level=2,msg="Failed to send SYSLOG message to %1: %2"}, action.hostip, err)
-					error( "Syslog notification to " .. tostring(action.hostip) .. " failed, " .. tostring(err) )
-				end
-			end
+			local pack = shallowCopy( action )
+			pack.hostname = host
+			pack.procid = scid
+			pack.message = msg
+			doSyslogDatagram( pack, tdev )
 		elseif action.method == "AA" then -- AddAlert (Vera action) (undocumented)
 			local baseurl = "http://localhost/port_3480/data_request?id=add_alert&device=0&type=3&source=3"
 			baseurl = baseurl .. "&users=" .. urlencode( cf.notifications[nid].users )
@@ -5202,7 +5215,7 @@ function actionClearLatched( dev, group )
 end
 
 function actionSendSMTP( lul_device, lul_settings )
-	D("actionNotifySMTP(%1,%2)", lul_device, lul_settings)
+	D("actionSendSMTP(%1,%2)", lul_device, lul_settings)
 
 	local from = lul_settings.From or "<Vera@localhost>"
 	local to = lul_settings.To or error("Missing 'To' parameter")
@@ -5217,6 +5230,26 @@ function actionSendSMTP( lul_device, lul_settings )
 		L{level=1,msg=err}
 	end
 	return 2,0
+end
+
+function actionSendSyslog( lul_device, lul_settings )
+	D("actionSendSyslog(%1,%2)", lul_device, lul_settings)
+	if not ( lul_settings.ServerIP and lul_settings.Application and lul_settings.Message ) then
+		L{level=1,msg="Action SendSyslog parameters ServerIP, Application and Message are required"}
+		return false
+	end
+	local pack = {
+		facility = lul_settings.Facility or 23,
+		severity = lul_settings.Severity or 5,
+		message = lul_settings.Message,
+		application = lul_settings.Application,
+		procid = string.format( "Reactor%d", lul_device ),
+		hostip = lul_settings.ServerIP
+	}
+	local success, err = pcall( doSyslogDatagram, pack, lul_device )
+	if success then return true end
+	L{level=1,msg=err}
+	return false
 end
 
 local function findSceneOrActivity( scene, dev )

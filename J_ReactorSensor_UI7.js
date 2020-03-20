@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.6develop-20078';
+	var pluginVersion = '3.6develop-20080';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -128,7 +128,7 @@ var ReactorSensor = (function(api, $) {
 		, { id: "SD", name: "Syslog", users: false, extra: [
 				{ id: "hostip", label: "Syslog Server IP:", placeholder: "Host IP4 Address", validpattern: "^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}$" },
 				{ id: "facility", label: "Facility:", type: "select", default: "23", values: [ "0=kern","1=user","2=mail","3-daemon","4=auth","5=syslog","6=lp","7=news","8=uucp","9=clock","10=security","11=FTP","12=NTP","13=audit","14=alert","16=local0","17=local1","18=local2","19=local3","20=local4","21=local5","22=local6","23=local7" ] },
-				{ id: "severity", label: "Severity:", type: "select", default: "5", values: [ "0=emerg","1=alert","2=crit","3=err","4=warn","5=notice","6=info","7-debug" ] }
+				{ id: "severity", label: "Severity:", type: "select", default: "5", values: [ "0=emerg","1=alert","2=crit","3=err","4=warn","5=notice","6=info","7=debug" ] }
 			] }
 		, { id: "UU", name: "User URL", users: false, requiresUnsafeLua: true, extra: [
 				{ id: "url", label: "URL:", type: "textarea", placeholder: "URL", validpattern: "^https?://", default: "http://localhost/alert?message={message}", fullwidth: true }
@@ -7627,8 +7627,8 @@ div#tab-actions.reactortab div.tblisttitle { background-color: #428BCA; color: #
 div#tab-actions.reactortab div.tblisttitle span.re-title { font-size: 16px; font-weight: bold; margin-right: 1em; } \
 div#tab-actions.reactortab span.re-titlemessage { padding-left: 8px; } \
 div#tab-actions.reactortab div.re-titlewarning { float: left !important; } \
-div#tab-actions.reactortab div.actionlist label:not(.required) { font-weight: normal; } \
-div#tab-actions.reactortab div.actionlist label.required { font-weight: bold; } \
+div#tab-actions.reactortab div.actionlist label:not(.reqarg) { font-weight: normal; } \
+div#tab-actions.reactortab div.actionlist label.reqarg { font-weight: bold; } \
 div#tab-actions.reactortab div.actionlist.tbmodified div.tblisttitle span.re-title:after { content: " (unsaved)" } \
 div#tab-actions.reactortab div.actionrow,div.buttonrow { padding: 8px; } \
 div#tab-actions.reactortab div.actionlist div.actionrow:nth-child(odd) { background-color: #EFF6FF; } \

@@ -245,5 +245,12 @@
 				return Reactor.actionSendSMTP( lul_device, lul_settings )
 			</job>
 		</action>
+		<action>
+			<serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
+			<name>SendSyslog</name>
+			<run>
+				return Reactor.actionSendSyslog( lul_device, lul_settings )
+			</run>
+		</action>
 	</actionList>
 </implementation>
