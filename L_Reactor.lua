@@ -1729,8 +1729,8 @@ local function getExpressionContext( cdata, tdev )
 			vn = tdev
 		else
 			vn = finddevice( dev, tdev )
-			D("setstate(%1), dev=%2, attr=%3, vn(dev)=%4", args, dev, attr, vn)
-			if vn == luaxp.NULL or vn == nil or luup.devices[vn] == nil then
+			D("getattribute(%1), dev=%2, attr=%3, vn(dev)=%4", args, dev, attr, vn)
+			if vn == luaxp.NULL or vn == nil or ( vn ~= 0 and luup.devices[vn] == nil ) then
 				return trouble == false and luaxp.evalerror( "Device not found" ) or luaxp.NULL
 			end
 		end
