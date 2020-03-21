@@ -25,6 +25,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 * Fix: Make sure non-existent scene is removed from scene cache, so we don't try to refetch it on subsequent reloads.
 * Fix: Update LuaXP to 1.0.2 for access to `indexof()` function; also fixes `pow()` with negative base (first argument).
 * Fix: Fix "leak" of LuaXP null atom structure on Status display.
+* Hotfix 20080-01: Allow device 0 in expression `getattribute()` function, so you can fetch system attributes.
 * Hotfix 20078-01: Fix a missing selector constraint that may affect conditions when pulse mode is used.
 * Hotfix 20072-01: openLuup only: Suppress "unsafe lua" warnings correctly on openLuup.
 * Hotfix 20070-02: Deviceinfo updates now stored as compressed, and remove any uncompressed file found, to remove ambiguity as to which file may be loaded.
