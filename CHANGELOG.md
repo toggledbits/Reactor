@@ -4,7 +4,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 **DEPRECATION NOTICE:** The expression functions `arraypush()`, `arraypop()`, `arrayunshift()` and `arrayshift()` have been made first-class functions in the LuaXP module under the names `push()`, `pop()`, `unshift()` and `shift()` respectively. The `array...()` versions are now deprecated, and will be removed from a future release. Please convert to the new functions, which for all practical purposes are identical (so you just need to change the names in your expressions and it's done).
 
-## Version 3.6 (development)
+## Version 3.6 (RC 20084)
 
 * Enhancement: The *Request* action has been added to activities to make an HTTP GET or POST request to a remove service as an action. The URL, headers, and (for POST) body data may be specified, and variable substitutions using the usual `{expr}` syntax work. When using POST, it is highly recommended that a correct "Content-Type" header be included.
 * Enhancement: The Activity editor now works much harder to preserve data when (a) a missing device is fixed to a new device, (b) the device is changed to another that supports the same action. This addresses the issue where having a missing device in an action would cause the action and parameters to be lost when you try to fix it--they are now preserved.
