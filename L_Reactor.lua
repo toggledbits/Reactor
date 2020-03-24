@@ -11,12 +11,12 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.6develop-20080"
+local _PLUGIN_VERSION = "3.6"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION	= 20070
 local _CDATAVERSION		= 20045	-- must coincide with JS
-local _UIVERSION		= 20078	-- must coincide with JS
+local _UIVERSION		= 20084	-- must coincide with JS
 	  _SVCVERSION		= 20045	-- must coincide with impl file (not local)
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
@@ -4577,8 +4577,8 @@ end
 
 -- Clean up sensor variables
 -- TODO: GetState seems to be faster than the request; test and verify, particularly openLuup
-local function cleanSensorState( tdev )
-	D("cleanSensorState(%1)", tdev)
+local function cleanSensorState( tdev, taskid )
+	D("cleanSensorState(%1,%2)", tdev, taskid)
 	local content
 	if unsafeLua then
 		local sc, httpStatus
@@ -4600,26 +4600,31 @@ local function cleanSensorState( tdev )
 	if data and data['Device_Num_'..tdev] then
 		data = data['Device_Num_'..tdev]
 		local cf = getSensorConfig( tdev ) or error "Configuration not available"
-		for _,st in ipairs( data.states ) do
+		cf.variables = cf.variables or {}
+		local groups = {}
+		for grp in conditionGroups( cf.conditions.root or {} ) do
+			groups[grp.id] = grp
+		end
+		for _,st in pairs( data.states ) do
 			if st.service == VARSID then
 				-- Expression default is *export*
-				if (((cf.variables or {})[st.variable] or {}).export or 1) == 0 then
-					D("cleanSensorState() removing orphan expression export %1", st.variable)
+				if ((cf.variables[st.variable] or {}).export or 1) == 0 then
+					D("cleanSensorState() removing orphan expression export %1 from #%2", st.variable, tdev)
 					deleteVar( st.service, st.variable, tdev )
 					deleteVar( st.service, st.variable .. "_Error", tdev )
 				end
 			elseif st.service == GRPSID then
-				local gid = st.variable:gsub( "GroupStatus_", "" )
-				if not findCondition( gid, cf, "group" ) then
-					D("cleanSensorState() removing orphan group state %1", st.variable)
+				local gid = st.variable:gsub( "^GroupStatus_", "" )
+				if not ( groups[gid] and groups[gid].operator ~= "nul" ) then
+					D("cleanSensorState() removing orphan group state %1 from #%2", st.variable, tdev)
 					deleteVar( st.service, st.variable, tdev )
 				end
 			end
 		end
 	else
-		D("cleanSensorState() return data unusable: %1", data or content)
+		L({level=2,msg="cleanSensorState() return data unusable: %1"}, data or content)
 	end
-	-- clearTask( ... ) -- TODO: for >3.5; test, use taskid arg
+	clearTask( taskid )
 end
 
 -- Start an instance
