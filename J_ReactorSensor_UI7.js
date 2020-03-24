@@ -25,7 +25,7 @@ var ReactorSensor = (function(api, $) {
 
 	var _CDATAVERSION = 20045;  /* must coincide with Lua core */
 
-	var _DOCURL = "https://www.toggledbits.com/static/reactor/docs/3.5/";
+	var _DOCURL = "https://www.toggledbits.com/static/reactor/docs/3.6/";
 
 	var myModule = {};
 
