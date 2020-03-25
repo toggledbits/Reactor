@@ -16,7 +16,7 @@ local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 
 local _CONFIGVERSION	= 20070
 local _CDATAVERSION		= 20045	-- must coincide with JS
-local _UIVERSION		= 20084	-- must coincide with JS
+local _UIVERSION		= 20085	-- must coincide with JS
 	  _SVCVERSION		= 20045	-- must coincide with impl file (not local)
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
@@ -1586,7 +1586,7 @@ local function getExpressionContext( cdata, tdev )
 	-- This should be the ONLY place that LuaXP is loaded. It additionally
 	-- defines metadata that must exist in all use.
 	luaxp = require "L_LuaXP_Reactor"
-	L({level=2,"loaded LuaXP %1 version %2"}, luaxp, (luaxp or {})._VERSION)
+	D("getExpressionContext(): loaded LuaXP version %1", (luaxp or {})._VERSION)
 	-- Make sure LuaXP null renders as "null" in JSON
 	local mt = getmetatable( luaxp.NULL ) or {}
 	mt.__tojson = function() return "null" end
@@ -1696,6 +1696,47 @@ local function getExpressionContext( cdata, tdev )
 		if attr == nil then return luaxp.evalerror("Invalid attribute name") end
 		-- Get and return value.
 		return luup.attr_get( attr, vn ) or luaxp.NULL
+	end
+	ctx.__functions.getdevices = function( args )
+		local filters = unpack( args )
+		filters = split( filters or "", "," )
+		local attrs = {}
+		for _,x in ipairs( filters ) do
+			local attr,val = x:match( "^([^=]+)=(.*)" )
+			attr = ({ room="room_num", name="description" })[attr] or attr -- map common names
+			if attr then attrs[attr] = val:gsub( "^%s+", "" ):gsub( "%s+$", "" ) end
+		end
+		if attrs.room_num and not tonumber( attrs.room_num ) then
+			local name = tostring(attrs.room_num):lower()
+			for k,v in pairs( luup.rooms ) do
+				if name == v:lower() then
+					attrs.room_num = tostring(k)
+					break
+				end
+			end
+		end
+		local x = {}
+		for k,d in pairs( luup.devices ) do
+			local found = true
+			for attr,v in pairs( attrs ) do
+				local dd
+				if attr:match( "/" ) then
+					local sid,var = attr:match( "^([^/]+)/(.*)$" )
+					dd = luup.variable_get( sid, var, k )
+				else
+					dd = d[attr] or luup.attr_get( attr, k )
+				end
+				if type(v)=="string" and v:match( "^/[^/]+/$" ) then -- /pattern/
+					found = tostring( dd ):match( v:sub(2,-2) )
+				else
+					found = dd ~= nil and tostring(dd) == v
+				end
+				if not found then break end
+			end
+			if found then table.insert( x, k ) end
+		end
+		table.sort( x )
+		return x
 	end
 	ctx.__functions.getluup = function( args )
 		local key = unpack( args )
