@@ -19,7 +19,7 @@ var Reactor = (function(api, $) {
 
 	var pluginVersion = '3.6';
 
-	var _UIVERSION = 20084;     /* must coincide with Lua core */
+	var _UIVERSION = 20085;     /* must coincide with Lua core */
 
 	var _DOCURL = "https://www.toggledbits.com/static/reactor/docs/3.6/";
 

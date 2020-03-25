@@ -21,7 +21,7 @@ var ReactorSensor = (function(api, $) {
 
 	var DEVINFO_MINSERIAL = 71.222;
 
-	var _UIVERSION = 20084;     /* must coincide with Lua core */
+	var _UIVERSION = 20085;     /* must coincide with Lua core */
 
 	var _CDATAVERSION = 20045;  /* must coincide with Lua core */
 
@@ -141,6 +141,8 @@ var ReactorSensor = (function(api, $) {
 	var msgOptionsShow = "Show condition options";
 	var msgOptionsHide = "Hide condition options";
 	var msgRemoteAlert = "You appear to be using remote access for this session. Editing of ReactorSensor configurations via remote access is possible, but not recommended due to the latency and inconsistency of cloud connections and infrastructure. You may experience issues, particularly when saving large configurations. Using local access exclusively is strongly recommended. It is also a good idea to back up your ReactorSensors (using the Backup/Restore tab in the Reactor master device) prior to editing via remote access.";
+
+	var NULLCONFIG = { conditions: {} };
 
 	/* Insert the header items */
 	/* Checkboxes, see https://codepen.io/VoodooSV/pen/XoZJme */
@@ -443,8 +445,14 @@ var ReactorSensor = (function(api, $) {
 		myid = myid || api.getCpanelDeviceId();
 		var d = getInstanceData( myid );
 		if ( force || ! d.cdata ) {
-			loadConfigData( myid );
-			console.log("getConfiguration(): loaded config serial " + String(d.cdata.serial) + ", timestamp " + String(d.cdata.timestamp));
+			try {
+				loadConfigData( myid );
+				console.log("getConfiguration(): loaded config serial " + String(d.cdata.serial) + ", timestamp " + String(d.cdata.timestamp));
+			} catch ( e ) {
+				console.log("getConfiguration(): can't load config for "+myid+": "+String(e));
+				console.log(e);
+				return false;
+			}
 		} else {
 			console.log("getConfiguration(): returning cached config serial " + String(d.cdata.serial));
 		}
@@ -499,13 +507,15 @@ var ReactorSensor = (function(api, $) {
 
 	/* Traverse - pre-order */
 	function DOtraverse( node, op, args, filter ) {
-		if ( ( !filter ) || filter( node ) ) {
-			op( node, args );
-		}
-		if ( "group" === ( node.type || "group" ) ) {
-			var l = node.conditions ? node.conditions.length : 0;
-			for ( var ix=0; ix<l; ix++ ) {
-				DOtraverse( node.conditions[ix], op, args, filter );
+		if ( node ) {
+			if ( ( !filter ) || filter( node ) ) {
+				op( node, args );
+			}
+			if ( "group" === ( node.type || "group" ) ) {
+				var l = node.conditions ? node.conditions.length : 0;
+				for ( var ix=0; ix<l; ix++ ) {
+					DOtraverse( node.conditions[ix], op, args, filter );
+				}
 			}
 		}
 	}
@@ -1925,14 +1935,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 					/* Our own groups */
 					dc = getConfiguration( myid );
 				} else {
-					/* Get config of another device */
-					dc = api.getDeviceState( cond.device, "urn:toggledbits-com:serviceId:ReactorSensor", "cdata" );
-					try {
-						dc = JSON.parse( dc );
-					} catch (e) {
-						console.log("Failed to parse cdata for " + String(cond.device) );
-						dc = null;
-					}
+					dc = getConfiguration( cond.device );
 				}
 				if ( dc ) {
 					var appendgrp = function ( grp, sel, pg ) {
@@ -5925,7 +5928,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					inp.prepend( topItem );
 					if ( 0 !== ( parm._reactor_with_activities || 0 ) ) {
 						/* Show activities in traversal order */
-						var cd = getConfiguration( devNum );
+						var cd = getConfiguration( devNum ) || NULLCONFIG;
 						var grp = $('<optgroup>').attr('label', 'ReactorSensor Activities');
 						/* Wrap because upvalue refs with multiples executing (fully re-entrant) */
 						(function ( cd, grp, topItem ) {
@@ -6461,7 +6464,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 		/* Get root condition (group) of selected device */
 		var root = getConditionIndex().root;
 		if ( ! isNaN( dev ) && dev >= 0 ) {
-			root = ( ( ( getConfiguration( dev ) || {} ).conditions ) || {} ).root;
+			root = ( getConfiguration( dev ) || NULLCONFIG ).root;
 			grp = null;
 			$m.val("*");
 			$( 'option[value=""]', $m ).prop( 'disabled', true );
@@ -6490,7 +6493,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 		/* Get root condition (group) of selected device */
 		var root = getConditionIndex().root;
 		if ( dev >= 0 ) {
-			root = ( ( ( getConfiguration( dev ) || {} ).conditions ) || {} ).root;
+			root = ( getConfiguration( dev ) || NULLCONFIG ).root;
 			grp = null;
 		}
 		DOtraverse( root || {}, function( node ) {
@@ -7600,7 +7603,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 		catch (e)
 		{
 			console.log( 'Error in ReactorSensor.doActivities(): ' + String( e ) );
-			alert( e.stack );
+			alert( e );
 		}
 	}
 
