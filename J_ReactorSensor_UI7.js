@@ -1825,7 +1825,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 			for ( var ix=0; ix<l; ix++ ) {
 				$( '<option/>' ).val( vix[ix].name ).text( vix[ix].name ).appendTo( $el );
 			}
-			if ( currExpr && 0 === $( "option[value=" + JSON.stringify( currExpr ) + "]", $el ) ) {
+			if ( currExpr && 0 === $( "option[value=" + JSON.stringify( currExpr ) + "]", $el ).length ) {
 				$( '<option/>' ).val( currExpr ).text( currExpr + " (undefined)" )
 					.prependTo( $el );
 			}
