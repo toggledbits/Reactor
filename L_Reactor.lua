@@ -1897,6 +1897,7 @@ local function getValue( val, ctx, tdev )
 			val = tostring(result)
 		end
 	end
+	val = val:gsub( "^%.(%d+)$", "0.%1" ) -- Vera tonumber() brokenness: ".5" => nil
 	return val, tonumber(val), result, err
 end
 
