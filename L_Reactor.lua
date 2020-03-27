@@ -1488,24 +1488,28 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
 		if err then
 			-- Error. Null context value, and build error message for multiple uses.
 			result = luaxp.NULL
-			errmsg = (err or {}).message or "Failed"
-			if (err or {}).location ~= nil then errmsg = errmsg .. " at " .. tostring(err.location) end
+			if type( err ) == "string" then
+				errmsg = "Runtime error: " .. err
+			else
+				errmsg = (err or {}).message or err or "Failed"
+				if (err or {}).location ~= nil then errmsg = errmsg .. " at " .. tostring(err.location) end
+			end
 			L({level=2,msg="%2 (#%1) failed evaluation of %3: %4"}, tdev, luup.devices[tdev].description,
 				vdef.expression, errmsg)
 			addEvent{ dev=tdev,
-				msg="TROUBLE: Evaluation error in variable %(vname)s: %(error)s",
+				msg="TROUBLE: Evaluation error in variable %(variable)s: %(error)s",
 				event="expression", variable=vname, ['error']=errmsg }
 			getSensorState( tdev ).trouble = true
 		elseif result == nil then
 			result = luaxp.NULL -- map nil to null
 		end
-		ctx[vname] = result -- update context for future evals
+		ctx.__lvars[vname] = result -- update context for future evals
 	else
 		D("evaluateVariable() luaxp.NULL is %1, tostring %2", luaxp.NULL, tostring(luaxp.NULL))
-		if ctx[vname] == nil then
+		if ctx.__lvars[vname] == nil then
 			result = luaxp.NULL
 		else
-			result = ctx[vname]
+			result = ctx.__lvars[vname]
 		end
 		err = nil
 		D("evaluateVariable() expressionless %1 = %2", vname, result)
@@ -1533,7 +1537,7 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
 			-- Store shallow copy, so later changes don't interfere with comparison,
 			-- as tables are stored by reference and not by value (this vs.lastvalue and result
 			-- are likely to be references to the same table).
-			ctx[vname] = shallowCopy( result )
+			ctx.__lvars[vname] = shallowCopy( result )
 		else
 			changed = vs.lastvalue ~= result
 		end
@@ -1581,7 +1585,12 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
 end
 
 local function getExpressionContext( cdata, tdev )
-	local ctx = { __functions={}, __lvars={} }
+	local sst = getSensorState( tdev )
+	if sst.ctx then return sst.ctx end
+
+	-- Create new state
+	ctx = { __functions={}, __lvars={} }
+	sst.ctx = ctx
 
 	-- This should be the ONLY place that LuaXP is loaded. It additionally
 	-- defines metadata that must exist in all use.
@@ -1594,7 +1603,7 @@ local function getExpressionContext( cdata, tdev )
 	setmetatable( luaxp.NULL, mt )
 
 	-- Define all-caps NULL as synonym for null
-	ctx.NULL = luaxp.NULL
+	ctx.__lvars.NULL = luaxp.NULL
 	-- Create evaluation context
 	ctx.__functions.finddevice = function( args )
 		local selector, trouble = unpack( args )
@@ -1758,6 +1767,9 @@ local function getExpressionContext( cdata, tdev )
 	ctx.__functions.unstringify = function( args )
 		local str = unpack( args )
 		-- Decode, converting "null" to LuaXP null.
+		if type(str) ~= "string" then
+			luaxp.evalerror("Invalid argument")
+		end
 		local val,pos,err = json.decode( str, nil, luaxp.NULL )
 		if val == nil then
 			luaxp.evalerror("Failed to unstringify at " .. pos .. ": " .. err)
@@ -1822,16 +1834,17 @@ local function getExpressionContext( cdata, tdev )
 	-- Add previous values to Luaxp context. We use the cstate versions rather
 	-- than the state variables to preserve original data type. Every defined
 	-- variable must have an entry in ctx.
-	local cstate = loadCleanState( tdev, true )
+	local cstate = loadCleanState( tdev )
 	D("getExpressionContext() luaxp.NULL is %1 string %2", luaxp.NULL, tostring(luaxp.NULL))
 	for n in pairs( cdata.variables or {} ) do
 		local lastval = ((cstate.vars or {})[n] or {}).lastvalue
 		if lastval == nil or luaxp.isNull( lastval ) then
-			ctx[n] = luaxp.NULL
+			ctx.__lvars[n] = luaxp.NULL
 		else
-			ctx[n] = lastval
+			ctx.__lvars[n] = lastval
 		end
-		D("getExpressionContext() set starting value for %1 to %2 (%3)", n, ctx[n], tostring(ctx[n]))
+		D("getExpressionContext() set starting value for %1 to %2 (%3)", 
+			n, ctx.__lvars[n], tostring(ctx.__lvars[n]))
 	end
 	return ctx
 end
@@ -2123,7 +2136,7 @@ local function doSetVar( varname, value, tdev, reparse, savestate )
 		-- Update LuaXP evaluation context if it exists.
 		local sst = getSensorState( tdev )
 		if sst.ctx then
-			sst.ctx[ varname ] = vv
+			sst.ctx.__lvars[ varname ] = vv
 		end
 		-- Update state variable if it's exported.
 		if ( cdata.variables[ varname ].export or 1 ) ~= 0 then
@@ -2492,7 +2505,7 @@ local function doActionRequest( action, scid, tdev )
 		if tonumber(httpStatus) and httpStatus >= 200 and httpStatus <= 299 then
 			D("doRequest() request returned httpStatus=%1, respBody=%2, respHeaders=%3, status=%4", httpStatus, respBody, rh, st)
 			-- Since we're using the table sink, concatenate chunks to single string.
-			respBody = table.concat(r)
+			respBody = table.concat(r, "")
 			L("Request succeeded, response body %1 bytes", #respBody)
 			addEvent{ dev=tdev, msg="Request response status %(status)s body %(bodylen)s bytes",
 				status=httpStatus, bodylen=#respBody }
@@ -2511,6 +2524,7 @@ local function doActionRequest( action, scid, tdev )
 	-- Store response, maybe
 	if ( action.target or "" ) ~= "" then
 		doSetVar( action.target, respBody, tdev, false ) -- no reparse (raw data)
+		scheduleDelay( tdev, 1 )
 	end
 
 	return true
@@ -3005,9 +3019,7 @@ local function updateVariables( cdata, tdev )
 	local condState = loadCleanState( tdev )
 	for _,v in variables( cdata ) do
 		if first then
-			local sst = getSensorState( tdev )
-			ctx = sst.ctx or getExpressionContext( cdata, tdev )
-			sst.ctx = ctx
+			ctx = getSensorState( tdev ).ctx or getExpressionContext( cdata, tdev )
 			first = false
 		end
 		D("updateVariables() evaluate %1", v)
