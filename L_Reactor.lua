@@ -1138,8 +1138,25 @@ local function loadCleanState( tdev )
 
 	-- Make array of conditions in cstate that aren't in cdata
 	local dels = {}
-	for k in pairs( cstate ) do
-		if k ~= "vars" and conds[k] == nil then table.insert( dels, k ) end
+	local now = os.time()
+	local timewarned = false
+	for k,v in pairs( cstate ) do
+		if k ~= "vars" and conds[k] == nil then
+			table.insert( dels, k ) -- cond state no for cond not in cdata, mark for deletion
+		else
+			-- "Real" state... check timestamp
+			if ( v.evalstamp and v.evalstamp > now ) or ( v.statestamp and v.statestamp > now ) then
+				L({level=2,msg="Last state timestamp(s) for %1 are future! System time may have recently changed dramatically, or Test Time was recently used. %2"},
+					k, v)
+				timewarned = true
+			end
+		end
+	end
+	if timewarned then
+		L({level=2,msg="The broken timestamps mentioned above can have serious effects on delay timing options, if used. Restarting %1 (#%2) is recommended."},
+			luup.devices[tdev].description, tdev)
+		addEvent{ dev=tdev, msg="TROUBLE! Some condition state timestamps are in the future. System clock may have changed dramatically, or Test Time used." }
+		getSensorState( tdev ).trouble = true
 	end
 
 	-- Delete them
@@ -1843,7 +1860,7 @@ local function getExpressionContext( cdata, tdev )
 		else
 			ctx.__lvars[n] = lastval
 		end
-		D("getExpressionContext() set starting value for %1 to %2 (%3)", 
+		D("getExpressionContext() set starting value for %1 to %2 (%3)",
 			n, ctx.__lvars[n], tostring(ctx.__lvars[n]))
 	end
 	return ctx
@@ -2126,25 +2143,25 @@ local function doSetVar( varname, value, tdev, reparse, savestate )
 		sv, _, vv, err = getValue( value, ctx, tdev )
 	else
 		sv = tostring( value )
-		vv = value
+		vv = tonumber( value ) or sv
 	end
 	local oldVal = vs.lastvalue
 	if oldVal ~= vv then
 		vs.lastvalue = vv
 		vs.valuestamp = os.time()
 		vs.changed = 1
-		-- Update LuaXP evaluation context if it exists.
-		local sst = getSensorState( tdev )
-		if sst.ctx then
-			sst.ctx.__lvars[ varname ] = vv
-		end
+
+		-- Update LuaXP evaluation context.
+		ctx.__lvars[ varname ] = vv
+
 		-- Update state variable if it's exported.
 		if ( cdata.variables[ varname ].export or 1 ) ~= 0 then
 			setVar( VARSID, varname, sv or "", tdev )
 			setVar( VARSID, varname .. "_Error", err or "", tdev )
 		end
+
 		-- Save updated state.
-		cstate.lastUsed = os.time()
+		cstate.lastUsed = os.time() -- mark to defer pruning
 		if savestate == nil or savestate then -- default true
 			luup.variable_set( RSSID, "cstate", json.encode( cstate ), tdev )
 		end
@@ -2366,7 +2383,10 @@ local function doActionNotify( action, scid, tdev )
 end
 
 -- Returns LTN12 filter that stops passing data after limit bytes
-local function getCountFilter( limit )
+local function getCountFilter( rp )
+	rp = rp or {}
+	rp.limit = rp.limit or 2048
+	rp.actual = 0
 	local count = 0
 	return function( chunk )
 		if chunk == nil then
@@ -2374,7 +2394,8 @@ local function getCountFilter( limit )
 		elseif chunk == "" then
 			return ""
 		else
-			local accept = limit - count
+			rp.actual = rp.actual + #chunk
+			local accept = rp.limit - count
 			if accept <= 0 then
 				-- can't accept any
 				return ""
@@ -2433,7 +2454,7 @@ local function doActionRequest( action, scid, tdev )
 	local respBody
 	local r = {}
 	if action.usecurl or getVarNumeric( "RequestUseCurl", 0, tdev, RSSID ) ~= 0 then
-		local req = "curl -o -"
+		local req = string.format( "curl -m %d -o -", timeout )
 		for k,v in pairs( tHeaders or {} ) do
 			req = req .. " -H '" .. k .. ": " .. v:gsub( "'", "''" ) .. "'"
 		end
@@ -2470,11 +2491,12 @@ local function doActionRequest( action, scid, tdev )
 		local httpStatus
 		-- Set up the request table
 		local tsink = ltn12.sink.table( r )
+		local countParam = { limit=maxResp }
 
 		local req = {
 			url = url,
 			source = src,
-			sink = ltn12.sink.chain( getCountFilter( maxResp ), tsink ),
+			sink = ltn12.sink.chain( getCountFilter( countParam ), tsink ),
 			method = method,
 			headers = tHeaders,
 			redirect = false
@@ -2507,8 +2529,15 @@ local function doActionRequest( action, scid, tdev )
 			-- Since we're using the table sink, concatenate chunks to single string.
 			respBody = table.concat(r, "")
 			L("Request succeeded, response body %1 bytes", #respBody)
-			addEvent{ dev=tdev, msg="Request response status %(status)s body %(bodylen)s bytes",
-				status=httpStatus, bodylen=#respBody }
+			addEvent{ dev=tdev, msg="Request response status %(status)s body %(bodylen)s bytes sent",
+				status=httpStatus, bodylen=countParam.actual }
+			if countParam.actual > maxResp then
+				L({level=2,msg="Response was %2 bytes, exceeded the limit of %1 bytes and was truncated"},
+					maxResp, countParam.actual)
+				addEvent{ dev=tdev, msg="TROUBLE: Response was too long and has been truncated to %(limit)s bytes!",
+					limit=maxResp }
+				getSensorState( tdev ).trouble = true
+			end
 		else
 			L({level=2,msg="Request %1 %2 returned [%3, %4, %5, %6]"}, respBody, httpStatus, rh, st)
 			addEvent{ dev=tdev, msg="TROUBLE: Request failed, response status %(status)s body %(bodylen)s bytes",
@@ -2523,8 +2552,17 @@ local function doActionRequest( action, scid, tdev )
 
 	-- Store response, maybe
 	if ( action.target or "" ) ~= "" then
-		doSetVar( action.target, respBody, tdev, false ) -- no reparse (raw data)
-		scheduleDelay( tdev, 1 )
+		local st,err = doSetVar( action.target, respBody, tdev, false ) -- no reparse (raw data)
+		if not st then
+			L({level=2,msg="Can't store request response on %1: %2"}, action.target, err)
+			addEvent{ dev=tdev, msg='TROUBLE: Request succeeded but failed to store response on %(variable)q: %(err)s',
+				variable=action.target, err=err }
+			if ( action.trouble or 1 ) ~= 0 then
+				getSensorState( tdev ).trouble = true
+			end
+		else
+			scheduleDelay( tdev, 1 )
+		end
 	end
 
 	return true
@@ -6228,7 +6266,7 @@ SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 
 			D("requestSummary() special config")
 			local first = true
-			for _,v in ipairs( { "UseReactorScenes", "LogEventsToFile", "EventLogMaxKB", "Retrigger", "AutoUntrip", "MaxUpdateRate", "MaxChangeRate", "FailOnTrouble", "ContinuousTimer", "ForceGeofenceMode", "StateCacheExpiry", "SuppressLuupRestartUpdate", "UseLegacyTripBehavior" } ) do
+			for _,v in ipairs( { "UseReactorScenes", "LogEventsToFile", "EventLogMaxKB", "Retrigger", "AutoUntrip", "MaxUpdateRate", "MaxChangeRate", "FailOnTrouble", "ContinuousTimer", "ForceGeofenceMode", "StateCacheExpiry", "SuppressLuupRestartUpdate", "UseLegacyTripBehavior", "RequestActionResponseLimit", "RequestActionTimeout", "RequestUseCurl", "RequestCurlOptions" } ) do
 				local val = luup.variable_get( RSSID, v, deviceNum ) or ""
 				if val ~= "" then
 					if first then first=false r = r .. "    Special Configuration" .. EOL end
