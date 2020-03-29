@@ -3792,7 +3792,6 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 		 * recursively.
 		 */
 		function deleteCondition( condId, ixCond, cdata, pgrp, reindex ) {
-			var ix;
 			var cond = ixCond[condId];
 			if ( undefined === cond ) return;
 			pgrp = pgrp || cond.__parent;
@@ -3810,10 +3809,10 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 			/* If this condition is a group, delete all subconditions (recursively) */
 			if ( "group" === ( cond.type || "group" ) ) {
 				var lx = cond.conditions ? cond.conditions.length : 0;
-				for ( ix=0; ix<lx; ix++ ) {
+				/* Delete end to front to avoid need to reindex each time */
+				for ( var ix=lx-1; ix>=0; ix-- ) {
 					deleteCondition( cond.conditions[ix].id, ixCond, cdata, cond, false );
 				}
-				delete cond.conditions;
 
 				/* Remove related activities */
 				if ( (cond.activities || {})[condId + ".true"] ) {
