@@ -149,6 +149,8 @@ local function getInstallPath()
 			local loader = require "openLuup.loader"
 			if loader.find_file then
 				installPath = loader.find_file( "L_Reactor.lua" ):gsub( "L_Reactor.lua$", "" )
+			else
+				installPath = "./" -- punt
 			end
 		end
 	end
