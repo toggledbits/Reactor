@@ -379,7 +379,7 @@ var Reactor = (function(api, $) {
 			if ( data.status ) {
 				reloadBackupInfo();
 			} else {
-				alert( "The backup failed." );
+				alert( "The backup failed due to an error: " + String(data.message) );
 			}
 		}).fail( function( jqXHR, textStatus, errThrown ) {
 			alert( "The backup request failed. Luup may be busy/reloading. Wait a moment, then try again." );
