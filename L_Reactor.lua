@@ -6487,7 +6487,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			if v.device_type == RSTYPE then
 				local key = tostring(k)
 				st.sensors[key] = { name=v.description, devnum=k, udn=v.udn,
-						room=string.format("%s:%s", v.room_num or 0, luup.rooms[v.room_num or 0] or "" )
+						room_num=v.room_num or 0, room_name=luup.rooms[v.room_num or 0]
 					}
 				local c,err = getVarJSON( "cdata", {}, k, RSSID )
 				if not c or err then
@@ -6500,20 +6500,22 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		local bdata = json.encode( st )
 		if action == "backup" then
 			local bfile = getInstallPath() .. "reactor-config-backup.tmp"
-			local f = io.open( bfile, "w" )
+			local f,ferr = io.open( bfile, "w" )
 			if f then
 				f:write( bdata )
 				f:close()
 				if not isOpenLuup then
-					os.execute( "pluto-lzo c '" .. getInstallPath() .. "reactor-config-backup.tmp' '" ..
-						getInstallPath() .. "reactor-config-backup.json.lzo'" )
+					os.execute( "pluto-lzo c '" .. bfile .."' '" .. getInstallPath() .. "reactor-config-backup.json.lzo'" )
 					-- Remove uncompressed file, which would now rot and interfere with download of new
-					os.remove( getInstallPath() .. "reactor-config-backup.json" )
+					os.remove( bfile )
+					bfile = getInstallPath() .. "reactor-config-backup.json.lzo"
 				else
 					os.execute( "mv -f '" .. bfile .. "' '" .. getInstallPath() .. "reactor-config-backup.json'" )
+					bfile = getInstallPath() .. "reactor-config-backup.json"
 				end
 			else
-				error("ERROR can't write " .. bfile)
+				return json.encode( { status=false, message=string.format( "Can't write %s: %s", bfile, tostring(ferr) ) } ),
+					"application/json"
 			end
 			return json.encode( { status=true, message="Done!", file=bfile } ), "application/json"
 		end
@@ -6587,23 +6589,26 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			"J_Reactor_UI7.js", "L_LuaXP_Reactor.lua", "L_Reactor.lua", "S_ReactorSensor.xml", "S_Reactor.xml" } ) do
 			local ff = path .. fn
 			local f = io.open( ff, "r" )
-			local usesCompressed = f == nil
+			local usesCompressed = f == nil and not isOpenLuup
+			if f then f:close() end
+			local p
 			if usesCompressed then
-				os.execute( "pluto-lzo d "..ff..".lzo /tmp/reactorfile.tmp" )
-				ff = "/tmp/reactorfile.tmp"
+				p = io.popen( "pluto-lzo d '"..ff.."' /proc/self/fd/1 | md5sum" )
 			else
-				f:close()
+				p = io.popen( "md5sum '"..ff.."'" )
 			end
-			local p = io.popen( "md5sum "..ff )
 			if p then
 				local sum = p:read("*a")
-				sum = tostring(sum or ""):gsub( "%s+.*$", "" )
+				if sum then
+					sum = tostring(sum or ""):gsub( "%s+.*$", "" )
+				else
+					sum = "[failed to compute hash]"
+				end
 				p:close()
 				inf.files[fn] = { compressed=usesCompressed or nil, check=sum }
 			else
 				inf.files[fn] = { notice="No data" }
 			end
-			os.remove( "/tmp/reactorfile.tmp" )
 		end
 		return alt_json_encode( inf ), "application/json"
 
@@ -6611,10 +6616,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		local loadtime = getVarNumeric( "LoadTime", 0, pluginDevice, MYSID )
 		return alt_json_encode( { status=true, loadtime=loadtime } ), "application/json"
 
-	elseif action == "serviceinfo" then
-		error("not yet implemented")
-
 	else
-		error("Not implemented: " .. action)
+		return "%REACTOR-REQUEST-F-NOTIMPL, requested action is not implemented", "text/plain"
 	end
 end
