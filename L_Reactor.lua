@@ -6485,12 +6485,15 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		local st = { _comment="Reactor configuration " .. os.date("%x %X"), timestamp=os.time(), version=_PLUGIN_VERSION, sensors={} }
 		for k,v in pairs( luup.devices ) do
 			if v.device_type == RSTYPE then
-				st.sensors[tostring(k)] = { name=v.description, devnum=k }
+				local key = tostring(k)
+				st.sensors[key] = { name=v.description, devnum=k, udn=v.udn,
+						room=string.format("%s:%s", v.room_num or 0, luup.rooms[v.room_num or 0] or "" )
+					}
 				local c,err = getVarJSON( "cdata", {}, k, RSSID )
 				if not c or err then
-					st.sensors[tostring(k)]._comment = "Unable to parse configuration: " .. tostring(err)
+					st.sensors[key]._comment = "Unable to parse configuration: " .. tostring(err)
 				else
-					st.sensors[tostring(k)].config = c
+					st.sensors[key].config = c
 				end
 			end
 		end
