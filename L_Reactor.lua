@@ -47,6 +47,13 @@ local geofenceEvent = 0
 local maxEvents = 100
 local dateFormat = false
 local timeFormat = false
+local lastMasterTick
+local clockStable = true
+local clockValid = true
+local lastNetCheckTime = 0
+local lastNetCheckState = false
+local netFailCount = 0
+local lastProbeSite
 local luaEnv -- global state for all runLua actions
 
 local runStamp = 0
@@ -878,6 +885,8 @@ local function plugin_runOnce( pdev )
 	initVar( "NumRunning", 0, pdev, MYSID )
 	initVar( "HouseMode", luup.attr_get( "Mode", 0 ) or "1", pdev, MYSID )
 	initVar( "LastDST", "0", pdev, MYSID )
+	initVar( "ClockValid", "1", pdev, MYSID )
+	initVar( "NetworkStatus", "1", pdev, MYSID )
 	initVar( "IsHome", "", pdev, MYSID )
 	initVar( "MaxRestartCount", "", pdev, MYSID )
 	initVar( "MaxRestartPeriod", "", pdev, MYSID )
@@ -891,9 +900,11 @@ local function plugin_runOnce( pdev )
 	initVar( "SMTPPort", "", pdev, MYSID )
 	initVar( "ProwlAPIKey", "", pdev, MYSID )
 	initVar( "ProwlProvider", "", pdev, MYSID )
+	initVar( "RequireValidClock", "0", pdev, MYSID )
 	initVar( "DefaultCollapseConditions", "", pdev, MYSID )
 
 	initVar( "rs", "", pdev, MYSID )
+	initVar( "ns", "", pdev, MYSID )
 
 	-- Consider per-version changes.
 	if s < 00206 then
@@ -2024,7 +2035,7 @@ local function execLua( fname, luafragment, extarg, tdev )
 				L({level=2,msg="%1 (%2) runLua action: %3 makes assignment to global %4 (missing 'local' declaration?) at %5"},
 					( luup.devices[dev] or {}).description, dev, fn, n, what)
 				addEvent{ event="lua",
-					msg="WARNING: Assignment to global %(name)s (missing 'local' declaration?)",
+					msg="WARNING: Assignment to global %(name)q (missing 'local' declaration?)",
 					dev=dev, script=fn, name=n, warning="Assignment to global" }
 			end
 			rawset(t, n, v) -- save in sandbox table
@@ -2040,8 +2051,8 @@ local function execLua( fname, luafragment, extarg, tdev )
 				L({level=1,msg="%1 (%2) runLua action: %3 accesses undeclared/uninitialized global %4"},
 					( luup.devices[dev] or {} ).description, dev, fn, n)
 				addEvent{ event="lua",
-					msg="ERROR: Using uninitialized global variable %(name)s",
-					dev=dev, script=fn, message="Undefined global" }
+					msg="ERROR: Using uninitialized global variable %(name)q",
+					dev=dev, script=fn, name=n, message="Undefined global" }
 			end
 			return rawget(t, n) -- uhhh... isn't this always nil???
 		end
@@ -2973,9 +2984,8 @@ local function resumeScenes()
 	end
 	sceneState = d or {}
 	for _,data in pairs( sceneState ) do
-		addEvent{ dev=data.owner,
-			msg="Resuming run after reload (%(scene)s)",
-			event="runscene", scene=data.scene, notice="Queing scene resume after reload" }
+		addEvent{ dev=data.owner, msg="Resuming run after reload (%(scene)s)",
+			event="runscene", scene=data.scene }
 		scheduleDelay( { id=data.taskid, owner=data.owner, func=execSceneGroups, args={} }, 1 )
 	end
 end
@@ -2987,8 +2997,8 @@ runScene = function( scene, tdev, options )
 
 	local scd = getSceneData( scene, tdev )
 	if scd == nil then
-		L({level=1,msg="%1 (%2) can't run scene %3, not found/loaded."}, tdev,
-			luup.devices[tdev].description, scene)
+		L({level=1,msg="%1 (#%2) can't run scene %3, not found/loaded."},
+			luup.devices[tdev].description, tdev, scene)
 		return
 	end
 
@@ -3214,6 +3224,14 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 	-- Fetch prior state/value
 	local cs = sst.condState[cond.id]
 	D("evaluateCondition() condstate %1", cs)
+	
+	-- Clock problem?
+	if not clockValid and string.match( ":trange:weekday:sun:", cond.type or "group" ) then
+		addEvent{ dev=tdev,
+			msg="TROUBLE: Using %(cond)q condition while clock is invalid--result will be inaccurate!",
+			cond=cond.type }
+		sst.trouble = true
+	end
 
 	if ( cond.type or "group" ) == "group" then
 		return evaluateGroup( cond, grp, cdata, tdev )
@@ -4174,6 +4192,11 @@ local function processSensorUpdate( tdev, sst )
 	local t1 = socket.gettime()
 	addEvent{dev=tdev,event='update',msg="Sensor update starting"}
 
+	if not clockValid then
+		addEvent{dev=tdev,event='warning',msg="***** SYSTEM CLOCK IS BOGUS *****"}
+		sst.trouble = true
+	end
+
 	-- Check throttling for update rate
 	local hasTimer = false -- luacheck: ignore 311/hasTimer
 	local maxUpdate = getVarNumeric( "MaxUpdateRate", 30, tdev, RSSID )
@@ -4596,6 +4619,33 @@ local function updateGeofences( pdev )
 	return true
 end
 
+local function checkInternetState( pdev )
+	D("checkInternetState(%1)", pdev)
+	local sites = split ( ( getReactorVar( "InternetCheckSites", "8.8.8.8,8.8.4.4,1.1.1.1,www.facebook.com,www.amazon.com,www.google.com", pdev ) ) )
+	if not sites or #sites < 3 then
+		error("Misconfiguration: at least three sites are required in InternetCheckSites")
+	end
+
+	for _=1,3 do -- try three sites each attempt
+		lastProbeSite = ( lastProbeSite or 0 ) + 1
+		if lastProbeSite > #sites then lastProbeSite = 1 end
+		local s = sites[lastProbeSite]
+		--[[ ping with lowercase -w emits status <> 0 for any failure. With capital -W
+			 it emits 0 for any successful packet, 1 for all failure, which is what we
+			 want. The first packet often fails, and we don't want false pos as a result.
+		--]]
+		local st = os.execute( "ping -q -c 3 -W 3 '" .. s .. "' >/dev/null" )
+		D("checkInternetState() probe of %1 returned %2 (lastProbeSite=%3)", s, st, lastProbeSite)
+		if st == 0 then
+			-- round-robin; lastProbeSite = 0 -- start from the beginning
+			return true
+		else
+			L({level=2,msg="Internet health probe (ping) of %1 failed (%2)"}, s, st)
+		end
+	end
+	return false
+end
+
 -- Tick handler for master device
 local function masterTick(pdev)
 	D("masterTick(%1)", pdev)
@@ -4603,6 +4653,21 @@ local function masterTick(pdev)
 	local now = os.time()
 	local nextTick = math.floor( now / 60 ) * 60 + 60
 	scheduleTick( tostring(pdev), nextTick )
+
+	-- Sanity-check the system clock
+	if lastMasterTick then
+		local dtime = now - lastMasterTick
+		if dtime <= 0 then
+			L({level=1,"***** SYSTEM CLOCK HAS MOVED BACKWARDS! Last master tick %1, now %2???"},
+				lastMasterTick, now)
+			clockStable = false
+		elseif dtime > 120 then
+			L({level=1,msg="***** SYSTEM CLOCK HAS LEAPT FORWARDS! Last master tick %1, now %2???"},
+				lastMasterTick, now)
+			clockStable = false
+		end
+	end
+	lastMasterTick = now
 
 	-- Check and update house mode (by polling, always).
 	setVar( MYSID, "HouseMode", luup.attr_get( "Mode", 0 ) or "1", pdev )
@@ -4619,35 +4684,87 @@ local function masterTick(pdev)
 		pcall( checkSystemBattery, pdev )
 	end
 
-	-- Check DST change. Re-eval all conditions if changed, just to be safe.
-	local dot = os.date("*t").isdst and "1" or "0"
-	local lastdst = getReactorVar( "LastDST", "", pdev )
-	D("masterTick() current DST %1, last %2", dot, lastdst)
-	if dot ~= lastdst then
-		L({level=2,msg="DST change detected! Re-evaluating children."})
-		luup.variable_set( MYSID, "LastDST", dot, pdev )
-		for k,v in pairs(luup.devices) do
-			if v.device_type == RSTYPE and v.device_num_parent == pdev then
-				if isEnabled( k ) then
-					-- Use tick rather than Restart action to preserve state. It's just a re-eval.
-					scheduleDelay( { id=tostring(k), info="DST_Change" } , 0, { replace=true } )
+debugMode=true
+	local netState = true
+	local checkInterval = getVarNumeric( "InternetCheckInterval", 5, pdev, MYSID )
+	if checkInterval > 0 then
+		netState = getVarNumeric( "NetworkStatus", 1, pdev, MYSID ) ~= 0
+		D("masterTick() before probe, stored network state is %1, last check %2 at %3", netState, lastNetCheckState, lastNetCheckTime)
+		-- Check periodically or more frequently when known down
+		if not lastNetCheckState or now >= ( lastNetCheckTime + 60 * checkInterval - 5 ) then
+			lastNetCheckTime = now
+			local st
+			st, lastNetCheckState = pcall( checkInternetState, pdev )
+			if not st then
+				L({level=1,msg="Failed to complete Internet check probes: %1"}, lastNetCheckState)
+				lastNetCheckState = true -- keep from doing too many probes while there's a problem
+				setVar( MYSID, "NetworkStatus", "", pdev )
+			else
+				if not lastNetCheckState then
+					netFailCount = netFailCount + 1
+					L({level=2,"All Internet probes have failed %1 times"}, netFailCount)
+					if netFailCount >= 3 then
+						netState = false
+					end
+				else
+					netState = true
+					netFailCount = 0
+				end
+				setVar( MYSID, "NetworkStatus", netState and "1" or "0" )
+				D("masterTick() determined network (Internet) status %1", netState)
+				local nstates = getReactorVar( "ns", "0:X", pdev )
+				nstates = split( nstates, "," )
+				local t,s = nstates[#nstates]:match( "^(%d+):(.*)" )
+				local dd = netState and "U" or "D"
+				if s ~= dd then
+					L("Detected network state change (%1) last %2", dd, os.date("%x %X", t))
+					table.insert( nstates, now .. ":" .. dd )
+					while #nstates > 10 do table.remove( nstates, 1 ) end
+					setVar( MYSID, "ns", table.concat( nstates, "," ), pdev )
 				end
 			end
 		end
+	else
+		setVar( MYSID, "NetworkStatus", "", pdev )
 	end
 
-	-- Geofencing. If flag on, at least one sensor is using geofencing.
-	-- N.B. ForceGeofenceMode is NOT BOOL!
-	if geofenceMode ~= 0 or getVarNumeric( "ForceGeofenceMode", 0, pdev, MYSID ) ~= 0 then
-		-- Getting geofence data can be a long-running task because of handling
-		-- userdata, so run as a job, unless using LPeg. LPeg considerably speeds up parsing so
-		-- we can do the task inline.
-		if json and json.using_lpeg and not getVarBool( "ForceGeofenceJob", false, pdev, MYSID ) == 0 then
-			pcall( updateGeofences, pdev )
-		else
-			D("masterTick() geofence mode %1, launching geofence update as job", geofenceMode)
-			geofenceEvent = geofenceEvent + 1
-			local rc,rs,rj,ra = luup.call_action( MYSID, "UpdateGeofences", { event=geofenceEvent }, pdev ) -- luacheck: ignore 211
+	-- Check DST change. Re-eval all conditions if changed, just to be safe.
+	if not netState then
+		L{level=2,msg="Skipping DST check; WAN is down, time may be (or become) inaccurate"}
+	else
+		local dstflag = os.date("*t", now).isdst
+		local dot = dstflag and "1" or "0"
+		local lastdst = getReactorVar( "LastDST", "", pdev )
+		D("masterTick() current DST %1 (isdst=%3), last %2", dot, lastdst, dstflag)
+		if dot ~= lastdst then
+			luup.variable_set( MYSID, "LastDST", dot, pdev )
+			if getVarNumeric( "SuppressDSTCheck", 0, pdev, MYSID ) == 0 then
+				L({level=2,msg="DST change detected (was %1 now %2 (%4) stable %3)! Re-evaluating children."},
+					lastdst, dot, clockStable, dstflag)
+				for k,v in pairs(luup.devices) do
+					if v.device_type == RSTYPE and v.device_num_parent == pdev then
+						if isEnabled( k ) then
+							-- Use tick rather than Restart action to preserve state. It's just a re-eval.
+							scheduleDelay( { id=tostring(k), info="DST_Change" } , 0, { replace=true } )
+						end
+					end
+				end
+			end
+		end
+
+		-- Geofencing. If flag on, at least one sensor is using geofencing.
+		-- N.B. ForceGeofenceMode is NOT BOOL!
+		if geofenceMode ~= 0 or getVarNumeric( "ForceGeofenceMode", 0, pdev, MYSID ) ~= 0 then
+			-- Getting geofence data can be a long-running task because of handling
+			-- userdata, so run as a job, unless using LPeg. LPeg considerably speeds up parsing so
+			-- we can do the task inline.
+			if json and json.using_lpeg and not getVarBool( "ForceGeofenceJob", false, pdev, MYSID ) == 0 then
+				pcall( updateGeofences, pdev )
+			else
+				D("masterTick() geofence mode %1, launching geofence update as job", geofenceMode)
+				geofenceEvent = geofenceEvent + 1
+				local rc,rs,rj,ra = luup.call_action( MYSID, "UpdateGeofences", { event=geofenceEvent }, pdev ) -- luacheck: ignore 211
+			end
 		end
 	end
 
@@ -4883,6 +5000,7 @@ local function waitSystemReady( pdev, taskid, callback )
 end
 
 local function markChildrenDown( msg, pdev )
+	pdev = pdev or pluginDevice
 	for k,v in childDevices( pdev ) do
 		if v.device_type == RSTYPE then
 			luup.variable_set( RSSID, "Message", msg or "Stopped", k )
@@ -4892,7 +5010,8 @@ local function markChildrenDown( msg, pdev )
 end
 
 -- Start plugin running.
-function startPlugin( pdev )
+function startPlugin( pdev, ptask ) -- N.B. can be run as task
+	D("startPlugin(%1,%2)", pdev, ptask)
 --[[
 	local uilang = luup.attr_get('ui_lang', 0) or "en"
 	local plang = getReactorVar( "lang", "" )
@@ -4909,10 +5028,6 @@ function startPlugin( pdev )
 		end
 	end
 --]]
-	if pluginDevice then
-		error "This device is already started/running."
-	end
-
 	L("Plugin version %1 starting on #%2 (%3)", _PLUGIN_VERSION, pdev, luup.devices[pdev].description)
 	luup.variable_set( MYSID, "NumRunning", "0", pdev )
 
@@ -4938,6 +5053,8 @@ function startPlugin( pdev )
 	geofenceEvent = 0
 	usesHouseMode = false
 	maxEvents = getVarNumeric( "MaxEvents", debugMode and 250 or 100, pdev, MYSID )
+	clockValid = true
+	clockStable = true
 
 	math.randomseed( os.time() )
 
@@ -4957,6 +5074,32 @@ function startPlugin( pdev )
 		D("startPlugin() debug enabled by state variable DebugMode")
 	end
 
+	-- One-time stuff
+	plugin_runOnce( pdev )
+
+	markChildrenDown( "Waiting for startup", pdev )
+
+	-- System clock check
+	if os.time() <= 1586092920 then
+		L{level=1, msg="***** SYSTEM CLOCK IS INVALID *****"}
+		if getVarNumeric( "RequireValidClock", 0, pdev, MYSID ) ~= 0 then
+			L{level=2, msg="RequireValidClock is set; deferring startup. Next check in 120 seconds."}
+			setVar( MYSID, "Message", "START DELAYED: INVALID CLOCK", pdev )
+			scheduleDelay( { id="startPlugin", func=startPlugin, owner=pdev }, 120 )
+			return true, "", _PLUGIN_NAME
+		end
+		-- Start now in recovery mode. Flag invalid clock for run.
+		clockValid = false
+		setVar( MYSID, "recoverymode", 1, pdev )
+	elseif getVarNumeric( "ClockValid", 1, pdev, MYSID ) == 0 then
+		L{level=2, msg="Forcing recovery restart -- system clock was invalid on previous run!"}
+		setVar( MYSID, "recoverymode", 1, pdev )
+		clockStable = false -- for first run after being bogus
+	end
+	-- Only set ClockValid at this point, no earlier. If RequireValidClock is set, we will end up
+	-- not having forced recovery mode, which is a Very Good Thing if we can do it.
+	setVar( MYSID, "ClockValid", clockValid and "1" or "0", pdev )
+
 	-- Check required packages
 	for _,v in ipairs{ "dkjson", "socket", "mime" } do
 		if not package.loaded[v] then
@@ -4971,7 +5114,7 @@ function startPlugin( pdev )
 		local st,p = pcall( require, v )
 		if not st or type(p) ~= "table" then
 			L({level=2,"Warning: the %1 module cannot be loaded, but is required for some action types."})
-		elseif isOpenLuup and v == "ssl" and tostring( package.loaded.ssl or "" )._VERSION:match( "^0%.[1234567]" ) then
+		elseif isOpenLuup and v == "ssl" and tostring( package.loaded.ssl or "" )._VERSION:match( "^0%.[12345]" ) then
 			L({level=2,'Warning: the "ssl" module (LuaSec) is out of date and should be upgraded.'})
 		end
 		package.loaded[v] = nil
@@ -4982,14 +5125,14 @@ function startPlugin( pdev )
 	-- first to be blamed.
 	local nr = getVarNumeric( "MaxRestartCount", 10, pdev, MYSID )
 	local p = getVarNumeric( "MaxRestartPeriod", 900, pdev, MYSID )
-	if nr > 1 and p > 0 then
+	if clockValid and nr > 1 and p > 0 then
 		local s = getReactorVar( "rs", "", pdev )
 		s = split( s, ',' )
-		while #s >= nr do table.remove(s, 1) end
+		while #s > 0 and #s >= nr do table.remove(s, 1) end
 		D("startPlugin() restart check (limit %1 in %2); previous restarts: %3", nr, p, s)
 		table.insert(s, os.time())
 		setVar( MYSID, "rs", table.concat( s, "," ), pdev )
-		if #s == nr then
+		if #s > 1 and #s == nr then
 			local d = s[nr] - s[1]
 			if d <= p then
 				-- Too many restarts! Abort. No soup for you!
@@ -5039,7 +5182,7 @@ function startPlugin( pdev )
 					newStyleFunc="Reactor_ALTUI.getStyle"
 				}, k )
 			D("startPlugin() ALTUI's RegisterPlugin action for %5 returned resultCode=%1, resultString=%2, job=%3, returnArguments=%4", rc,rs,jj,ra, MYTYPE)
-		elseif not isOpenLuup and v.device_type == "openLuup" then
+		elseif not isOpenLuup and v.device_type == "openLuup" and v.device_num_parent == 0 then
 			L("Detected openLuup (%1)", k)
 			isOpenLuup = k
 			local vv = getVarNumeric( "Vnumber", 0, k, v.device_type )
@@ -5063,8 +5206,7 @@ function startPlugin( pdev )
 		elseif v.device_type == "urn:richardgreen:device:VeraAlert:1" and v.device_num_parent == 0 then
 			devVeraAlerts = k
 			L("Detected VeraAlerts (%1)", k)
-		elseif v.device_type == RSTYPE then
-			luup.variable_set( RSSID, "Message", "Stopped", k )
+		elseif v.device_num_parent == pdev and v.device_type == RSTYPE then
 			addEvent{ dev=k, msg="Reactor startup (Luup reload)" }
 		end
 	end
@@ -5082,16 +5224,13 @@ function startPlugin( pdev )
 		return false, "Incompatible firmware " .. luup.version, _PLUGIN_NAME
 	end
 
-	-- One-time stuff
-	plugin_runOnce( pdev )
-
 	-- Check for recovery mode.
 	if getVarNumeric( "recoverymode", 0, pdev, MYSID ) ~= 0 then
 		-- Recovery mode. Wipe state data.
 		setVar( MYSID, "runscene", "{}", pdev )
 		setVar( MYSID, "scenedata", "{}", pdev )
 		setVar( MYSID, "NotifyQueue", "[]", pdev )
-		setVar( MYSID, "recoverymode", "0", pdev )
+		-- Don't reset "recoverymode" yet -- we need it in startSensor()
 	end
 
 	-- For openLuup, we watch the openLuup device's HouseMode variable.
@@ -5117,7 +5256,16 @@ function startPlugin( pdev )
 	startSensors( pdev )
 
 	-- Remove recovery mode flag if we can
-	deleteVar( MYSID, "recoverymode", pdev )
+	if clockValid and luup.variable_get( MYSID, "recoverymode", pdev ) ~= nil then
+		-- Variable exists
+		setVar( MYSID, "recoverymode", 0, pdev ) -- older Luup can't delete
+		deleteVar( MYSID, "recoverymode", pdev )
+	end
+
+	if not clockValid then
+		setVar( MYSID, "Message", "INVALID SYSTEM CLOCK!", pdev )
+		setVar( MYSID, "recoverymode", 1, pdev ) -- next startup in recovery mode
+	end
 
 	-- Return success
 	luup.set_failure( 0, pdev )
@@ -6139,6 +6287,7 @@ SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 	r = r .. "; UnsafeLua=" .. tostring(luup.attr_get( "UnsafeLua", 0 ) or "nil")
 	r = r .. EOL
 	r = r .. "Local time: " .. os.date("%Y-%m-%dT%H:%M:%S%z") ..
+		( clockValid and ( clockStable and "" or " ***UNSTABLE***" ) or " ***BOGUS***" ) ..
 		"; DST=" .. getReactorVar( "LastDST", "?" ) ..
 		"; " .. tostring(luup.attr_get("City_description",0) or "") ..
 		", " .. tostring(luup.attr_get("Region_description",0) or "") ..
@@ -6163,6 +6312,8 @@ SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 		r = r .. "     Power: " .. getReactorVar( "SystemPowerSource", "?")
 		r = r .. ", battery level " .. getReactorVar( "SystemBatteryLevel", "?") .. EOL
 	end
+	r = r .. "        RS: " .. getReactorVar( "rs", "" ) .. EOL
+	r = r .. "        NS: " .. getReactorVar( "ns", "" ) .. EOL
 	for n,d in pairs( luup.devices ) do
 		local scenesUsed = {}
 		summaryDevices = {}
