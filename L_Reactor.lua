@@ -1310,7 +1310,7 @@ local function loadScene( sceneId, pdev )
 		L("Can't decode JSON response for scene %1: %2 at %3 in %4", sceneId, err, pos, body)
 		return false
 	end
-	data.loadtime = luup.attr_get("LoadTime", 0) or "0"
+	data.loadtime = getVarNumeric( "LoadTime", 0, pluginDevice, MYSID )
 	if data.groups then
 		table.sort( data.groups, function( a, b ) return (a.delay or 0) < (b.delay or 0) end )
 	end
@@ -1423,8 +1423,8 @@ local function getSceneData( sceneId, tdev )
 	-- See if we can return from cache
 	local scd = sceneData[skey]
 	if scd ~= nil then
-		local llt = tostring( luup.attr_get( "LoadTime", 0 ) or 0 )
-		if tostring(scd.loadtime or 0) ~= llt then
+		local llt = getVarNumeric( "LoadTime", 0, pluginDevice, MYSID )
+		if (scd.loadtime or 0) ~= llt then
 			-- Reload since cached, queue for refresh.
 			D("getSceneData() reload since scene last cached, queueing update")
 			refreshScene( scid )
@@ -6265,6 +6265,7 @@ SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 			v = p:read("*l")
 			p:close()
 			r = r .. " on " .. tostring(v)
+			r = r .. "; in " .. getInstallPath()
 		end
 	else
 		r = r .. "Vera version " .. tostring(luup.version) .. " (" ..
@@ -6274,17 +6275,19 @@ SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 			" (" .. ( ({["35"]="Vera Edge", ["36"]="Vera Plus", ["37"]="Vera Secure"})[tostring(luup.modelID or "X")] or "unknown" ) .. ")"
 	end
 	r = r .. "; loadtime " .. tostring( luup.attr_get('LoadTime',0) or "" )
+		.. "/" .. getVar( "LoadTime", 0, pluginDevice, MYSID )
 	r = r .. "; systemReady " .. tostring( systemReady )
 	if isALTUI then
 		r = r .. "; ALTUI"
 		local v = luup.variable_get( "urn:upnp-org:serviceId:altui1", "Version", isALTUI )
 		r = r .. " " .. tostring(v)
 	end
-	r = r .. "; " .. tostring((_G or {})._VERSION)
+	r = r .. EOL
+	r = r .. "       Env: " .. tostring((_G or {})._VERSION)
 	pcall( function()
 		if json then r = r .. "; JSON " .. (json.version or "unknown") .. (json.using_lpeg and "+LPeg" or "" ) end
 	end )
-	r = r .. "; UnsafeLua=" .. tostring(luup.attr_get( "UnsafeLua", 0 ) or "nil")
+	r = r .. "; UnsafeLua=" .. tostring(luup.attr_get( "UnsafeLua", 0 ) or "nil") .. "/" .. tostring(unsafeLua)
 	r = r .. EOL
 	r = r .. "Local time: " .. os.date("%Y-%m-%dT%H:%M:%S%z") ..
 		( clockValid and ( clockStable and "" or " ***UNSTABLE***" ) or " ***BOGUS***" ) ..
@@ -6321,6 +6324,7 @@ SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 			D("requestSummary() handling device %1 %2", n, d.description)
 			local status = ( ( getVarNumeric( "Armed", 0, n, SENSOR_SID ) ~= 0 ) and " armed" or "" )
 			status = status .. ( ( getVarNumeric("Tripped", 0, n, SENSOR_SID ) ~= 0 ) and " tripped" or "" )
+			status = status .. ( ( getVarNumeric("Enabled", 1, n, RSSID ) ~= 0 ) and "" or " DISABLED" )
 			status = status .. ( ( getVarNumeric("Trouble", 0, n, RSSID ) ~= 0 ) and " TROUBLE" or "" )
 			r = r .. string.rep( "*", 132 ) .. EOL
 			r = r .. string.format("%s (#%d)%s", tostring(d.description), n, status) .. EOL
@@ -6397,7 +6401,7 @@ SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 				r = r .. "    Watches" .. EOL
 				for key,devs in pairs( watchData or {} ) do
 					for dev in pairs( devs or {} ) do
-						if tonumber(dev) == deviceNum then
+						if tonumber(dev) == n then
 							if not pcall(
 								function( kk )
 									local dd = split( kk, '/' )
