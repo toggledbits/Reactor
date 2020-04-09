@@ -2581,6 +2581,12 @@ local function doActionRequest( action, scid, tdev )
 	return true
 end
 
+function logActivityStep( desc, scd, group, index, action, tdev )
+	L("%1 (#%2) Performing %3 (%4 group %5 index %6)",
+		( luup.devices[tdev] or {} ).description or "?", tdev, desc,
+		scd.name or scd.id, group or "n/a", index or "n/a" )
+end
+
 -- Run the next scene group(s), until we run out of groups or a group delay
 -- restriction hasn't been met. Across reloads, scenes will "catch up," running
 -- groups that are now past-due (native Luup scenes don't do this).
@@ -2663,6 +2669,8 @@ local function execSceneGroups( tdev, taskid, scd )
 			end
 			if tt > now then
 				-- It's not time yet. Schedule task to continue.
+				logActivityStep( "Delay until "..os.date( dateFormat .. " " .. timeFormat, tt ),
+					scd, nextGroup, nil, nil, tdev )
 				D("execSceneGroups() scene group %1 must delay to %2", nextGroup, tt)
 				addEvent{ dev=tdev,
 					msg="Delaying scene %(sceneName)s group %(group)s actions until %(when)s",
@@ -2703,6 +2711,7 @@ local function execSceneGroups( tdev, taskid, scd )
 						devnum = tdev
 						param.Options = json.encode( { contextDevice=sst.options.contextDevice, stopPriorScenes=false } )
 					end
+					logActivityStep( "Vera Scene Action", scd, nextGroup, ix, action, tdev )
 					luup.call_action( action.service, action.action, param, devnum )
 				end
 			else
@@ -2719,6 +2728,7 @@ local function execSceneGroups( tdev, taskid, scd )
 							group=nextGroup, index=ix, message=action.comment or "" }
 					end
 				elseif action.type == "device" then
+					logActivityStep( "Device Action", scd, nextGroup, ix, action, tdev )
 					local devnum = tonumber( action.device )
 					if devnum == -1 then devnum = tdev end
 					if devnum == nil or luup.devices[devnum] == nil then
@@ -2748,10 +2758,12 @@ local function execSceneGroups( tdev, taskid, scd )
 						luup.call_action( action.service, action.action, param, devnum )
 					end
 				elseif action.type == "housemode" then
+					logActivityStep( "Set House Mode", scd, nextGroup, ix, action, tdev )
 					D("execSceneGroups() setting house mode to %1", action.housemode)
 					luup.call_action( "urn:micasaverde-com:serviceId:HomeAutomationGateway1",
 						"SetHouseMode", { Mode=action.housemode or "1" }, 0 )
 				elseif action.type == "runscene" then
+					logActivityStep( "Run Scene", scd, nextGroup, ix, action, tdev )
 					-- Run scene in same context as this one. Whoa... recursion... depth???
 					local scene = getValue( action.scene, nil, tdev )
 					D("execSceneGroups() launching scene %1 (%2) from scene %3",
@@ -2765,6 +2777,7 @@ local function execSceneGroups( tdev, taskid, scd )
 						runScene( scene, tdev, options )
 					end
 				elseif action.type == "runlua" then
+					logActivityStep( "Run Lua", scd, nextGroup, ix, action, tdev )
 					local fname = string.format("rs%s_sc%s_gr%d_ac%d",
 						tostring(tdev), tostring(scd.id), nextGroup, ix )
 					D("execSceneGroups() running Lua for %1 (chunk name %2)", scd.id, fname)
@@ -2803,6 +2816,7 @@ local function execSceneGroups( tdev, taskid, scd )
 						return nil
 					end
 				elseif action.type == "rungsa" then
+					logActivityStep( "Run Group Activity", scd, nextGroup, ix, action, tdev )
 					local device = action.device or -1
 					if device == -1 then
 						device = tdev
@@ -2811,12 +2825,14 @@ local function execSceneGroups( tdev, taskid, scd )
 					if ( action.stopall or 0 ) ~= 0 then opts.stopPriorScenes = true end
 					luup.call_action( RSSID, "RunScene", { SceneNum=action.activity or "error", Options=json.encode(opts) }, device )
 				elseif action.type == "stopgsa" then
+					logActivityStep( "Stop Group Activity", scd, nextGroup, ix, action, tdev )
 					local device = action.device or -1
 					if device == -1 then
 						device = tdev
 					end
 					luup.call_action( RSSID, "StopScene", { SceneNum=action.activity or "" }, device )
 				elseif action.type == "setvar" then
+					logActivityStep( "Set Variable", scd, nextGroup, ix, action, tdev )
 					local success, oldval, newval = doSetVar( action.variable, action.value, tdev )
 					if success then
 						addEvent{ dev=tdev, msg="Variable %(variable)q set to %(newValue)q; was %(newValue)q",
@@ -2834,6 +2850,7 @@ local function execSceneGroups( tdev, taskid, scd )
 						getSensorState( tdev ).trouble = true
 					end
 				elseif action.type == "resetlatch" then
+					logActivityStep( "Reset Latch", scd, nextGroup, ix, action, tdev )
 					local device = action.device or -1
 					local group = action.group or ""
 					if device == -1 or device == tdev then
@@ -2848,6 +2865,7 @@ local function execSceneGroups( tdev, taskid, scd )
 						luup.call_action( RSSID, "ClearLatched", { Group=group }, device )
 					end
 				elseif action.type == "notify" then
+					logActivityStep( "Notify", scd, nextGroup, ix, action, tdev )
 					local success,err = pcall( doActionNotify, action, scd.id, tdev )
 					if not success then
 						L({level=2,msg="Notify action failed: " .. err .. " (%1 group %2 action %3)"},
@@ -2858,6 +2876,7 @@ local function execSceneGroups( tdev, taskid, scd )
 						getSensorState( tdev ).trouble = true
 					end
 				elseif action.type == "request" then
+					logActivityStep( "HTTP Request", scd, nextGroup, ix, action, tdev )
 					local success,err = pcall( doActionRequest, action, scd.id, tdev )
 					if not success then
 						L({level=2,msg="Request action failed: " .. err .. " (%1 group %2 action %3)"},
@@ -2869,7 +2888,7 @@ local function execSceneGroups( tdev, taskid, scd )
 					end
 				else
 					L({level=1,msg="Unhandled action type %1 at %2 in scene %3 for %4 (%5)"},
-						action.type, ix, scd.id, tdev, luup.devices[tdev].description)
+						action.type, ix, scd.name or scd.id, tdev, luup.devices[tdev].description)
 					addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup,
 						warning="TROUBLE: action #" .. tostring(ix) .. " unrecognized type: " .. tostring(action.type) .. ", ignored." }
 					getSensorState( tdev ).trouble = true
@@ -4684,7 +4703,6 @@ local function masterTick(pdev)
 		pcall( checkSystemBattery, pdev )
 	end
 
-debugMode=true
 	local netState = true
 	local checkInterval = getVarNumeric( "InternetCheckInterval", 5, pdev, MYSID )
 	if checkInterval > 0 then
