@@ -7224,7 +7224,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						}
 						$( 'select.devicemenu', newRow ).val( act.device || "-1" );
 						$m = $( 'select.re-activity', newRow ).empty();
-						makeDeviceActivityMenu( act.device || -1, $m );
+						makeDeviceActivityMenu( act.device || -1, $m )
+							.prepend( '<option value="">(all activities)</option>' );
 						if ( 0 === $( 'option[value=' + quot(act.activity || "") + ']', $m ).length ) {
 							$( '<option/>' ).val( act.activity || "undef" )
 								.text( ( act.activity || "name?" ) + " (missing)" )
