@@ -3886,7 +3886,7 @@ local function processCondition( cond, grp, cdata, tdev )
 				local predstate = ( condopt.aftermode or 0 ) ~= 0 or predState.evalstate
 				-- To clear, pred must be true, pred's true precedes our true, and if window, age within window
 				D("evaluateCondition() pred %1, window %2, age %3", predCond.id, window, age)
-				if not ( predstate and age >= 0 and ( window==0 or age <= window ) ) then
+				if not ( predstate and age >= 0 and ( window == 0 or age <= window ) ) then
 					D("evaluateCondition() didn't meet sequence requirement %1 after %2(=%3) mode %6 within %4 (%5 ago)",
 						cond.id, predCond.id, predState.evalstate, condopt.aftertime or "any", age,
 						condopt.aftermode or 0)
@@ -3925,8 +3925,9 @@ local function processCondition( cond, grp, cdata, tdev )
 				cond.id, #cs.repeats, now-cs.repeats[1], condopt.repeatcount, condopt.repeatwithin)
 		end
 	elseif ( condopt.duration or 0 ) > 0 then
-		-- Duration restriction?
+		-- Duration (sustained for) restriction?
 		-- Age is seconds since last state change.
+		D("processCondition() sustain state %1 opt %2", state, condopt)
 		local op = condopt.duration_op or "ge"
 		if op == "lt" then
 			-- If duration < X, then eval is true only if last true interval
@@ -3978,6 +3979,8 @@ local function processCondition( cond, grp, cdata, tdev )
 	else
 		cs.waituntil = nil
 	end
+
+	-- Output control below this comment; restrictions above.
 
 	-- Pulsed output (timed reset). Pulse is held even if underlying drops out.
 	if ( condopt.pulsetime or 0 ) > 0 then
@@ -4684,7 +4687,6 @@ local function masterTick(pdev)
 		pcall( checkSystemBattery, pdev )
 	end
 
-debugMode=true
 	local netState = true
 	local checkInterval = getVarNumeric( "InternetCheckInterval", 5, pdev, MYSID )
 	if checkInterval > 0 then
