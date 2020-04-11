@@ -10,7 +10,7 @@
 
 module("L_LuaXP_Reactor", package.seeall)
 
-_VERSION = "1.0.2"
+_VERSION = "1.0.2enh"
 _VNUMBER = 10002
 _DEBUG = false -- Caller may set boolean true or function(msg)
 
@@ -1171,7 +1171,13 @@ local function fetch( stack, ctx )
 			D("fetch: calling external resolver for %1", e.name)
 			v = ctx.__functions.__resolve( e.name, ctx )
 		end
-		if v == nil then evalerror("Undefined variable: " .. e.name, e.pos) end
+		if v == nil then
+			if getOption( ctx, "undefinedvarnull" ) then
+				v = NULLATOM
+			else
+				evalerror("Undefined variable: " .. e.name, e.pos)
+			end
+		end
 		-- Apply array index if present
 		if e.index ~= nil then
 			if base.type(v) ~= "table" then evalerror(e.name .. " is not an array", e.pos) end
@@ -1350,7 +1356,9 @@ _run = function( atom, ctx, stack )
 				.. base.type(v1) .. e.op .. base.type(v2) .. ")", e.pos) end
 			v = v1 >= v2
 		elseif e.op == '==' then
-			if base.type(v1) == "boolean" or base.type(v2) == "boolean" then
+			if isNull(v1) or isNull(v2) then
+				v = isNull(v1) and isNull(v2)
+			elseif base.type(v1) == "boolean" or base.type(v2) == "boolean" then
 				v = coerce(v1, "boolean") == coerce(v2, "boolean")
 			elseif (base.type(v1) == "number" or base.type(v2) == "number") and isNumeric(v1) and isNumeric(v2) then
 				-- Either is number and both have valid numeric representation, treat both as numbers
@@ -1360,7 +1368,9 @@ _run = function( atom, ctx, stack )
 				v = coerce(v1, "string") == coerce(v2, "string")
 			end
 		elseif e.op == '<>' or e.op == '!=' or e.op == '~=' then
-			if base.type(v1) == "boolean" or base.type(v2) == "boolean" then
+			if isNull(v1) or isNull(v2) then
+				v = not ( isNull(v1) and isNull(v2) )
+			elseif base.type(v1) == "boolean" or base.type(v2) == "boolean" then
 				v = coerce(v1, "boolean") == coerce(v2, "boolean")
 			elseif (base.type(v1) == "number" or base.type(v2) == "number") and isNumeric(v1) and isNumeric(v2) then
 				v = coerce(v1, "number") ~= coerce(v2, "number")

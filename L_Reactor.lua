@@ -1618,7 +1618,7 @@ local function getExpressionContext( cdata, tdev )
 	local sst = getSensorState( tdev )
 	if sst.ctx then return sst.ctx end
 
-	-- Create new state
+	-- Create evaluation context
 	ctx = { __functions={}, __lvars={} }
 	sst.ctx = ctx
 
@@ -1632,9 +1632,12 @@ local function getExpressionContext( cdata, tdev )
 	mt.__tostring = function() return "null" end
 	setmetatable( luaxp.NULL, mt )
 
+	-- Options
+	ctx.__options = { undefinedvarnull = true, subscriptmissnull = true }
+
 	-- Define all-caps NULL as synonym for null
 	ctx.__lvars.NULL = luaxp.NULL
-	-- Create evaluation context
+
 	ctx.__functions.finddevice = function( args )
 		local selector, trouble = unpack( args )
 		D("findDevice(%1) selector=%2", args, selector)
