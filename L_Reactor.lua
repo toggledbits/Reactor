@@ -1521,8 +1521,7 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
 			if type( err ) == "string" then
 				errmsg = "Runtime error: " .. err
 			else
-				errmsg = (err or {}).message or err or "Failed"
-				if (err or {}).location ~= nil then errmsg = errmsg .. " at " .. tostring(err.location) end
+				errmsg = tostring( err ) -- newer LuaXP has metamethod
 			end
 			L({level=2,msg="%2 (#%1) failed evaluation of %3: %4"}, tdev, luup.devices[tdev].description,
 				vdef.expression, errmsg)
@@ -1618,7 +1617,7 @@ local function getExpressionContext( cdata, tdev )
 	local sst = getSensorState( tdev )
 	if sst.ctx then return sst.ctx end
 
-	-- Create new state
+	-- Create evaluation context
 	ctx = { __functions={}, __lvars={} }
 	sst.ctx = ctx
 
@@ -1632,9 +1631,12 @@ local function getExpressionContext( cdata, tdev )
 	mt.__tostring = function() return "null" end
 	setmetatable( luaxp.NULL, mt )
 
+	-- Options
+	ctx.__options = { undefinedvarnull = true, subscriptmissnull = true }
+
 	-- Define all-caps NULL as synonym for null
 	ctx.__lvars.NULL = luaxp.NULL
-	-- Create evaluation context
+
 	ctx.__functions.finddevice = function( args )
 		local selector, trouble = unpack( args )
 		D("findDevice(%1) selector=%2", args, selector)
@@ -1927,9 +1929,10 @@ local function getValue( val, ctx, tdev )
 		if err then
 			L({level=2,msg="%1 (%2) Error evaluating %3: %4"}, luup.devices[tdev].description,
 				tdev, mp, err)
+			err = tostring( err ) -- newer LuaXP has metamethod; convert AFTER logging
 			addEvent{ dev=tdev,
 				msg="TROUBLE: Evaluation error in %(expression)q: %(error)s",
-				event="evaluate", expression=val, ['error']=err }
+				event="evaluate", expression=mp, ['error']=err }
 			getSensorState( tdev ).trouble = true
 			val = ""
 		elseif result == nil or luaxp.isNull( result ) then
@@ -2581,7 +2584,7 @@ local function doActionRequest( action, scid, tdev )
 	return true
 end
 
-function logActivityStep( desc, scd, group, index, action, tdev )
+function logActivityStep( desc, scd, group, index, action, tdev ) -- luacheck: ignore 212
 	L("%1 (#%2) Performing %3 (%4 group %5 index %6)",
 		( luup.devices[tdev] or {} ).description or "?", tdev, desc,
 		scd.name or scd.id, group or "n/a", index or "n/a" )
@@ -2835,7 +2838,7 @@ local function execSceneGroups( tdev, taskid, scd )
 					logActivityStep( "Set Variable", scd, nextGroup, ix, action, tdev )
 					local success, oldval, newval = doSetVar( action.variable, action.value, tdev )
 					if success then
-						addEvent{ dev=tdev, msg="Variable %(variable)q set to %(newValue)q; was %(newValue)q",
+						addEvent{ dev=tdev, msg="Variable %(variable)q set to %(newValue)q; was %(oldValue)q",
 							variable=action.variable, newValue=newval, oldValue=oldval }
 						if (action.reeval or 0) ~= 0 then
 							scheduleDelay( tdev, 1 )
