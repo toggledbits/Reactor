@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.5hotfix-20071';
+	var pluginVersion = '3.5hotfix-20103';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -2998,6 +2998,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 			if ( events && events.length > 0 ) {
 				var wrapAction = function( eventinfo, cond, $row ) {
 					return function( ev ) {
+						ev.preventDefault(); /* Hotfix 20102: prevent odd jump to Dashboard on old UI7/1040 and below */
 						var el = $( ev.target );
 						cond.service = el.data( 'service' ) || "?";
 						cond.variable = el.data( 'variable' ) || "?";
@@ -7134,6 +7135,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 	}
 
 	function handleActionCopyClick( ev ) {
+		ev.preventDefault();
 		var $el = $( ev.currentTarget );
 		var source = $el.attr( 'id' ) || "";
 		if ( "" === source ) return; /* clicked a non-clickable */

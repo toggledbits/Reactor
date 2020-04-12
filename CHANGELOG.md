@@ -4,6 +4,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2018.11
 
 ## Version 3.5 Hotfixes
 
+* Hotfix 20103-01: Prevent odd jump to Dashboard from event list (Conditions tab, Device State condition) on older UI7 (at least 1040 and below).
 * Hotfix 20080-01: Allow device 0 in `getattribute()` expression function, so you can fetch system attributes.
 * Hotfix 20078-01: Fix a missing selector constraint that may affect conditions when pulse mode is used.
 * Hotfix 20071-01: openLuup only: Suppress "unsafe lua" warnings correctly on openLuup.
