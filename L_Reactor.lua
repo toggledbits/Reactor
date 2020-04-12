@@ -1521,8 +1521,7 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
 			if type( err ) == "string" then
 				errmsg = "Runtime error: " .. err
 			else
-				errmsg = (err or {}).message or err or "Failed"
-				if (err or {}).location ~= nil then errmsg = errmsg .. " at " .. tostring(err.location) end
+				errmsg = tostring( err ) -- newer LuaXP has metamethod
 			end
 			L({level=2,msg="%2 (#%1) failed evaluation of %3: %4"}, tdev, luup.devices[tdev].description,
 				vdef.expression, errmsg)
@@ -1930,9 +1929,10 @@ local function getValue( val, ctx, tdev )
 		if err then
 			L({level=2,msg="%1 (%2) Error evaluating %3: %4"}, luup.devices[tdev].description,
 				tdev, mp, err)
+			err = tostring( err ) -- newer LuaXP has metamethod; convert AFTER logging
 			addEvent{ dev=tdev,
 				msg="TROUBLE: Evaluation error in %(expression)q: %(error)s",
-				event="evaluate", expression=val, ['error']=err }
+				event="evaluate", expression=mp, ['error']=err }
 			getSensorState( tdev ).trouble = true
 			val = ""
 		elseif result == nil or luaxp.isNull( result ) then
@@ -2584,7 +2584,7 @@ local function doActionRequest( action, scid, tdev )
 	return true
 end
 
-function logActivityStep( desc, scd, group, index, action, tdev )
+function logActivityStep( desc, scd, group, index, action, tdev ) -- luacheck: ignore 212
 	L("%1 (#%2) Performing %3 (%4 group %5 index %6)",
 		( luup.devices[tdev] or {} ).description or "?", tdev, desc,
 		scd.name or scd.id, group or "n/a", index or "n/a" )
