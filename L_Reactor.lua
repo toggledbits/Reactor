@@ -2838,7 +2838,7 @@ local function execSceneGroups( tdev, taskid, scd )
 					logActivityStep( "Set Variable", scd, nextGroup, ix, action, tdev )
 					local success, oldval, newval = doSetVar( action.variable, action.value, tdev )
 					if success then
-						addEvent{ dev=tdev, msg="Variable %(variable)q set to %(newValue)q; was %(newValue)q",
+						addEvent{ dev=tdev, msg="Variable %(variable)q set to %(newValue)q; was %(oldValue)q",
 							variable=action.variable, newValue=newval, oldValue=oldval }
 						if (action.reeval or 0) ~= 0 then
 							scheduleDelay( tdev, 1 )
