@@ -3030,12 +3030,16 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 						var sk = cond.service + "/" + cond.variable;
 						menuSelectDefaultInsert( $( 'select.varmenu', $row ), sk );
 						$( 'select.opmenu', $row ).val( cond.operator );
+						setUpConditionOpFields( $row, cond );
 						$( 'input#' + idSelector( cond.id + '-value' ), $row ).val( cond.value );
 						configModified = true;
-						setUpConditionOpFields( $row, cond );
 						updateCurrentServiceValue( $row );
 						updateConditionRow( $row, $( ev ) );
 						$( 'select.varmenu', $row ).focus();
+						/* 2020-04-12: Older UI/firmware (<=1040 at least) seems to need this to prevent
+						               the button click from returning to the UI to the dashboard, which
+						               is truly bizrre. */
+						ev.preventDefault();
 					};
 				};
 				var reptext = function( s ) {
@@ -4455,6 +4459,7 @@ div#tab-conds.reactortab input.re-comment { width: 100% !important; } \
 	}
 
 	function handleGetStateClear( ev ) {
+		ev.preventDefault();
 		clearGetStateOptions();
 	}
 
@@ -7318,6 +7323,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 	}
 
 	function handleActionCopyClick( ev ) {
+		ev.preventDefault();
 		var $el = $( ev.currentTarget );
 		var source = $el.attr( 'id' ) || "";
 		if ( "" === source ) return; /* clicked a non-clickable */
