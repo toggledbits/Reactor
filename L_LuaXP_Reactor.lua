@@ -139,14 +139,24 @@ end
 
 local function is_non( v ) return v == nil or isNull( v ) end
 
+local function _newerr(r)
+	r.__source = r.__source or "luaxp"
+	local m = getmetatable( r ) or {}
+	m.__tostring = function(t) return string.format("[%s]%s%s", t.__source,
+		t.message or "unspecified error",
+		t.location and ( " at " .. tostring(t.location) ) or "" ) end
+	setmetatable( r, m )
+	return r
+end
+
 local function comperror(msg, loc)
 	D("throwing comperror at %1: %2", loc, msg)
-	return base.error( { __source='luaxp', ['type']='compile', location=loc, message=msg } )
+	return base.error( _newerr{ ['type']='compile', location=loc, message=msg } )
 end
 
 function evalerror(msg, loc)
 	D("throwing evalerror at %1: %2", loc, msg)
-	return base.error( { __source='luaxp', ['type']='evaluation', location=loc, message=msg } )
+	return base.error( _newerr{ ['type']='evaluation', location=loc, message=msg } )
 end
 
 local function xp_pow( argv )
