@@ -3036,9 +3036,9 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 						updateCurrentServiceValue( $row );
 						updateConditionRow( $row, $( ev ) );
 						$( 'select.varmenu', $row ).focus();
-						/* 2020-04-12: Older UI/firmware (<=1040 at least) seems to need this to prevent
-						               the button click from returning to the UI to the dashboard, which
-						               is truly bizrre. */
+						/* Hotfix 20103-01: Older UI/firmware (<=1040 at least) seems to need this
+						               to prevent the button click from returning to the UI to the
+						               dashboard, which is truly bizrre. */
 						ev.preventDefault();
 					};
 				};
