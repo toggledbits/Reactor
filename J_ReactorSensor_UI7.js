@@ -6804,12 +6804,12 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 	}
 
 	function handleActionControlClick( ev ) {
-		var el = ev.currentTarget;
-		if ( $( el ).prop('disabled') ) {
+		var $el = $( ev.currentTarget );
+		if ( $el.prop('disabled') ) {
 			return;
 		}
-		var row = $(el).closest('div.actionrow');
-		var op = $( el ).data( 'action' );
+		var row = $el.closest('div.actionrow');
+		var op = $el.data( 'action' );
 		switch ( op ) {
 			case "up":
 				/* Move up in display */
@@ -6840,6 +6840,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				break;
 
 			case "try":
+				$el.addClass( "re-activemode" );
 				var cvars = false;
 				if ( $( '.tberror', row ).length > 0 ) {
 					alert( 'Please fix the errors before attempting to run this action.' );
@@ -6899,52 +6900,45 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					for ( k in param ) {
 						if ( param.hasOwnProperty( k ) ) {
 							ap.push( k + "=" + quot( param[k] ) );
-							param[k] = encodeURIComponent( param[k] ); /* prep for action */
 						}
 					}
 					actionText += ap.join(", ");
 					actionText += " )\n\n";
 
-					api.performActionOnDevice( d, pt[0], pt[1], {
-						actionArguments: param,
-						onSuccess: function( xhr ) {
-							console.log(actionText + "performActionOnDevice.onSuccess: " + String(xhr));
-							if (typeof(xhr)==="object") {
-								for ( var k in xhr ) {
-									if ( xhr.hasOwnProperty(k) )
-										console.log("xhr." + k + "=" + String(xhr[k]));
-								}
-							}
-							if ( "object" === typeof( xhr ) ) {
-								if ( xhr.responseText && xhr.responseText.match( /ERROR:/ ) ) {
-									alert( actionText + xhr.responseText );
-								} else {
-									alert( actionText + xhr.responseText );
-								}
-							}
-							// alert( "The action completed successfully!" );
-						},
-						onFailure: function( xhr ) {
-							//??? are there undocumented parameters here?
-							if (typeof(xhr)==="object") {
-								for ( var k in xhr ) {
-									if ( xhr.hasOwnProperty(k) )
-										console.log("xhr." + k + "=" + String(xhr[k]));
-								}
-							}
-							if ( 501 === xhr.status ) {
-								alert(actionText + "The requested action may not be implemented by the selected device.");
-							} else if ( 401 === xhr.status ) {
-								alert(actionText + "The requested action's service is unrecognized or not supported by the device.");
-							} else if ( 503 === xhr.status || 500 === xhr.status ) {
-								alert(actionText + "Luup appears to be reloading; wait a moment and try again.");
-							} else {
-								alert(actionText + String(xhr.status) + " " + String(xhr.errorThrown) );
-							}
+					/* 2020-04-12: Don't use api.performActionOnDevice() because its URL-encoding
+					               discipline is inconsistent. */
+					param.id = "action";
+					param.DeviceNum = d;
+					param.serviceId = pt[0] || "";
+					param.action = pt[1] || "";
+					console.log("Try action: ");
+					console.log(param);
+					$.ajax({
+						method: "POST",
+						url: api.getDataRequestURL(),
+						data: param,
+						timeout: 10000,
+						dataType: "text"
+					}).done( function( data ) {
+						alert( actionText + data );
+						$el.removeClass( "re-activemode" );
+					}).fail( function( xhr, textStatus, errorThrown ) {
+						console.log( xhr );
+						console.log( textStatus );
+						console.log( errorThrown );
+						if ( 501 === xhr.status ) {
+							alert(actionText + "The requested action may not be implemented by the selected device.");
+						} else if ( 401 === xhr.status ) {
+							alert(actionText + "The requested action's service is unrecognized or not supported by the device.");
+						} else if ( 503 === xhr.status || 500 === xhr.status ) {
+							alert(actionText + "Luup appears to be reloading; wait a moment and try again.");
+						} else if ( "timeout" === xhr.status ) {
+							alert(actionText + "Luup appears to be taking a long time to respond.");
+						} else {
+							alert(actionText + String(xhr.status) + " " + String(xhr.statusText) + " " + String(xhr.errorThrown) );
 						}
-					} );
-				} else {
-					alert( "Can't perform selected action. You should not be seeing this message." );
+						$el.removeClass( "re-activemode" );
+					});
 				}
 				break;
 
