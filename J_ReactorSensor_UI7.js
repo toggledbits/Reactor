@@ -821,9 +821,11 @@ var ReactorSensor = (function(api, $) {
 				DeviceNum: devnum,
 				serviceId: serviceId,
 				Variable: variable,
-				Value: ""
+				Value: "",
+				r: Math.random()
 			},
 			dataType: "text",
+			cache: false,
 			timeout: 5000
 		}).fail( function( /* jqXHR, textStatus, errorThrown */ ) {
 			console.log( "deleteStateVariable: failed, maybe try again later" );
@@ -883,9 +885,11 @@ var ReactorSensor = (function(api, $) {
 					url: api.getDataRequestURL(),
 					data: {
 						id: "lr_Reactor",
-						action: "alive"
+						action: "alive",
+						r: Math.random()
 					},
 					dataType: "json",
+					cache: false,
 					timeout: 5000
 				}).done( function( data ) {
 					if ( data && data.status ) {
@@ -4416,9 +4420,11 @@ div#tab-conds.reactortab input.re-comment { width: 100% !important; } \
 				id: "lr_Reactor",
 				action: "tryexpression",
 				device: api.getCpanelDeviceId(),
-				expr: $( 'textarea.expr', row ).val() || ""
+				expr: $( 'textarea.expr', row ).val() || "",
+				r: Math.random()
 			},
 			dataType: "json",
+			cache: false,
 			timeout: 5000
 		}).done( function( data, statusText, jqXHR ) {
 			var msg;
@@ -4782,10 +4788,11 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 			data: {
 				id: "lr_Reactor",
 				action: "testlua",
-				lua: lua
+				lua: lua,
+				r: Math.random()
 			},
-			cache: false,
 			dataType: 'json',
+			cache: false,
 			timeout: 5000
 		}).done( function( data, statusText, jqXHR ) {
 			if ( data.status ) {
@@ -5175,6 +5182,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 			method: "POST",
 			data: req,
 			dataType: "text",
+			cache: false,
 			timeout: 15000
 		}).done( function( data, statusText, jqXHR ) {
 			if ( "OK" !== data ) {
@@ -5273,6 +5281,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					url: api.getDataRequestURL(),
 					data: { id: "scene", action: "delete", scene: scene },
 					dataType: "text",
+					cache: false,
 					timeout: 5000
 				}).always( function() {
 					_rmscene( myid, dl );
@@ -5401,9 +5410,11 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 							action: "preloadscene",
 							device: api.getCpanelDeviceId(),
 							scene: action.scene,
-							flush: firstScene ? 0 : 1
+							flush: firstScene ? 0 : 1,
+							r: Math.random()
 						},
 						dataType: "json",
+						cache: false,
 						timeout: 5000
 					}).done( function( data, statusText, jqXHR ) {
 					}).fail( function( jqXHR ) {
@@ -6367,6 +6378,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 			if ( fnext ) fnext.apply( null, fargs );
 			return;
 		}
+		/* Wait on a Promise to get the data from the "actions" request */
 		if ( undefined === deviceActionData[devobj.device_type] ) {
 			deviceActionData[devobj.device_type] = Promise.resolve( $.ajax(
 				{
@@ -6374,10 +6386,12 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					data: {
 						id: "actions",
 						DeviceNum: newVal,
-						output_format: "json"
+						output_format: "json",
+						r: Math.random()
 					},
 					dataType: "json",
-					timeout: 15000
+					cache: false,
+					timeout: 10000
 				}
 			) );
 		}
@@ -6405,7 +6419,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 			/* Set up a retry */
 			window.setTimeout( function() {
 				return changeActionDevice( row, newVal, fnext, fargs, retries );
-			}, 3000 );
+			}, 5000 );
 		});
 	}
 
@@ -6918,6 +6932,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						url: api.getDataRequestURL(),
 						data: param,
 						timeout: 10000,
+						cache: false,
 						dataType: "text"
 					}).done( function( data ) {
 						alert( actionText + data );
@@ -6958,9 +6973,11 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 								id: "scene",
 								action: "list",
 								scene: scene,
-								output_format: "json"
+								output_format: "json",
+								r: Math.random()
 							},
 							dataType: "json",
+							cache: false,
 							timeout: 5000
 						}).done( function( data, statusText, jqXHR ) {
 							var pred = row;
@@ -7583,11 +7600,13 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					url: "https://www.toggledbits.com/deviceinfo/checkupdate.php",
 					data: {
 						"v": deviceInfo.serial,
-						"fw": ""
+						"fw": "",
+						r: Math.random()
 					},
 					dataType: "jsonp",
 					jsonp: "callback",
 					crossDomain: true,
+					cache: false,
 					timeout: 10000
 				}).done( function( respData, statusText, jqXHR ) {
 					console.log("Response from server is " + JSON.stringify(respData));
@@ -7669,6 +7688,7 @@ div#tab-actions.reactortab button.re-activemode { color: #6f6; } \
 					r: Math.random()
 				},
 				dataType: "json",
+				cache: false,
 				timeout: 15000
 			}).done( function( data, statusText, jqXHR ) {
 				console.log("D_ReactorDeviceInfo loaded (" + String(Date.now()-start) +
@@ -7811,6 +7831,7 @@ div#tab-actions.reactortab button.re-activemode { color: #6f6; } \
 		var jqXHR = $.ajax({
 			url: scpdurl,
 			dataType: "xml",
+			cache: false,
 			timeout: 15000
 		});
 
@@ -7880,9 +7901,11 @@ div#tab-actions.reactortab button.re-activemode { color: #6f6; } \
 			url: api.getDataRequestURL(),
 			data: {
 				id: "lu_device",
-				output_format: "xml"
+				output_format: "xml",
+				r: Math.random()
 			},
 			dataType: "xml",
+			cache: false,
 			timeout: 15000
 		}).done( function( data, statusText, jqXHR ) {
 			var devs = $( data ).find( "device" );
@@ -8019,7 +8042,8 @@ div#tab-actions.reactortab button.re-activemode { color: #6f6; } \
 			url: "https://www.toggledbits.com/deviceinfo/checkupdate.php",
 			data: {
 				"v": ( deviceInfo || {}).serial || "",
-				"fw": ""
+				"fw": "",
+				r: Math.random()
 			},
 			dataType: "jsonp",
 			jsonp: "callback",
@@ -8216,9 +8240,11 @@ textarea#devspyoutput { width: 100%; font-family: monospace; } \
 				data: {
 					id: "lr_Reactor",
 					action: "infoupdate",
-					infov: deviceInfo.serial || 0
+					infov: deviceInfo.serial || 0,
+					r: Math.Random()
 				},
 				dataType: 'json',
+				cache: false,
 				timeout: 30000
 			}).done( function( respData /* , respText, jqXHR */ ) {
 				if ( respData && respData.status ) {
