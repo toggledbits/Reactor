@@ -13,6 +13,7 @@ local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
 local _PLUGIN_VERSION = "3.6"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
+local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.6/"
 
 local _CONFIGVERSION	= 20070
 local _CDATAVERSION		= 20045	-- must coincide with JS
@@ -2258,7 +2259,7 @@ local function doSMTPSend( from, to, subject, body, cc, bcc )
 	D("doSMTPSend() msgt=%1", msgt)
 	if port > 0 then
 		sendt.port = port
-		if port == 465 or getVarNumeric( "SMTPConnectSSLTLS", 0, pluginDevice, MYSID ) ~= 0 then
+		if port == 465 or getVarBool( "SMTPConnectSSLTLS", false, pluginDevice, MYSID ) then
 			sendt.create = function()
 				-- local socket = require "socket"
 				local sock = socket.tcp()
@@ -2469,7 +2470,7 @@ local function doActionRequest( action, scid, tdev )
 
 	local respBody
 	local r = {}
-	if action.usecurl or getVarNumeric( "RequestUseCurl", 0, tdev, RSSID ) ~= 0 then
+	if action.usecurl or getVarBool( "RequestUseCurl", false, tdev, RSSID ) then
 		local req = string.format( "curl -m %d -o -", timeout )
 		for k,v in pairs( tHeaders or {} ) do
 			req = req .. " -H '" .. k .. ": " .. v:gsub( "'", "''" ) .. "'"
@@ -3144,7 +3145,6 @@ end
 -- handle its special cases.
 local function doComparison( cond, op, vv, vn, rv, cv, cn, tdev )
 	D("doComparison(%1,%2,%3,%4,%5,%6,%7,%8)", cond, op, vv, vn, rv, cv, cn, tdev )
-	local now = os.time()
 	if op == "=" then
 		if vv ~= cv then return vv,false end
 	elseif op == "<>" then
@@ -3214,18 +3214,12 @@ local function doComparison( cond, op, vv, vn, rv, cv, cn, tdev )
 		end
 		D("doComparison() service change op without terms, currval=%1, prior=%2, term=%3",
 			vv, cs.lastvalue, cv)
-		local hold = getVarNumeric( "ValueChangeHoldTime", 0, tdev, RSSID ) -- DEPRECATED REMOVE AFTER >19296
 		if vv == cs.lastvalue then
-			-- No change. If we haven't yet met the hold time, continue delay.
-			local later = ( cs.valuestamp or 0 ) + hold
-			if now >= later then
-				return vv,false -- time to reset
-			end
-			hold = math.min( hold, later - now )
-			D("evaluationCondition() no change, but hold time from prior change not yet met, continuing delay for %1 more...", hold)
+			-- No change.
+			return vv,false -- time to reset
 		end
-		-- Changed without terminal values, pulse.
-		scheduleDelay( { id=tdev, info="change "..cond.id }, hold )
+		-- Changed without terminal values, pulse zero.
+		scheduleDelay( { id=tdev, info="change "..cond.id }, 0 )
 	else
 		L({level=1,msg="doComparison() unknown op %1 in cond %2"}, op, cv)
 		addEvent{ dev=tdev, event="condition", condition=cond.id, ['error']="TROUBLE: unrecognized operator "..tostring(op or "nil") }
@@ -3301,17 +3295,12 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 				D("evaluateCondition() ignoring restart-time update")
 				return vv,false
 			end
-			local hold = getVarNumeric( "ValueChangeHoldTime", 0, tdev, RSSID ) -- DEPRECATED REMOVE AFTER >19296
 			if vv == cs.lastvalue then
-				-- No change. If we haven't yet met the hold time, continue delay.
-				local later = ( cs.valuestamp or 0 ) + hold
-				if now >= later then
-					return vv,false -- time to reset
-				end
-				hold = math.min( hold, later - now )
-				D("evaluationCondition() no change, but hold time from prior change not yet met, continuing delay for %1 more...", hold)
+				-- No change.
+				return vv,false
 			end
-			scheduleDelay( { id=tdev, info="update "..cond.id }, hold )
+			-- Pulse zero.
+			scheduleDelay( { id=tdev, info="update "..cond.id }, 0 )
 		else
 			return doComparison( cond, op, vv, vn, vv, cv, cn, tdev )
 		end
@@ -3360,18 +3349,12 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		if cond.operator == "change" then
 			D("evaluateCondition() group state change, curr=%1, prior=%2",
 				vv, cs.lastvalue)
-			local hold = getVarNumeric( "ValueChangeHoldTime", 0, tdev, RSSID ) -- DEPRECATED REMOVE AFTER >19296
 			if vv == cs.lastvalue then
-				-- No change. If we haven't yet met the hold time, continue delay.
-				local later = ( cs.valuestamp or 0 ) + hold
-				if now >= later then
-					return vv,false -- time to reset
-				end
-				hold = math.min( hold, later - now )
-				D("evaluationCondition() no change, but hold time from prior change not yet met, continuing delay for %1 more...", hold)
+				-- No change.
+				return vv,false
 			end
-			-- Changed without terminal values, pulse.
-			scheduleDelay( { id=tdev, info="change "..cond.id }, hold )
+			-- Changed without terminal values, pulse zero.
+			scheduleDelay( { id=tdev, info="change "..cond.id }, 0 )
 		else
 			-- istrue or isfalse
 			if cond.operator == "isfalse" then
@@ -3410,18 +3393,12 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 			end
 			-- Simple change (any to any).
 			D("evaluateCondition() housemode change op, currval=%1, prior=%2 (no term)", mode, cs.lastvalue)
-			local hold = getVarNumeric( "ValueChangeHoldTime", 0, tdev, RSSID ) -- DEPRECATED REMOVE AFTER >19296
 			if mode == cs.lastvalue then
 				-- No change. If we haven't yet met the hold time, continue delay.
-				local later = ( cs.valuestamp or 0 ) + hold
-				if now >= later then
-					return mode,false
-				end
-				hold = math.min( hold, later - now )
-				D("evaluationCondition() no change, but hold time from prior change not yet met, continuing delay for %1 more...", hold)
+				return mode,false
 			end
-			-- Changed, pulse.
-			scheduleDelay( { id=tdev,info="change "..cond.id }, hold )
+			-- Changed, pulse zero.
+			scheduleDelay( { id=tdev,info="change "..cond.id }, 0 )
 		else
 			-- Default "is" operator
 			D("evaluateCondition() housemode %1 among %2?", mode, modes)
@@ -3677,18 +3654,12 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		local lastload = getVarNumeric( "LastLoad", 0, tdev, RSSID )
 		local reloaded = loadtime ~= lastload
 		D("evaluateCondition() loadtime %1 lastload %2 reloaded %3", loadtime, lastload, reloaded)
-		local hold = getVarNumeric( "ReloadConditionHoldTime", 0, tdev, RSSID ) -- DEPRECATED REMOVE AFTER >19296
 		if not reloaded then
-			-- Not reloaded. Hold on until we've satisfied hold time from last TRUE.
-			local later = ( ( cs.stateedge or {} ).t or 0 ) + hold
-			if now >= later then
-				return false,false
-			end
-			hold = math.min( hold, later - now )
-		else
-			luup.variable_set( RSSID, "LastLoad", loadtime, tdev )
+			-- Not reloaded.
+			return false,false
 		end
-		scheduleDelay( tdev, hold )
+		luup.variable_set( RSSID, "LastLoad", loadtime, tdev )
+		scheduleDelay( { id=tdev, info="reload "..cond.id }, 0 )
 		return true,true
 
 	elseif cond.type == "interval" then
@@ -3759,7 +3730,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		-- Go true.
 		D("evaluateCondition() triggering interval condition %1", cond.id)
 		-- On time of 1 second (use reset delay to extend)
-		scheduleDelay( { id=tdev,info="interval "..cond.id }, 1 )
+		scheduleDelay( { id=tdev,info="interval "..cond.id }, 0 )
 		return now,true
 
 	elseif cond.type == "ishome" then
@@ -4712,7 +4683,7 @@ local function masterTick(pdev)
 	local netState = true
 	local checkInterval = getVarNumeric( "InternetCheckInterval", 5, pdev, MYSID )
 	if checkInterval > 0 then
-		netState = getVarNumeric( "NetworkStatus", 1, pdev, MYSID ) ~= 0
+		netState = getVarBool( "NetworkStatus", true, pdev, MYSID )
 		D("masterTick() before probe, stored network state is %1, last check %2 at %3", netState, lastNetCheckState, lastNetCheckTime)
 		-- Check periodically or more frequently when known down
 		if not lastNetCheckState or now >= ( lastNetCheckTime + 60 * checkInterval - 5 ) then
@@ -4762,7 +4733,7 @@ local function masterTick(pdev)
 		D("masterTick() current DST %1 (isdst=%3), last %2", dot, lastdst, dstflag)
 		if dot ~= lastdst then
 			luup.variable_set( MYSID, "LastDST", dot, pdev )
-			if getVarNumeric( "SuppressDSTCheck", 0, pdev, MYSID ) == 0 then
+			if not getVarBool( "SuppressDSTCheck", false, pdev, MYSID ) then
 				L({level=2,msg="DST change detected (was %1 now %2 (%4) stable %3)! Re-evaluating children."},
 					lastdst, dot, clockStable, dstflag)
 				for k,v in pairs(luup.devices) do
@@ -4948,7 +4919,7 @@ local function startSensors( pdev )
 	-- Resume any scenes that were running prior to restart
 	resumeScenes( pdev )
 
-	local isRecovery = getVarNumeric( "recoverymode", 0, pdev, MYSID ) ~= 0
+	local isRecovery = getVarBool( "recoverymode", false, pdev, MYSID )
 
 	-- Ready to go. Start our children.
 	local count = 0
@@ -5003,7 +4974,7 @@ end
 
 local function waitSystemReady( pdev, taskid, callback )
 	D("waitSystemReady(%1,%2,%3)", pdev, taskid, callback)
-	if getVarNumeric( "SuppressSystemReadyCheck", 0, pdev, MYSID ) == 0 then
+	if not ( isOpenLuup or getVarBool( "SuppressSystemReadyCheck", false, pdev, MYSID ) ) then
 		for n,d in pairs(luup.devices) do
 			if d.device_type == "urn:schemas-micasaverde-com:device:ZWaveNetwork:1" then
 				local sysStatus = luup.variable_get( "urn:micasaverde-com:serviceId:ZWaveNetwork1", "NetStatusID", n )
@@ -5059,14 +5030,14 @@ function startPlugin( pdev, ptask ) -- N.B. can be run as task
 	pluginDevice = pdev
 	systemReady = false
 	isALTUI = false
-	isOpenLuup = false
+	isOpenLuup = luup.openLuup ~= nil -- a starting point
 	unsafeLua = true
 	devVeraAlerts = false
 	sensorState = {}
 	watchData = {}
 	sceneData = {}
 	luaFunc = {}
-	if getVarNumeric( "SuppressWeakLuaFunc", 0, pdev, MYSID ) == 0 then
+	if not getVarBool( "SuppressWeakLuaFunc", false, pdev, MYSID ) then
 		setmetatable( luaFunc, { __mode="v" } ) -- weak values
 	end
 	sceneWaiting = {}
@@ -5083,7 +5054,7 @@ function startPlugin( pdev, ptask ) -- N.B. can be run as task
 	math.randomseed( os.time() )
 
 	-- Enabled?
-	if getVarNumeric( "Enabled", 1, pdev, MYSID ) == 0 then
+	if not getVarBool( "Enabled", true, pdev, MYSID ) then
 		luup.variable_set( MYSID, "Message", "DISABLED", pdev )
 		markChildrenDown( "Reactor disabled", pdev )
 		setVar( MYSID, "rs", "", pdev ) -- clear restart tracking
@@ -5106,7 +5077,7 @@ function startPlugin( pdev, ptask ) -- N.B. can be run as task
 	-- System clock check
 	if os.time() <= 1586092920 then
 		L{level=1, msg="***** SYSTEM CLOCK IS INVALID *****"}
-		if getVarNumeric( "RequireValidClock", 0, pdev, MYSID ) ~= 0 then
+		if getVarBool( "RequireValidClock", false, pdev, MYSID ) then
 			L{level=2, msg="RequireValidClock is set; deferring startup. Next check in 120 seconds."}
 			setVar( MYSID, "Message", "START DELAYED: INVALID CLOCK", pdev )
 			scheduleDelay( { id="startPlugin", func=startPlugin, owner=pdev }, 120 )
@@ -5115,7 +5086,7 @@ function startPlugin( pdev, ptask ) -- N.B. can be run as task
 		-- Start now in recovery mode. Flag invalid clock for run.
 		clockValid = false
 		setVar( MYSID, "recoverymode", 1, pdev )
-	elseif getVarNumeric( "ClockValid", 1, pdev, MYSID ) == 0 then
+	elseif not getVarBool( "ClockValid", true, pdev, MYSID ) then
 		L{level=2, msg="Forcing recovery restart -- system clock was invalid on previous run!"}
 		setVar( MYSID, "recoverymode", 1, pdev )
 		clockStable = false -- for first run after being bogus
@@ -5125,23 +5096,26 @@ function startPlugin( pdev, ptask ) -- N.B. can be run as task
 	setVar( MYSID, "ClockValid", clockValid and "1" or "0", pdev )
 
 	-- Check required packages
-	for _,v in ipairs{ "dkjson", "socket", "mime" } do
-		if not package.loaded[v] then
-			L({level=1,"Required system module %1 cannot be loaded"}, v)
-			luup.variable_set( MYSID, "Message", "Required package missing (see log)", pdev )
-			markChildrenDown( "Required package missing (see log)", pdev )
-			return false, "Required package missing", _PLUGIN_NAME
+	if isOpenLuup then
+		L"Checking required packages for openLuup"
+		for _,v in ipairs{ "dkjson", "socket", "mime" } do
+			if not package.loaded[v] then
+				L({level=1,msg="Required system module %1 cannot be loaded; see ".._DOC_URL.."Installation"}, v)
+				luup.variable_set( MYSID, "Message", "Required package missing (see log)", pdev )
+				markChildrenDown( "Required package missing (see log)", pdev )
+				return false, "Required package missing", _PLUGIN_NAME
+			end
 		end
-	end
-	-- These are needed for notifications other actions
-	for _,v in ipairs{ "socket.http", "socket.smtp", "ssl", "ssl.https", "ltn12" } do
-		local st,p = pcall( require, v )
-		if not st or type(p) ~= "table" then
-			L({level=2,"Warning: the %1 module cannot be loaded, but is required for some action types."})
-		elseif isOpenLuup and v == "ssl" and tostring( package.loaded.ssl or "" )._VERSION:match( "^0%.[12345]" ) then
-			L({level=2,'Warning: the "ssl" module (LuaSec) is out of date and should be upgraded.'})
+		-- These are needed for notifications other actions
+		for _,v in ipairs{ "socket.http", "socket.smtp", "ssl", "ssl.https", "ltn12" } do
+			local st,p = pcall( require, v )
+			if not st or type(p) ~= "table" then
+				L({level=2,"Warning: the %1 module cannot be loaded, but is required for some action types."})
+			elseif v == "ssl" and tostring( package.loaded.ssl._VERSION or "" ):match( "^0%.[12345]" ) then
+				L({level=2,'Warning: the "ssl" module (LuaSec) is out of date and should be upgraded.'})
+			end
+			package.loaded[v] = nil
 		end
-		package.loaded[v] = nil
 	end
 
 	-- Check for hard system restart loop; stand off if it's happening. Not
@@ -5206,12 +5180,12 @@ function startPlugin( pdev, ptask ) -- N.B. can be run as task
 					newStyleFunc="Reactor_ALTUI.getStyle"
 				}, k )
 			D("startPlugin() ALTUI's RegisterPlugin action for %5 returned resultCode=%1, resultString=%2, job=%3, returnArguments=%4", rc,rs,jj,ra, MYTYPE)
-		elseif not isOpenLuup and v.device_type == "openLuup" and v.device_num_parent == 0 then
+		elseif v.device_type == "openLuup" and v.device_num_parent == 0 then
 			L("Detected openLuup (%1)", k)
 			isOpenLuup = k
 			local vv = getVarNumeric( "Vnumber", 0, k, v.device_type )
-			if vv < 181121 then
-				L({level=1,msg="OpenLuup version must be at least 181121; you have %1. Can't continue."}, vv)
+			if vv < 200414 then
+				L({level=1,msg="OpenLuup version must be at least 200414; you have %1. Can't continue."}, vv)
 				luup.variable_set( MYSID, "Message", "Unsupported firmware " .. tostring(vv), pdev )
 				luup.set_failure( 1, pdev )
 				failmsg = "Incompatible openLuup ver " .. tostring(vv)
@@ -5249,7 +5223,7 @@ function startPlugin( pdev, ptask ) -- N.B. can be run as task
 	end
 
 	-- Check for recovery mode.
-	if getVarNumeric( "recoverymode", 0, pdev, MYSID ) ~= 0 then
+	if getVarBool( "recoverymode", false, pdev, MYSID ) then
 		-- Recovery mode. Wipe state data.
 		setVar( MYSID, "runscene", "{}", pdev )
 		setVar( MYSID, "scenedata", "{}", pdev )
@@ -5302,7 +5276,7 @@ function assertEnabled( dev ) return isEnabled( dev ) or error "Cannot perform t
 -- Add a child (used as both action and local function)
 function actionAddSensor( pdev, count )
 	D("addSensor(%1)", pdev)
-	if getVarNumeric( "Enabled", 1, pluginDevice, MYSID ) == 0 then
+	if not getVarBool( "Enabled", true, pluginDevice, MYSID ) then
 		error "Cannot perform this operation when Reactor is disabled"
 	end
 	count = tonumber( count ) or 1
@@ -5368,7 +5342,7 @@ end
 -- Set enabled state of ReactorSensor
 function actionSetEnabled( enabled, tdev )
 	D("setEnabled(%1,%2)", enabled, tdev)
-	if getVarNumeric( "Enabled", 1, pluginDevice, MYSID ) == 0 then
+	if not getVarBool( "Enabled", true, pluginDevice, MYSID ) then
 		setMessage( "Reactor plugin is disabled.", tdev )
 		error "Cannot perform this operation when Reactor is disabled"
 	end
@@ -5818,7 +5792,7 @@ function watch( dev, sid, var, oldVal, newVal )
 			luup.devices[dev].id == "hmt" and sid == SENSOR_SID and var == "Armed" then
 		-- Arming state changed on HMT, update house mode.
 		D("watch() HMT device %1 arming state changed", dev)
-		if geofenceMode ~= 0 and getVarNumeric( "SuppressGeofenceHMTUpdate", 0, pluginDevice, MYSID ) == 0 then
+		if geofenceMode ~= 0 and not getVarBool( "SuppressGeofenceHMTUpdate", false, pluginDevice, MYSID ) then
 			D("watch() forcing geofence update job for house mode change")
 			geofenceEvent = geofenceEvent + 1
 			luup.call_action( MYSID, "UpdateGeofences", { event=geofenceEvent }, pluginDevice ) -- luacheck: ignore 211

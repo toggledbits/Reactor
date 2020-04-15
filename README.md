@@ -8,6 +8,7 @@ for scenes and other actions.
 * Powerful features for testing conditions and performing actions.
 
 ## Background ##
+
 I developed another plugin called DelayLight to address a common use case that
 Vera did not address natively: delay-off (and/or delay-on) of loads in response
 to triggers. It quickly became apparent that the trigger capabilities of DelayLight
