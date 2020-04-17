@@ -63,7 +63,7 @@ var ReactorSensor = (function(api, $) {
 		"ishome": "Geofence",
 		"reload": "Luup Reloaded",
 		"grpstate": "Group State",
-		"var": "Expression Variable",
+		"var": "Expression Value",
 		"group": "Group"
 	};
 	/* Note: default true for the following: hold, pulse, latch */
