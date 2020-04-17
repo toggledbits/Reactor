@@ -22,8 +22,10 @@ binops = {
 	, { op='%',  prec= 3 }
 	, { op='+',  prec= 4 }
 	, { op='-',  prec= 4 }
-	, { op='<',  prec= 6 }
 	, { op='..', prec= 5 }
+	, { op='<<', prec= 5 }
+	, { op='>>', prec= 5 }
+	, { op='<',  prec= 6 }
 	, { op='<=', prec= 6 }
 	, { op='>',  prec= 6 }
 	, { op='>=', prec= 6 }
@@ -1349,6 +1351,12 @@ _run = function( atom, ctx, stack )
 			else
 				v = bit.bxor( coerce(v1, "number"), coerce(v2, "number") )
 			end
+		elseif e.op == '<<' or e.op == '>>' then
+			local f = coerce( v2, "number" )
+			if f < 0 then evalerror( "Invalid shift count "..tostring(f)) end
+			v = ( e.op == '<<' ) and
+				( coerce( v1, "number" ) * ( 2 ^ f ) ) or
+				math.floor( coerce( v1, "number" ) / ( 2 ^ f ) )
 		elseif e.op == '<' then
 			if not check_operand(v1, {"number","string"}, v2) then evalerror("Invalid comparison ("
 				.. base.type(v1) .. e.op .. base.type(v2) .. ")", e.pos) end
