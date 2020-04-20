@@ -238,6 +238,8 @@ local function ftime( t )
 	return os.date( timeFormat, t )
 end
 
+local function fdatetime( t ) return fdate(t) .. " " .. ftime(t) end
+
 -- Get iterator for child devices matching passed table of attributes
 -- (e.g. { device_type="urn:...", category_num=4 })
 local function childDevices( prnt, attr )
@@ -2673,7 +2675,7 @@ local function execSceneGroups( tdev, taskid, scd )
 			end
 			if tt > now then
 				-- It's not time yet. Schedule task to continue.
-				logActivityStep( "Delay until "..os.date( dateFormat .. " " .. timeFormat, tt ),
+				logActivityStep( "Delay until "..fdatetime(tt),
 					scd, nextGroup, nil, nil, tdev )
 				D("execSceneGroups() scene group %1 must delay to %2", nextGroup, tt)
 				addEvent{ dev=tdev,
@@ -2759,7 +2761,17 @@ local function execSceneGroups( tdev, taskid, scd )
 							action.service, action.action, param, devnum,
 							(luup.devices[devnum] or {}).description or "?unknown?",
 							scd.name or "", scd.id )
-						luup.call_action( action.service, action.action, param, devnum )
+if getVarBool( "ForceZWaveJobs", true, tdev, RSSID ) and (luup.devices[devnum] or {}).device_num_parent == 1 then action.wrap = 1 end
+						if ( 1 == scd.wrapactions or 1 == action.wrap ) and not ( 0 == action.wrap ) then
+							-- Wrapped action
+							local st = json.encode( { device=devnum, service=action.service,
+								action=action.action, parameters=param, source=tdev,
+								scene=scd.id, group=nextGroup, step=ix } )
+							luup.call_action( MYSID, "wrapaction", { actiondata=st }, pluginDevice )
+						else
+							-- Direct action
+							luup.call_action( action.service, action.action, param, devnum )
+						end
 					end
 				elseif action.type == "housemode" then
 					logActivityStep( "Set House Mode", scd, nextGroup, ix, action, tdev )
@@ -3106,7 +3118,7 @@ end
 -- Helper to schedule next condition update. Times are MSM (mins since midnight)
 local function doNextCondCheck( taskinfo, nowMSM, startMSM, endMSM, testing )
 	D("doNextCondCheck(%1,%2,%3,%4,%5)", taskinfo, nowMSM, startMSM, endMSM, testing)
-	if testing then return end -- Do nothing when testing at the moment
+	-- if testing then return end -- Do nothing when testing at the moment
 	local edge = 1440
 	if nowMSM < startMSM then
 		edge = startMSM
@@ -3124,7 +3136,7 @@ end
 -- Compute the next interval after lastTrue that's aligned to baseTime
 local function getNextInterval( lastTrue, interval, baseTime)
 	D("getNextInterval(%1,%2,%3,%4)", lastTrue, interval, baseTime)
-	if baseTime == nil then
+	if not baseTime then
 		local t = os.date("*t", lastTrue)
 		t.hour = 0
 		t.min = 0
@@ -4208,10 +4220,18 @@ local function processSensorUpdate( tdev, sst )
 		local currTrip = (sst.condState.root or {}).evalstate or false
 		local retrig = getVarBool( "Retrigger", false, tdev, RSSID )
 
-		-- Mark a stable base of time
+		-- Mark a stable base of time.
 		local tt = getVarNumeric( "TestTime", 0, tdev, RSSID )
-		if tt ~= 0 then addEvent{ dev=tdev, msg="Test time %(t)s", t=os.date("%Y-%m-%d %H:%M:%S", tt) } end
-		sst.timebase = tt == 0 and os.time() or tt
+		if tt > 0 then 
+			sst.timeoffset = os.time() - getVarNumeric( "tref", os.time(), tdev, RSSID )
+			sst.timebase = tt + sst.timeoffset
+			sst.trouble = true
+			addEvent{ dev=tdev, msg="Test time %(tt)s, current offset %(offs)ss, final %(ft)s", 
+				tt=fdatetime(tt), offs=sst.timeoffset, ft=fdatetime(tt) }
+		else
+			sst.timebase = os.time()
+			sst.timeoffset = nil
+		end
 		sst.timeparts = os.date("*t", sst.timebase)
 		sst.timetest = tt > 0
 		D("processSensorUpdate() base time is %1 (%2) testing=%3", sst.timebase, sst.timeparts, sst.timetest)
@@ -4965,7 +4985,7 @@ local function startSensors( pdev )
 	if count == 0 then
 		luup.variable_set( MYSID, "Message", "Open control panel!", pdev )
 	else
-		luup.variable_set( MYSID, "Message", string.format("Started %d of %d at %s %s", started, count, fdate(), ftime()), pdev )
+		luup.variable_set( MYSID, "Message", string.format("Started %d of %d at %s", started, count, fdatetime()), pdev )
 	end
 end
 
@@ -5334,6 +5354,21 @@ function actionSetDebug( state, tdev )
 	if debugMode then
 		D("Debug enabled")
 	end
+end
+
+-- Job wrapper for action
+function actionWrapAction( dev, params )
+	D("actionWrapAction(%1,%2)", dev, params)
+	local s = json.decode( params.actiondata or "" )
+	if s then
+		L("Performing %1/%2 on %3 (#%4) for RS #%5 %6 group %7 step %8", s.service, s.action,
+			(luup.devices[s.device] or {}).description, s.device, s.source, s.scene,
+			s.group, s.step)
+		luup.call_action( s.service, s.action, s.parameters, s.device )
+		return 4,0
+	end
+	L({level=1,msg="Invalid action request on #%1: %2"}, dev, params)
+	return 2,0
 end
 
 -- Set enabled state of ReactorSensor
@@ -5755,6 +5790,12 @@ local function sensorWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
 		addEvent{ dev=dev, msg="Configuration changed!", event="configchange" }
 		stopScene( dev, nil, dev ) -- Stop all scenes in this device context.
 		getSensorConfig( dev, true )
+	elseif sid == RSSID and var == "TestTime" then
+		if newVal == "" then
+			deleteVar( RSSID, "tref", dev )
+		else
+			setVar( RSSID, "tref", os.time(), dev )
+		end
 	else
 		addEvent{ dev=tdev, event='devicewatch', device=dev,
 			msg="Device %(name)s (#%(device)s) %(var)s changed from %(old)s to %(new)s%(act)s",
@@ -6330,8 +6371,11 @@ SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 				r = r .. string.format("    Version %s.%s %s", cdata.version or 0, cdata.serial or 0, os.date("%x %X", cdata.timestamp or 0)) .. EOL
 				r = r .. string.format("    Message/status: %s", getVar( "Message", "", n ) ) .. EOL
 				local s = getVarNumeric( "TestTime", 0, n, RSSID )
-				if s ~= 0 then
-					r = r .. string.format("    Test time set: %s", os.date("%Y-%m-%d %H:%M", s)) .. EOL
+				if s > 0 then
+					local tref = getVarNumeric( "tref", os.time(), n, RSSID )
+					local offs = os.time() - tref
+					r = r .. string.format("**  Test Time Set: %s; offset now %ss, test clock %s",
+						os.date("%Y-%m-%d %X", s), offs, os.date("%Y-%m-%d %X", s + offs)) .. EOL
 				end
 				s = getVarNumeric( "TestHouseMode", 0, n, RSSID )
 				if s ~= 0 then
