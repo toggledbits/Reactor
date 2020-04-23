@@ -141,11 +141,6 @@
 			</job>
 		</action>
 		<action>
-			<serviceId>urn:toggledbits-com:serviceId:Reactor</serviceId>
-			<name>wrapaction</name>
-			<job>return Reactor.actionWrapAction( lul_device, lul_settings )</job>
-		</action>
-		<action>
 			<serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
 			<name>RunScene</name>
 			<job>

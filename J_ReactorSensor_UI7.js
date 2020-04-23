@@ -5415,11 +5415,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 							}
 						}
 					}
-					if ( $( 'input.re-wrapjob', row ).prop( "checked" ) ) {
-						action.wrap = 1;
-					} else {
-						delete action.wrap;
-					}
+					delete action.wrap;
 					break;
 
 				case "housemode":
@@ -6093,9 +6089,6 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				}
 			}
 		}
-		getCheckbox( getUID( "wrap" ), "1", "Run as job", "re-wrapjob", "Device-Action#using-jobs" )
-			.on( 'change.reactor', handleActionValueChange )
-			.appendTo( ct );
 	}
 
 	function handleActionActionChange( ev ) {
@@ -7224,7 +7217,6 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 								}
 								fld.val( coalesce( action.parameters[j].value, "" ) );
 							}
-							$( 'input.re-wrapjob', row ).prop( "checked", 0 !== (action.wrap||0) );
 						}, [ newRow, act ]);
 						if ( false && -1 === act.device &&
 							"urn:toggledbits-com:serviceId:ReactorSensor" === act.service &&

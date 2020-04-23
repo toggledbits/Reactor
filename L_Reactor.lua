@@ -1285,8 +1285,8 @@ local function isSceneEmpty( scd )
 		next(scd.groups or {}) == nil or -- no groups
 		( #scd.groups == 1 and -- exactly one group and...
 			(
-				next(scd.groups[1].actions or {}) == nil or -- no actions
-				( #(scd.groups[1].actions) == 1 and scd.groups[1].actions[1].type == "comment" ) -- only action is comment
+				next(scd.groups[1].actions or {}) == nil -- no actions
+				-- Even a lone Comment action does not count as an empty scene (intentionally)
 			)
 		)
 	D("isSceneEmpty() %1", e)
@@ -2588,7 +2588,7 @@ local function doActionRequest( action, scid, tdev )
 end
 
 function logActivityStep( desc, scd, group, index, action, tdev ) -- luacheck: ignore 212
-	L("%1 (#%2) Performing %3 (%4 group %5 index %6)",
+	L("%1 (#%2) Performing %3 (%4 group %5 step %6)",
 		( luup.devices[tdev] or {} ).description or "?", tdev, desc,
 		scd.name or scd.id, group or "n/a", index or "n/a" )
 end
@@ -2761,17 +2761,7 @@ local function execSceneGroups( tdev, taskid, scd )
 							action.service, action.action, param, devnum,
 							(luup.devices[devnum] or {}).description or "?unknown?",
 							scd.name or "", scd.id )
-if getVarBool( "ForceZWaveJobs", true, tdev, RSSID ) and (luup.devices[devnum] or {}).device_num_parent == 1 then action.wrap = 1 end
-						if ( 1 == scd.wrapactions or 1 == action.wrap ) and not ( 0 == action.wrap ) then
-							-- Wrapped action
-							local st = json.encode( { device=devnum, service=action.service,
-								action=action.action, parameters=param, source=tdev,
-								scene=scd.id, group=nextGroup, step=ix } )
-							luup.call_action( MYSID, "wrapaction", { actiondata=st }, pluginDevice )
-						else
-							-- Direct action
-							luup.call_action( action.service, action.action, param, devnum )
-						end
+						luup.call_action( action.service, action.action, param, devnum )
 					end
 				elseif action.type == "housemode" then
 					logActivityStep( "Set House Mode", scd, nextGroup, ix, action, tdev )
@@ -5361,7 +5351,7 @@ function actionWrapAction( dev, params )
 	D("actionWrapAction(%1,%2)", dev, params)
 	local s = json.decode( params.actiondata or "" )
 	if s then
-		L("Performing %1/%2 on %3 (#%4) for RS #%5 %6 group %7 step %8", s.service, s.action,
+		L("Job running for %1/%2 on %3 (#%4) from RS #%5 %6 group %7 step %8", s.service, s.action,
 			(luup.devices[s.device] or {}).description, s.device, s.source, s.scene,
 			s.group, s.step)
 		luup.call_action( s.service, s.action, s.parameters, s.device )

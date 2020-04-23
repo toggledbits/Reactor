@@ -190,14 +190,6 @@
 			</argumentList>
 		</action>
 		<action>
-			<name>wrapaction</name>
-			<argumentList>
-				<argument>actiondata</argument>
-				<direction>in</direction>
-				<relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
-			</argumentList>
-		</action>
-		<action>
 			<name>GetPluginVersion</name>
 			<argumentList>
 				<argument>
