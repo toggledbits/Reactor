@@ -1455,6 +1455,14 @@ local function stopScene( ctx, taskid, tdev, scene )
 	for tid,d in pairs(sceneState) do
 		if ( ctx == nil or ctx == d.context ) and ( taskid == nil or taskid == tid ) and ( scene == nil or d.scene == scene) then
 			D("stopScene() stopping scene task %1", tid)
+			if d.context ~= tdev then
+				addEvent{ dev=tdev, msg="Stopping activity %(scname)q on %(ctxdev)s",
+					scname=d.scene, d.context }
+				addEvent{ dev=d.context, msg="Stopping activity %(scname)q from %(tdev)s",
+					scname=d.scene, tdev=tdev }
+			else
+				addEvent{ dev=tdev, msg="Stopping activity %(scname)q", scname=d.scene }
+			end
 			clearTask( tid )
 			sceneState[tid] = nil
 		end
@@ -3065,7 +3073,7 @@ local function trip( state, tdev )
 			local scd = getSceneData( 'root.false', tdev )
 			if not isSceneEmpty( scd ) then
 				-- Note we only stop trip actions if there are untrip actions.
-				addEvent{ dev=tdev, msg="Launching root.false activity" }
+				addEvent{ dev=tdev, msg="Launching root.false activity (legacy mode)" }
 				stopScene( tdev, nil, tdev, 'root.true' ) -- stop contra-activity
 				execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } )
 			end
@@ -3078,7 +3086,7 @@ local function trip( state, tdev )
 			local scd = getSceneData( 'root.true', tdev )
 			if not isSceneEmpty( scd ) then
 				-- Note we only stop untrip actions if there are trip actions.
-				addEvent{ dev=tdev, msg="Launching root.true activity" }
+				addEvent{ dev=tdev, msg="Launching root.true activity (legacy mode)" }
 				stopScene( tdev, nil, tdev, 'root.false' ) -- stop contra-activity
 				execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } )
 			end
@@ -4277,9 +4285,9 @@ local function processSensorUpdate( tdev, sst )
 				if not isSceneEmpty( scd ) then
 					-- Note we only stop contra-actions if we have actions to perform.
 					D("processSensorUpdate() running %1 activities", activity)
-					addEvent{ dev=tdev, msg="Launching " .. tostring(grp.name or grp.id) ..
-						( gs.evalstate and ".true" or ".false" ) .. " activity",
-						activity=activity }
+					addEvent{ dev=tdev, msg="Preparing " .. tostring(grp.name or grp.id) ..
+						( gs.evalstate and ".true" or ".false" ) .. " (%(scid)s) activity",
+						activity=activity, scid=grp.id..(gs.evalstate and ".true" or ".false") }
 					local contra = grp.id .. ( gs.evalstate and ".false" or ".true" )
 					stopScene( tdev, nil, tdev, contra )
 					execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } )
@@ -6450,8 +6458,19 @@ SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 				end
 			end
 
-			D("requestSummary() special config")
 			local first = true
+			for t,s in pairs( sceneState or {} ) do
+				if s.owner == n or s.context == n then
+					if first then
+						r = r .. "    Activities in Progress" .. EOL
+						first = false
+					end
+					r = r .. string.format( "        %s: %s", t, dump( s ) ) .. EOL
+				end
+			end
+
+			D("requestSummary() special config")
+			first = true
 			for _,v in ipairs( { "UseReactorScenes", "LogEventsToFile", "EventLogMaxKB", "Retrigger", "AutoUntrip", "MaxUpdateRate", "MaxChangeRate", "FailOnTrouble", "ContinuousTimer", "ForceGeofenceMode", "StateCacheExpiry", "SuppressLuupRestartUpdate", "UseLegacyTripBehavior", "RequestActionResponseLimit", "RequestActionTimeout", "RequestUseCurl", "RequestCurlOptions" } ) do
 				local val = luup.variable_get( RSSID, v, deviceNum ) or ""
 				if val ~= "" then
