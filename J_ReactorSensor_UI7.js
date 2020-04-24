@@ -190,7 +190,7 @@ var ReactorSensor = (function(api, $) {
 	div#tbcopyright { display: block; margin: 12px 0px; } \
 	div#tbbegging { display: block; color: #ff6600; margin-top: 12px; } \
 	div.reactortab .vanotice { font-size: 0.9em; line-height: 1.5em; color: #666; margin-top: 4px; } \
-	div.reactortab div.remotealert { margin: 4px 4px; padding: 8px 8px; border: 2px solid red; color: red; border-radius: 8px; font-size: 0.9em; } \
+	div.reactortab div.re-alertblock { margin: 4px 4px; padding: 8px 8px; border: 2px solid red; color: red; border-radius: 8px; font-size: 0.9em; } \
 </style>');
 	}
 
@@ -354,13 +354,16 @@ var ReactorSensor = (function(api, $) {
 	}
 
 	/* Generate an inline checkbox. */
-	function getCheckbox( id, value, label, classes ) {
+	function getCheckbox( id, value, label, classes, help ) {
 		var $div = $( '<div class="checkbox checkbox-inline"/>' );
 		$( '<input type="checkbox" />' ).attr( 'id', id ).val( value )
 			.addClass( classes || "" )
 			.appendTo( $div );
 		$( '<label/>' ).attr( 'for', id ).html( label )
 			.appendTo( $div );
+		if ( help ) {
+			getWiki( help ).appendTo( $div );
+		}
 		return $div;
 	}
 
@@ -1605,6 +1608,31 @@ var ReactorSensor = (function(api, $) {
 
 		stel.empty();
 
+		var s = parseInt( api.getDeviceState( pdev, serviceId, "TestTime" ) || "0" );
+		if ( s && s > 0 ) {
+			var tid = getUID( "clk" );
+			$('<div class="re-alertblock" />').attr( 'id', tid ).text("Test Time is in effect!")
+				.appendTo( stel );
+			var updateTestClock = function( fid, base ) {
+				if ( !inStatusPanel ) return;
+				var $f = $( 'div#' + fid + ".re-alertblock" );
+				if ( 1 === $f.length ) {
+					var now = Math.floor( Date.now() / 1000 );
+					var offs = now - (parseInt( api.getDeviceState( pdev, serviceId, "tref" ) ) || now);
+					var dt = new Date();
+					dt.setTime( ( base + offs ) * 1000 );
+					$f.text("Test Time is in effect! Test clock is " + dt.toLocaleString());
+					window.setTimeout( function() { updateTestClock(fid, base); }, 500 );
+				}
+			};
+			updateTestClock( tid, s );
+		}
+
+		if ( "" !== ( api.getDeviceState( pdev, serviceId, "TestHouseMode" ) || "" ) ) {
+			$('<div class="re-alertblock" />').text("Test House Mode is in effect!")
+				.appendTo( stel );
+		}
+
 		var vix = [];
 		for ( var vn in ( cdata.variables || {} ) ) {
 			if ( cdata.variables.hasOwnProperty( vn ) ) {
@@ -1636,6 +1664,8 @@ var ReactorSensor = (function(api, $) {
 				var vv = ((cstate.vars || {})[vd.name] || {}).lastvalue;
 				if ( null === vv ) {
 					vv = "(null)";
+				} else if ( "object" === typeof vv && "null" === vv.__type ) {
+					vv = "( null )";
 				} else {
 					try {
 						vv = JSON.stringify(vv);
@@ -1736,14 +1766,15 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 
 		try {
 			updateStatus( myid );
-
-			setTimeout( function() { clearUnusedStateVariables( myid, getConfiguration( myid ) ); }, 2000 );
 		}
 		catch ( e ) {
 			inStatusPanel = false; /* stop updates */
 			console.log( e );
 			alert( e.stack );
 		}
+
+		setTimeout( function() { clearUnusedStateVariables( myid, getConfiguration( myid ) ); }, 2000 );
+
 	}
 
 /** ***************************************************************************
@@ -4333,7 +4364,7 @@ div#tab-conds.reactortab input.re-comment { width: 100% !important; } \
 
 			if ( checkRemoteAccess() ) {
 				$( 'div.reactortab' ).prepend(
-					$( '<div class="remotealert" />' ).text( msgRemoteAlert )
+					$( '<div class="remotealert re-alertblock" />' ).text( msgRemoteAlert )
 				);
 			}
 
@@ -4760,7 +4791,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 
 			if ( checkRemoteAccess() ) {
 				$( 'div.reactortab' ).prepend(
-					$( '<div class="remotealert" />' ).text( msgRemoteAlert )
+					$( '<div class="remotealert re-alertblock" />' ).text( msgRemoteAlert )
 				);
 			}
 
@@ -5384,6 +5415,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 							}
 						}
 					}
+					delete action.wrap;
 					break;
 
 				case "housemode":
@@ -6617,7 +6649,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				makeDeviceActivityMenu( -1, $m )
 					.val( "root.true" )
 					.on( 'change.reactor', handleActionValueChange );
-				getCheckbox( getUID( "stopall" ), "1", "Stop all other running activities first", "re-stopall" )
+				getCheckbox( getUID( "stopall" ), "1", "Stop all other running activities first", "re-stopall",
+					"Run-Activity-Action" )
 					.on( 'change.reactor', handleActionValueChange )
 					.appendTo( $fs );
 				break;
@@ -6688,7 +6721,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					.attr( 'id', pfx + "value" )
 					.on( 'change.reactor', handleActionValueChange )
 					.appendTo( $fs );
-				$m = getCheckbox( getUID("reeval"), "1", "Force re-evaluation of expressions and conditions", "" );
+				$m = getCheckbox( getUID("reeval"), "1", "Force re-evaluation of expressions and conditions", "",
+					"Set-Variable-Action" );
 				$( 'input', $m ).addClass("tbreeval")
 					.on( 'change.reactor', handleActionValueChange );
 				$m.appendTo( $fs );
@@ -7570,7 +7604,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 			$( 'div#tbcopyright' ).append('<span> Reactor device info ver ' + String(deviceInfo.serial) + '</span>');
 			if ( checkRemoteAccess() ) {
 				$( 'div.reactortab' ).prepend(
-					$( '<div class="remotealert" />' ).text( msgRemoteAlert )
+					$( '<div class="remotealert re-alertblock" />' ).text( msgRemoteAlert )
 				);
 			}
 		}

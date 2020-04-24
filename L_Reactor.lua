@@ -238,6 +238,8 @@ local function ftime( t )
 	return os.date( timeFormat, t )
 end
 
+local function fdatetime( t ) return fdate(t) .. " " .. ftime(t) end
+
 -- Get iterator for child devices matching passed table of attributes
 -- (e.g. { device_type="urn:...", category_num=4 })
 local function childDevices( prnt, attr )
@@ -1283,8 +1285,8 @@ local function isSceneEmpty( scd )
 		next(scd.groups or {}) == nil or -- no groups
 		( #scd.groups == 1 and -- exactly one group and...
 			(
-				next(scd.groups[1].actions or {}) == nil or -- no actions
-				( #(scd.groups[1].actions) == 1 and scd.groups[1].actions[1].type == "comment" ) -- only action is comment
+				next(scd.groups[1].actions or {}) == nil -- no actions
+				-- Even a lone Comment action does not count as an empty scene (intentionally)
 			)
 		)
 	D("isSceneEmpty() %1", e)
@@ -1453,6 +1455,14 @@ local function stopScene( ctx, taskid, tdev, scene )
 	for tid,d in pairs(sceneState) do
 		if ( ctx == nil or ctx == d.context ) and ( taskid == nil or taskid == tid ) and ( scene == nil or d.scene == scene) then
 			D("stopScene() stopping scene task %1", tid)
+			if d.context ~= tdev then
+				addEvent{ dev=tdev, msg="Stopping activity %(scname)q on %(ctxdev)s",
+					scname=d.scene, d.context }
+				addEvent{ dev=d.context, msg="Stopping activity %(scname)q from %(tdev)s",
+					scname=d.scene, tdev=tdev }
+			else
+				addEvent{ dev=tdev, msg="Stopping activity %(scname)q", scname=d.scene }
+			end
 			clearTask( tid )
 			sceneState[tid] = nil
 		end
@@ -2586,7 +2596,7 @@ local function doActionRequest( action, scid, tdev )
 end
 
 function logActivityStep( desc, scd, group, index, action, tdev ) -- luacheck: ignore 212
-	L("%1 (#%2) Performing %3 (%4 group %5 index %6)",
+	L("%1 (#%2) Performing %3 (%4 group %5 step %6)",
 		( luup.devices[tdev] or {} ).description or "?", tdev, desc,
 		scd.name or scd.id, group or "n/a", index or "n/a" )
 end
@@ -2673,7 +2683,7 @@ local function execSceneGroups( tdev, taskid, scd )
 			end
 			if tt > now then
 				-- It's not time yet. Schedule task to continue.
-				logActivityStep( "Delay until "..os.date( dateFormat .. " " .. timeFormat, tt ),
+				logActivityStep( "Delay until "..fdatetime(tt),
 					scd, nextGroup, nil, nil, tdev )
 				D("execSceneGroups() scene group %1 must delay to %2", nextGroup, tt)
 				addEvent{ dev=tdev,
@@ -3063,7 +3073,7 @@ local function trip( state, tdev )
 			local scd = getSceneData( 'root.false', tdev )
 			if not isSceneEmpty( scd ) then
 				-- Note we only stop trip actions if there are untrip actions.
-				addEvent{ dev=tdev, msg="Launching root.false activity" }
+				addEvent{ dev=tdev, msg="Launching root.false activity (legacy mode)" }
 				stopScene( tdev, nil, tdev, 'root.true' ) -- stop contra-activity
 				execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } )
 			end
@@ -3076,7 +3086,7 @@ local function trip( state, tdev )
 			local scd = getSceneData( 'root.true', tdev )
 			if not isSceneEmpty( scd ) then
 				-- Note we only stop untrip actions if there are trip actions.
-				addEvent{ dev=tdev, msg="Launching root.true activity" }
+				addEvent{ dev=tdev, msg="Launching root.true activity (legacy mode)" }
 				stopScene( tdev, nil, tdev, 'root.false' ) -- stop contra-activity
 				execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } )
 			end
@@ -3106,7 +3116,7 @@ end
 -- Helper to schedule next condition update. Times are MSM (mins since midnight)
 local function doNextCondCheck( taskinfo, nowMSM, startMSM, endMSM, testing )
 	D("doNextCondCheck(%1,%2,%3,%4,%5)", taskinfo, nowMSM, startMSM, endMSM, testing)
-	if testing then return end -- Do nothing when testing at the moment
+	-- if testing then return end -- Do nothing when testing at the moment
 	local edge = 1440
 	if nowMSM < startMSM then
 		edge = startMSM
@@ -3124,7 +3134,7 @@ end
 -- Compute the next interval after lastTrue that's aligned to baseTime
 local function getNextInterval( lastTrue, interval, baseTime)
 	D("getNextInterval(%1,%2,%3,%4)", lastTrue, interval, baseTime)
-	if baseTime == nil then
+	if not baseTime then
 		local t = os.date("*t", lastTrue)
 		t.hour = 0
 		t.min = 0
@@ -4211,10 +4221,18 @@ local function processSensorUpdate( tdev, sst )
 		local currTrip = (sst.condState.root or {}).evalstate or false
 		local retrig = getVarBool( "Retrigger", false, tdev, RSSID )
 
-		-- Mark a stable base of time
+		-- Mark a stable base of time.
 		local tt = getVarNumeric( "TestTime", 0, tdev, RSSID )
-		if tt ~= 0 then addEvent{ dev=tdev, msg="Test time %(t)s", t=os.date("%Y-%m-%d %H:%M:%S", tt) } end
-		sst.timebase = tt == 0 and os.time() or tt
+		if tt > 0 then 
+			sst.timeoffset = os.time() - getVarNumeric( "tref", os.time(), tdev, RSSID )
+			sst.timebase = tt + sst.timeoffset
+			sst.trouble = true
+			addEvent{ dev=tdev, msg="Test time %(tt)s, current offset %(offs)ss, final %(ft)s", 
+				tt=fdatetime(tt), offs=sst.timeoffset, ft=fdatetime(tt) }
+		else
+			sst.timebase = os.time()
+			sst.timeoffset = nil
+		end
 		sst.timeparts = os.date("*t", sst.timebase)
 		sst.timetest = tt > 0
 		D("processSensorUpdate() base time is %1 (%2) testing=%3", sst.timebase, sst.timeparts, sst.timetest)
@@ -4270,9 +4288,9 @@ local function processSensorUpdate( tdev, sst )
 				if not isSceneEmpty( scd ) then
 					-- Note we only stop contra-actions if we have actions to perform.
 					D("processSensorUpdate() running %1 activities", activity)
-					addEvent{ dev=tdev, msg="Launching " .. tostring(grp.name or grp.id) ..
-						( gs.evalstate and ".true" or ".false" ) .. " activity",
-						activity=activity }
+					addEvent{ dev=tdev, msg="Preparing " .. tostring(grp.name or grp.id) ..
+						( gs.evalstate and ".true" or ".false" ) .. " (%(scid)s) activity",
+						activity=activity, scid=grp.id..(gs.evalstate and ".true" or ".false") }
 					local contra = grp.id .. ( gs.evalstate and ".false" or ".true" )
 					stopScene( tdev, nil, tdev, contra )
 					execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } )
@@ -4968,7 +4986,7 @@ local function startSensors( pdev )
 	if count == 0 then
 		luup.variable_set( MYSID, "Message", "Open control panel!", pdev )
 	else
-		luup.variable_set( MYSID, "Message", string.format("Started %d of %d at %s %s", started, count, fdate(), ftime()), pdev )
+		luup.variable_set( MYSID, "Message", string.format("Started %d of %d at %s", started, count, fdatetime()), pdev )
 	end
 end
 
@@ -5337,6 +5355,21 @@ function actionSetDebug( state, tdev )
 	if debugMode then
 		D("Debug enabled")
 	end
+end
+
+-- Job wrapper for action
+function actionWrapAction( dev, params )
+	D("actionWrapAction(%1,%2)", dev, params)
+	local s = json.decode( params.actiondata or "" )
+	if s then
+		L("Job running for %1/%2 on %3 (#%4) from RS #%5 %6 group %7 step %8", s.service, s.action,
+			(luup.devices[s.device] or {}).description, s.device, s.source, s.scene,
+			s.group, s.step)
+		luup.call_action( s.service, s.action, s.parameters, s.device )
+		return 4,0
+	end
+	L({level=1,msg="Invalid action request on #%1: %2"}, dev, params)
+	return 2,0
 end
 
 -- Set enabled state of ReactorSensor
@@ -5758,6 +5791,12 @@ local function sensorWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
 		addEvent{ dev=dev, msg="Configuration changed!", event="configchange" }
 		stopScene( dev, nil, dev ) -- Stop all scenes in this device context.
 		getSensorConfig( dev, true )
+	elseif sid == RSSID and var == "TestTime" then
+		if newVal == "" then
+			deleteVar( RSSID, "tref", dev )
+		else
+			setVar( RSSID, "tref", os.time(), dev )
+		end
 	else
 		addEvent{ dev=tdev, event='devicewatch', device=dev,
 			msg="Device %(name)s (#%(device)s) %(var)s changed from %(old)s to %(new)s%(act)s",
@@ -6333,8 +6372,11 @@ SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 				r = r .. string.format("    Version %s.%s %s", cdata.version or 0, cdata.serial or 0, os.date("%x %X", cdata.timestamp or 0)) .. EOL
 				r = r .. string.format("    Message/status: %s", getVar( "Message", "", n ) ) .. EOL
 				local s = getVarNumeric( "TestTime", 0, n, RSSID )
-				if s ~= 0 then
-					r = r .. string.format("    Test time set: %s", os.date("%Y-%m-%d %H:%M", s)) .. EOL
+				if s > 0 then
+					local tref = getVarNumeric( "tref", os.time(), n, RSSID )
+					local offs = os.time() - tref
+					r = r .. string.format("**  Test Time Set: %s; offset now %ss, test clock %s",
+						os.date("%Y-%m-%d %X", s), offs, os.date("%Y-%m-%d %X", s + offs)) .. EOL
 				end
 				s = getVarNumeric( "TestHouseMode", 0, n, RSSID )
 				if s ~= 0 then
@@ -6419,8 +6461,19 @@ SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 				end
 			end
 
-			D("requestSummary() special config")
 			local first = true
+			for t,s in pairs( sceneState or {} ) do
+				if s.owner == n or s.context == n then
+					if first then
+						r = r .. "    Activities in Progress" .. EOL
+						first = false
+					end
+					r = r .. string.format( "        %s: %s", t, dump( s ) ) .. EOL
+				end
+			end
+
+			D("requestSummary() special config")
+			first = true
 			for _,v in ipairs( { "UseReactorScenes", "LogEventsToFile", "EventLogMaxKB", "Retrigger", "AutoUntrip", "MaxUpdateRate", "MaxChangeRate", "FailOnTrouble", "ContinuousTimer", "ForceGeofenceMode", "StateCacheExpiry", "SuppressLuupRestartUpdate", "UseLegacyTripBehavior", "RequestActionResponseLimit", "RequestActionTimeout", "RequestUseCurl", "RequestCurlOptions" } ) do
 				local val = luup.variable_get( RSSID, v, deviceNum ) or ""
 				if val ~= "" then
