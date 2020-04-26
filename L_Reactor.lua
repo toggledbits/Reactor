@@ -2567,8 +2567,8 @@ local function doActionRequest( action, scid, tdev )
 			end
 		else
 			L({level=2,msg="Request %1 %2 returned [%3, %4, %5, %6]"}, respBody, httpStatus, rh, st)
-			addEvent{ dev=tdev, msg="TROUBLE: Request failed, response status %(status)s body %(bodylen)s bytes",
-				status=httpStatus, bodylen=#respBody }
+			addEvent{ dev=tdev, msg="TROUBLE: Request failed, response status %(status)s",
+				status=httpStatus }
 			if ( action.trouble or 1 ) ~= 0 then
 				getSensorState( tdev ).trouble = true
 			end
