@@ -1527,13 +1527,14 @@ _run = function( atom, ctx, stack )
 				nmax = runfetch( e.args[3], ctx, stack )
 				if base.type(nmax) ~= "number" or nmax < 1 then evalerror("push() argument 3 must be numeric > 0", e.pos) end
 			end
-			if (ctx.__lvars or {})[nv] then
-				if base.type(ctx.__lvars[nv]) ~= "table" then evalerror("argument 1 is not array", e.pos) end
+			v = NULLATOM
+			if (ctx.__lvars or {})[nv] and not isNull( ctx.__lvars[nv] ) then
+				if base.type(ctx.__lvars[nv]) ~= "table" or ctx.__lvars[nv].__type then -- non-table or atom
+					evalerror("argument 1 is not array", e.pos)
+				end
 				v = ctx.__lvars[nv]
-			elseif ctx[nv] then
-				if base.type(ctx[nv]) ~= "table" then evalerror("argument 1 is not array", e.pos) end
-				v = ctx[nv]
-			else
+			end
+			if is_non( v ) then
 				ctx.__lvars = ctx.__lvars or {}
 				v = {}
 				ctx.__lvars[nv] = v
@@ -1548,13 +1549,11 @@ _run = function( atom, ctx, stack )
 			if e.args[1].__type ~= "vref" then evalerror("pop() argument 1 must be array name", e.pos) end
 			local nv = e.args[1].name
 			local av
-			if (ctx.__lvars or {})[nv] then
-				if base.type(ctx.__lvars[nv]) ~= "table" then evalerror("argument 1 is not array", e.pos) end
+			if (ctx.__lvars or {})[nv] and not isNull( ctx.__lvars[nv] ) then
+				if base.type(ctx.__lvars[nv]) ~= "table" or ctx.__lvars[nv].__type then evalerror("argument 1 is not array", e.pos) end
 				av = ctx.__lvars[nv]
-			elseif ctx[nv] then
-				if base.type(ctx[nv]) ~= "table" then evalerror("argument 1 is not array", e.pos) end
-				av = ctx[nv]
-			else
+			end
+			if is_non( av ) then
 				ctx.__lvars = ctx.__lvars or {}
 				av = {}
 				ctx.__lvars[nv] = av
@@ -1570,13 +1569,14 @@ _run = function( atom, ctx, stack )
 				nmax = runfetch( e.args[3], ctx, stack )
 				if base.type(nmax) ~= "number" or nmax < 1 then evalerror("unshift() argument 3 must be numeric > 0", e.pos) end
 			end
-			if (ctx.__lvars or {})[nv] then
-				if base.type(ctx.__lvars[nv]) ~= "table" then evalerror("argument 1 is not array", e.pos) end
+			v = NULLATOM
+			if (ctx.__lvars or {})[nv] and not isNull( ctx.__lvars[nv] ) then
+				if base.type(ctx.__lvars[nv]) ~= "table" or ctx.__lvars[nv].__type then -- non-table or atom
+					evalerror("argument 1 is not array", e.pos)
+				end
 				v = ctx.__lvars[nv]
-			elseif ctx[nv] then
-				if base.type(ctx[nv]) ~= "table" then evalerror("argument 1 is not array", e.pos) end
-				v = ctx[nv]
-			else
+			end
+			if is_non( v ) then
 				ctx.__lvars = ctx.__lvars or {}
 				v = {}
 				ctx.__lvars[nv] = v
@@ -1591,13 +1591,11 @@ _run = function( atom, ctx, stack )
 			if e.args[1].__type ~= "vref" then evalerror("shift() argument 1 must be array name", e.pos) end
 			local nv = e.args[1].name
 			local av
-			if (ctx.__lvars or {})[nv] then
-				if base.type(ctx.__lvars[nv]) ~= "table" then evalerror("argument 1 is not array", e.pos) end
+			if (ctx.__lvars or {})[nv] and not isNull( ctx.__lvars[nv] ) then
+				if base.type(ctx.__lvars[nv]) ~= "table" or ctx.__lvars[nv].__type then evalerror("argument 1 is not array", e.pos) end
 				av = ctx.__lvars[nv]
-			elseif ctx[nv] then
-				if base.type(ctx[nv]) ~= "table" then evalerror("argument 1 is not array", e.pos) end
-				av = ctx[nv]
-			else
+			end
+			if is_non( av ) then
 				ctx.__lvars = ctx.__lvars or {}
 				av = {}
 				ctx.__lvars[nv] = av
