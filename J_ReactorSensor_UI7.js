@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.6';
+	var pluginVersion = '3.6develop-20119';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -6543,7 +6543,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 		/* Get root condition (group) of selected device */
 		var root = getConditionIndex().root;
 		if ( dev >= 0 ) {
-			root = ( getConfiguration( dev ) || NULLCONFIG ).root;
+			root = ( getConfiguration( dev ) || NULLCONFIG ).conditions.root;
 			grp = null;
 		}
 		DOtraverse( root || {}, function( node ) {
@@ -7564,7 +7564,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 			/* Pass UI version to bypass disabled check on RS */
 			var param = { SceneNum: act,
 				Options: JSON.stringify({ contextDevice: dev, stopRunningScenes: true }) };
-			api.performActionOnDevice( dev, serviceId, "RunScene", {
+			api.performActionOnDevice( dev, serviceId, "RunSceneInline", {
 				actionArguments: param,
 				onSuccess: function( xhr ) {
 					/* Briefly highlight button and restore as UI feedback */
