@@ -151,6 +151,15 @@
 			</job>
 		</action>
 		<action>
+			<serviceId>urn:toggledbits-com:serviceId:ReactorSensor</serviceId>
+			<name>RunSceneInline</name>
+			<run>
+				-- Run scene in ReactorSensor context.
+				-- See https://www.toggledbits.com/reactor for explanation of Options
+				return Reactor.actionRunScene( lul_settings.SceneNum, lul_settings.Options, lul_device )
+			</run>
+		</action>
+		<action>
 			<serviceId>urn:micasaverde-com:serviceId:HomeAutomationGateway1</serviceId>
 			<name>RunScene</name>
 			<job>

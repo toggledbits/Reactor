@@ -144,6 +144,21 @@
 		  </argumentList>
 		</action>
 		<action>
+		  <name>RunSceneInline</name>
+		  <argumentList>
+			<argument>
+			  <name>SceneNum</name>
+			  <direction>in</direction>
+			  <relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
+			</argument>
+			<argument>
+			  <name>Options</name>
+			  <direction>in</direction>
+			  <relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
+			</argument>
+		  </argumentList>
+		</action>
+		<action>
 		  <name>StopScene</name>
 		  <argumentList>
 			<argument>
