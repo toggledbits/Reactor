@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.6"
+local _PLUGIN_VERSION = "3.6develop-20119"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.6/"
 
@@ -2480,8 +2480,11 @@ local function doActionRequest( action, scid, tdev )
 
 	local respBody
 	local r = {}
-	if action.usecurl or getVarBool( "RequestUseCurl", false, tdev, RSSID ) then
+	if action.usecurl or getVarBool( "RequestActionUseCurl", false, tdev, RSSID ) then
 		local req = string.format( "curl -m %d -o -", timeout )
+		if getVarBool( "RequestActionFollowRedirects", false, tdev, RSSID ) then
+			req = req .. " -L"
+		end
 		for k,v in pairs( tHeaders or {} ) do
 			req = req .. " -H '" .. k .. ": " .. v:gsub( "'", "''" ) .. "'"
 		end
@@ -2526,7 +2529,7 @@ local function doActionRequest( action, scid, tdev )
 			sink = ltn12.sink.chain( getCountFilter( countParam ), tsink ),
 			method = method,
 			headers = tHeaders,
-			redirect = false
+			redirect = getVarBool( "RequestActionFollowRedirects", false, tdev, RSSID )
 		}
 
 		-- HTTP or HTTPS?
@@ -2551,7 +2554,9 @@ local function doActionRequest( action, scid, tdev )
 		D("doRequest() request %1", req)
 		local rh, st
 		respBody, httpStatus, rh, st = requestor.request(req)
-		if tonumber(httpStatus) and httpStatus >= 200 and httpStatus <= 299 then
+		local hs = tonumber(httpStatus)
+		if getVar( "RequestActionAcceptStatus", "200", tdev, RSSID ):match( httpStatus ) or
+			( hs and hs >= 200 and hs <= 299 ) then
 			D("doRequest() request returned httpStatus=%1, respBody=%2, respHeaders=%3, status=%4", httpStatus, respBody, rh, st)
 			-- Since we're using the table sink, concatenate chunks to single string.
 			respBody = table.concat(r, "")
@@ -3250,7 +3255,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 	-- Fetch prior state/value
 	local cs = sst.condState[cond.id]
 	D("evaluateCondition() condstate %1", cs)
-	
+
 	-- Clock problem?
 	if not clockValid and string.match( ":trange:weekday:sun:", cond.type or "group" ) then
 		addEvent{ dev=tdev,
@@ -4223,12 +4228,12 @@ local function processSensorUpdate( tdev, sst )
 
 		-- Mark a stable base of time.
 		local tt = getVarNumeric( "TestTime", 0, tdev, RSSID )
-		if tt > 0 then 
+		if tt > 0 then
 			sst.timeoffset = os.time() - getVarNumeric( "tref", os.time(), tdev, RSSID )
 			sst.timebase = tt + sst.timeoffset
 			sst.trouble = true
-			addEvent{ dev=tdev, msg="Test time %(tt)s, current offset %(offs)ss, final %(ft)s", 
-				tt=fdatetime(tt), offs=sst.timeoffset, ft=fdatetime(tt) }
+			addEvent{ dev=tdev, msg="Test time base %(tt)s, current offset %(offs)ss, now %(ft)s",
+				tt=fdatetime(tt), offs=sst.timeoffset, ft=fdatetime(tt+sst.timeoffset) }
 		else
 			sst.timebase = os.time()
 			sst.timeoffset = nil
@@ -4804,7 +4809,7 @@ end
 local function cleanSensorState( tdev, taskid )
 	D("cleanSensorState(%1,%2)", tdev, taskid)
 	local content
-	if unsafeLua then
+	if false and unsafeLua then -- ??? deprecate out if not needed for openLuup
 		local sc, httpStatus
 		sc,content,httpStatus = luup.inet.wget( 'http://127.0.0.1:3480/data_request?id=status&DeviceNum='..tdev..'&output_format=json' )
 		if sc ~= 0 then
@@ -6474,7 +6479,14 @@ SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 
 			D("requestSummary() special config")
 			first = true
-			for _,v in ipairs( { "UseReactorScenes", "LogEventsToFile", "EventLogMaxKB", "Retrigger", "AutoUntrip", "MaxUpdateRate", "MaxChangeRate", "FailOnTrouble", "ContinuousTimer", "ForceGeofenceMode", "StateCacheExpiry", "SuppressLuupRestartUpdate", "UseLegacyTripBehavior", "RequestActionResponseLimit", "RequestActionTimeout", "RequestUseCurl", "RequestCurlOptions" } ) do
+			for _,v in ipairs( { "UseReactorScenes", "LogEventsToFile", "EventLogMaxKB", "Retrigger",
+				"AutoUntrip", "MaxUpdateRate", "MaxChangeRate", "FailOnTrouble", "ContinuousTimer",
+				"ForceGeofenceMode", "StateCacheExpiry", "SuppressLuupRestartUpdate",
+				"UseLegacyTripBehavior", "SSLProtocol", "SSLVerify", "SSLOptions",
+				"RequestActionResponseLimit", "RequestActionTimeout", "RequestActionUseCurl",
+				"RequestActionCurlOptions", "RequestActionTimeout",
+				"RequestActionFollowRedirects", "RequestActionAcceptStatus",
+				"SMTPSSLParams", "SMTPSSLProtocol", "SMTPSSLMode", "SMTPSSLVerify", "SMTPSSLOptions" } ) do
 				local val = luup.variable_get( RSSID, v, deviceNum ) or ""
 				if val ~= "" then
 					if first then first=false r = r .. "    Special Configuration" .. EOL end
