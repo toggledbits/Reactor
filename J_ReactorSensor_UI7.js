@@ -4609,8 +4609,7 @@ div#tab-conds.reactortab input.re-comment { width: 100% !important; } \
 	function getVariableRow() {
 		var el = $('<div class="row varexp"></div>');
 		el.append( '<div class="col-xs-12 col-sm-12 col-md-2 re-varname"></div>' );
-		el.append( '<div class="col-xs-12 col-sm-9 col-md-8"><textarea class="expr form-control form-control-sm" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="off"/>');
-		$('<div class="currval" />').appendTo( el );
+		el.append( '<div class="col-xs-12 col-sm-9 col-md-8"><textarea class="expr form-control form-control-sm" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="off"/><div class="currval" /></div>');
 		// ??? devices_other is an alternate for insert state variable
 		el.append( '<div class="col-xs-12 col-sm-3 col-md-2 text-right">\
 <button class="btn md-btn draghandle" title="Change order (drag)"><i class="material-icons">reorder</i></button>\
@@ -4787,7 +4786,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 			/* Body content */
 			var html = '<div id="tab-vars" class="reactortab">';
 			html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>Expressions/Variables</h3></div></div>';
-			html += '<div class="row"><div class="col-xs-12 col-sm-12">Expressions allow you to do complex arithmetic, string, and other operations that otherwise cannot be done in the Conditions editor. When you create an expression, you specify a variable name into which its result is stored. You can then use that variable name in your conditions and activities.</div></div>';
+			html += '<div class="row"><div class="col-xs-12 col-sm-12">Note that "Last Result" values shown here do not update dynamically. For help with expressions and functions, please <a href="' + _DOCURL +
+				'/Expressions-&-Variables/" target="_blank">see the Reactor Documentation</a>.</div></div>';
 
 			html += '<div id="reactorvars"/>';
 
