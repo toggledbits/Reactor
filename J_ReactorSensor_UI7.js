@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.6develop-20119';
+	var pluginVersion = '3.6develop-20120';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -33,6 +33,7 @@ var ReactorSensor = (function(api, $) {
 	var deviceType = "urn:schemas-toggledbits-com:device:ReactorSensor:1";
 
 	var moduleReady = false;
+	var needsRestart = false;
 	var iData = [];
 	var roomsByName = false;
 	var actions = {};
@@ -562,6 +563,7 @@ var ReactorSensor = (function(api, $) {
 		spyDevice = false;
 		lastx = 0;
 		moduleReady = false;
+		needsRestart = false;
 	}
 
 	/* Initialize the module */
@@ -1717,6 +1719,11 @@ var ReactorSensor = (function(api, $) {
 		/* Make sure changes are saved. */
 		var myid = api.getCpanelDeviceId();
 		checkUnsaved( myid );
+
+		if ( needsRestart && confirm( 'It is recommended that your ReactorSensor be restarted after setting or clearing the Test Time or House Mode. Press "OK" to restart it now, or "Cancel" to skip the restart.' ) ) {
+			api.performActionOnDevice( myid, serviceId, "Restart", { actionArguments: {} } );
+		}
+		needsRestart = false;
 
 		if ( ! initModule() ) {
 			return;
@@ -4050,10 +4057,11 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 				for ( var ix=0; ix < lx; ix++ ) {
 					var cls = opScan[ix];
 					if ( $el.hasClass( cls ) && $el.hasClass( "checked" ) ) {
-						/* Special case handling for NUL--remove activities */
-						var cdata = getConfiguration();
-						if ( "re-op-nul" === cls && groupHasActivities( grp, cdata ) ) {
-							if ( ! confirm( 'This group currently has activities associated with it. Groups with the NUL operator do not run activities. OK to delete the associated activities?' ) ) {
+						/* Special case handling for NUL--remove activities, force no NOT */
+						if ( "re-op-nul" === cls ) {
+							var cdata = getConfiguration();
+							if ( groupHasActivities( grp, cdata ) &&
+								! confirm( 'This group currently has Activities associated with it. Groups with the NUL operator do not run Activities. OK to delete the associated Activities?' ) ) {
 								return;
 							}
 							delete cdata.activities[grpid+'.true'];
@@ -7836,8 +7844,10 @@ div#tab-actions.reactortab button.re-activemode { color: #6f6; } \
 			if ( p !== null ) {
 				t.setHours( p[1] );
 				t.setMinutes( p[2] );
-				if ( p.length >= 5 && p[5] !== undefined ) {
+				if ( p.length >= 5 && p[4] !== undefined ) {
 					t.setSeconds( p[4] );
+				} else {
+					t.setSeconds( 0 );
 				}
 			}
 			t.setMilliseconds( 0 );
@@ -7849,6 +7859,7 @@ div#tab-actions.reactortab button.re-activemode { color: #6f6; } \
 			$('select,input#testtime', $ct).prop('disabled', true);
 		}
 		api.setDeviceStateVariablePersistent( api.getCpanelDeviceId(), serviceId, "TestTime", vv );
+		needsRestart = true;
 
 		el = $('input#testhousemode', container);
 		if ( el.prop('checked') ) {
@@ -7859,6 +7870,7 @@ div#tab-actions.reactortab button.re-activemode { color: #6f6; } \
 			vv = "";
 		}
 		api.setDeviceStateVariablePersistent( api.getCpanelDeviceId(), serviceId, "TestHouseMode", vv );
+		needsRestart = true;
 	}
 
 	function processServiceFile( dd, serviceId, scpdurl ) {
