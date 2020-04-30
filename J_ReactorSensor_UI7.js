@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.6develop-20120';
+	var pluginVersion = '3.6develop-20121';
 
 	var DEVINFO_MINSERIAL = 71.222;
 
@@ -283,7 +283,7 @@ var ReactorSensor = (function(api, $) {
 		var $opt = $( 'option[value=' + quot( val ) + ']', $mm );
 		if ( 0 === $opt.length ) {
 			$opt = $( '<option/>' ).val( val ).text( txt || ( val + '? (missing)' ) );
-			$mm.append( $opt );
+			$mm.addClass( "tberror" ).append( $opt );
 		}
 		val = $opt.val(); /* actual value now */
 		$mm.val( val );
@@ -1474,6 +1474,14 @@ var ReactorSensor = (function(api, $) {
 		}
 	}
 
+	function handleStatusCondClick( ev ) {
+		var $el = $( ev.target );
+		var $grp = $el.closest( 'div.reactorgroup' );
+		var $body = $( 'div.grpbody', $grp );
+		$grp.toggleClass( 're-grp-collapsed' );
+		$body.toggle( ! $grp.hasClass( 're-grp-collapsed' ) );
+	}
+
 	function showGroupStatus( grp, container, cstate ) {
 		var grpel = $( '\
 <div class="reactorgroup"> \
@@ -1486,7 +1494,8 @@ var ReactorSensor = (function(api, $) {
 		var title = 'Group: ' + (grp.name || grp.id ) +
 			( grp.disabled ? " (disabled)" : "" ) + " <" + grp.id + ">";
 		$( 'span.re-title', grpel ).text( title + getCondOptionDesc( grp ) + "; " );
-		$( '.condbtn', grpel ).text( (grp.invert ? "NOT " : "") + (grp.operator || "and" ).toUpperCase() );
+		$( '.condbtn', grpel ).text( (grp.invert ? "NOT " : "") + (grp.operator || "and" ).toUpperCase() )
+			.on( "click.reactor", handleStatusCondClick );
 
 		/* Highlight groups that are "true" */
 		if ( grp.disabled || "0" === api.getDeviceState( api.getCpanelDeviceId(), serviceId, "Enabled" ) ) {
@@ -1517,6 +1526,9 @@ var ReactorSensor = (function(api, $) {
 					case 'service':
 					case 'grpstate':
 					case 'var':
+						if ( -1 !== ( cond.device || -1 ) ) {
+							row.toggleClass( "re-cond-error", ! api.getDeviceObject( cond.device ) );
+						}
 						break;
 
 					case 'weekday':
@@ -1762,6 +1774,7 @@ div#reactorstatus span.timer { } \
 .grpcond > *:last-child::after { display: none; } \
 div#reactorstatus .var { min-height: 2em; color: #003399; padding: 2px 4px; } \
 div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size: 0.9em; } \
+div#reactorstatus div.cond.re-cond-error { border: 3px solid red; } \
 div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 @keyframes pulse { 0% { background-color: #fff; } 50% { background-color: #cfc; } 100% { background-color: #fff; } } \
 </style>');
@@ -4253,6 +4266,8 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 
 			var cdata = getConfiguration( myid );
 			redrawGroup( myid, cdata.conditions.root );
+
+			$( 'div.cond-cond', container ).has( '.tberror' ).addClass( 'tberror' );
 
 			$("button.saveconf").on( 'click.reactor', handleSaveClick );
 			$("button.revertconf").on( 'click.reactor', handleRevertClick );
