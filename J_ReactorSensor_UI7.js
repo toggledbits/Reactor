@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.6develop-20126';
+	var pluginVersion = '3.6develop-20127';
 
 	var DEVINFO_MINSERIAL = 482;
 
@@ -8305,7 +8305,7 @@ textarea#devspyoutput { width: 100%; font-family: monospace; } \
 					id: "lr_Reactor",
 					action: "infoupdate",
 					infov: deviceInfo.serial || 0,
-					r: Math.Random()
+					r: Math.random()
 				},
 				dataType: 'json',
 				cache: false,
