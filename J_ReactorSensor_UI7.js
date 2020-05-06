@@ -385,10 +385,13 @@ var ReactorSensor = (function(api, $) {
 			throw "Device " + String(myid) + " not found or incorrect type";
 		}
 		// PHR??? Dynamic false needs more testing. Save/update of local/lustatus should be sufficient
+		/* Empty configs are not allowed, but happen when the Vera UI gets wildly out of sync with Vera, 
+		   which has happened increasingly since 7.29. */
 		var s = api.getDeviceState( myid, serviceId, "cdata" /* , { dynamic: false } */ ) || "";
 		if ( isEmpty( s ) ) {
-			console.log("Empty cdata; restart ReactorSensor");
-			throw "Unable to parse configuration. Please restart the ReactorSensor and try again.";
+			console.log( "ReactorSensor " + myid + ": EMPTY DATA" );
+			alert( 'Reactor has detected that the Vera UI may be badly out of sync with the Vera itself. To remedy this, please (1) reload Luup or reboot your Vera, and then (2) do a "hard-refresh" of your browser (refresh with cache flush). Do not edit any devices or do anything else until this issue has been remedied.' );
+			throw "empty configuration";
 		}
 		var cdata;
 		try {
@@ -6329,8 +6332,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					continue;
 				}
 
-				opt = $( '<option/>' ).val( key ).text( actname + ( nodata ? "??(E)" : "") );
-				if ( nodata ) opt.addClass( "nodata" );
+				opt = $( '<option/>' ).val( key ).text( actname );
+				if ( nodata ) opt.append(" &diams;").addClass( "nodata" );
 				section.append( opt );
 
 				hasAction = true;
@@ -6353,7 +6356,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					var el = $( '<option/>' ).val( key );
 					if ( undefined === actions[key] || actions[key].noddb ) {
 						/* Service+action not in lu_actions or no DDB data for it */
-						el.text( String(thisover.description || thisover.action) + '??(M)' );
+						el.text( String(thisover.description || thisover.action) );
+						el.append( '&nbsp&#9652;' );
 						el.prop( 'disabled', true );
 					} else {
 						/* There's a well-known service/action, so copy it, and apply overrides */
@@ -7722,7 +7726,6 @@ div#tab-actions.reactortab div.editor { width: 100%; min-height: 240px; } \
 div#tab-actions.reactortab div.tbhint { font-size: 90%; font-weight: normal; } \
 div#tab-actions.reactortab div.warning { color: red; } \
 div#tab-actions.reactortab option.nodata { font-style: italic; } \
-div#tab-actions.reactortab option.nodata:after { content: "[1] see footer"; } \
 div#tab-actions.reactortab .tbslider { display: inline-block; width: 200px; height: 1em; border-radius: 8px; } \
 div#tab-actions.reactortab .tbslider .ui-slider-handle { background: url("/cmh/skins/default/img/other/slider_horizontal_cursor_24.png?") no-repeat scroll left center rgba(0,0,0,0); cursor: pointer !important; height: 24px !important; width: 24px !important; margin-top: 6px; font-size: 12px; text-align: center; padding-top: 4px; text-decoration: none; } \
 div#tab-actions.reactortab .tbslider .ui-slider-range-min { background-color: #12805b !important; } \
