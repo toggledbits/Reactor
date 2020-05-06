@@ -33,7 +33,7 @@ for large numbers of sensors and logic conditions.
 
 ## Installation, Configuration, etc. ##
 
-Documentation for Reactor can be found in the wiki for the project: https://www.toggledbits.com/static/reactor/docs/
+Documentation for Reactor can be found here: https://www.toggledbits.com/static/reactor/docs/
 
 ## Revision History ##
 
@@ -52,4 +52,4 @@ My branching strategy for Reactor includes four branches, as follows:
 Reactor currently is copyrighted and all rights are reserved. Although the source code is visible for public
 review, it is not an open source project at this time and the release of derivative works is not permitted.
 
-Please refer to [the full license in the Reactor documentation](https://www.toggledbits.com/static/reactor/docs/Installation/).
+Please refer to [the full license in the Reactor documentation](https://www.toggledbits.com/static/reactor/docs/3.6/Installation/).
