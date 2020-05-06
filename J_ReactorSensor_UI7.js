@@ -19,7 +19,7 @@ var ReactorSensor = (function(api, $) {
 
 	var pluginVersion = '3.6develop-20126';
 
-	var DEVINFO_MINSERIAL = 71.222;
+	var DEVINFO_MINSERIAL = 482;
 
 	var _UIVERSION = 20085;     /* must coincide with Lua core */
 
@@ -1716,7 +1716,7 @@ var ReactorSensor = (function(api, $) {
 		}
 		var pdev = api.getCpanelDeviceId();
 		if ( args.id == pdev ) {
-			if ( arrayFindValue( args.states || [], function( v ) { return null !== v.variable.match( /^(cdata|cstate|Tripped|Armed|Enabled)$/i ); } ) ) {
+			if ( arrayFindValue( args.states || [], function( v ) { return null !== v.variable.match( /^(cdata|cstate|Tripped|Armed|Enabled|TestTime|TestHouseMode|LastLoad)$/i ); } ) ) {
 				try {
 					updateStatus( pdev );
 				} catch (e) {
