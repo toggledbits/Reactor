@@ -5751,10 +5751,15 @@ function tick(p)
 	for _,v in ipairs(todo) do
 		v.when = nil -- task needs to reschedule itself (also marks running)
 		D("tick() running eligible task %1", v.id)
-		local success, err = pcall( v.func, v.owner, v.id, unpack(v.args or {}) )
+		local success, err = xpcall( function() return v.func( v.owner, v.id, unpack(v.args or {}) ) end,
+			function( er )
+				L({level=1,msg="Device %1 (#%2) tick failed: %3"}, (luup.devices[v.owner] or {}).description,
+					v.owner, er)
+				if debug and debug.traceback then luup.log( debug.traceback(), 1 ) end
+			end
+		)
 		D("tick() return %2 from task %1, err=%3", v.id, success, err)
 		if not success then
-			L({level=1,msg="Reactor device %1 (%2) tick failed: %3"}, v.owner, (luup.devices[v.owner] or {}).description, err)
 			addEvent{ dev=v.owner, event="error", message="tick failed", reason=err }
 		end
 	end
@@ -5762,8 +5767,8 @@ function tick(p)
 	-- Things change while we work. Take another pass to find next task.
 	local nextTick = nil
 	for t,v in pairs(tickTasks) do
-		if t ~= "_plugin" and v.when ~= nil then
-			if nextTick == nil or v.when < nextTick then
+		if t ~= "_plugin" and v.when then
+			if not nextTick or v.when < nextTick then
 				nextTick = v.when
 			end
 		end
@@ -5771,7 +5776,7 @@ function tick(p)
 
 	-- Figure out next master tick, or don't resched if no tasks waiting.
 	D("tick() finished, next eligible task at %1", nextTick)
-	if nextTick ~= nil then
+	if nextTick then
 		now = os.time() -- Get the actual time now; above tasks can take a while.
 		local delay = math.max( 0, nextTick - now )
 		tickTasks._plugin.when = now + delay
@@ -5792,10 +5797,14 @@ local function sensorWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
 		addEvent{ dev=tdev, event='devicewatch', device=dev,
 			name=(luup.devices[dev] or {}).description, var=var }
 	elseif sid == RSSID and var == "cdata" then
-		L("%1 (#%2) configuration change, updating!", dev, luup.devices[dev].description)
 		addEvent{ dev=dev, msg="Configuration changed!", event="configchange" }
-		stopScene( dev, nil, dev ) -- Stop all scenes in this device context.
-		getSensorConfig( dev, true )
+		if enabled then
+			L("%1 (#%2) configuration change, updating!", dev, luup.devices[dev].description)
+			stopScene( dev, nil, dev ) -- Stop all scenes in this device context.
+			getSensorConfig( dev, true )
+		else
+			return -- no update while disabled
+		end
 	elseif sid == RSSID and var == "TestTime" then
 		if newVal == "" then
 			deleteVar( RSSID, "tref", dev )
