@@ -5750,14 +5750,18 @@ function tick(p)
 	D("tick() to-do list is %1", todo)
 	for _,v in ipairs(todo) do
 		v.when = nil -- task needs to reschedule itself (also marks running)
+		v.lasterr = nil
 		D("tick() running eligible task %1", v.id)
-		local success, err = xpcall( function() return v.func( v.owner, v.id, unpack(v.args or {}) ) end,
+		local success, err = xpcall(
+			function() return v.func( v.owner, v.id, unpack(v.args or {}) ) end,
 			function( er )
-				L({level=1,msg="Device %1 (#%2) tick failed: %3"}, (luup.devices[v.owner] or {}).description,
-					v.owner, er)
+				v.lasterr = er
+				L({level=1,msg="%1 (#%2) tick failed: %3"},
+					(luup.devices[v.owner] or {}).description, v.owner, er)
 				if debug and debug.traceback then luup.log( debug.traceback(), 1 ) end
 			end
 		)
+		v.lastrun = now
 		D("tick() return %2 from task %1, err=%3", v.id, success, err)
 		if not success then
 			addEvent{ dev=v.owner, event="error", message="tick failed", reason=err }
