@@ -51,3 +51,5 @@ My branching strategy for Reactor includes four branches, as follows:
 
 Reactor currently is copyrighted and all rights are reserved. Although the source code is visible for public
 review, it is not an open source project at this time and the release of derivative works is not permitted.
+
+Please refer to [the full license in the Reactor documentation](https://www.toggledbits.com/static/reactor/docs/Installation/).
