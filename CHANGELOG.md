@@ -38,6 +38,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04
 * Fix: Make sure non-existent scene is removed from scene cache, so we don't try to refetch it on subsequent reloads.
 * Fix: Update LuaXP to 1.0.2 for access to `indexof()` function; also fixes `pow()` with negative base (first argument).
 * Fix: Fix "leak" of LuaXP null atom structure on Status display.
+* Hotfix 20127-01: Fix bug that causes incomplete output in _Run Lua_ action `print()` statements.
 * Hotfix 20103-01: Prevent odd jump to Dashboard from event list (Conditions tab, Device State condition) on older UI7 (at least 1040 and below).
 * Hotfix 20080-01: Allow device 0 in expression `getattribute()` function, so you can fetch system attributes.
 * Hotfix 20078-01: Fix a missing selector constraint that may affect conditions when pulse mode is used.
