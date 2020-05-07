@@ -2012,7 +2012,7 @@ local function execLua( fname, luafragment, extarg, tdev )
 								" (" .. tostring(dev) .. ") [" .. tostring(luaEnv.__reactor_getscript() or "?") ..
 								"] " .. msg)
 							addEvent{ dev=dev,
-								msg="<%(script)s> %(message)",
+								msg="<%(script)s> %(message)s",
 								event="lua", script=luaEnv.__reactor_getscript(), message=msg }
 						end
 		-- Override next and pairs specifically so that variables proxy table can iterate.
