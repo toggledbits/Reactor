@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.6develop-20127';
+	var pluginVersion = '3.6develop-20128';
 
 	var DEVINFO_MINSERIAL = 482;
 
@@ -7487,6 +7487,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 		setParentState( "showactivities", vis );
 		var cd = getConfiguration();
 		var ac = cd.activities || {};
+		$( 'div.re-filteralert' ).toggle( "" !== vis );
 		var decide = function( id ) {
 			var target = $( 'div#' + idSelector( id ) + ".actionlist" );
 			if ( ( "inuse" === vis && isEmptyActivity( ac[id] ) ) ||
@@ -7577,9 +7578,9 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 		if ( ! showedAny ) {
 			container.append( $( '<div/>' )
 				.html( '<em>There are no groups eligible for activities.</em>' ) );
-		} else if ( "" !== showWhich ) {
+		} else {
 			$( 'select#whatshow', container ).trigger( 'change.reactor' );
-			container.append( $( '<div class="re-alertbox" />' )
+			container.append( $( '<div class="re-alertbox re-filteralert" />' )
 				.text( 'Not all possible activities are being shown. Choose "All" from the "Show Activities" menu at top to see everything.' ) );
 		}
 
