@@ -4,7 +4,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04
 
 **DEPRECATION NOTICE:** The expression functions `arraypush()`, `arraypop()`, `arrayunshift()` and `arrayshift()` have been made first-class functions in the LuaXP module under the names `push()`, `pop()`, `unshift()` and `shift()` respectively. The `array...()` versions are now deprecated, and will be removed from a future release. Please convert to the new functions, which for all practical purposes are identical (so you just need to change the names in your expressions and it's done).
 
-## Version 3.6 (RC 20126)
+## Version 3.6 (released)
 
 * Enhancement: **IMPORTANT! PLEASE READ!** As of 3.6, Reactor attempts to check the validity of the system clock at startup and during operation. Clock problems are relatively rare, but can be quite severe in their effect on the system's and Reactor's behavior. There are two specific cases now handled as follows:
 
