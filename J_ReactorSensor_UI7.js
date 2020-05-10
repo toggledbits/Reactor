@@ -17,11 +17,11 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.6develop-20128';
+	var pluginVersion = '3.6develop-20130';
 
 	var DEVINFO_MINSERIAL = 482;
 
-	var _UIVERSION = 20085;     /* must coincide with Lua core */
+	var _UIVERSION = 20130;     /* must coincide with Lua core */
 
 	var _CDATAVERSION = 20045;  /* must coincide with Lua core */
 
@@ -385,7 +385,7 @@ var ReactorSensor = (function(api, $) {
 			throw "Device " + String(myid) + " not found or incorrect type";
 		}
 		// PHR??? Dynamic false needs more testing. Save/update of local/lustatus should be sufficient
-		/* Empty configs are not allowed, but happen when the Vera UI gets wildly out of sync with Vera, 
+		/* Empty configs are not allowed, but happen when the Vera UI gets wildly out of sync with Vera,
 		   which has happened increasingly since 7.29. */
 		var s = api.getDeviceState( myid, serviceId, "cdata" /* , { dynamic: false } */ ) || "";
 		if ( isEmpty( s ) ) {
@@ -5187,6 +5187,20 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 		}
 	}
 
+	/* Return next available notification slot (integer as string) */
+	function nextNotification( config ) {
+		/* Safety first and second. */
+		config.notifications = config.notifications || {};
+		if ( ! parseInt( config.notifications.nextid ) ) {
+			config.notifications.nextid = 1;
+		}
+		var nid = String(config.notifications.nextid);
+		while ( config.notifications[nid] ) {
+			nid = String(++config.notifications.nextid);
+		}
+		return nid;
+	}
+
 	/* Check that notification scene exists; create it if not */
 	function checkNotificationScene( myid, nid ) {
 		myid = myid || api.getCpanelDeviceId();
@@ -5571,18 +5585,16 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					var myid = api.getCpanelDeviceId();
 					var cf = getConfiguration( myid );
 					cf.notifications = cf.notifications || { nextid: 1 };
-					if ( isNaN( cf.notifications.nextid ) ) cf.notifications.nextid = 1;
-					if ( "" === nid ) {
-						/* Search for an empty slot */
-						do {
-							nid = String(cf.notifications.nextid++);
-						} while ( undefined !== cf.notifications[nid] );
+					if ( "" === nid || undefined === cf.notifications[nid] ) {
+						/* No slot assigned or gone missing, reassign: get next id and create slot */
+						nid = nextNotification( cf );
+						cf.notifications[nid] = { 'id': parseInt(nid) };
 						$( 'input.re-notifyid', row ).val( nid );
 					}
-					cf.notifications[nid] = cf.notifications[nid] || { id: parseInt(nid) };
 					cf.notifications[nid].users = users.join(',');
 					cf.notifications[nid].usernames = unames.join(',');
 					cf.notifications[nid].message = $( 'input.re-message', row ).val() || nid;
+					action.notifyid = nid;
 					if ( "" === method ) {
 						delete action.method;
 						checkNotificationScene( myid, nid );
@@ -5594,7 +5606,6 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						$( 'input.re-message', row ).prop( 'disabled', false );
 						$( '.vanotice', row ).hide();
 					}
-					action.notifyid = nid;
 					var ninfo = arrayFindValue( notifyMethods, function( v ) { return v.id === action.method; } ) || notifyMethods[0];
 					var lf = ninfo.extra ? ninfo.extra.length : 0;
 					for ( var f=0; f<lf; ++f ) {
@@ -7174,7 +7185,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 		updateActionControls();
 	}
 
-	function loadActions( section, scene ) {
+	function loadActions( section, scene, copying ) {
 		var insertionPoint = $( 'div.buttonrow', section );
 		var newRow;
 		var ns = Date.now();
@@ -7343,7 +7354,18 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						break;
 
 					case "notify":
-						$( 'input.re-notifyid', newRow ).val( act.notifyid || "" );
+						/* If we're copying, we need to clone the notification */
+						if ( copying ) {
+							/* Clone the old notification, and set clone's ID to new ID. */
+							var cf = getConfiguration();
+							var nid = nextNotification( cf );
+							cf.notifications[nid] = api.cloneObject( cf.notifications[String(act.notifyid)] || {} );
+							cf.notifications[nid].id = parseInt(nid);
+							$( 'input.re-notifyid', newRow ).val( nid );
+							configModified = true;
+						} else {
+							$( 'input.re-notifyid', newRow ).val( act.notifyid || "" );
+						}
 						$m = $( 'select.re-method', newRow );
 						if ( 0 === $( 'option[value="' + (act.method || "") + '"]', $m ).length ) {
 							if ( !devVeraAlerts && "VA" === act.method ) {
@@ -7404,7 +7426,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 
 		/* Pass clone of actions so adding to ourselves isn't infinite loop */
 		var cdata = getConfiguration();
-		loadActions( $target, api.cloneObject( cdata.activities[source] || {} ) );
+		loadActions( $target, api.cloneObject( cdata.activities[source] || {} ), true );
 		updateActionList( $target );
 		updateActionControls();
 	}
@@ -7548,7 +7570,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				$( 'span.re-title', el ).text( 'When ' +
 					( gr.name || gr.id ) + ' is TRUE' );
 				container.append( el );
-				loadActions( el, cd.activities[scene] || {} );
+				loadActions( el, cd.activities[scene] || {}, false );
 				if ( "inuse" === showWhich && isEmptyActivity( cd.activities[scene] ) ) {
 					el.hide();
 				}
@@ -7559,7 +7581,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				$( 'span.re-title', el ).text( 'When ' +
 					( gr.name || gr.id ) + ' is FALSE' );
 				container.append( el );
-				loadActions( el, cd.activities[scene] || {} );
+				loadActions( el, cd.activities[scene] || {}, false );
 
 				showedAny = true;
 			}
@@ -7579,9 +7601,11 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 			container.append( $( '<div/>' )
 				.html( '<em>There are no groups eligible for activities.</em>' ) );
 		} else {
+			container.append(
+				$( '<div class="re-alertbox re-filteralert" />' )
+					.text( 'Not all possible activities are being shown. Choose "All" from the "Show Activities" menu at top to see everything.' )
+			);
 			$( 'select#whatshow', container ).trigger( 'change.reactor' );
-			container.append( $( '<div class="re-alertbox re-filteralert" />' )
-				.text( 'Not all possible activities are being shown. Choose "All" from the "Show Activities" menu at top to see everything.' ) );
 		}
 
 		$("div#tab-actions.reactortab button.re-collapse").on( 'click.reactor', handleActivityCollapseClick );
