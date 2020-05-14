@@ -4,6 +4,10 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04
 
 **DEPRECATION NOTICE:** The expression functions `arraypush()`, `arraypop()`, `arrayunshift()` and `arrayshift()` have been made first-class functions in the LuaXP module under the names `push()`, `pop()`, `unshift()` and `shift()` respectively. The `array...()` versions are now deprecated, and will be removed from a future release. Please convert to the new functions, which for all practical purposes are identical (so you just need to change the names in your expressions and it's done).
 
+## HOTFIXES TO 3.6 RELEASE
+
+* Hotfix 20135-01: Fix special message parameter not correctly substituted in *UserURL* notification method.
+
 ## Version 3.6 (released)
 
 * **BREAKING CHANGE**: The previously-permitted but inconsistently-supported ability to use variable substitution embedded within strings (e.g. `The time is {now}`) is no longer supported. Some places could handle expressions, others could handle only variable names, and the embedding within a string was also not consistently supported. In order to make the behavior consistent throughout, a new formatting rule applies. Now, variable/expression substitutions are performed only when the string/parameter/operand begins with a `{` (left curly brace) and ends with a `}` (right curly brace). The text between the curly braces may be a variable name or an expression (a variable name alone is, in fact, an expression unto itself). Concatenation operators can be used to build strings from both text and multiple values, as well as any of the functions available. So where previously one might have used `The time is {nowtime} and the weather is {weatherwords}`, it is now necessary to use `{ "The time is " .. nowtime .. " and the weather is " .. weatherwords }`. This was necessary to support consistent form and use of expression substitution in more places where possible.
