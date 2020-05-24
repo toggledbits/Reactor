@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.7develop-20131';
+	var pluginVersion = '3.7develop-20145';
 
 	var DEVINFO_MINSERIAL = 482;
 
@@ -3463,7 +3463,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 					});
 					/* Restore values. */
 					op = menuSelectDefaultFirst( $( "select.opmenu", container ), cond.operator );
-					if ( "bet" === op || "nob" === "op" ) {
+					if ( "bet" === op || "nob" === op ) {
 						$("fieldset.re-endfields", container).show();
 					} else {
 						$("fieldset.re-endfields", container).hide();
