@@ -176,9 +176,10 @@ end
 
 local function urlencode( s )
 	-- Could add dot per RFC3986; note space becomes %20
-	return s:gsub( "([^A-Za-z0-9_-])", function( m )
+	-- Take care to only return 1 value (gsub returns 2)
+	return ( s:gsub( "([^A-Za-z0-9_-])", function( m )
 			return string.format( "%%%02x", string.byte( m ) ) end
-		)
+		) )
 end
 
 -- Shallow copy
@@ -1824,7 +1825,8 @@ local function getExpressionContext( cdata, tdev )
 	end
 	ctx.__functions.urldecode = function( args )
 		local str = string.lower( args[1] or "" ):gsub( "%+", " " )
-		return str:gsub( "%%([a-f0-9][a-f0-9])", function( m ) return string.char( tonumber( m, 16 ) or 49 ) end )
+		-- only return one value (gsub returns 2)
+		return ( str:gsub( "%%([a-f0-9][a-f0-9])", function( m ) return string.char( tonumber( m, 16 ) or 49 ) end ) )
 	end
 	-- Append an element to an array, returns the array.
 	ctx.__functions.arraypush = function( args )
@@ -2388,7 +2390,7 @@ local function doActionNotify( action, scid, tdev )
 			D("doActionNotify() AddAlert request returned %1,%2 [%3]", st, ht, baseurl)
 		elseif action.method == "UU" then -- User URL
 			local baseurl = action.url or ""
-			baseurl = baseurl:gsub( "%{message%}", urlencode( msg ):gsub("%%", "%%%%") ) -- special
+			baseurl = baseurl:gsub( "%{message%}", ( urlencode( msg ):gsub("%%", "%%%%") ) ) -- special
 			baseurl = baseurl:gsub( "%{[^}]+%}", function( ref )
 				local vv = getValue( ref, nil, tdev )
 				return ( vv ~= nil ) and vv or ref
@@ -6007,8 +6009,13 @@ local function getReactorScene( t, s, tdev, runscenes, cf )
 					if cf.notifications and cf.notifications[tostring(act.notifyid)] then
 						local nn = cf.notifications[tostring(act.notifyid)]
 						if nn.scene then resp = resp .. " sid " .. nn.scene end
-						if nn.users then resp = resp .. " users " .. tostring(nn.users) end
+						if ( nn.users or "") ~= "" then resp = resp .. " users " .. tostring(nn.users) end
 						resp = resp .. " message " .. string.format("%q", tostring(nn.message))
+					end
+					for k,v in pairs(act) do
+						if not string.match(":type:method:notifyid:", k) then
+							resp = resp .. string.format("; %s=%q", k, tostring(v))
+						end
 					end
 					local mv = {
 						SM={"SMTPServer","SMTPPort","SMTPSender","SMTPDefaultRecipient","SMTPDefaultSubject","SMTPUsername","*SMTPPassword"},
@@ -6018,7 +6025,7 @@ local function getReactorScene( t, s, tdev, runscenes, cf )
 						local m,n = v:match("^(%*)(.*)")
 						n = n or v
 						local vv = getVar( n, "", pluginDevice, MYSID )
-						if m and vv ~= "" then vv = "****" end
+						if m and vv ~= "" then vv = "*" end
 						resp = resp .. string.format("; %s=%q", n, tostring(vv))
 					end
 					if act.method == "SM" then
