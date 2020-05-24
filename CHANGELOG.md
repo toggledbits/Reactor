@@ -6,6 +6,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04
 
 ## HOTFIXES TO 3.6 RELEASE
 
+* Hotfix 20145-01: Fix field redraw/reload problem with "not between" operator on date/time conditions.
 * Hotfix 20135-01: Fix special message parameter not correctly substituted in *UserURL* notification method.
 
 ## Version 3.6 (released)
