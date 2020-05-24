@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.6hotfix-20145"
+local _PLUGIN_VERSION = "3.6hotfix-20145.0920"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.6/"
 
@@ -6014,7 +6014,8 @@ local function getReactorScene( t, s, tdev, runscenes, cf )
 						if not string.match(":type:method:notifyid:", k) then
 							resp = resp .. string.format("; %s=%q", k, tostring(v))
 						end
-					end					local mv = {
+					end
+					local mv = {
 						SM={"SMTPServer","SMTPPort","SMTPSender","SMTPDefaultRecipient","SMTPDefaultSubject","SMTPUsername","*SMTPPassword"},
 						PR={"ProwlProvider","ProwlSubject","ProwlURL","*ProwlAPIKey"}
 					}
