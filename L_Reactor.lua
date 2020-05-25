@@ -152,6 +152,7 @@ end
 
 local function E(msg, ...) L({level=1,msg=msg}, ...) end
 local function W(msg, ...) L({level=2,msg=msg}, ...) end
+local function T(msg, ...) L(msg, ...) if debug and debug.traceback then luup.log((debug.traceback())) end end
 
 local function getInstallPath()
 	if not installPath then
@@ -1083,8 +1084,8 @@ local function loadSensorConfig( tdev )
 	-- Special meta to control encode rendering when needed.
 	local mt = { __jsontype="object" } -- dkjson (later revs) empty tables render as object
 	if debugMode then
-		mt.__index = function(t, n) if debugMode then W("access to %1 in cdata, which is undefined!", n) end return rawget(t,n) end
-		mt.__newindex = function(t, n, v) rawset(t,n,v) if debugMode then L({level=2,msg="setting %1=%2 in cdata"}, n, v) end end
+		mt.__index = function(t, n) if debugMode then T({level=2,msg="access to %1 in cdata, which is undefined!"}, n) end return rawget(t,n) end
+		mt.__newindex = function(t, n, v) rawset(t,n,v) if debugMode then T({level=2,msg="setting %1=%2 in cdata"}, n, v) end end
 	end
 	setmetatable( cdata, mt )
 
@@ -5768,9 +5769,8 @@ function tick(p)
 			function() return v.func( v.owner, v.id, unpack(v.args or {}) ) end,
 			function( er )
 				v.lasterr = er
-				E("%1 (#%2) tick failed: %3",
+				T({level=1,msg="%1 (#%2) tick failed: %3"},
 					(luup.devices[v.owner] or {}).description, v.owner, er)
-				if debug and debug.traceback then luup.log( debug.traceback(), 1 ) end
 			end
 		)
 		v.lastrun = now
