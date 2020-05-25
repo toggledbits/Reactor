@@ -150,6 +150,9 @@ local function DA(cond, m, ...)
 	error("assertion failed") -- should be unreachable
 end
 
+local function E(msg, ...) L({level=1,msg=msg}, ...) end
+local function W(msg, ...) L({level=2,msg=msg}, ...) end
+
 local function getInstallPath()
 	if not installPath then
 		installPath = "/etc/cmh-ludl/" -- until we know otherwise
@@ -799,7 +802,7 @@ local function checkVersion(dev)
 		end
 		return true
 	end
-	L({level=1,msg="firmware %1 (%2.%3.%4) not compatible"}, luup.version,
+	E("firmware %1 (%2.%3.%4) not compatible", luup.version,
 		luup.version_branch, luup.version_major, luup.version_minor)
 	return false
 end
@@ -826,7 +829,7 @@ local function sensor_runOnce( tdev )
 	initVar( "Retrigger", "", tdev, RSSID )
 	initVar( "Message", "", tdev, RSSID )
 	initVar( "Trouble", "0", tdev, RSSID )
-	initVar( "cdata", "", tdev, RSSID )
+	initVar( "cdata", "###", tdev, RSSID )
 	initVar( "cstate", "", tdev, RSSID )
 	initVar( "Runtime", 0, tdev, RSSID )
 	initVar( "TripCount", 0, tdev, RSSID )
@@ -946,19 +949,10 @@ end
 local function loadSensorConfig( tdev )
 	D("loadSensorConfig(%1)", tdev)
 	local upgraded = false
-	local s = getVar( "cdata", "", tdev )
+	local s = getVar( "cdata", nil, tdev )
 	local cdata, pos, err
-	if "" ~= s then
-		-- Unparseable non-empty config is a hard error, so we have a chance to go in and correct.
-		cdata, pos, err = json.decode( s )
-		if cdata == nil or type(cdata) ~= "table" then
-			L("Unable to parse JSON data at %2, %1 in %3", pos, err, s)
-			return error("Unable to load configuration")
-		end
-		D("loadSensorConfig() loaded configuration version %1", cdata.version)
-	end
-	if cdata == nil then
-		L("Initializing new configuration")
+	if s == "###" then -- typ for new RS
+		L"Initializing new configuration"
 		cdata = {
 			serial=0,
 			version=_CDATAVERSION,
@@ -973,7 +967,22 @@ local function loadSensorConfig( tdev )
 			activities={}
 		}
 		upgraded = true
-	elseif ( cdata.version or 0 ) < _CDATAVERSION then
+	elseif s == nil or s == "" then
+		setVar( RSSID, "Message", "Lost configuration!", tdev )
+		E"Lost configuration! Luup's user_data may be corrupt, or disk space may be low on /etc/cmh."
+		return error("Lost configuration")
+	else
+		-- Unparseable config is a hard error, so we have a chance to go in and correct.
+		cdata, pos, err = json.decode( s )
+		if cdata == nil or type(cdata) ~= "table" then
+			setVar( RSSID, "Message", "Invalid configuration!", tdev )
+			E("Unable to parse JSON data at %2, %1 in %3", pos, err, s)
+			return error("Unable to load configuration")
+		end
+		D("loadSensorConfig() loaded configuration version %1", cdata.version)
+	end
+	-- Check config version; backup if upgrading.
+	if ( cdata.version or 0 ) < _CDATAVERSION then
 		local fn = string.format( "%sreactor-dev%d-config-v%s-backup.json",
 			getInstallPath(), tdev, tostring( cdata.version or 0 ) )
 		local f = io.open( fn, "r" )
@@ -1066,7 +1075,7 @@ local function loadSensorConfig( tdev )
 
 	-- Backport/downgrade attempt from future version?
 	if ( cdata.version or 0 ) > _CDATAVERSION then
-		L({level=1,msg="Configuration loaded is format v%1, max compatible with this version of Reactor is %2; upgrade Reactor or restore older config from backup."},
+		E("Configuration loaded is format v%1, max compatible with this version of Reactor is %2; upgrade Reactor or restore older config from backup.",
 			cdata.version, _CDATAVERSION)
 		error("Incompatible config format version. Upgrade Reactor or restore older config from backup.")
 	end
@@ -1074,7 +1083,7 @@ local function loadSensorConfig( tdev )
 	-- Special meta to control encode rendering when needed.
 	local mt = { __jsontype="object" } -- dkjson (later revs) empty tables render as object
 	if debugMode then
-		mt.__index = function(t, n) if debugMode then L({level=1,msg="access to %1 in cdata, which is undefined!"},n) end return rawget(t,n) end
+		mt.__index = function(t, n) if debugMode then W("access to %1 in cdata, which is undefined!", n) end return rawget(t,n) end
 		mt.__newindex = function(t, n, v) rawset(t,n,v) if debugMode then L({level=2,msg="setting %1=%2 in cdata"}, n, v) end end
 	end
 	setmetatable( cdata, mt )
@@ -1090,7 +1099,7 @@ local function loadSensorConfig( tdev )
 		if rawConfig and #rawConfig > 0 then
 			luup.variable_set( RSSID, "cdata", json.encode( cdata ), tdev, false )
 		else
-			L({level=1,msg="Can't save! The JSON library (%1) can't encode updated config: %2"}, json.version, err)
+			E("Can't save! The JSON library (%1) can't encode updated config: %2", json.version, err)
 			L("%1", cdata)
 			error("Unable to encode updated config; not saved.")
 		end
@@ -1411,7 +1420,7 @@ local function getSceneData( sceneId, tdev )
 	-- At this point, we're looking for a Vera scene, so make sure it's valid.
 	if luup.scenes[scid] == nil then
 		-- Nope.
-		L({level=1,msg="Scene %1 in configuration for %3 (%2) is no longer available!"}, sceneId,
+		W("Scene %1 in configuration for %3 (%2) is no longer available!", sceneId,
 			tdev, luup.devices[tdev].description)
 		addEvent{ dev=tdev, msg="TROUBLE: Attempt to run scene %(scene)s, %(error)s", event="runscene", scene=tostring(sceneId), sceneName="", ['error']="scene not found" }
 		getSensorState( tdev ).trouble = true
@@ -1514,7 +1523,7 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
 	D("evaluateVariable(%1,cdata,%2)", vname, tdev)
 	local vdef = (cdata.variables or {})[vname]
 	if vdef == nil then
-		L({level=1,msg="%2 (%1) Invalid variable reference to %3, not configured"},
+		W("%2 (%1) Invalid variable reference to %3, not configured",
 			tdev, luup.devices[tdev].description, vname)
 		return
 	end
@@ -1973,8 +1982,7 @@ local function execLua( fname, luafragment, extarg, tdev )
 		local err
 		fnc,err = loadstring( luafragment, fname )
 		if fnc == nil or err then
-			L({level=1,msg="%1 %(2) [%3] Lua load failed"},
-				luup.devices[tdev].description, tdev, fname)
+			W("%1 %(2) [%3] Lua load failed", luup.devices[tdev].description, tdev, fname)
 			addEvent{ dev=tdev,
 				msg="TROUBLE: Failed to load Lua (%(name)q): %(error)s",
 				event="runlua", name=fname, ['error']=tostring(err) }
@@ -2064,7 +2072,7 @@ local function execLua( fname, luafragment, extarg, tdev )
 			if what.what ~= "C" and not getVarBool( "SuppressLuaGlobalWarnings", false, pluginDevice, MYSID ) then
 				local dev = t.__reactor_getdevice()
 				local fn = t.__reactor_getscript() or tostring(what.source)
-				L({level=1,msg="%1 (%2) runLua action: %3 accesses undeclared/uninitialized global %4"},
+				W("%1 (%2) runLua action: %3 accesses undeclared/uninitialized global %4",
 					( luup.devices[dev] or {} ).description, dev, fn, n)
 				addEvent{ event="lua",
 					msg="ERROR: Using uninitialized global variable %(name)q",
@@ -2118,7 +2126,7 @@ local function execLua( fname, luafragment, extarg, tdev )
 						-- Always fetch, because it could be changing dynamically
 						local v = rawget(getmetatable(t).__vars, n)
 						if v == nil then
-							L({level=1,msg="%1 (%2) Run Lua action: your code attempts to access undefined Reactor variable "..tostring(n)},
+							W("%1 (%2) Run Lua action: your code attempts to access undefined Reactor variable "..tostring(n),
 								luup.devices[tdev].description, tdev, n)
 							addEvent{ dev=tdev,
 								msg="WARNING: Attempt to access undefined value in Reactor.variables: %(name)s",
@@ -2222,7 +2230,7 @@ local function doSyslogDatagram( pack, tdev )
 		end
 		return
 	end
-	L{level=1,msg="Failed to get UDP socket for Syslog datagram"}
+	E"Failed to get UDP socket for Syslog datagram"
 	error("Syslog notification to " .. tostring(pack.hostip) .. " failed, can't get UDP socket")
 end
 
@@ -2656,7 +2664,7 @@ local function execSceneGroups( tdev, taskid, scd )
 		D("execSceneGroups() reloading scene data for %1", sst.scene)
 		scd = getSceneData(sst.scene, tdev)
 		if scd == nil then
-			L({level=1,msg="Previously running scene %1 now not found/loaded. Aborting run."}, sst.scene)
+			W("Previously running scene %1 now not found/loaded. Aborting run.", sst.scene)
 			return stopScene( nil, taskid, tdev )
 		end
 	end
@@ -2670,7 +2678,7 @@ local function execSceneGroups( tdev, taskid, scd )
 		local delay = scd.groups[nextGroup].delay or 0
 		if type(delay) == "string" then _,delay = getValue( delay, nil, tdev ) end
 		if type(delay) ~= "number" then
-			L({level=1,msg="%1 (%2) delay at group %3 did not resolve to number; no delay!"},
+			W("%1 (%2) delay at group %3 did not resolve to number; no delay!",
 				luup.devices[tdev].description, tdev, nextGroup)
 			addEvent{ dev=tdev,
 				msg="TROUBLE: Invalid delay in scene group %(group)s of %(sceneName)s: %(delay)q",
@@ -2756,7 +2764,7 @@ local function execSceneGroups( tdev, taskid, scd )
 						addEvent{ dev=tdev,
 							msg="TROUBLE: Device %(xdev)q invalid or does not exist; reference in scene %(sceneName)s group %(group)s step %(step)s",
 							event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, step=ix, xdev=action.device, warning="Invalid device" }
-						L({level=1,msg="%5 (%6): invalid device (%4) in scene %1 (%2) group %3; skipping action."},
+						W("%5 (%6): invalid device (%4) in scene %1 (%2) group %3; skipping action.",
 							scd.name or "", scd.id, nextGroup, action.device, tdev, luup.devices[tdev].description)
 						getSensorState( tdev ).trouble = true
 					else
@@ -2809,7 +2817,7 @@ local function execSceneGroups( tdev, taskid, scd )
 							addEvent{ dev=tdev,
 								msg="TROUBLE: Can't decode Lua for activity %(sceneName)s group %(group)s step %(step)s",
 								event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, step=ix, ['error']="Can't decode Lua" }
-							L({level=1,msg="Aborting scene %1 (%2) run, unable to decode scene Lua"}, scd.id, scd.name)
+							W("Aborting scene %1 (%2) run, unable to decode scene Lua", scd.id, scd.name)
 							getSensorState( tdev ).trouble = true
 							stopScene( tdev, nil, tdev ) -- stop all scenes in context.
 							return nil
@@ -2817,7 +2825,7 @@ local function execSceneGroups( tdev, taskid, scd )
 					end
 					local more, err = execLua( fname, lua, nil, tdev )
 					if err then
-						L({level=1,msg="%1 (%2) aborting scene %3 Lua execution at group step %4, Lua run failed: %5"},
+						W("%1 (%2) aborting scene %3 Lua execution at group step %4, Lua run failed: %5",
 							luup.devices[tdev].description, tdev, scd.id, ix, err)
 						L{level=2,msg="Lua:\n"..lua} -- concat to avoid formatting
 						addEvent{ dev=tdev,
@@ -2908,7 +2916,7 @@ local function execSceneGroups( tdev, taskid, scd )
 						getSensorState( tdev ).trouble = true
 					end
 				else
-					L({level=1,msg="Unhandled action type %1 at %2 in scene %3 for %4 (%5)"},
+					W("Unhandled action type %1 at %2 in scene %3 for %4 (%5)",
 						action.type, ix, scd.name or scd.id, tdev, luup.devices[tdev].description)
 					addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup,
 						warning="TROUBLE: action #" .. tostring(ix) .. " unrecognized type: " .. tostring(action.type) .. ", ignored." }
@@ -2962,7 +2970,7 @@ local function execScene( scd, tdev, options )
 			luafragment = mime.unb64( scd.lua )
 			if luafragment == nil then
 				addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, ['error']="Aborting; unable to decode scene Lua" }
-				L({level=1,msg="Aborting scene %1 (%2) run, unable to decode scene Lua"}, scd.id, scd.name)
+				W("Aborting scene %1 (%2) run, unable to decode scene Lua", scd.id, scd.name)
 				return
 			end
 		else
@@ -2979,7 +2987,7 @@ local function execScene( scd, tdev, options )
 			addEvent{ dev=tdev,
 				msg="TROUBLE: Aborting, error in scene Lua: %(error)s",
 				event="runscene", scene=scd.id, sceneName=scd.name or scd.id, ['error']=err }
-			L({level=1,msg="%1 (%2) scene %3 scene Lua run failed: %4"},
+			W("%1 (%2) scene %3 scene Lua run failed: %4",
 				luup.devices[tdev].description, tdev, scd.id, err)
 			L{level=2,msg="Lua:\n"..luafragment} -- concat to avoid formatting
 			return
@@ -3018,8 +3026,7 @@ local function resumeScenes()
 	D("resumeScenes()")
 	local d,err = getVarJSON( "runscene", {}, pluginDevice, MYSID )
 	if err then
-		L({level=1,msg="Can't resume scenes, failed to parse JSON for saved scene state: %1"},
-			err)
+		E("Can't resume scenes, failed to parse JSON for saved scene state: %1", err)
 		luup.variable_set( MYSID, "runscene", "{}", pluginDevice )
 	end
 	sceneState = d or {}
@@ -3037,8 +3044,8 @@ runScene = function( scene, tdev, options )
 
 	local scd = getSceneData( scene, tdev )
 	if scd == nil then
-		L({level=1,msg="%1 (#%2) can't run scene %3, not found/loaded."},
-			luup.devices[tdev].description, tdev, scene)
+		W("%1 (#%2) can't run scene %3, not found/loaded.", luup.devices[tdev].description,
+			tdev, scene)
 		return
 	end
 
@@ -3238,7 +3245,7 @@ local function doComparison( cond, op, vv, vn, rv, cv, cn, tdev )
 		-- Changed without terminal values, pulse zero.
 		scheduleDelay( { id=tdev, info="change "..cond.id }, 0 )
 	else
-		L({level=1,msg="doComparison() unknown op %1 in cond %2"}, op, cv)
+		E("doComparison() unknown op %1 in cond %2", op, cv)
 		addEvent{ dev=tdev, event="condition", condition=cond.id, ['error']="TROUBLE: unrecognized operator "..tostring(op or "nil") }
 		getSensorState( tdev ).trouble = true
 		return vv,nil
@@ -3651,7 +3658,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 			elseif cp == "after" then
 				if tmnow < stt then return now,false end
 			else
-				L({level=1,msg="Unrecognized operator %1 in time spec for cond %2 of %3 (%4)"},
+				E("Unrecognized operator %1 in time spec for cond %2 of %3 (%4)",
 					cp, cond.id, tdev, luup.devices[tdev].description)
 				addEvent{ dev=tdev, event="condition", condition=cond.id,
 					operator=cp, ['error']="TROUBLE: unrecognized operator" }
@@ -3692,7 +3699,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 			local xs = ( sst.condState or {} )[cond.relcond]
 			if xs == nil then
 				-- Trouble, missing condition or no state.
-				L({level=1,msg="Unrecognized condition for %1 in interval cond %2 of %3 (%4)"},
+				W("Unrecognized condition for %1 in interval cond %2 of %3 (%4)",
 					cond.relcond or "nil", cond.id, tdev, luup.devices[tdev].description)
 				addEvent{ dev=tdev, event="condition", condition=cond.id,
 					referencing=cond.relcond, ['error']="TROUBLE: relative condition missing" }
@@ -3843,7 +3850,10 @@ local function processCondition( cond, grp, cdata, tdev )
 		D("processCondition() recording %1 state change", cond.id)
 		-- ??? At certain times, Vera gets a time that is in the future, or so it appears. It looks like the TZ offset isn't applied, randomly.
 		-- Maybe if call is during ntp update, don't know. Investigating... This log message helps detection and analysis.
-		if now < ( cs.statestamp or 0 ) then L({level=1,msg="Time moved backwards! Sensor %4 cond %1 last change at %2, but time now %3"}, cond.id, cs.statestamp, now, tdev) end
+		if now < ( cs.statestamp or 0 ) then
+			E("Time moved backwards! Sensor %4 cond %1 last change at %2, but time now %3",
+				cond.id, cs.statestamp, now, tdev)
+		end
 		addEvent{ dev=tdev,
 			msg="%(cname)s test state changed from %(oldState)q to %(newState)q",
 			cname=(cond.type or "group")=="group" and ("Group "..(cond.name or cond.id)) or ("Condition "..cond.id),
@@ -3876,7 +3886,7 @@ local function processCondition( cond, grp, cdata, tdev )
 		-- Sequence; this condition must become true after named sequence becomes true
 		local predCond = findCondition( condopt.after, cdata )
 		if predCond == nil then
-			L({level=1,msg="%1 (#%2) group %3 condition %4 uses sequence, but predecessor condition %5 not found (deleted?)"},
+			W("%1 (#%2) group %3 condition %4 uses sequence, but predecessor condition %5 not found (deleted?)",
 				luup.devices[tdev].description, tdev, grp.id, cond.id, condopt.after)
 			addEvent{ dev=tdev, event="condition", condition=cond.id,
 				predecessor=condopt.after, ['error']="TROUBLE: predecessor condition not found" }
@@ -4394,7 +4404,7 @@ local function updateSensor( tdev )
 	local success,err = pcall( processSensorUpdate, tdev, sst )
 	sst.updating = false
 	if not success then
-		L({level=1,msg="Sensor update failed: %1"}, err)
+		E("Sensor update failed: %1", err)
 		addEvent{ dev=tdev, msg="FAILED: %(err)s", err=err }
 	end
 end
@@ -4679,11 +4689,11 @@ local function masterTick(pdev)
 	if lastMasterTick then
 		local dtime = now - lastMasterTick
 		if dtime <= 0 then
-			L({level=1,"***** SYSTEM CLOCK HAS MOVED BACKWARDS! Last master tick %1, now %2???"},
+			E("***** SYSTEM CLOCK HAS MOVED BACKWARDS! Last master tick %1, now %2???",
 				lastMasterTick, now)
 			clockStable = false
 		elseif dtime > 120 then
-			L({level=1,msg="***** SYSTEM CLOCK HAS LEAPT FORWARDS! Last master tick %1, now %2???"},
+			E("***** SYSTEM CLOCK HAS LEAPT FORWARDS! Last master tick %1, now %2???",
 				lastMasterTick, now)
 			clockStable = false
 		end
@@ -4716,7 +4726,7 @@ local function masterTick(pdev)
 			local st
 			st, lastNetCheckState = pcall( checkInternetState, pdev )
 			if not st then
-				L({level=1,msg="Failed to complete Internet check probes: %1"}, lastNetCheckState)
+				W("Failed to complete Internet check probes: %1", lastNetCheckState)
 				lastNetCheckState = true -- keep from doing too many probes while there's a problem
 				setVar( MYSID, "NetworkStatus", "", pdev )
 			else
@@ -4963,7 +4973,7 @@ local function startSensors( pdev )
 			-- N.B. start sensor whether enabled or not, as key inits happen regardless.
 			local status, err = pcall( startSensor, k, pdev, true )
 			if not status then
-				L({level=1,msg="%1 (#%2) failed to start: %3"}, luup.devices[k].description, k, err)
+				E("%1 (#%2) failed to start: %3", luup.devices[k].description, k, err)
 				addEvent{ dev=k, event="error", message="Start-up failed", reason=err }
 				setMessage( "Failed (see log)", k )
 				luup.set_failure( 1, k ) -- error on child device
@@ -5101,7 +5111,7 @@ function startPlugin( pdev, ptask ) -- N.B. can be run as task
 
 	-- System clock check
 	if os.time() <= 1586092920 then
-		L{level=1, msg="***** SYSTEM CLOCK IS INVALID *****"}
+		E"***** SYSTEM CLOCK IS INVALID *****"
 		if getVarBool( "RequireValidClock", false, pdev, MYSID ) then
 			L{level=2, msg="RequireValidClock is set; deferring startup. Next check in 120 seconds."}
 			setVar( MYSID, "Message", "START DELAYED: INVALID CLOCK", pdev )
@@ -5125,7 +5135,7 @@ function startPlugin( pdev, ptask ) -- N.B. can be run as task
 		L"Checking required packages for openLuup"
 		for _,v in ipairs{ "dkjson", "socket", "mime" } do
 			if not package.loaded[v] then
-				L({level=1,msg="Required system module %1 cannot be loaded; see ".._DOC_URL.."Installation"}, v)
+				E("Required system module %1 cannot be loaded; see ".._DOC_URL.."Installation", v)
 				luup.variable_set( MYSID, "Message", "Required package missing (see log)", pdev )
 				markChildrenDown( "Required package missing (see log)", pdev )
 				return false, "Required package missing", _PLUGIN_NAME
@@ -5159,7 +5169,7 @@ function startPlugin( pdev, ptask ) -- N.B. can be run as task
 			local d = s[nr] - s[1]
 			if d <= p then
 				-- Too many restarts! Abort. No soup for you!
-				L({level=1,msg="Reactor has detected that this system has restarted %1 times in %2 seconds; disabling Reactor just in case."},
+				E("Reactor has detected that this system has restarted %1 times in %2 seconds; disabling Reactor just in case.",
 					nr, d)
 				setVar( MYSID, "recoverymode", 1, pdev )
 				setVar( MYSID, "Message", "Safety Lockout!", pdev )
@@ -5210,7 +5220,7 @@ function startPlugin( pdev, ptask ) -- N.B. can be run as task
 			isOpenLuup = k
 			local vv = getVarNumeric( "Vnumber", 0, k, v.device_type )
 			if vv < 200414 then
-				L({level=1,msg="OpenLuup version must be at least 200414; you have %1. Can't continue."}, vv)
+				E("OpenLuup version must be at least 200414; you have %1. Can't continue.", vv)
 				luup.variable_set( MYSID, "Message", "Unsupported firmware " .. tostring(vv), pdev )
 				luup.set_failure( 1, pdev )
 				failmsg = "Incompatible openLuup ver " .. tostring(vv)
@@ -5219,7 +5229,7 @@ function startPlugin( pdev, ptask ) -- N.B. can be run as task
 			D("startPlugin() Lua interpreter is %1", vv)
 			local n = vv:match( "^Lua +(.*)$")
 			if type(n) == "string" and not n:match( "^5.1" ) then
-				L({level=1,msg="Invalid Lua version: %1"}, vv)
+				E("Invalid Lua version: %1", vv)
 				luup.variable_set( MYSID, "Message", "Unsupported Lua interpreter " .. tostring(vv), pdev )
 				luup.set_failure( 1, pdev )
 				failmsg = "Incompatible Lua interpreter " .. tostring(vv)
@@ -5241,7 +5251,7 @@ function startPlugin( pdev, ptask ) -- N.B. can be run as task
 
 	-- Check UI version
 	if not checkVersion( pdev ) then
-		L({level=1,msg="This plugin does not run on this firmware."})
+		E"This plugin does not run on this firmware."
 		luup.variable_set( MYSID, "Message", "Unsupported firmware "..tostring(luup.version), pdev )
 		luup.set_failure( 1, pdev )
 		return false, "Incompatible firmware " .. luup.version, _PLUGIN_NAME
@@ -5375,7 +5385,7 @@ function actionWrapAction( dev, params )
 		luup.call_action( s.service, s.action, s.parameters, s.device )
 		return 4,0
 	end
-	L({level=1,msg="Invalid action request on #%1: %2"}, dev, params)
+	E("Invalid action request on #%1: %2", dev, params)
 	return 2,0
 end
 
@@ -5483,7 +5493,7 @@ function actionClearLatched( dev, group )
 				end
 			end
 			if not grpid then
-				L({level=1,msg="Can't ClearLatched, group not found: %1 on %2 (#%3)"}, group,
+				W("Can't ClearLatched, group not found: %1 on %2 (#%3)", group,
 					luup.devices[dev].description, dev)
 				return false
 			end
@@ -5512,7 +5522,7 @@ function actionSendSMTP( lul_device, lul_settings )
 		L("SendSMTP action succeeded to %1 subject %2", to, subject)
 		return 4,0
 	else
-		L{level=1,msg=err}
+		E("%1", err)
 	end
 	return 2,0
 end
@@ -5520,7 +5530,7 @@ end
 function actionSendSyslog( lul_device, lul_settings )
 	D("actionSendSyslog(%1,%2)", lul_device, lul_settings)
 	if not ( lul_settings.ServerIP and lul_settings.Application and lul_settings.Message ) then
-		L{level=1,msg="Action SendSyslog parameters ServerIP, Application and Message are required"}
+		E"Action SendSyslog parameters ServerIP, Application and Message are required"
 		return false
 	end
 	local pack = {
@@ -5533,7 +5543,7 @@ function actionSendSyslog( lul_device, lul_settings )
 	}
 	local success, err = pcall( doSyslogDatagram, pack, lul_device )
 	if success then return true end
-	L{level=1,msg=err}
+	E("%1", err)
 	return false
 end
 
@@ -5621,7 +5631,7 @@ function actionRunScene( scene, options, dev )
 	if ( options or "" ) ~= "" then
 		local opts,err,pos = json.decode( options )
 		if not opts then
-			L({level=1,msg="Invalid JSON in Options parameter to RunScene action: %1 at %2 in "..options},
+			E("Invalid JSON in Options parameter to RunScene action: %1 at %2 in "..options,
 				err, pos)
 			return false
 		end
@@ -5690,12 +5700,12 @@ function actionSetGroupEnabled( grpid, enab, dev )
 		if rawConfig and #rawConfig > 0 then
 			luup.variable_set( RSSID, "cdata", rawConfig, dev )
 		else
-			L({level=1,msg="Can't save configuration! The JSON library (%1) can't encode it: %2"}, json.version, err)
+			E("Can't save configuration! The JSON library (%1) can't encode it: %2", json.version, err)
 			L("%1", cdata)
 			return 2,0
 		end
 	end
-	L({level=1,msg="%1 (%2) action SetGroupEnabled %3 failed, group not found in config"},
+	W("%1 (%2) action SetGroupEnabled %3 failed, group not found in config",
 		luup.devices[dev].description, dev, grpid)
 	return 2,0,"Invalid group"
 end
@@ -5758,7 +5768,7 @@ function tick(p)
 			function() return v.func( v.owner, v.id, unpack(v.args or {}) ) end,
 			function( er )
 				v.lasterr = er
-				L({level=1,msg="%1 (#%2) tick failed: %3"},
+				E("%1 (#%2) tick failed: %3",
 					(luup.devices[v.owner] or {}).description, v.owner, er)
 				if debug and debug.traceback then luup.log( debug.traceback(), 1 ) end
 			end
@@ -5878,7 +5888,7 @@ function watch( dev, sid, var, oldVal, newVal )
 					D("watch() dispatching to %1 (%2)", tdev, luup.devices[tdev].description)
 					local success,err = pcall( sensorWatch, dev, sid, var, oldVal, newVal, tdev, pluginDevice )
 					if not success then
-						L({level=1,msg="watch() device %2 dispatch error: %1"}, err, tdev)
+						E("watch() device %2 dispatch error: %1", err, tdev)
 					end
 				end
 			end
