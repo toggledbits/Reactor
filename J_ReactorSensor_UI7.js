@@ -1645,7 +1645,8 @@ var ReactorSensor = (function(api, $) {
 			updateTestClock( tid, s );
 		}
 
-		if ( "" !== ( api.getDeviceState( pdev, serviceId, "TestHouseMode" ) || "" ) ) {
+		var thm = api.getDeviceState( pdev, serviceId, "TestHouseMode" ) || "0";
+		if ( ! ( isEmpty(thm) || "0" === thm ) ) {
 			$('<div class="re-alertblock" />').text("Test House Mode is in effect!")
 				.appendTo( stel );
 		}
@@ -8307,7 +8308,7 @@ textarea#devspyoutput { width: 100%; font-family: monospace; } \
 		var mode = api.getDeviceState( api.getCpanelDeviceId(), serviceId, "TestHouseMode" ) || "";
 		$('input#testhousemode', container).prop('checked', false);
 		$('select#mode', container).prop('disabled', true);
-		if ( ! isEmpty( mode ) ) {
+		if ( ! ( isEmpty( mode ) || "0" === mode ) ) {
 			mode = parseInt( mode );
 			if ( ! isNaN( mode ) ) {
 				$('input#testhousemode', container).prop('checked', true);
