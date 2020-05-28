@@ -8523,16 +8523,16 @@ textarea#devspyoutput { width: 100%; font-family: monospace; } \
 			$( 'option[value="-1"]', $mm ).remove();
 			var $ct = $('div#re-devicerepair');
 			var $row = $('<div class="row"/>').appendTo( $ct );
-			$( '<div class="col-xs-12"><h3>Device Repair</h3><p>This tool identifies missing or suspect devices and allows you to reassign them, without having to go in and edit each individual condition and action. If the device is listed here, it is either missing entirely, or its name has changed since you last edited the ReactorSensor configuration. <em>This tool does not repair device references in Expressions</em>, including <tt>getstate()</tt>. You will need to do those manually.</p><p>It is always a good idea to <strong>back up your ReactorSensors</strong> (from the Reactor master device) before making reassignments/repairs.</p></div>' )
+			$( '<div class="col-xs-12 col-sm-12"><h3>Device Repair</h3><p>This tool identifies missing or suspect devices and allows you to reassign them, without having to go in and edit each individual condition and action. If the device is listed here, it is either missing entirely, or its name has changed since you last edited the ReactorSensor configuration. <em>This tool does not repair device references in Expressions</em>, including <tt>getstate()</tt>. You will need to do those manually.</p><p>It is always a good idea to <strong>back up your ReactorSensors</strong> (from the Reactor master device) before making reassignments/repairs.</p></div>' )
 				.appendTo( $row );
 			$row = $('<div class="row"/>').appendTo( $ct );
-			$( '<div class="col-xs-8" />' ).html( '<b>Missing/Suspect Device</b>' )
+			$( '<div class="col-xs-12 col-sm-8 col-md-6 col-lg-6 col-xl-4" />' ).html( '<b>Missing/Suspect Device</b>' )
 				.appendTo( $row );
-			$( '<div class="col-xs-4" />' ).html( '<b>Replace With</b>' )
+			$( '<div class="col-xs-12 col-sm-4 col-md-6 col-lg-6 col-xl-3" />' ).html( '<b>Replace With</b>' )
 				.appendTo( $row );
 			for ( var ds in lost ) {
 				$row = $('<div class="row re-lost-device" />' ).attr( 'id', ds ).appendTo( $ct );
-				$( '<div class="col-xs-8" />' )
+				$( '<div class="col-xs-12 col-sm-8 col-md-6 col-lg-6 col-xl-4" />' )
 					.text( "#" + ds + " last known as \"" + (lost[ds].lastname || "") +
 						"\"; used in " + ( lost[ds].cond ? lost[ds].cond.length : 0 ) +
 						" conditions and " + ( lost[ds].act ? lost[ds].act.length : 0 ) +
@@ -8540,7 +8540,7 @@ textarea#devspyoutput { width: 100%; font-family: monospace; } \
 						( lost[ds].newname ? ( "; current device name \"" + lost[ds].newname + '"' ) : "; missing" ) +
 						"."
 					).appendTo( $row );
-				$( '<div class="col-xs-4"><select /></div>' )
+				$( '<div class="col-xs-12 col-sm-8 col-md-6 col-lg-6 col-xl-3"><select /></div>' )
 					.appendTo( $row );
 				var $mx = $mm.clone().attr( 'id', 'lost' + ds );
 				$( 'select', $row ).replaceWith( $mx );
@@ -8560,7 +8560,7 @@ textarea#devspyoutput { width: 100%; font-family: monospace; } \
 				});
 			}
 			$row = $('<div class="row"/>').appendTo( $ct );
-			$( '<div class="col-xs-12"><button id="re-make-repairs" class="btn btn-sm btn-primary">Apply and Save</button><span id="re-repairstatus"/></div>' )
+			$( '<div class="col-xs-12 col-sm-12"><button id="re-make-repairs" class="btn btn-sm btn-primary">Apply and Save</button><span id="re-repairstatus"/></div>' )
 				.appendTo( $row );
 			$( 'button#re-make-repairs', $ct )
 				.prop( 'disabled', true )
