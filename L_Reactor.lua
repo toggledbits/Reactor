@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.7develop-20145"
+local _PLUGIN_VERSION = "3.7develop-20149"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.6/"
 
@@ -5980,7 +5980,7 @@ local function getReactorScene( t, s, tdev, runscenes, cf )
 					p = table.concat( p, ", " )
 					resp = resp .. pfx .. "Device "
 					resp = resp .. ( ( act.device or -1 ) == -1 and "(self)" or
-						( ( (luup.devices[act.device or -1] or {}).description or ( (act.deviceName or "unknown") .. "?" ) ) ..
+						( ( (luup.devices[act.device or -1] or {}).description or ( (act.devicename or act.deviceName or "unknown") .. "?" ) ) ..
 						  " (" .. tostring(act.device) .. ")" ) )
 					resp = resp .. " action " .. (act.service or "?") .. "/" .. (act.action or "?") .. "( " .. p .. " )"
 					resp = resp .. EOL
@@ -5997,7 +5997,7 @@ local function getReactorScene( t, s, tdev, runscenes, cf )
 					resp = resp .. " " .. tostring( act.activity or "all activities" )
 					if ( act.device or -1 ) ~= -1 then
 						resp = resp .. " on " ..
-							( (luup.devices[act.device or -1] or {}).description or ( (act.deviceName or "unknown") .. "?" ) ) ..
+							( (luup.devices[act.device or -1] or {}).description or ( (act.devicename or act.deviceName or "unknown") .. "?" ) ) ..
 							" (" .. tostring(act.device) .. ")"
 					end
 					if ( act.stopall or 0 ) ~= 0 then resp = resp .. " (after stopping all others)" end
@@ -6010,7 +6010,7 @@ local function getReactorScene( t, s, tdev, runscenes, cf )
 					end
 					if ( act.device or -1 ) ~= -1 then
 						resp = resp .. " on " ..
-							( (luup.devices[act.device or -1] or {}).description or ( (act.deviceName or "unknown") .. "?" ) ) ..
+							( (luup.devices[act.device or -1] or {}).description or ( (act.devicename or act.deviceName or "unknown") .. "?" ) ) ..
 							" (" .. tostring(act.device) .. ")"
 					end
 					resp = resp .. EOL

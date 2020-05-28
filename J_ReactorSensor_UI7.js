@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.7develop-20145';
+	var pluginVersion = '3.7develop-20149';
 
 	var DEVINFO_MINSERIAL = 482;
 
@@ -932,23 +932,17 @@ var ReactorSensor = (function(api, $) {
 		});
 	}
 
-	/**
-	 * Handle save click: save the current configuration.
-	 */
-	function handleSaveClick( ev, fnext, fargs ) {
-		var myid = api.getCpanelDeviceId();
+	function saveConfiguration( myid, successFunc, failFunc ) {
+		/* Save to persistent state */
+		myid = myid || api.getCpanelDeviceId();
 		var cdata = getConfiguration( myid );
 
-		$( "button.revertconf" ).prop( "disabled", true );
-		$( "button.saveconf" ).text("Wait...").prop( "disabled", true );
-
-		/* Save to persistent state */
 		cdata.timestamp = Math.floor( Date.now() / 1000 );
 		cdata.serial = ( cdata.serial || 0 ) + 1;
 		cdata.device = myid;
-		console.log("handleSaveClick(): save config serial " + String(cdata.serial) + ", timestamp " + String(cdata.timestamp));
+		console.log("saveConfiguration(): saving #" + myid + " config serial " + String(cdata.serial) + ", timestamp " + String(cdata.timestamp));
 		waitForReloadComplete( "Waiting for system ready before saving configuration..." ).then( function() {
-			console.log("handleSaveClick() writing cdata");
+			console.log("saveConfiguration() writing cdata");
 			var jsstr = JSON.stringify( cdata,
 				function( k, v ) { return ( k.match( /^__/ ) || v === null ) ? undefined : purify(v); }
 			);
@@ -960,34 +954,54 @@ var ReactorSensor = (function(api, $) {
 						}
 						configModified = false;
 						updateSaveControls();
-						console.log("handleSaveClick(): SUCCESS, serial " + String(cdata.serial) + ", timestamp " + String(cdata.timestamp));
-						if ( "function" === typeof(fnext) ) fnext.apply( null, fargs );
-						if ( cdata.__reloadneeded ) {
-							delete cdata.__reloadneeded;
-							api.showCustomPopup( "Reloading Luup...", { autoHide: false, category: 3 } );
-							setTimeout( function() {
-								api.performActionOnDevice( 0, "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "Reload",
-									{ actionArguments: { Reason: "Reactor saved config needs reload" } } );
-								setTimeout( function() {
-									waitForReloadComplete().then( function() {
-										$("#myModal").modal("hide");
-									}).catch( function(reason) {
-										$("#myModal").modal("hide");
-									});
-								}, 5000 );
-							}, 5000 );
-						} else {
-							clearUnusedStateVariables( myid, cdata );
-						}
+						console.log("saveConfiguration(): successful");
+						successFunc && successFunc();
 					},
 					'onFailure' : function() {
-						alert('There was a problem saving the configuration. Vera/Luup may have been restarting. Please try hitting the "Save" button again.');
-						updateSaveControls();
-						if ( "function" === typeof(fnext) ) fnext.apply( null, fargs );
+						console.log("saveConfiguration(): FAILED");
+						failFunc && failFunc();
 					}
 				}
 			); /* setDeviceStateVariable */
 		}); /* then */
+	}
+
+	/**
+	 * Handle save click: save the current configuration.
+	 */
+	function handleSaveClick( ev, fnext, fargs ) {
+		var myid = api.getCpanelDeviceId();
+		var cdata = getConfiguration( myid );
+
+		$( "button.revertconf" ).prop( "disabled", true );
+		$( "button.saveconf" ).text("Wait...").prop( "disabled", true );
+
+		saveConfiguration( myid, function() {
+			updateSaveControls();
+			configModified = false;
+			fnext && fnext.apply( null, fargs );
+			if ( cdata.__reloadneeded ) {
+				delete cdata.__reloadneeded;
+				api.showCustomPopup( "Reloading Luup...", { autoHide: false, category: 3 } );
+				setTimeout( function() {
+					api.performActionOnDevice( 0, "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "Reload",
+						{ actionArguments: { Reason: "Reactor saved config needs reload" } } );
+					setTimeout( function() {
+						waitForReloadComplete().then( function() {
+							$("#myModal").modal("hide");
+						}).catch( function(reason) {
+							$("#myModal").modal("hide");
+						});
+					}, 5000 );
+				}, 5000 );
+			} else {
+				clearUnusedStateVariables( myid, cdata );
+			}
+		}, function() {
+			alert('There was a problem saving the configuration. Vera/Luup may have been restarting. Please try saving again in a moment.');
+			updateSaveControls();
+			fnext && fnext.apply( null, fargs );
+		});
 	}
 
 	/**
@@ -1080,7 +1094,7 @@ var ReactorSensor = (function(api, $) {
 					str += cond.var || "(undefined)";
 				} else {
 					t = getDeviceFriendlyName( cond.device );
-					str += t ? t : '#' + cond.device + ' ' + ( cond.devicename === undefined ? "name unknown" : cond.devicename ) + ' (missing)';
+					str += t ? t : '#' + cond.device + ' ' + ( cond.devicename || cond.deviceName || "name unknown" ) + ' (missing)';
 					str += ' ' + ( cond.variable || "?" );
 				}
 				t = arrayFindValue( serviceOps, function( v ) { return v.op === cond.operator; } );
@@ -1113,7 +1127,7 @@ var ReactorSensor = (function(api, $) {
 
 			case "grpstate":
 				t = getDeviceFriendlyName( cond.device );
-				str += t ? t : '#' + cond.device + ' ' + ( cond.devicename === undefined ? "name unknown" : cond.devicename ) + ' (missing)';
+				str += t ? t : '#' + cond.device + ' ' + ( cond.devicename || cond.deviceName || "name unknown" ) + ' (missing)';
 				try {
 					var devnum = -1 === ( cond.device || -1 ) ? api.getCpanelDeviceId() : cond.device;
 					t = ( getConditionIndex( devnum ) || {} )[ cond.groupid ];
@@ -2066,6 +2080,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 						$el = $( "div.params select.devicemenu", $row );
 						cond.device = parseInt( $el.val() );
 						delete cond.devicename;
+						delete cond.deviceName; /* delete old form */
 						if ( isNaN( cond.device ) ) {
 							cond.device = "";
 						} else {
@@ -2818,6 +2833,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 				var dobj = api.getDeviceObject( cond.device );
 				cond.devicename = ( dobj || {}).name;
 			}
+			delete cond.deviceName; /* remove old form */
 			configModified = true;
 
 			/* Make a new service/variable menu and replace it on the row. */
@@ -3217,6 +3233,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 						}
 						if ( v && cond.devicename !== v ) {
 							cond.devicename = v;
+							delete cond.deviceName; /* remove old form */
 							configModified = true;
 						}
 						fs = $('<fieldset class="vargroup"/>')
@@ -3276,6 +3293,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 					}
 					if ( cond.devicename !== v ) {
 						cond.devicename = v;
+						delete cond.deviceName; /* remove old form */
 						configModified = true;
 					}
 					/* Create group menu for selected device (if any) */
@@ -3306,6 +3324,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 							var dobj = api.getDeviceObject( cond.device );
 							cond.devicename = (dobj || {}).name;
 						}
+						delete cond.deviceName; /* remove old form */
 						delete cond.groupname;
 						delete cond.groupid;
 						configModified = true;
@@ -5422,7 +5441,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					action.device = parseInt( $( 'select.devicemenu', row ).val() );
 					devnum = -1 === action.device ? api.getCpanelDeviceId() : action.device;
 					devobj = api.getDeviceObject( devnum );
-					action.deviceName = (devobj || {}).name;
+					action.devicename = (devobj || {}).name;
+					delete action.deviceName; /* remove old form */
 					t = $( 'select.re-actionmenu', row ).val() || "";
 					pt = t.split( /\//, 2 );
 					action.service = pt[0]; action.action = pt[1];
@@ -5515,12 +5535,13 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					devnum = parseInt( $( 'select.devicemenu', row ).val() || "-1" );
 					if ( isNaN( devnum ) || devnum < 0 ) {
 						delete action.device;
-						delete action.deviceName;
+						delete action.devicename;
 					} else {
 						action.device = devnum;
 						devobj = api.getDeviceObject( devnum < 0 ? api.getCpanelDeviceId() : devnum );
-						action.deviceName = devobj.name;
+						action.devicename = devobj.name;
 					}
+					delete action.deviceName; /* remove old form */
 					action.activity = $( 'select.re-activity', row ).val() || "";
 					if ( $( 'input.re-stopall', row ).prop( 'checked' ) ) {
 						action.stopall = 1;
@@ -5533,12 +5554,13 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					devnum = parseInt( $( 'select.devicemenu', row ).val() || "-1" );
 					if ( isNaN( devnum ) || devnum < 0 ) {
 						delete action.device;
-						delete action.deviceName;
+						delete action.devicename;
 					} else {
 						action.device = devnum;
 						devobj = api.getDeviceObject( devnum < 0 ? api.getCpanelDeviceId() : devnum );
-						action.deviceName = devobj.name;
+						action.devicename = devobj.name;
 					}
+					delete action.deviceName; /* remove old form */
 					action.activity = $( 'select.re-activity', row ).val() || "";
 					if ( isEmpty( action.activity ) ) { delete action.activity; }
 					break;
@@ -5557,12 +5579,13 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					devnum = parseInt( $( 'select.devicemenu', row ).val() || "-1" );
 					if ( devnum < 0 || isNaN( devnum ) ) {
 						delete action.device;
-						delete action.deviceName;
+						delete action.devicename;
 					} else {
 						action.device = devnum;
 						devobj = api.getDeviceObject( devnum < 0 ? api.getCpanelDeviceId() : devnum );
-						action.deviceName = devobj.name;
+						action.devicename = devobj.name;
 					}
+					delete action.deviceName; /* remove old form */
 					var gid = $( 'select.re-group', row ).val() || "";
 					if ( isEmpty( gid ) ) {
 						delete action.group;
@@ -7094,7 +7117,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 									$( 'select.re-actiontype', newRow).val( "device" );
 									changeActionType( newRow, "device" );
 									if ( 0 == $( 'select.devicemenu option[value="' + act.device + '"]', newRow ).length ) {
-										var opt = $( '<option/>' ).val( act.device ).text( '#' + act.device + ' ' + ( act.deviceName || 'name?' ) + ' (missing)' );
+										var opt = $( '<option/>' ).val( act.device ).text( '#' + act.device + ' ' + ( act.devicename || 'name?' ) + ' (missing)' );
 										// opt.insertAfter( $( 'select.devicemenu option[value=""]:first', newRow ) );
 										$( 'select.devicemenu', newRow ).prepend( opt ).addClass( "tberror" );
 									}
@@ -7218,7 +7241,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 
 					case "device":
 						if ( 0 === $( 'select.devicemenu option[value="' + act.device + '"]', newRow ).length ) {
-							var opt = $( '<option/>' ).val( act.device ).text( '#' + act.device + ' ' + ( act.deviceName || 'name?' ) + ' (missing)' );
+							var opt = $( '<option/>' ).val( act.device ).text( '#' + act.device + ' ' + ( act.devicename || 'name?' ) + ' (missing)' );
 							// opt.insertAfter( $( 'select.devicemenu option[value=""]:first', newRow ) );
 							$( 'select.devicemenu', newRow ).prepend( opt ).addClass( "tberror" );
 						}
@@ -7286,7 +7309,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					case "rungsa":
 						if ( undefined !== act.device && 0 === $( 'select.devicemenu option[value="' + act.device + '"]', newRow ).length ) {
 							$( '<option/>' ).val( act.device )
-								.text( '#' + act.device + ' ' + ( act.deviceName || 'name?' ) + ' (missing)' )
+								.text( '#' + act.device + ' ' + ( act.devicename || 'name?' ) + ' (missing)' )
 								.prependTo( $( 'select.devicemenu', newRow )
 								.addClass( "tberror" ) );
 							newRow.addClass( "tberror" );
@@ -7306,7 +7329,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					case "stopgsa":
 						if ( undefined !== act.device && 0 === $( 'select.devicemenu option[value="' + act.device + '"]', newRow ).length ) {
 							$( '<option/>' ).val( act.device )
-								.text( '#' + act.device + ' ' + ( act.deviceName || 'name?' ) + ' (missing)' )
+								.text( '#' + act.device + ' ' + ( act.devicename || 'name?' ) + ' (missing)' )
 								.prependTo( $( 'select.devicemenu', newRow )
 								.addClass( "tberror" ) );
 							newRow.addClass( "tberror" );
@@ -7338,7 +7361,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					case "resetlatch":
 						if ( undefined !== act.device && 0 === $( 'select.devicemenu option[value="' + act.device + '"]', newRow ).length ) {
 							$( '<option/>' ).val( act.device )
-								.text( '#' + act.device + ' ' + ( act.deviceName || 'name?' ) + ' (missing)' )
+								.text( '#' + act.device + ' ' + ( act.devicename || 'name?' ) + ' (missing)' )
 								.prependTo( $( 'select.devicemenu', newRow )
 								.addClass( "tberror" ) );
 						}
@@ -8195,6 +8218,146 @@ div#tab-actions.reactortab button.re-activemode { color: #6f6; } \
 		}
 	}
 
+	function repair_scan( cf, node, result ) {
+		console.log("Repair check " + ((node || {}).id || "undefined"));
+		result = result || {};
+		if ( undefined === node ) {
+			return result;
+		} else if ( "group" === ( node.type || "group" ) ) {
+			/* Check activities */
+			console.log("Need to check activities for " + node.id);
+			function checkActivity( activity ) {
+				if ( !activity ) return;
+				console.log("checking "+String(activity.id));
+				for ( var igrp=0; igrp < (activity.groups || []).length; ++igrp ) {
+					var grp = activity.groups[igrp];
+					console.log(grp);
+					for ( var iact=0; iact < (grp.actions || []).length; ++iact ) {
+						var act = grp.actions[iact];
+						console.log(act);
+						if ( undefined !== act.device && -1 !== act.device ) {
+							var oldname = act.devicename || act.deviceName;
+							var key = activity.id + "/" + igrp + "/" + iact;
+							var dd = api.getDeviceObject( act.device );
+							console.log("checking " + key + " " + String(act.device) + " " + String(oldname));
+							if ( !dd || dd.name !== oldname ) {
+								if ( undefined === result[String(act.device)] ) {
+									result[String(act.device)] = {
+										"device": act.device,
+										"lastname": act.devicename || act.deviceName,
+										"newname": (dd || {}).name,
+										"act": [ key ]
+									};
+								} else {
+									result[String(act.device)].act = result[String(act.device)].act || [];
+									result[String(act.device)].act.push( key );
+								}
+							}
+						}
+					}
+				}
+			}
+			console.log(node.id + ".true=" + (cf.activities || {})[node.id + ".true"]);
+			console.log(node.id + ".false=" + (cf.activities || {})[node.id + ".false"]);
+			checkActivity( ( cf.activities || {} )[node.id + ".true"] );
+			checkActivity( ( cf.activities || {} )[node.id + ".false"] );
+
+			/* Check sub-conditions */
+			for ( var ix=0; ix<(node.conditions || []).length; ++ix ) {
+				result = repair_scan( cf, node.conditions[ix], result );
+			}
+		} else if ( undefined !== node.device && -1 !== node.device ) {
+			var oldname = node.devicename || node.deviceName;
+			var dd = api.getDeviceObject( node.device );
+			if ( ! dd || dd.name !== oldname ) {
+				if ( undefined === result[String(node.device)] ) {
+					result[String(node.device)] = { "device": node.device,
+						"lastname": node.devicename || node.deviceName,
+						"newname": (dd || {}).name,
+						"cond": [ node.id ] };
+				} else {
+					result[String(node.device)].cond = result[String(node.device)].cond || [];
+					result[String(node.device)].cond.push( node.id );
+				}
+			}
+		}
+		return result;
+	}
+
+	function repair_activity( activity, old_dev, new_dev, new_name ) {
+		if ( undefined === activity ) {
+			return;
+		}
+		for ( var igrp=0; igrp<(activity.groups || []).length; ++igrp ) {
+			for ( var iact=0; iact<(activity.groups[igrp].actions || []).length; ++iact ) {
+				var act = activity.groups[igrp].actions[iact];
+				if ( act.device && act.device === old_dev ) {
+					console.log("Repairing "+old_dev+" in "+activity.id+"/"+igrp+"/"+iact);
+					act.device = new_dev;
+					act.devicename = new_name;
+					delete act.deviceName;
+					configModified = true;
+				}
+			}
+		}
+	}
+
+	function repair_replace( cf, node, old_dev, new_dev, new_name ) {
+		if ( undefined === node ) {
+			return;
+		} else if ( "group" === ( node.type || "group" ) ) {
+			for ( var ix=0; ix<(node.conditions || []).length; ++ix ) {
+				repair_replace( cf, node.conditions[ix], old_dev, new_dev, new_name );
+			}
+			repair_activity( (cf.activities || {})[node.id + '.true'], old_dev, new_dev, new_name );
+			repair_activity( (cf.activities || {})[node.id + '.false'], old_dev, new_dev, new_name );
+		} else if ( node.device && node.device === old_dev ) {
+			console.log("Repairing "+old_dev+" in "+node.id);
+			node.device = new_dev;
+			node.devicename = new_name;
+			delete node.deviceName;
+			configModified = true;
+		}
+	}
+
+	function do_device_repairs() {
+		var cf = getConfiguration();
+		var $ct = $('div#re-devicerepair');
+		$( 'button#re-make-repairs', $ct ).prop( 'disabled', true );
+		$( 'span#re-repairstatus', $ct ).html("Saving, please wait...");
+		$( 'div.re-lost-device', $ct ).each( function() {
+			var old_dev = $(this).attr( 'id' );
+			var new_dev = $( "select.re-replacemenu", $(this) ).val() || "";
+			var ndev, dd;
+			if ( "*" === new_dev ) {
+				console.log("Device "+old_dev+" repair by fixing stored name.");
+				ndev = parseInt( old_dev );
+				dd = api.getDeviceObject( ndev );
+				if ( dd ) {
+					repair_replace( cf, cf.conditions.root, ndev, ndev, dd.name );
+					$(this).remove();
+				}
+			} else if ( "" !== new_dev ) {
+				console.log("Device "+old_dev+" reassign to "+new_dev);
+				ndev = parseInt( new_dev );
+				dd = api.getDeviceObject( ndev );
+				if ( dd ) {
+					repair_replace( cf, cf.conditions.root, parseInt( old_dev ), ndev, dd.name );
+					$(this).remove();
+				}
+			} else {
+				console.log("Device "+old_dev+" no change.");
+			}
+		});
+
+		saveConfiguration( false, function() {
+			$( 'span#re-repairstatus', $ct ).html("Changes saved.");
+		}, function() {
+			$( 'span#re-repairstatus', $ct ).html('<em style="color: red">FAILED! Please try again!</em>');
+			$( 'button#re-make-repairs', $ct ).prop( 'disabled', false );
+		});
+	}
+
 	function doTools()
 	{
 		console.log("doTools()");
@@ -8242,6 +8405,8 @@ textarea#devspyoutput { width: 100%; font-family: monospace; } \
 		if ( !isOpenLuup ) {
 			html += '<div id="enhancement" class="form-inline"><h3>Submit Device Data</h3>If you have a device that is missing "Common Actions" or warns you about missing enhancement data in the Activities tab (actions in <i>italics</i>), you can submit the device data to rigpapa for evaluation. This process sends the relevant data about the device. It does not send any identifying information about you or your Vera, and the data is used only for enhancement of the device information database. <p><select id="devices"></select> <button id="submitdata" class="btn btn-sm btn-info">Submit Device Data</button></p></div>';
 		}
+
+		html += '<div id="re-devicerepair"/>';
 
 		html += '<div id="troubleshooting"><h3>Troubleshooting &amp; Support</h3>If you are having trouble working out your condition logic, or you think you have found a bug, here are some steps and tools you can use:';
 		html += '<ul><li>Check the <a href="' + _DOCURL + '" target="_blank">Reactor Documentation</a>.</li>\
@@ -8349,6 +8514,58 @@ textarea#devspyoutput { width: 100%; font-family: monospace; } \
 				msg.text( "The update failed; Vera busy/restarting. Try again in a moment." );
 			});
 		});
+
+		var cf = getConfiguration( false, true );
+		var lost = repair_scan( cf, cf.conditions.root );
+		if ( hasAnyProperty( lost ) ) {
+			var $mm = deviceMenu.clone().attr( 'id', '' ).addClass( "re-replacemenu" );
+			$( 'option[value=""]', $mm ).text("(no change)");
+			$( 'option[value="-1"]', $mm ).remove();
+			var $ct = $('div#re-devicerepair');
+			var $row = $('<div class="row"/>').appendTo( $ct );
+			$( '<div class="col-xs-12"><h3>Device Repair</h3><p>This tool identifies missing or suspect devices and allows you to reassign them, without having to go in and edit each individual condition and action. If the device is listed here, it is either missing entirely, or its name has changed since you last edited the ReactorSensor configuration. <em>This tool does not repair device references in Expressions</em>, including <tt>getstate()</tt>. You will need to do those manually.</p><p>It is always a good idea to <strong>back up your ReactorSensors</strong> (from the Reactor master device) before making reassignments/repairs.</p></div>' )
+				.appendTo( $row );
+			$row = $('<div class="row"/>').appendTo( $ct );
+			$( '<div class="col-xs-8" />' ).html( '<b>Missing/Suspect Device</b>' )
+				.appendTo( $row );
+			$( '<div class="col-xs-4" />' ).html( '<b>Replace With</b>' )
+				.appendTo( $row );
+			for ( var ds in lost ) {
+				$row = $('<div class="row re-lost-device" />' ).attr( 'id', ds ).appendTo( $ct );
+				$( '<div class="col-xs-8" />' )
+					.text( "#" + ds + " last known as \"" + (lost[ds].lastname || "") +
+						"\"; used in " + ( lost[ds].cond ? lost[ds].cond.length : 0 ) +
+						" conditions and " + ( lost[ds].act ? lost[ds].act.length : 0 ) +
+						" actions" +
+						( lost[ds].newname ? ( "; current device name \"" + lost[ds].newname + '"' ) : "; missing" ) +
+						"."
+					).appendTo( $row );
+				$( '<div class="col-xs-4"><select /></div>' )
+					.appendTo( $row );
+				var $mx = $mm.clone().attr( 'id', 'lost' + ds );
+				$( 'select', $row ).replaceWith( $mx );
+				if ( undefined !== lost[ds].newname ) {
+					$( '<option/>' ).val("*").text("(keep device #, update to current name)")
+						.prependTo( $mx );
+				} else {
+					$( 'option[value="*"]', $mx ).remove();
+				}
+				$mx.off( 'change.reactor' ).on( 'change.reactor', function( ev ) {
+					var $m = $( 'div#re-devicerepair select.re-replacemenu option[value!=""]:selected' );
+					var pending = configModified || $m.length > 0;
+					$( 'div#re-devicerepair button#re-make-repairs' )
+						.prop( 'disabled', !pending );
+					$( 'div#re-devicerepair span#re-repairstatus' )
+						.text( pending ? "Changes pending (unsaved)" : "" );
+				});
+			}
+			$row = $('<div class="row"/>').appendTo( $ct );
+			$( '<div class="col-xs-12"><button id="re-make-repairs" class="btn btn-sm btn-primary">Apply and Save</button><span id="re-repairstatus"/></div>' )
+				.appendTo( $row );
+			$( 'button#re-make-repairs', $ct )
+				.prop( 'disabled', true )
+				.on( 'click.reactor', do_device_repairs );
+		}
 
 		deviceMenu = deviceMenu.clone().attr( 'id', 'devspydev' ).on( 'change.reactor', handleDevSpyDevice );
 		$( 'select#devspydev', container ).replaceWith( deviceMenu );
