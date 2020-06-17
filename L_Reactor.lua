@@ -4822,12 +4822,12 @@ end
 local function cleanSensorState( tdev, taskid )
 	D("cleanSensorState(%1,%2)", tdev, taskid)
 	local content
-	if false and unsafeLua then -- ??? deprecate out if not needed for openLuup
+	if isOpenLuup or not unsafeLua then -- openLuup doesn't implement GetStatus (under discussion)
 		local sc, httpStatus
 		sc,content,httpStatus = luup.inet.wget( 'http://127.0.0.1:3480/data_request?id=status&DeviceNum='..tdev..'&output_format=json' )
 		if sc ~= 0 then
 			L({level=2,msg="Failed to complete status request for #%1 (%2, %3)"}, tdev, sc, httpStatus)
-			content = false
+			content = nil
 		end
 	end
 	if not content then
@@ -4836,7 +4836,7 @@ local function cleanSensorState( tdev, taskid )
 		if rc ~= 0 or (ra or {}).Status == nil then
 			L({level=2,msg="GetStatus action failed for #%1; rc=%2, ra=%3"}, tdev, rc, ra)
 		end
-		content = (ra or {}).Status
+		content = (ra or {}).Status or ""
 	end
 	local data = json.decode( content )
 	if data and data['Device_Num_'..tdev] then
