@@ -1122,6 +1122,7 @@ function coerce(val, typ)
 			end
 		elseif isNull(val) then return false -- null coerces to boolean false
 		end
+		return true -- all other non-null is true
 	elseif typ == "string" then
 		if vt == "number" then return base.tostring(val)
 		elseif vt == "boolean" then return val and "true" or "false"

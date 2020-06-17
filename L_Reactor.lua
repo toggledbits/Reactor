@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.6hotfix-20145.0920"
+local _PLUGIN_VERSION = "3.6hotfix-20169.1015"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.6/"
 
@@ -4805,16 +4805,15 @@ local function masterTick(pdev)
 end
 
 -- Clean up sensor variables
--- TODO: GetState seems to be faster than the request; test and verify, particularly openLuup
 local function cleanSensorState( tdev, taskid )
 	D("cleanSensorState(%1,%2)", tdev, taskid)
 	local content
-	if false and unsafeLua then -- ??? deprecate out if not needed for openLuup
+	if isOpenLuup then -- openLuup does not (yet) implement GetStatus
 		local sc, httpStatus
 		sc,content,httpStatus = luup.inet.wget( 'http://127.0.0.1:3480/data_request?id=status&DeviceNum='..tdev..'&output_format=json' )
 		if sc ~= 0 then
 			L({level=2,msg="Failed to complete status request for #%1 (%2, %3)"}, tdev, sc, httpStatus)
-			content = false
+			content = nil
 		end
 	end
 	if not content then
@@ -4823,7 +4822,7 @@ local function cleanSensorState( tdev, taskid )
 		if rc ~= 0 or (ra or {}).Status == nil then
 			L({level=2,msg="GetStatus action failed for #%1; rc=%2, ra=%3"}, tdev, rc, ra)
 		end
-		content = (ra or {}).Status
+		content = (ra or {}).Status or ""
 	end
 	local data = json.decode( content )
 	if data and data['Device_Num_'..tdev] then
