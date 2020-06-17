@@ -7,6 +7,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04
 ## Version 3.7 (development) [20149]
 
 * Enhancement: Tools tab now has a "Device Repair" section that appears when missing/suspect devices are detected. This tool should be especially handy for migrating ReactorSensors between systems, or after device replacements, etc.
+* Hotfix 20169-01: (openLuup only) fix error logged when cleaning state variables on RS (non-critical).
 * Hotfix 20145-01: Fix field redraw/reload problem with "not between" operator on date/time conditions.
 * Hotfix 20135-01: Fix special message parameter not correctly substituted in *UserURL* notification method.
 
