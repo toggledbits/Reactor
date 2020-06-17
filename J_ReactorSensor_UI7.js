@@ -8186,16 +8186,17 @@ div#tab-actions.reactortab button.re-activemode { color: #6f6; } \
 
 	function spyDeviceChangeHandler( args ) {
 		if ( ! spyDevice ) return;
+		console.log(args);
 		if ( args.id == spyDevice ) {
 			var l = args.states.length;
+			var txt = "";
 			for ( var i=0; i<l; i++ ) {
-				var txt =
-					args.states[i].service + " / " + args.states[i].variable + " = " +
-						String( args.states[i].value ) + "\n";
-				var $fld = $( '#devspyoutput' ).append( txt ).show();
-				if ( $fld.length ) {
-					$fld.scrollTop( $fld.prop( 'scrollHeight' ) - $fld.height() );
-				}
+				txt += args.states[i].service + " / " + args.states[i].variable + " = " +
+						JSON.stringify( args.states[i].value ) + "\n";
+			}
+			var $fld = $( '#devspyoutput' ).append( txt ).show();
+			if ( $fld.length ) {
+				$fld.scrollTop( $fld.prop( 'scrollHeight' ) - $fld.height() );
 			}
 		}
 	}
@@ -8420,7 +8421,7 @@ textarea#devspyoutput { width: 100%; font-family: monospace; } \
 		}
 		html += '</ul></div>';
 
-		html += '<div id="devicespy"><h3>Device Spy</h3>If you\'re trying to figure out what state variables are changing on a device, choose the device below, and then perform operations on the device any way that is consistent with what you want to detect. The list will show you what state variables are changing.\
+		html += '<div id="devicespy"><h3>Device Spy</h3>If you\'re trying to figure out what state variables are changing on a device, choose the device below, and then perform operations on the device any way that is consistent with what you want to detect. The list will show you what state variables are changing. <strong>Due to the way in which Vera handles state variables and UI7, not all variables may be shown.</strong> This display is therefore not entirely conclusive: it is meant as an assistive tool, not an authoritative tool. \
 <div class="form-inline"><select id="devspydev" class="form-control form-control-sm"><option value="">--choose--</option></select></div> \
 <textarea id="devspyoutput" rows="16" wrap="off" class="form-control form-control-sm" /> \
 </div>';
