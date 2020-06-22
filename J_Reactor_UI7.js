@@ -4,10 +4,10 @@
  * Configuration interface for Reactor master device
  *
  * Copyright 2018,2019 Patrick H. Rigney, All Rights Reserved.
- * This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
+ * This file is part Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
  *
  */
-/* globals api,jQuery,$ */
+/* globals api,jQuery,$,MultiBox */
 /* jshint multistr: true */
 
 //"use strict"; // fails on UI7, works fine with ALTUI
@@ -17,7 +17,7 @@ var Reactor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '72acc6ea-f24d-11e8-bd87-74d4351650de';
 
-	var pluginVersion = '3.7develop-20169';
+	var pluginVersion = '3.7develop-20174';
 
 	var _UIVERSION = 20130;     /* must coincide with Lua core */
 
@@ -32,7 +32,7 @@ var Reactor = (function(api, $) {
 	var dateFormat = "%F"; /* ISO8601 default */
 	var timeFormat = "%T";
 	// unused: var isOpenLuup = false;
-	// unused: var isALTUI = undefined !== MultiBox;
+	var isALTUI = false;
 	var backupInfo = false;
 
 	/* Quote string */
@@ -139,6 +139,10 @@ var Reactor = (function(api, $) {
 				".</div>" );
 			return false;
 		}
+		
+		/* Go */
+		isALTUI = undefined !== MultiBox;
+		// isOpenLuup = ;
 
 		/* Try to establish date format */
 		var ud = api.getUserData();
@@ -292,13 +296,19 @@ var Reactor = (function(api, $) {
 			"cdata", jsstr,
 			{
 				'onSuccess' : function() {
-					api.setDeviceState( dev.id, "urn:toggledbits-com:serviceId:ReactorSensor",
-						"cdata", jsstr ); /* force local/lu_status */
-					jQuery( '.reactortab div#restorestatus p#' + idSelector(item) + ' > img' ).replaceWith( "<span> succeeded.</span>" );
-					/* If specific restore item selected, also check rename option */
-					var $ri = jQuery( '.reactortab select#restoreitem option:selected' );
-					if ( 1 === $ri.length && "" !== $ri.val() && jQuery( '.reactortab input#renamers' ).prop( 'checked' ) ) {
-						api.setDeviceAttribute( dev.id, 'name', $ri.text(), { persistent: true } );
+					if ( ! isALTUI ) { /* this makes ALTUI nuts, not sure why */
+						api.setDeviceState( dev.id, "urn:toggledbits-com:serviceId:ReactorSensor",
+							"cdata", jsstr ); /* force local/lu_status */
+					}
+					try {
+						/* If specific restore item selected, also check rename option */
+						var $ri = jQuery( '.reactortab select#restoreitem option:selected' );
+						if ( 1 === $ri.length && "" !== $ri.val() && jQuery( '.reactortab input#renamers' ).prop( 'checked' ) ) {
+							api.setDeviceAttribute( dev.id, 'name', $ri.text(), { persistent: true } );
+						}
+						jQuery( '.reactortab div#restorestatus p#' + idSelector(item) + ' > img' ).replaceWith( "<span> succeeded.</span>" );
+					} catch(e) {
+						jQuery( '.reactortab div#restorestatus p#' + idSelector(item) + ' > img' ).replaceWith( "<span> restore succeeded; name change failed.</span>" );
 					}
 				},
 				'onFailure' : function() {
