@@ -17,7 +17,7 @@ var Reactor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '72acc6ea-f24d-11e8-bd87-74d4351650de';
 
-	var pluginVersion = '3.7develop-20174';
+	var pluginVersion = '3.7';
 
 	var _UIVERSION = 20130;     /* must coincide with Lua core */
 
@@ -141,7 +141,7 @@ var Reactor = (function(api, $) {
 		}
 		
 		/* Go */
-		isALTUI = undefined !== MultiBox;
+		isALTUI = "undefined" !== typeof(MultiBox);
 		// isOpenLuup = ;
 
 		/* Try to establish date format */
