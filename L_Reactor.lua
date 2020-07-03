@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.7-20179"
+local _PLUGIN_VERSION = "3.7-20185"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.6/"
 
@@ -5955,7 +5955,7 @@ local function getReactorScene( t, s, tdev, runscenes, cf )
 	local pfx = "        "
 	if s then
 		for _,gr in ipairs( s.groups or {}) do
-			if (gr.delay or 0) > 0 then
+			if (gr.delay or "0") ~= "0" then
 				resp = resp .. pfx .. "Delay " .. gr.delay .. " " .. (gr.delaytype or "inline") .. EOL
 			end
 			for _,act in ipairs( gr.actions or {} ) do
