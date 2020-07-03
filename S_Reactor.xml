@@ -125,6 +125,16 @@
 			<argumentList/>
 		</action>
 		<action>
+			<name>RepairDevice</name>
+			<argumentList>
+				<argument>
+				  <name>DeviceNum</name>
+				  <direction>in</direction>
+				  <relatedStateVariable>A_ARG_TYPE_ui4</relatedStateVariable>
+				</argument>
+			</argumentList>
+		</action>
+		<action>
 			<name>SendSMTP</name>
 			<argumentList>
 				<argument>

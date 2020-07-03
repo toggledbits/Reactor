@@ -18,7 +18,7 @@ local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.6/"
 local _CONFIGVERSION	= 20179
 local _CDATAVERSION		= 20045	-- must coincide with JS
 local _UIVERSION		= 20130	-- must coincide with JS
-	  _SVCVERSION		= 20130	-- must coincide with impl file (not local)
+	  _SVCVERSION		= 20185	-- must coincide with impl file (not local)
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Reactor:1"
@@ -5347,6 +5347,51 @@ function actionMasterClear( dev )
 	local ptr = luup.chdev.start( dev )
 	luup.chdev.sync( dev, ptr )
 	-- Should cause reload immediately.
+end
+
+-- luup.call_action("urn:toggledbits-com:serviceId:Reactor", "RepairDevice", { DeviceNum=86 }, 70 )
+function actionRepairDevice( dev, settings )
+	D("actionRepairDevice(%1,%2)", dev, settings)
+	if isOpenLuup then return true end -- does nothing on openLuup
+	local target = tonumber( settings.DeviceNum ) or error "Invalid DeviceNum parameter"
+	if not luup.devices[target] then error "Target device does not exist" end
+	L("Repairing device %1 (#%2)", luup.devices[target].description, target)
+	local rc,_,_,ra = luup.call_action( "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "GetUserData", { DataFormat="json" }, 0 ) -- luacheck: ignore 311
+	if rc ~= 0 or (ra or {}).UserData == nil then
+		L({level=2,msg="Unable to fetch userdata for repair! action rc=%1, ra=%2"}, rc, ra)
+		return false
+	end
+	local content = tostring( ra.UserData )
+	local data = json.decode( content ) or "Unable to parse GetUserData response"
+	local ssort = { [MYSID]=1, [RSSID]=2, [VARSID]=3, [GRPSID]=4 } -- sid sort order
+	-- Find the target device
+	for _,d in ipairs( data.devices ) do
+		if tonumber(d.id) == target then
+			local newst = {}
+			table.sort( d.states or {}, function(a,b)
+				local as = ssort[tostring(a.service)] or 99
+				local bs = 	ssort[tostring(b.service)] or 99
+				if as == bs then return a.variable < b.variable end
+				return as < bs
+			end )
+			for _,s in ipairs(d.states or {}) do
+				s.id = #newst
+				if ( s.service == MYSID or s.service == RSSID ) and s.value == "X" then s.value = "" end
+				table.insert( newst, s )
+			end
+			d.states = newst -- replace states
+			d.ControlURLs = nil
+			local newdata = { devices={} }
+			newdata.devices["devices_" .. d.id] = d
+			D("actionRepairDevice() repaired data %1", newdata)
+			L("Finished; writing repaired device data to user_data; %d states", #newst)
+			luup.call_action( "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "ModifyUserData",
+				{ inUserData=json.encode(newdata), DataFormat="json", Reload="1" }, 0 )
+			return true
+		end
+		d.states = nil
+	end
+	return false
 end
 
 -- Update geofence data. This is long-running, so runs as a job from the master tick.
