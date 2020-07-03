@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.6hotfix-20169.1015"
+local _PLUGIN_VERSION = "3.6hotfix-20185.1315"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.6/"
 
@@ -5943,7 +5943,7 @@ local function getReactorScene( t, s, tdev, runscenes, cf )
 	local pfx = "        "
 	if s then
 		for _,gr in ipairs( s.groups or {}) do
-			if (gr.delay or 0) > 0 then
+			if (gr.delay or "0") ~= "0" then
 				resp = resp .. pfx .. "Delay " .. gr.delay .. " " .. (gr.delaytype or "inline") .. EOL
 			end
 			for _,act in ipairs( gr.actions or {} ) do
@@ -6128,7 +6128,7 @@ local function getLuupSceneSummary( scd )
 	end
 	for ix,gr in ipairs( scd.groups or {} ) do
 		r = r .. string.format( "%sGroup %d", pfx, ix )
-		if ( gr.delay or 0 ) > 0 then
+		if ( gr.delay or "0" ) ~= "0" then
 			r = r .. string.format( " delay %d", gr.delay )
 		end
 		r = r .. EOL
