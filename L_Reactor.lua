@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.7-20185"
+local _PLUGIN_VERSION = "3.7-20186"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.6/"
 
@@ -3847,7 +3847,8 @@ local function processCondition( cond, grp, cdata, tdev )
 
 	-- Preserve the result of the condition eval. We are edge-triggered,
 	-- so only save changes, with timestamp.
-	if state ~= cs.laststate then
+	cs.statechanged = state ~= cs.laststate
+	if cs.statechanged then
 		D("processCondition() recording %1 state change", cond.id)
 		-- ??? At certain times, Vera gets a time that is in the future, or so it appears. It looks like the TZ offset isn't applied, randomly.
 		-- Maybe if call is during ntp update, don't know. Investigating... This log message helps detection and analysis.
@@ -4003,39 +4004,49 @@ local function processCondition( cond, grp, cdata, tdev )
 
 	-- Output control below this comment; restrictions above.
 
-	-- Pulsed output (timed reset). Pulse is held even if underlying drops out.
+	-- Pulsed output (timed reset). Pulse is held even if underlying test drops false.
 	if ( condopt.pulsetime or 0 ) > 0 then
 		D("processCondition() pulse time %1 state %2 evalstate %3", condopt.pulsetime, state, cs.evalstate)
-		local pulseend
-		if state and not cs.evalstate then
-			-- Starting new pulse... or are we...
-			pulseend = cs.pulseuntil or ( now + condopt.pulsetime )
-			if not cs.pulseuntil then cs.pulsecount = 1 end
-		else
-			-- Continuing from last true edge (even if state false)
-			pulseend = ( (cs.evaledge or {}).t or 0 ) + condopt.pulsetime
+		if state and not cs.pulseuntil then
+			-- No pulse train running, but there should be...
+			D("processCondition() starting new pulse")
+			cs.pulseuntil = now + condopt.pulsetime
+			cs.pulsecount = 1
 		end
-		D("processCondition() pulseend is %1 (pulsing %2), cs.pulseuntil is %3", pulseend, now < pulseend, cs.pulseuntil)
-		if now < pulseend then
-			D("processCondition() continue pulse until %1", pulseend)
-			state = true -- hold up unconditionally
-			cs.pulseuntil = pulseend
-			scheduleDelay( tostring(tdev), pulseend - now )
-			addEvent{ dev=tdev,
-				msg="%(cname)s timing output pulse, %(delay)s seconds remain",
-				cname=(cond.type or "group")=="group" and ("Group "..(cond.name or cond.id)) or ("Condition "..cond.id),
-				cond=cond.id, delay=pulseend-now }
+		if not cs.pulseuntil then
+			-- Not pulsing
+			D("processCondition() not pulsing")
+			cs.pulsecount = nil
 		else
-			-- Passed, but keep pulseuntil around until (real) test state goes false
-			D("processCondition() pulse off phase (%1)", state)
-			if state then
+			-- Pulsing
+			D("processCondition() cs.pulseuntil is %1 (pulsing %2)", cs.pulseuntil, now < cs.pulseuntil )
+			if now < cs.pulseuntil then
+				D("processCondition() continue pulse until %1", cs.pulseuntil)
+				state = true -- hold up unconditionally
+				scheduleDelay( tostring(tdev), cs.pulseuntil - now )
 				addEvent{ dev=tdev,
-					msg="%(cname)s end of pulse",
+					msg="%(cname)s timing output pulse, %(delay)s seconds remain",
+					cname=(cond.type or "group")=="group" and ("Group "..(cond.name or cond.id)) or ("Condition "..cond.id),
+					cond=cond.id, delay=cs.pulseuntil-now }
+			elseif not state then
+				-- Pulse high timer has expired and underlying test now false, end.
+				D("processCondition() end of pulse train after %1 pulses", cs.pulsecount)
+				addEvent{ dev=tdev,
+					msg="%(cname)s end of pulse with reset",
 					cname=(cond.type or "group")=="group" and ("Group "..(cond.name or cond.id)) or ("Condition "..cond.id),
 					cond=cond.id }
-				if cs.pulseuntil and (condopt.pulsebreak or 0) > 0 then
-					local holdoff = pulseend + condopt.pulsebreak
+				cs.pulseuntil = nil
+				cs.pulsecount = nil
+			else
+				-- Pulse high timer expired, test still true. If repeat in effect, delay through off period
+				D("processCondition() pulse off phase (%1)", state)
+				if (condopt.pulsebreak or 0) > 0 then
+					local holdoff = cs.pulseuntil + condopt.pulsebreak
 					D("processCondition() pulse repeat, break until %1", holdoff)
+					addEvent{ dev=tdev,
+						msg="%(cname)s end of pulse, in repeat break, %(dly)s more",
+						cname=(cond.type or "group")=="group" and ("Group "..(cond.name or cond.id)) or ("Condition "..cond.id),
+						cond=cond.id, delay=holdoff-now }
 					if now >= holdoff then
 						local pulselim = condopt.pulsecount or 0
 						if pulselim == 0 or ( cs.pulsecount or 1 ) < pulselim then
@@ -4057,17 +4068,18 @@ local function processCondition( cond, grp, cdata, tdev )
 						state = false -- override
 					end
 				else
-					-- One-shot pulse.
-					cs.pulseuntil = state and pulseend or nil
+					-- One-shot pulse (no repeat).
+					addEvent{ dev=tdev,
+						msg="%(cname)s end of pulse, one-shot hold",
+						cname=(cond.type or "group")=="group" and ("Group "..(cond.name or cond.id)) or ("Condition "..cond.id),
+						cond=cond.id }
+					cs.pulseuntil = state and cs.pulseuntil or nil
 					cs.pulsecount = nil
 					state = false -- override
 				end
-			else
-				cs.pulseuntil = nil
-				cs.pulsecount = nil
 			end
+			D("processCondition() pulse state is %1, until %2", state, cs.pulseuntil)
 		end
-		D("processCondition() pulse state is %1, until %2", state, cs.pulseuntil)
 	else
 		cs.pulseuntil = nil
 		cs.pulsecount = nil
@@ -5241,6 +5253,11 @@ function startPlugin( pdev, ptask ) -- N.B. can be run as task
 			L("Detected VeraAlerts (%1)", k)
 		elseif v.device_num_parent == pdev and v.device_type == RSTYPE then
 			addEvent{ dev=k, msg="Reactor startup (Luup reload)" }
+		elseif v.device_type == MYTYPE and k < pdev then
+			-- Found another master device w/lower dev# than me, no go.
+			luup.variable_set( MYSID, "Message", "Duplicate master device", pdev )
+			luup.set_failure( 1, pdev )
+			return false, "Duplicate master device", _PLUGIN_NAME
 		end
 	end
 	if failmsg then
