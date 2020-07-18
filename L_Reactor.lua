@@ -11,13 +11,13 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.7-20186"
+local _PLUGIN_VERSION = "3.7-20190"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.6/"
 
-local _CONFIGVERSION	= 20179
+local _CONFIGVERSION	= 20190
 local _CDATAVERSION		= 20045	-- must coincide with JS
-local _UIVERSION		= 20130	-- must coincide with JS
+local _UIVERSION		= 20190	-- must coincide with JS
 	  _SVCVERSION		= 20185	-- must coincide with impl file (not local)
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
@@ -3847,8 +3847,8 @@ local function processCondition( cond, grp, cdata, tdev )
 
 	-- Preserve the result of the condition eval. We are edge-triggered,
 	-- so only save changes, with timestamp.
-	cs.statechanged = state ~= cs.laststate
-	if cs.statechanged then
+cs.statechanged = nil -- DEVELOPMENT
+	if state ~= cs.laststate then
 		D("processCondition() recording %1 state change", cond.id)
 		-- ??? At certain times, Vera gets a time that is in the future, or so it appears. It looks like the TZ offset isn't applied, randomly.
 		-- Maybe if call is during ntp update, don't know. Investigating... This log message helps detection and analysis.
@@ -4044,7 +4044,7 @@ local function processCondition( cond, grp, cdata, tdev )
 					local holdoff = cs.pulseuntil + condopt.pulsebreak
 					D("processCondition() pulse repeat, break until %1", holdoff)
 					addEvent{ dev=tdev,
-						msg="%(cname)s end of pulse, in repeat break, %(dly)s more",
+						msg="%(cname)s end of pulse (repeat mode); break %(dly)s more",
 						cname=(cond.type or "group")=="group" and ("Group "..(cond.name or cond.id)) or ("Condition "..cond.id),
 						cond=cond.id, delay=holdoff-now }
 					if now >= holdoff then
@@ -4070,7 +4070,7 @@ local function processCondition( cond, grp, cdata, tdev )
 				else
 					-- One-shot pulse (no repeat).
 					addEvent{ dev=tdev,
-						msg="%(cname)s end of pulse, one-shot hold",
+						msg="%(cname)s end of pulse (one-shot mode)",
 						cname=(cond.type or "group")=="group" and ("Group "..(cond.name or cond.id)) or ("Condition "..cond.id),
 						cond=cond.id }
 					cs.pulseuntil = state and cs.pulseuntil or nil

@@ -17,9 +17,9 @@ var Reactor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '72acc6ea-f24d-11e8-bd87-74d4351650de';
 
-	var pluginVersion = '3.7-20186';
+	var pluginVersion = '3.7-20190';
 
-	var _UIVERSION = 20130;     /* must coincide with Lua core */
+	var _UIVERSION = 20190;     /* must coincide with Lua core */
 
 	var _DOCURL = "https://www.toggledbits.com/static/reactor/docs/3.6/";
 
@@ -116,7 +116,7 @@ var Reactor = (function(api, $) {
 			' &bull; <a href="/cgi-bin/cmh/log.sh?Device=LuaUPnP" target="_blank">Log&nbsp;File</a>' +
 			' &bull; <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=status" target="_blank">Plugin&nbsp;Status</a>' +
 			' &bull; <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=files" target="_blank">Plugin&nbsp;Files</a>' +
-			' &bull; <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=summary&device=' + api.getCpanelDeviceId() + '" target="_blank">Logic&nbsp;Summary</a>' +
+			' &bull; <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=summary" target="_blank">Logic&nbsp;Summary</a>' +
 			' &bull; <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=clearstate" target="_blank">Clear&nbsp;Data</a>' +
 			'</div>';
 		return html;

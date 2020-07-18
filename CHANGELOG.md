@@ -4,12 +4,13 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04
 
 **DEPRECATION NOTICE:** The expression functions `arraypush()`, `arraypop()`, `arrayunshift()` and `arrayshift()` have been made first-class functions in the LuaXP module under the names `push()`, `pop()`, `unshift()` and `shift()` respectively. The `array...()` versions are now deprecated, and will be removed from a future release. Please convert to the new functions, which for all practical purposes are identical (so you just need to change the names in your expressions and it's done).
 
-## Version 3.7 (20186) 
+## Version 3.7 (20190)
 
 * Enhancement: Tools tab now has a "Device Repair" section that appears when missing/suspect devices are detected. This tool should be especially handy for migrating ReactorSensors between systems, or after device replacements, etc.
 * Added `RepairDevice` action (in master service ID) to repair broken device IDs on any device.
 * Detect duplicate master devices (prevent startup of duplicates).
 * Fix an issue with backup/restore not marking success on ALTUI (apparent ALTUI oddness, same as 20049-02).
+* Remove device ID on Logic Summary link on master device; shouldn't be there/copy-paste error.
 * Hotfix 20185-01: Fix crash generating Logic Summary when activity delay uses variable reference.
 * Hotfix 20169-01: (openLuup only) fix error logged when cleaning state variables on RS (non-critical).
 * Hotfix 20145-01: Fix field redraw/reload problem with "not between" operator on date/time conditions.
