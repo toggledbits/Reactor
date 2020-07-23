@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.7-20190"
+local _PLUGIN_VERSION = "3.8-20205"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.6/"
 
@@ -2221,7 +2221,7 @@ local function doSyslogDatagram( pack, tdev )
 	-- local socket = require "socket"
 	local udp = socket.udp()
 	if udp then
-		D("doActionNotify() sending SysLog UDP datagram to %1", pack.hostip)
+		D("doSyslogDatagram() sending SysLog UDP datagram to %1", pack.hostip)
 		udp:setsockname("*", 0)
 		local stat,err = udp:sendto( datagram, pack.hostip, 514 )
 		udp:close()
