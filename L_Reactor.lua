@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.8-20205"
+local _PLUGIN_VERSION = "3.8-20215"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.6/"
 
@@ -911,6 +911,7 @@ local function plugin_runOnce( pdev )
 	initVar( "RequireValidClock", "0", pdev, MYSID )
 	initVar( "DefaultCollapseConditions", "", pdev, MYSID )
 
+	initVar( "grelease", "", pdev, MYSID )
 	initVar( "rs", "", pdev, MYSID )
 	initVar( "ns", "", pdev, MYSID )
 
@@ -6609,6 +6610,8 @@ SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 	return r
 end
 
+local MIMETYPE_JSON = "application/json"
+
 function request( lul_request, lul_parameters, lul_outputformat )
 	D("request(%1,%2,%3) luup.device=%4", lul_request, lul_parameters, lul_outputformat, luup.device)
 	local action = lul_parameters['action'] or lul_parameters['command'] or ""
@@ -6631,7 +6634,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			luup.variable_set( MYSID, "scenedata", "{}", pluginDevice )
 		end
 		local status, msg = pcall( loadScene, tonumber(lul_parameters.scene or 0), pluginDevice )
-		return json.encode( { status=status,message=msg } ), "application/json"
+		return json.encode( { status=status,message=msg } ), MIMETYPE_JSON
 
 	elseif action == "purge" then
 		-- Purge scene data
@@ -6642,7 +6645,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 	elseif action == "clearconditionstate" then
 		if luup.devices[deviceNum] and luup.devices[deviceNum].device_type == RSTYPE then
 			clearConditionState( deviceNum )
-			return json.encode( { status=true } ), "application/json"
+			return json.encode( { status=true } ), MIMETYPE_JSON
 		end
 		L({level=2,msg="Invalid clearconditionstate action device %1"}, deviceNum)
 		return "ERROR\nInvalid device in request", "text/plain"
@@ -6669,7 +6672,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		for _,n in ipairs( children ) do
 			pcall( actionRestart, n )
 		end
-		return '{"status":true,"message":"Plugin state cleared"}', "application/json"
+		return '{"status":true,"message":"Plugin state cleared"}', MIMETYPE_JSON
 
 	elseif action == "summary" then
 		D("request() generating summary for %1", deviceNum )
@@ -6679,7 +6682,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 
 	elseif action == "tryexpression" then
 		if luup.devices[deviceNum] == nil or luup.devices[deviceNum].device_type ~= RSTYPE then
-			return json.encode{ status=false, message="Invalid device number" }, "application/json"
+			return json.encode{ status=false, message="Invalid device number" }, MIMETYPE_JSON
 		end
 		local expr = lul_parameters['expr'] or ""
 		local sst = getSensorState( deviceNum )
@@ -6688,17 +6691,17 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		-- if debugMode then luaxp._DEBUG = D end
 		D("request() tryexpression expr=%1", expr)
 		if expr:match( "^%s*$" ) then
-			return json.encode( { status=true, resultValue="", err={ message="no expression" }, expression=expr } ), "application/json"
+			return json.encode( { status=true, resultValue="", err={ message="no expression" }, expression=expr } ), MIMETYPE_JSON
 		end
 		local result, err = luaxp.evaluate( expr, ctx )
-		return json.encode( { status=true, resultValue=result, err=err or false, expression=expr } ), "application/json"
+		return json.encode( { status=true, resultValue=result, err=err or false, expression=expr } ), MIMETYPE_JSON
 
 	elseif action == "testlua" then
 		local _,err = loadstring( lul_parameters.lua or "" )
 		if err then
-			return json.encode{ status=false, message=err }, "application/json"
+			return json.encode{ status=false, message=err }, MIMETYPE_JSON
 		end
-		return json.encode{ status=true, message="Lua OK" }, "application/json"
+		return json.encode{ status=true, message="Lua OK" }, MIMETYPE_JSON
 
 	elseif action == "infoupdate" then
 		-- Fetch and install updated deviceinfo file; these will change more frequently than the plugin.
@@ -6716,7 +6719,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		local https = require("ssl.https")
 		local ltn12 = require("ltn12")
 		local f = io.open( tmpPath , "w" )
-		if not f then return json.encode{ status=false, message="A temporary file could not be opened", path=tmpPath }, "application/json" end
+		if not f then return json.encode{ status=false, message="A temporary file could not be opened", path=tmpPath }, MIMETYPE_JSON end
 		local body = "action=fetch&fv=" .. luup.version .. "&pv=" .. _PLUGIN_VERSION
 		local req =  {
 			method = "POST",
@@ -6732,7 +6735,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		http.TIMEOUT = 30
 		https.TIMEOUT = 30
 		local cond, httpStatus, httpHeaders = https.request( req )
-		D("doMatchQuery() returned from request(), cond=%1, httpStatus=%2, httpHeaders=%3", cond, httpStatus, httpHeaders)
+		D("request() returned from request(), cond=%1, httpStatus=%2, httpHeaders=%3", cond, httpStatus, httpHeaders)
 		-- No need to close f, the sink does it for us.
 		-- Handle special errors from socket library
 		if tonumber(httpStatus) == nil then
@@ -6753,13 +6756,13 @@ function request( lul_request, lul_parameters, lul_outputformat )
 				return json.encode{ status=false, exitStatus=es,
 					message="The download was successful but the updated file could not be installed;" ..
 					" please move " .. tmpPath .. " to " .. targetPath },
-					"application/json"
+					MIMETYPE_JSON
 			end
 			os.remove( tmpPath )
-			return json.encode{ status=true, message="Device info updated" }, "application/json"
+			return json.encode{ status=true, message="Device info updated" }, MIMETYPE_JSON
 		end
 		os.remove( tmpPath )
-		return json.encode{ status=false, message="Download failed (" .. tostring(httpStatus) .. ")" }, "application/json"
+		return json.encode{ status=false, message="Download failed (" .. tostring(httpStatus) .. ")" }, MIMETYPE_JSON
 
 	elseif action == "submitdevice" then
 
@@ -6773,7 +6776,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			method = "POST",
 			url = "https://www.toggledbits.com/deviceinfo/submitdevice.php",
 			redirect = false,
-			headers = { ['Content-Length']=string.len( body ), ['Content-Type']="application/json" },
+			headers = { ['Content-Length']=string.len( body ), ['Content-Type']=MIMETYPE_JSON },
 			source = ltn12.source.string( body ),
 			sink = ltn12.sink.table(resp),
 			verify = getReactorVar( "SSLVerify", "none" ),
@@ -6783,16 +6786,16 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		http.TIMEOUT = 30
 		https.TIMEOUT = 30
 		local cond, httpStatus, httpHeaders = https.request( req )
-		D("doMatchQuery() returned from request(), cond=%1, httpStatus=%2, httpHeaders=%3", cond, httpStatus, httpHeaders)
+		D("request() returned from request(), cond=%1, httpStatus=%2, httpHeaders=%3", cond, httpStatus, httpHeaders)
 		-- Handle special errors from socket library
 		if tonumber(httpStatus) == nil then
 			respBody = httpStatus
 			httpStatus = 500
 		end
 		if httpStatus == 200 then
-			return json.encode( { status=true, message="OK" } ), "application/json"
+			return json.encode( { status=true, message="OK" } ), MIMETYPE_JSON
 		end
-		return json.encode( { status=false, message="Can't send device info, status " .. httpStatus } ), "application/json"
+		return json.encode( { status=false, message="Can't send device info, status " .. httpStatus } ), MIMETYPE_JSON
 
 	elseif action == "config" or action == "backup" then
 		local st = { _comment="Reactor configuration " .. os.date("%x %X"), timestamp=os.time(), version=_PLUGIN_VERSION, sensors={} }
@@ -6828,11 +6831,11 @@ function request( lul_request, lul_parameters, lul_outputformat )
 				end
 			else
 				return json.encode( { status=false, message=string.format( "Can't write %s: %s", bfile, tostring(ferr) ) } ),
-					"application/json"
+					MIMETYPE_JSON
 			end
-			return json.encode( { status=true, message="Done!", file=bfile } ), "application/json"
+			return json.encode( { status=true, message="Done!", file=bfile } ), MIMETYPE_JSON
 		end
-		return bdata, "application/json"
+		return bdata, MIMETYPE_JSON
 
 	elseif action == "getcurrentbackup" then
 		local bfile = getInstallPath() .. "reactor-config-backup.json"
@@ -6846,12 +6849,12 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		end
 		if not f then f = io.open( bfile, "r" ) end
 		if not f then
-			return '{"backupstatus":false}', "application/json"
+			return '{"backupstatus":false}', MIMETYPE_JSON
 		else
 			local r = f:read( "*a" )
 			f:close()
 			os.remove( tfile )
-			return r, "application/json"
+			return r, MIMETYPE_JSON
 		end
 
 	elseif action == "status" then
@@ -6892,7 +6895,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 				table.insert( st.devices, devinfo )
 			end
 		end
-		return alt_json_encode( st ), "application/json"
+		return alt_json_encode( st ), MIMETYPE_JSON
 
 	elseif action == "files" then
 		local path = getInstallPath()
@@ -6923,11 +6926,89 @@ function request( lul_request, lul_parameters, lul_outputformat )
 				inf.files[fn] = { notice="No data" }
 			end
 		end
-		return alt_json_encode( inf ), "application/json"
+		return alt_json_encode( inf ), MIMETYPE_JSON
 
 	elseif action == "alive" then
 		local loadtime = getVarNumeric( "LoadTime", 0, pluginDevice, MYSID )
-		return alt_json_encode( { status=true, loadtime=loadtime } ), "application/json"
+		return alt_json_encode( { status=true, loadtime=loadtime } ), MIMETYPE_JSON
+
+	elseif action == "updateplugin" then
+		D("request() update %1", lul_parameters)
+		assert(lul_parameters.release ~= nil, "Invalid release ID")
+		assert(not isOpenLuup, "Use AltAppStore to update Reactor on openLuup")
+		local lfs = require "lfs"
+		local f = io.popen(
+			'curl -s -o - -m 15 https://api.github.com/repos/toggledbits/Reactor/releases/' ..
+			lul_parameters.release )
+		if not f then
+			return json.encode( { status=false, message="Unable to fetch Github releases" } ), MIMETYPE_JSON
+		end
+		local p = f:read("*a")
+		f:close()
+		local d,dpos,derr = json.decode( p )
+		if d then
+			if d.tag_name ~= getVar( "grelease", "", pluginDevice, MYSID ) then
+				L("Performing update to %1 (%2) on branch %3", d.tag_name, d.name, d.target_commitish)
+				os.execute( 'rm -rf /tmp/reactor' )
+				os.execute( 'mkdir -p /tmp/reactor' )
+				D("request() fetching %1", d.zipball_url)
+				local st = os.execute( "curl -s -L -o /tmp/reactor/latest.zip -m 30 '" .. d.zipball_url .. "'" )
+				if st == 0 then
+					os.execute( 'unzip -o /tmp/reactor/latest.zip -d /tmp/reactor' )
+					-- Copy/LZO the files
+					local ufiles = {}
+					local postscript = false
+					local function uscan( path )
+						D("request() scanning %1", path)
+						for fn in lfs.dir( path ) do
+							D("request() evaluating %1", fn)
+							if not fn:match( "^%." ) then
+								local s = lfs.attributes( path .. fn )
+								if s.mode == "directory" then
+									uscan( path .. fn .. "/" )
+								elseif s.mode == "file" then
+									if fn:match( "^[DJILS]_" ) then
+										os.execute( "pluto-lzo c '" .. path .. fn .. "' '" .. path .. fn .. ".lzo'" )
+										table.insert( ufiles, { target=fn .. ".lzo", source=path .. fn .. ".lzo" } )
+									elseif fn == "post_install.sh" then
+										postscript = path .. fn
+									end
+								end
+							end
+						end
+					end
+					uscan( "/tmp/reactor/" )
+					for _,ff in ipairs( ufiles ) do
+						-- Update each file. If updating a compressed file, force remove any uncompressed version.
+						L("Updating %1", ff.target)
+						os.execute( "mv -f '" .. ff.source .. "' '/etc/cmh-ludl/" .. ff.target .. "'" )
+						if ff.target:match( "%.lzo$" ) then os.remove( "/etc/cmh-ludl/" .. ff.target:gsub( "%.lzo$", "" ) ) end
+					end
+					if postscript then
+						f = io.popen( "sh " .. postscript .. " 2>&1" )
+						while true do
+							l = f:read("*l")
+							if not l then break end
+							L("Post-install script output: %1", l )
+						end
+						f:close()
+					end
+					setVar( MYSID, "grelease", table.concat( { d.id, d.tag_name, d.target_commitish, d.published_at }, "|" ), pluginDevice )
+					luup.attr_set( "plugin", "", pluginDevice ) -- disconnect from App Marketplace
+					L"Update completed; Luup needs to be reloaded for changes to take effect."
+					os.execute( "rm -rf  /tmp/reactor/" )
+					return json.encode( { status=true, updated=true, message="OK", release=d } ), MIMETYPE_JSON
+				else
+					return json.encode( { status=false, message="Unable to UNZIP update package" } ), MIMETYPE_JSON
+				end
+			else
+				-- We don't care about this release.
+				return json.encode( { status=true, updated=false, message="No update required", release=d } ), MIMETYPE_JSON
+			end
+		end
+		W("Can't parse Github response %1 %2", dpos, derr)
+		luup.log(tostring(p),2)
+		return json.encode( { status=false, message="Unable to parse Github response" } ), MIMETYPE_JSON
 
 	else
 		return "%REACTOR-REQUEST-F-NOTIMPL, requested action is not implemented", "text/plain"
