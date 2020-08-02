@@ -347,6 +347,45 @@ var ReactorSensor = (function(api, $) {
 		return api.setDeviceStatePersistent( me.id_parent || me.id, "urn:toggledbits-com:serviceId:Reactor", varName, val );
 	}
 
+	function checkUpdate() {
+		return new Promise( function( resolve, reject ) {
+			$.ajax({
+				url: "https://api.github.com/repos/toggledbits/Reactor/releases",
+				data: {
+					r: Math.random()
+				},
+				dataType: "json",
+				timeout: 15000,
+				cache: false
+			}).fail( function( /* jqXHR, textStatus, errorThrown */ ) {
+				reject();
+			}).done( function( data ) {
+				var newest = false;
+				for ( var j=0; j<data.length; ++j ) {
+					var rel = data[j];
+					if ( "master" === rel.target_commitish || "hotfix" === rel.target_commitish ) {
+						var pubtime = Date.parse( rel.published_at );
+						rel.published_at = pubtime;
+						if ( !newest || pubtime > rel.published_at ) {
+							newest = rel;
+						}
+					}
+				}
+
+				/* Now see if newest is not current */
+				if ( newest ) {
+					var st = getParentState( "grelease", false ) || "";
+					var r = st.split( /\|/ );
+					if ( r.length > 0 && r[0] == String(newest.id) ) {
+						/* Installed version is current version */
+						newest = false;
+					}
+				}
+				resolve( newest );
+			});
+		});
+	}
+
 	/* Get data for this instance */
 	function getInstanceData( myid ) {
 		myid = myid || api.getCpanelDeviceId();
@@ -1798,12 +1837,22 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 </style>');
 		}
 
-		api.setCpanelContent( '<div id="reactorstatus" class="reactortab"></div>' );
+		api.setCpanelContent( '<div id="reactorstatus" class="reactortab">Loading...</div>' );
 		inStatusPanel = true; /* Tell the event handler it's OK */
 		api.registerEventHandler('on_ui_deviceStatusChanged', ReactorSensor, 'onUIDeviceStatusChanged');
 
 		try {
 			updateStatus( myid );
+
+			/*
+			checkUpdate().then( function( data ) {
+				if ( data ) {
+					$( '<div class="re-updatestatus" />' )
+						.text( 'An update for Reactor is available. Go to the Tools tab to install it.' )
+						.insertBefore( $( 'div#reactorstatus' ) );
+				}
+			});
+			*/
 		}
 		catch ( e ) {
 			inStatusPanel = false; /* stop updates */
@@ -8359,6 +8408,47 @@ div#tab-actions.reactortab button.re-activemode { color: #6f6; } \
 		});
 	}
 
+	function doPluginUpdate( releaseId ) {
+		$( 'div#re-pluginupdate button' ).prop( 'disabled', true );
+		api.showCustomPopup( "Updating Reactor...", { autoHide: false, category: 3 } );
+		$.ajax({
+			url: api.getDataRequestURL(),
+			data: {
+				id: "lr_Reactor",
+				action: "updateplugin",
+				release: releaseId,
+				r: Math.random()
+			},
+			dataType: "json",
+			cache: false,
+			timeout: 60000
+		}).done( function( data ) {
+			if ( data.status ) {
+				api.showCustomPopup( "Update completed. Reloading Luup...", { autoHide: false, category: 3 } );
+				setTimeout( function() {
+					api.performActionOnDevice( 0, "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "Reload",
+						{ actionArguments: { Reason: "Reactor plugin updated by user" } } );
+					setTimeout( function() {
+						waitForReloadComplete().then( function() {
+							$("#myModal").modal("hide");
+							alert("Please hard-refresh your browser!");
+						}).catch( function(reason) {
+							$("#myModal").modal("hide");
+						});
+					}, 5000 );
+				}, 5000 );
+			} else {
+				$("#myModal").modal("hide");
+				alert("Update failed: " + String(data.message));
+			}
+		}).fail( function( /* jqXHR, textStatus, errorThrown */ ) {
+			$("#myModal").modal("hide");
+			alert("Update request failed. Luup may be reloading. Try again in a moment.");
+		}).always( function() {
+			$( 'div#re-pluginupdate button' ).prop( 'disabled', false );
+		});
+	}
+
 	function doTools()
 	{
 		console.log("doTools()");
@@ -8401,6 +8491,8 @@ textarea#devspyoutput { width: 100%; font-family: monospace; } \
 		html += '</div>'; /* row */
 
 		html += '<div><h3>Update Device Information Database</h3>The device information database contains information to help smooth out the user interface for device actions. The "Activities" tab will notify you when an update is available. You may update by clicking the button below; this process does not require a Luup restart or browser refresh. The updates are shared by all ReactorSensors, so updating any one of them updates all of them. This process sends information about the versions of your Vera firmware, this plugin, and the current database, but no personally-identifying information. This information is used to select the correct database for your configuration; it is not used for tracking you. <span id="di-ver-info"/><p><button id="updateinfo" class="btn btn-sm btn-success">Update Device Info</button> <span id="status"/></p>';
+
+		// html += '<div id="re-updateplugin"><h3>Update Reactor</h3><span id="re-updatestatus">Update information not available at the moment.</span><p><button id="updateplugin" class="btn btn-sm btn-success">Update Reactor Now</button></p></div>';
 
 		/* This feature doesn't work on openLuup -- old form of lu_device request isn't implemented */
 		if ( !isOpenLuup ) {
@@ -8579,6 +8671,22 @@ textarea#devspyoutput { width: 100%; font-family: monospace; } \
 		}
 
 		updateToolsVersionDisplay();
+
+		/*
+		$( 'div#re-updateplugin' ).toggle( false );
+		checkUpdate().then( function( data ) {
+			if ( data ) {
+				$( 'div#re-updateplugin' ).toggle( true );
+				$( 'div#re-updateplugin #re-updatestatus' )
+					.html( "An update to Reactor is available: " + String(data.name) +
+						". Click to update; a restart of Luup is required after." +
+						' <a href="' + data.html_url + '" target="_blank">More Information</a>' );
+				$( 'div#re-updateplugin button' ).on( 'click.reactor', function() { doPluginUpdate( data.id ); } );
+			}
+		}).catch( function() {
+			// nada
+		});
+		*/
 
 		api.registerEventHandler('on_ui_deviceStatusChanged', ReactorSensor, 'spyDeviceChangeHandler');
 	}
