@@ -367,32 +367,79 @@ end
 
 -- Check system battery (VeraSecure)
 local function checkSystemBattery( pdev )
-	local level, source = "", ""
 	if isOpenLuup then return end
-	local f = io.popen("battery get powersource") -- powersource=DC mode/Battery mode
+	local level, source = "", nil
+	local f, s
+
+--[[
+	-- Command line check; see /etc/init.d/platform_init.sh case "MiOS v1"
+	f = io.open( "/proc/cmdline", "r" )
 	if f then
-		local s = f:read("*a") or ""
-		f:close()
-		D("checkSystemBattery() source query returned %1", s)
-		if s ~= "" then
-			source = string.match(s, "powersource=(.*)") or ""
-			if string.find( source:lower(), "battery" ) then source = "battery"
-			elseif string.find( source:lower(), "dc mode" ) then source = "utility"
-			end
-			f = io.popen("battery get level") -- level=%%%
+		s = (f:read("*a") or ""):lower()
+		s = s:match( "power_source=(%S+)" )
+		if s == "adaptor" then
+			source = "utility"
+		elseif s == "batteries" then
+			source = "battery"
+		end
+	end
+
+	-- File check.
+	if not source then
+		f = io.open("/tmp/.running_on_batteries", "r")
+		if f then
+			f:close()
+			source = "battery"
+		else
+			f = io.open("/tmp/.running_on_adaptor", "r")
 			if f then
-				s = f:read("*a") or ""
-				D("checkSystemBattery() level query returned %1", s)
-				level = string.match( s, "level=(%d+)" ) or ""
 				f:close()
+				source = "utility"
+			end
+		end
+		D("checkSystemBattery() power state via files yields %1", source)
+	end
+--]]
+
+	if not source then
+		f = io.popen("battery get powersource 2>&1") -- powersource=DC mode/Battery mode
+		if f then
+			local l = f:read("*a") or ""
+			f:close()
+			D("checkSystemBattery() source query returned %1", l)
+			if l ~= "" then
+				s = l:lower():match("powersource=(.*)")
+				if s then
+					if s:match( "^batt" ) then source = "battery"
+					elseif s:match( "^dc mode" ) then source = "utility"
+					else
+						W("Battery check returned unrecognized source %1; assuming utility", s)
+						source = "utility"
+					end
+				else
+					W("Attempt to get power source unexpected result (%1); assuming non-battery system", l)
+				end
+				if source then
+					f = io.popen("battery get level") -- level=%%%
+					if f then
+						s = f:read("*a") or ""
+						D("checkSystemBattery() level query returned %1", s)
+						level = s:lower():match( "level=(%d+)" ) or ""
+						f:close()
+					end
+				end
+			else
+				L("Power source query failed; assuming non-battery system") -- similar but different
 			end
 		else
-			hasBattery = false
+			L("Power state query failed; assuming non-battery system") -- similar but different
 		end
-	else
+	end
+	if not source then
+		if hasBattery then L("Turning off battery checks") end
 		hasBattery = false
 	end
-	setVar( MYSID, "SystemPowerSource", source, pdev )
+	setVar( MYSID, "SystemPowerSource", source or "", pdev )
 	setVar( MYSID, "SystemBatteryLevel", level, pdev )
 end
 
@@ -898,6 +945,8 @@ local function plugin_runOnce( pdev )
 	initVar( "IsHome", "", pdev, MYSID )
 	initVar( "MaxRestartCount", "", pdev, MYSID )
 	initVar( "MaxRestartPeriod", "", pdev, MYSID )
+	initVar( "ActivityCheckpoint", "", pdev, MYSID )
+	initVar( "ActivityMaxExecTime", "", pdev, MYSID )
 	initVar( "RescanDelay", "", pdev, MYSID )
 	initVar( "SMTPServer", "", pdev, MYSID )
 	initVar( "SMTPSender", "", pdev, MYSID )
@@ -2758,12 +2807,12 @@ local function execSceneGroups( tdev, taskid, scd )
 				if action.type == "comment" then
 					-- If first char is asterisk, emit comment to log file
 					if ( action.comment or ""):byte(1) == 42 then
-						L("%2 (%1) %3 [%4:%5]", tdev, luup.devices[tdev].description,
-							action.comment, scd.id, sst.currstep)
+						L("%2 (#%1) %3 [%4:%5:%6]", tdev, luup.devices[tdev].description,
+							action.comment, scd.name or scd.id, sst.currgroup, sst.currstep)
 						addEvent{ dev=tdev,
-							msg="<%(sceneName)s:%(group)s:%(index)s> %(message)s",
+							msg="<%(sceneName)s:%(group)s:%(step)s> %(message)s",
 							event="runscene", scene=scd.id, sceneName=scd.name or scd.id,
-							group=nextGroup, index=sst.currstep, message=action.comment or "" }
+							group=nextGroup, step=sst.currstep, message=action.comment or "" }
 					end
 				elseif action.type == "device" then
 					logActivityStep( "Device Action", scd, nextGroup, sst.currstep, action, tdev )
@@ -2942,7 +2991,7 @@ local function execSceneGroups( tdev, taskid, scd )
 			sst.currstep = sst.currstep + 1
 
 			-- If we've spent too long running this scene/activity, take a break
-			if os.time() >= ( execBegin + 15 ) then
+			if os.time() >= ( execBegin + getVarNumeric( "ActivityMaxExecTime", 15, pluginDevice, MYSID ) ) then
 				D("execSceneGroups() taking a break from scene %1 group %2 at step %3; last exec %4s >= limit",
 					scd.name or scd.id, sst.currgroup, sst.currstep, os.time()-execBegin)
 				luup.variable_set( MYSID, "runscene", json.encode(sceneState), pluginDevice )
@@ -2951,14 +3000,14 @@ local function execSceneGroups( tdev, taskid, scd )
 			end
 
 			-- Checkpoint every 5 steps
-			if 0 == ( sst.currstep % getVarNumeric( "ActivityCheckpoint", 5, pluginDevice, MYSID) ) then
+			if 0 == ( sst.currstep % getVarNumeric( "ActivityCheckpoint", 5, pluginDevice, MYSID ) ) then
 				D("execSceneGroups() checkpoint scene %1 group %2 at step %3", scd.name or scd.id,
 					sst.currgroup, sst.currstep)
 				luup.variable_set( MYSID, "runscene", json.encode(sceneState), pluginDevice )
 			end
 		end
 
-		-- Finished this group. Save position.
+		-- Finished this group; set up next, checkpoint.
 		sst.currgroup = sst.currgroup + 1
 		sst.currstep = 0
 		sst.lastgrouptime = os.time()
@@ -4758,7 +4807,11 @@ local function masterTick(pdev)
 
 	-- Vera Secure has battery, check it.
 	if hasBattery then
-		pcall( checkSystemBattery, pdev )
+		local st,err = pcall( checkSystemBattery, pdev )
+		if not st then E("Battery check failed: %1", err) end
+	else
+		setVar( MYSID, "SystemPowerSource", "", pdev )
+		setVar( MYSID, "SystemBatteryLevel", "", pdev )
 	end
 
 	local netState = true
@@ -5087,6 +5140,7 @@ end
 -- Start plugin running.
 function startPlugin( pdev, ptask ) -- N.B. can be run as task
 	D("startPlugin(%1,%2)", pdev, ptask)
+
 --[[
 	local uilang = luup.attr_get('ui_lang', 0) or "en"
 	local plang = getReactorVar( "lang", "" )
@@ -5235,7 +5289,7 @@ function startPlugin( pdev, ptask ) -- N.B. can be run as task
 	setVar( MYSID, "_UIV", _UIVERSION, pdev )
 
 	-- System type (id 35=Edge, 36=Plus, 37=Secure)
-	hasBattery = luup.modelID == nil or luup.modelID == 37
+	hasBattery = true or luup.modelID == nil or luup.modelID == 37
 
 	-- Check for ALTUI and OpenLuup
 	local failmsg = false
