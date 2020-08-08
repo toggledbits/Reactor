@@ -6,6 +6,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04
 
 ## Version 3.8 (20215)
 
+* Improve job scheduling in the scene/activity executive. This is an extensive overhaul...
 * Internal: correct function name in log message.
 * Internal: update directly from Github (via request)
 
