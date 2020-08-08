@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.8-20215"
+local _PLUGIN_VERSION = "3.8develop-20221"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.6/"
 
@@ -367,32 +367,79 @@ end
 
 -- Check system battery (VeraSecure)
 local function checkSystemBattery( pdev )
-	local level, source = "", ""
 	if isOpenLuup then return end
-	local f = io.popen("battery get powersource") -- powersource=DC mode/Battery mode
+	local level, source = "", nil
+	local f, s
+
+--[[
+	-- Command line check; see /etc/init.d/platform_init.sh case "MiOS v1"
+	f = io.open( "/proc/cmdline", "r" )
 	if f then
-		local s = f:read("*a") or ""
-		f:close()
-		D("checkSystemBattery() source query returned %1", s)
-		if s ~= "" then
-			source = string.match(s, "powersource=(.*)") or ""
-			if string.find( source:lower(), "battery" ) then source = "battery"
-			elseif string.find( source:lower(), "dc mode" ) then source = "utility"
-			end
-			f = io.popen("battery get level") -- level=%%%
+		s = (f:read("*a") or ""):lower()
+		s = s:match( "power_source=(%S+)" )
+		if s == "adaptor" then
+			source = "utility"
+		elseif s == "batteries" then
+			source = "battery"
+		end
+	end
+
+	-- File check.
+	if not source then
+		f = io.open("/tmp/.running_on_batteries", "r")
+		if f then
+			f:close()
+			source = "battery"
+		else
+			f = io.open("/tmp/.running_on_adaptor", "r")
 			if f then
-				s = f:read("*a") or ""
-				D("checkSystemBattery() level query returned %1", s)
-				level = string.match( s, "level=(%d+)" ) or ""
 				f:close()
+				source = "utility"
+			end
+		end
+		D("checkSystemBattery() power state via files yields %1", source)
+	end
+--]]
+
+	if not source then
+		f = io.popen("battery get powersource 2>&1") -- powersource=DC mode/Battery mode
+		if f then
+			local l = f:read("*a") or ""
+			f:close()
+			D("checkSystemBattery() source query returned %1", l)
+			if l ~= "" then
+				s = l:lower():match("powersource=(.*)")
+				if s then
+					if s:match( "^batt" ) then source = "battery"
+					elseif s:match( "^dc mode" ) then source = "utility"
+					else
+						W("Battery check returned unrecognized source %1; assuming utility", s)
+						source = "utility"
+					end
+				else
+					W("Attempt to get power source unexpected result (%1); assuming non-battery system", l)
+				end
+				if source then
+					f = io.popen("battery get level") -- level=%%%
+					if f then
+						s = f:read("*a") or ""
+						D("checkSystemBattery() level query returned %1", s)
+						level = s:lower():match( "level=(%d+)" ) or ""
+						f:close()
+					end
+				end
+			else
+				L("Power source query failed; assuming non-battery system") -- similar but different
 			end
 		else
-			hasBattery = false
+			L("Power state query failed; assuming non-battery system") -- similar but different
 		end
-	else
+	end
+	if not source then
+		if hasBattery then L("Turning off battery checks") end
 		hasBattery = false
 	end
-	setVar( MYSID, "SystemPowerSource", source, pdev )
+	setVar( MYSID, "SystemPowerSource", source or "", pdev )
 	setVar( MYSID, "SystemBatteryLevel", level, pdev )
 end
 
@@ -4726,7 +4773,8 @@ local function masterTick(pdev)
 
 	-- Vera Secure has battery, check it.
 	if hasBattery then
-		pcall( checkSystemBattery, pdev )
+		local st,err = pcall( checkSystemBattery, pdev )
+		if not st then W("Battery check failed: %1", err) end
 	end
 
 	local netState = true
