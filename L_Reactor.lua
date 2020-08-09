@@ -154,6 +154,10 @@ local function E(msg, ...) L({level=1,msg=msg}, ...) end
 local function W(msg, ...) L({level=2,msg=msg}, ...) end
 local function T(msg, ...) L(msg, ...) if debug and debug.traceback then luup.log((debug.traceback())) end end
 
+local function timems()
+	return math.floor( socket.gettime() * 1000 + 0.5 ) / 1000
+end
+
 local function getInstallPath()
 	if not installPath then
 		installPath = "/etc/cmh-ludl/" -- until we know otherwise
@@ -2746,9 +2750,9 @@ local function execSceneGroups( tdev, taskid, scd )
 				local tt
 				-- Vera (7.x.x) scenes are always "start" delay type.
 				if delaytype == "start" or not scd.isReactorScene then
-					tt = sst.starttime + delay
+					tt = math.floor( sst.starttime + 0.5 ) + delay
 				else
-					tt = (sst.lastgrouptime or sst.starttime) + delay
+					tt = ( sst.lastgrouptime or math.floor( sst.starttime + 0.5 ) ) + delay
 				end
 				if tt > os.time() then
 					-- It's not time yet. Schedule task to continue.
@@ -3015,7 +3019,8 @@ local function execSceneGroups( tdev, taskid, scd )
 	end
 
 	-- We've run out of groups!
-	addEvent{ dev=tdev, msg="Activity %(sceneName)q finished", event="endscene", scene=scd.id, sceneName=scd.name or scd.id }
+	addEvent{ dev=tdev, msg="Activity %(sceneName)q finished in %(dt)ss", event="endscene",
+		scene=scd.id, sceneName=scd.name or scd.id, dt=timems()-sst.starttime }
 	D("execSceneGroups(%3) reached end of scene %1 (%2)", scd.id, scd.name, taskid)
 	stopScene( nil, taskid, tdev )
 	return nil
@@ -3089,7 +3094,7 @@ local function execScene( scd, tdev, options )
 	local now = os.time()
 	sceneState[taskid] = {
 		scene=scd.id,   -- scene ID
-		starttime=now,  -- original start time for scene
+		starttime=timems(),  -- original start time for scene
 		currgroup=1,    -- current (next) group to run
 		currstep=0,     -- current (next) step to run
 		lastgrouptime=now,
@@ -6116,7 +6121,7 @@ local function getReactorScene( t, s, tdev, runscenes, cf )
 					resp = resp .. getLuaSummary( act.lua, act.encoded_lua, pfx .. "%6d: %s" )
 				elseif act.type == "runscene" then
 					resp = resp .. pfx .. "Run scene " .. tostring(act.scene) .. " " .. ((luup.scenes[act.scene] or {}).description or (act.sceneName or "").."?")
-					resp = resp .. ( ( act.usevera or 0 ) ~= 0 ) and "(via luup)" or "(via int exec)"
+					resp = resp .. ( ( ( act.usevera or 0 ) ~= 0 ) and " (via Luup)" or " (via local exec)" )
 					resp = resp .. EOL
 					if not runscenes[tostring(act.scene)] then
 						runscenes[tostring(act.scene)] = getSceneData( act.scene, tdev )
