@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.8develop-20221"
+local _PLUGIN_VERSION = "3.8develop-20222"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.6/"
 
@@ -407,6 +407,7 @@ local function checkSystemBattery( pdev )
 			local l = f:read("*a") or ""
 			f:close()
 			D("checkSystemBattery() source query returned %1", l)
+			setVar( MYSID, "ps", table.concat( { l, os.time() }, "|" ), pdev )
 			if l ~= "" then
 				s = l:lower():match("powersource=(.*)")
 				if s then
@@ -5251,7 +5252,7 @@ function startPlugin( pdev, ptask ) -- N.B. can be run as task
 	setVar( MYSID, "_UIV", _UIVERSION, pdev )
 
 	-- System type (id 35=Edge, 36=Plus, 37=Secure)
-	hasBattery = luup.modelID == nil or luup.modelID == 37
+--	hasBattery = luup.modelID == nil or luup.modelID == 37
 
 	-- Check for ALTUI and OpenLuup
 	local failmsg = false
@@ -6078,7 +6079,7 @@ local function getReactorScene( t, s, tdev, runscenes, cf )
 					resp = resp .. getLuaSummary( act.lua, act.encoded_lua, pfx .. "%6d: %s" )
 				elseif act.type == "runscene" then
 					resp = resp .. pfx .. "Run scene " .. tostring(act.scene) .. " " .. ((luup.scenes[act.scene] or {}).description or (act.sceneName or "").."?")
-					resp = resp .. ( ( act.usevera or 0 ) ~= 0 ) and "(via luup)" or "(via int exec)"
+					resp = resp .. ( ( ( act.usevera or 0 ) ~= 0 ) and "(via luup)" or "(via int exec)" )
 					resp = resp .. EOL
 					if not runscenes[tostring(act.scene)] then
 						runscenes[tostring(act.scene)] = getSceneData( act.scene, tdev )
