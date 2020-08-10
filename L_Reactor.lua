@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.8develop-20222"
+local _PLUGIN_VERSION = "3.8develop-20223"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.6/"
 
@@ -77,6 +77,7 @@ local _,json = pcall( require, "dkjson" )
 local _,socket = pcall( require, "socket" )
 local _,mime = pcall( require, "mime" )
 local luaxp -- will only be loaded if needed
+local luaxp_extfunc = false
 
 local function dump(t, seen)
 	if t == nil then return "nil" end
@@ -363,6 +364,29 @@ local function getSSLParams( prefix, pdev, sid )
 	params.options = getSSLListParam(s)
 	D("getSSLParams() %1", params)
 	return params
+end
+
+local function requireLoadable( module, ... )
+	D("requireLoadable(%1)")
+	if package.loaded[module] then return package.loaded[module] end
+	D("requireLoadable() attempting load")
+	local st, md = pcall( require, module )
+	if st and type(md) == "table" then
+		if not ( md.MODULE_API and md.MODULE_API >= 20223 ) then
+			E("Loadable module %1 does not have a compatible API (%2) with this version of Reactor (requires %3 or higher)."
+				, module, md.MODULE_API, 20223)
+			package.loaded[module] = nil
+			return nil, "Invalid module API"
+		end
+		L("Loaded module %1 version %2 api %3", module, md.VERSION, md.MODULE_API)
+		if type(md.reactor_module_init) == "function" then
+			local se,er = pcall( md.reactor_module_init, pluginDevice, { ['log']=L, ['debug']=D, ['trace']=T }, ... )
+			if not se then W("Loadable module %1 init failed: %2", module, er) end
+		end
+		return md
+	end
+	D("requireLoadable() package NOT loaded")
+	return nil, md
 end
 
 -- Check system battery (VeraSecure)
@@ -1887,6 +1911,17 @@ local function getExpressionContext( cdata, tdev )
 		-- only return one value (gsub returns 2)
 		return ( str:gsub( "%%([a-f0-9][a-f0-9])", function( m ) return string.char( tonumber( m, 16 ) or 49 ) end ) )
 	end
+	ctx.__functions.b64 = function( args )
+		local str = unpack( args )
+		local mime = require "mime"
+		return ( mime.b64(str or "") )
+	end
+	ctx.__functions.unb64 = function( args )
+		local str = unpack( args )
+		local mime = require "mime"
+		return ( mime.unb64(str or "") )
+	end
+
 	-- Append an element to an array, returns the array.
 	ctx.__functions.arraypush = function( args )
 		addEvent{ dev=tdev, msg="WARNING: Expression function arraypush() is deprecated; please use push()" }
@@ -1933,6 +1968,23 @@ local function getExpressionContext( cdata, tdev )
 			msg="TROUBLE: Expression called trouble(): %(message)s",
 			event="evaluate", trouble=title or "trouble()", message=msg or "" }
 		getSensorState( tdev ).trouble = true
+	end
+
+	-- Get loadable functions
+	if luaxp_extfunc == false then
+		-- N.B. global will become nil if module not loadable
+		luaxp_extfunc = requireLoadable("L_Reactor_LuaXP_ExtFunc", luaxp, ctx)
+	end
+	if luaxp_extfunc then -- nil or false intentional
+		D("getExpressionContext() loading custom functions")
+		for n,f in pairs(luaxp_extfunc) do
+			if n:match("^luaxp_") and type(f) == "function" then
+				local fn = n:sub(7)
+				D("getExpressionContext() %1 %2", n, fn)
+				if ctx.__functions[fn] then W("L_Reactor_LuaXP_ExtFunc redefines %1", fn) end
+				ctx.__functions[fn] = f
+			end
+		end
 	end
 
 	-- Add previous values to Luaxp context. We use the cstate versions rather
