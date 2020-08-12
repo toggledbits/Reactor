@@ -897,9 +897,6 @@ local function sensor_runOnce( tdev )
 		-- Fix up category and subcategory
 		luup.attr_set('category_num', 4, tdev)
 		luup.attr_set('subcategory_num', 0, tdev)
-
-		luup.variable_set( RSSID, "Version", _CONFIGVERSION, tdev )
-		return
 	end
 
 	initVar( "Enabled", "1", tdev, RSSID )
@@ -1342,7 +1339,10 @@ end
 local function clearConditionState( tdev )
 	D("clearConditionState(%1)", tdev)
 	luup.variable_set( RSSID, "cstate", "", tdev )
-	getSensorState( tdev ).condState = nil
+	local sst = getSensorState( tdev )
+	sst.condState = nil
+	sst.ctx = nil
+	sst.trouble = nil
 	setVar( SENSOR_SID, "Tripped", "0", tdev )
 	setVar( SWITCH_SID, "Target", "0", tdev )
 	setVar( SWITCH_SID, "Status", "0", tdev )
@@ -5067,6 +5067,7 @@ local function startSensor( tdev, pdev, isReload )
 	sst.eventList = sst.eventList or {}
 	sst.configData = nil
 	sst.condState = nil
+	sst.ctx = nil
 	sst.updateRate = initRate( 60, 15 )
 	sst.updateThrottled = false
 	sst.changeRate = initRate( 60, 15 )
@@ -5492,7 +5493,8 @@ function actionAddSensor( pdev, count )
 			luup.attr_get( 'device_file', k ) or "",
 			luup.attr_get( 'impl_file', k ) or "", "", false )
 	end
-	local vv = string.format( "%s,Enabled=1\n,room=%s", RSSID, luup.attr_get( "room", pdev ) or "0" )
+	local vv = string.format( "%s,Enabled=1\n%s,cdata=###\n,%s,cstate=\n,room=%s",
+		RSSID, RSSID, RSSID, luup.attr_get( "room", pdev ) or "0" )
 	for k = 1,count do
 		highd = highd + 1
 		D("addSensor() creating child %3/%4 as r%1s%2", pdev, highd, k, count)
