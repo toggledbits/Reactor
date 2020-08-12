@@ -4,13 +4,15 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04
 
 **DEPRECATION NOTICE:** The expression functions `arraypush()`, `arraypop()`, `arrayunshift()` and `arrayshift()` have been made first-class functions in the LuaXP module under the names `push()`, `pop()`, `unshift()` and `shift()` respectively. The `array...()` versions are now deprecated, and will be removed from a future release. Please convert to the new functions, which for all practical purposes are identical (so you just need to change the names in your expressions and it's done).
 
-## Version 3.8 (20223)
+## Version 3.8 (20225)
 
 * Improve job scheduling in the scene/activity executive. This is an extensive overhaul...
 * Enhancement: The functions `b64()` and `unb64()` are now available in expressions to (respectively) Base64 encode and decode a string.
 * Enhancement: Loadable functions can be used to create user-specific/custom functions for expressions. See the docs.
+* Internal: restart now clears LuaXP context
 * Internal: correct function name in log message.
 * Internal: update directly from Github (via request)
+* Hotfix 20225-01: Fix a small issue that makes creation of new RS require additional Luup reload.
 
 ## Version 3.7 (20190)
 
