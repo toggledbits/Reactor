@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.7-20190"
+local _PLUGIN_VERSION = "3.7hotfix-20225"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.6/"
 
@@ -821,9 +821,6 @@ local function sensor_runOnce( tdev )
 		-- Fix up category and subcategory
 		luup.attr_set('category_num', 4, tdev)
 		luup.attr_set('subcategory_num', 0, tdev)
-
-		luup.variable_set( RSSID, "Version", _CONFIGVERSION, tdev )
-		return
 	end
 
 	initVar( "Enabled", "1", tdev, RSSID )
