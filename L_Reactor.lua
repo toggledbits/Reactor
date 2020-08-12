@@ -6132,7 +6132,7 @@ local function getReactorScene( t, s, tdev, runscenes, cf )
 					resp = resp .. getLuaSummary( act.lua, act.encoded_lua, pfx .. "%6d: %s" )
 				elseif act.type == "runscene" then
 					resp = resp .. pfx .. "Run scene " .. tostring(act.scene) .. " " .. ((luup.scenes[act.scene] or {}).description or (act.sceneName or "").."?")
-					resp = resp .. ( ( ( act.usevera or 0 ) ~= 0 ) and "(via luup)" or "(via int exec)" )
+					resp = resp .. ( ( ( act.usevera or 0 ) ~= 0 ) and " (via luup)" or " (via int exec)" )
 					resp = resp .. EOL
 					if not runscenes[tostring(act.scene)] then
 						runscenes[tostring(act.scene)] = getSceneData( act.scene, tdev )
