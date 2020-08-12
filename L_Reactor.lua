@@ -1333,7 +1333,10 @@ end
 local function clearConditionState( tdev )
 	D("clearConditionState(%1)", tdev)
 	luup.variable_set( RSSID, "cstate", "", tdev )
-	getSensorState( tdev ).condState = nil
+	local sst = getSensorState( tdev )
+	sst.condState = nil
+	sst.ctx = nil
+	sst.trouble = nil
 	setVar( SENSOR_SID, "Tripped", "0", tdev )
 	setVar( SWITCH_SID, "Target", "0", tdev )
 	setVar( SWITCH_SID, "Status", "0", tdev )
@@ -5022,6 +5025,7 @@ local function startSensor( tdev, pdev, isReload )
 	sst.eventList = sst.eventList or {}
 	sst.configData = nil
 	sst.condState = nil
+	sst.ctx = nil
 	sst.updateRate = initRate( 60, 15 )
 	sst.updateThrottled = false
 	sst.changeRate = initRate( 60, 15 )

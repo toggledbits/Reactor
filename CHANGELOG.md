@@ -8,6 +8,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04
 
 * Enhancement: The functions `b64()` and `unb64()` are now available in expressions to (respectively) Base64 encode and decode a string.
 * Enhancement: Loadable functions can be used to create user-specific/custom functions for expressions. See the docs.
+* Internal: restart now clears LuaXP context
 * Internal: correct function name in log message.
 * Internal: update directly from Github (via request)
 * Hotfix 20225-01: Fix a small issue that makes creation of new RS require additional Luup reload.
