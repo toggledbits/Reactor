@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.8newexec-20223"
+local _PLUGIN_VERSION = "3.8newexec-20228"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.6/"
 
@@ -667,7 +667,7 @@ local function addEvent( t )
 	sst.eventList = sst.eventList or {}
 	table.insert( sst.eventList, p )
 	while #sst.eventList > 0 and #sst.eventList > maxEvents do table.remove( sst.eventList, 1 ) end
-	if sst.eventLog ~= false then openEventLogFile( dev ) end
+	if sst.eventLog == nil then openEventLogFile( dev ) end
 	if sst.eventLog then pcall( function()
 		sst.eventLog:write( p )
 		sst.eventLog:write( "\n" )
@@ -2817,6 +2817,8 @@ local function execSceneGroups( tdev, taskid, scd )
 						event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, when=os.date("%X", tt), notice="Scene delay" }
 					scheduleTick( { id=sst.taskid, owner=sst.owner, func=execSceneGroups, args={ scd } }, tt )
 					return taskid
+				else
+					D("execSceneGroup() delay target %1 has passed, moving on...", tt)
 				end
 			end
 			sst.currstep = 1
@@ -2904,8 +2906,25 @@ local function execSceneGroups( tdev, taskid, scd )
 				elseif action.type == "housemode" then
 					logActivityStep( "Set House Mode", scd, nextGroup, sst.currstep, action, tdev )
 					D("execSceneGroups() setting house mode to %1", action.housemode)
-					luup.call_action( "urn:micasaverde-com:serviceId:HomeAutomationGateway1",
-						"SetHouseMode", { Mode=action.housemode or "1" }, 0 )
+					local newMode = tostring(action.housemode or 1)
+					local currMode = luup.attr_get( "Mode", 0 ) or "1"
+					local transMode = luup.attr_get( "mode_change_mode", 0 ) or ""
+					D("execSceneGroups() current mode is %1 trans mode %2", currMode, transMode)
+					if currMode == newMode then
+						L("%1 (#%2) activity %3:%4:%5 skipping set house mode; already in mode %6",
+							luup.devices[tdev].description, tdev, scd.name or scd.id, nextGroup, sst.currstep,
+							newMode)
+					elseif transMode == newMode then
+						L("%1 (#%2) activity %3:%4:%5 skipping set house mode; timing delay to mode %6 currently in progress.",
+							luup.devices[tdev].description, tdev, scd.name or scd.id, nextGroup, sst.currstep,
+							transMode)
+					end
+					-- Set house mode if check is off, or currMode <> newMode, or not on our way to newMode already
+					if getVarBool( "DisableHouseModeCheck", false, pluginDevice, MYSID ) or
+						( currMode ~= newMode and transMode ~= newMode ) then
+						luup.call_action( "urn:micasaverde-com:serviceId:HomeAutomationGateway1",
+							"SetHouseMode", { Mode=action.housemode or "1" }, 0 )
+					end
 				elseif action.type == "runscene" then
 					logActivityStep( "Run Scene", scd, nextGroup, sst.currstep, action, tdev )
 					-- Run scene in same context as this one. Whoa... recursion... depth???
@@ -2916,9 +2935,28 @@ local function execSceneGroups( tdev, taskid, scd )
 						luup.call_action( "urn:micasaverde-com:serviceId:HomeAutomationGateway1",
 							"RunScene", { SceneNum=scene }, 0 )
 					else
-						-- Not running as job here because we want in-line execution of scene actions (the Reactor way).
-						local options = { contextDevice=sst.options.contextDevice, stopPriorScenes=false }
-						runScene( scene, tdev, options )
+						-- In the case of resuming an activity with a Run Scene action, the target scene may already
+						-- by on the list of running scenes. In that case, we want to let it resume from wherever
+						-- *it* was; if we call runscene() here, it will restart it from its beginning, which is not
+						-- desirable (particularly if a scene device is causing crashes).
+						local found = false
+						for _, _sc in pairs(sceneState) do
+							if tostring(_sc.scene) == tostring(scene) and (_sc.options or {}).parentAction and
+								_sc.options.parentAction.sig == sst.sig and
+								_sc.options.parentAction.dev == tdev and _sc.options.parentAction.sc == scd.id and
+								_sc.options.parentAction.gr == nextGroup and _sc.options.parentAction.st == sst.currstep then
+								D("execSceneGroups() skipping (re)start of scene %1; it's already running for %2:%3:%4 (%5)",
+									scene, scd.name or scd.id, nextGroup, sst.currstep, sst.sig)
+								found = true
+								break
+							end
+						end
+						if not found then
+							-- Not running; start it. No job here, we want in-line execution (at least for group 1).
+							local options = { contextDevice=sst.options.contextDevice, stopPriorScenes=false }
+							options.parentAction = { sig=sst.sig, dev=tdev, sc=scd.id, gr=nextGroup, st=sst.currstep }
+							runScene( scene, tdev, options )
+						end
 					end
 				elseif action.type == "runlua" then
 					logActivityStep( "Run Lua", scd, nextGroup, sst.currstep, action, tdev )
@@ -3144,13 +3182,15 @@ local function execScene( scd, tdev, options )
 
 	-- We are going to run groups. Set up for it.
 	D("execScene() setting up to run groups for scene")
-	local now = os.time()
+	local now = timems()
+	local sig = string.format("%x:%x", math.floor(now), math.floor(now*1000)%1000)
 	sceneState[taskid] = {
 		scene=scd.id,   -- scene ID
-		starttime=timems(),  -- original start time for scene
+		sig=sig,        -- run signature
+		starttime=now,  -- original start time for scene
 		currgroup=1,    -- current (next) group to run
 		currstep=0,     -- current (next) step to run
-		lastgrouptime=now,
+		lastgrouptime=os.time(),
 		taskid=taskid,  -- timer task ID
 		context=ctx,    -- context device (device requesting scene run)
 		options=options,    -- options
@@ -3172,9 +3212,17 @@ local function resumeScenes()
 	end
 	sceneState = d or {}
 	for _,data in pairs( sceneState ) do
-		addEvent{ dev=data.owner, msg="Resuming run after reload (%(scene)s)",
-			event="runscene", scene=data.scene }
-		scheduleDelay( { id=data.taskid, owner=data.owner, func=execSceneGroups, args={} }, 1 )
+		if luup.devices[data.owner] then
+			D("resumeScenes() resume %1 from group %2 step %3 for %4 (#%5)", data.scene,
+				data.currgroup, data.currstep, luup.devices[data.owner].description,
+				data.owner)
+			addEvent{ dev=data.owner, msg="Resuming run after reload (%(scene)s:%(group)s:%(step)s)",
+				event="runscene", scene=data.scene, group=data.currgroup, step=data.currstep }
+			scheduleDelay( { id=data.taskid, owner=data.owner, func=execSceneGroups, args={} }, 1 )
+		else
+			D("resumeScenes() skipping resume of %1 for %2; RS no longer exists", 
+				data.scene, data.owner)
+		end
 	end
 end
 
@@ -5109,7 +5157,7 @@ local function startSensors( pdev )
 	scheduleTick( { id=tostring(pdev), func=masterTick, owner=pdev }, tt, { replace=true } )
 
 	-- Resume any scenes that were running prior to restart
-	resumeScenes( pdev )
+	resumeScenes()
 
 	local isRecovery = getVarBool( "recoverymode", false, pdev, MYSID )
 
@@ -5984,6 +6032,8 @@ function tick(p)
 		D("tick() return %2 from task %1, err=%3", v.id, success, err)
 		if not success then
 			addEvent{ dev=v.owner, event="error", message="tick failed", reason=err }
+		else
+			D("tick() task %1 next run %2", v.id, v.when)
 		end
 	end
 
@@ -6047,7 +6097,7 @@ local function sensorWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
 			act=enabled and "" or " (ignored/disabled)" }
 	end
 	if enabled then
-		local holdOff = getVarNumeric( "WatchResponseHoldOff", -1, tdev, RSSID )
+		local holdOff = getVarNumeric( "WatchResponseHoldOff", 0, tdev, RSSID )
 		if holdOff < 0 then
 			-- Immediate update.
 			updateSensor( tdev )
@@ -6725,6 +6775,7 @@ SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 			for _,v in ipairs( { "UseReactorScenes", "LogEventsToFile", "EventLogMaxKB", "Retrigger",
 				"AutoUntrip", "MaxUpdateRate", "MaxChangeRate", "FailOnTrouble", "ContinuousTimer",
 				"ForceGeofenceMode", "StateCacheExpiry", "SuppressLuupRestartUpdate",
+				"ActivityCheckpoint", "ActivityMaxExecTime", "WatchResponseHoldOff",
 				"UseLegacyTripBehavior", "SSLProtocol", "SSLVerify", "SSLOptions",
 				"RequestActionResponseLimit", "RequestActionTimeout", "RequestActionUseCurl",
 				"RequestActionCurlOptions", "RequestActionTimeout",
