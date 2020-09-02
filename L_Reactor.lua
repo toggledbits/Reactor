@@ -6210,6 +6210,10 @@ local function getReactorScene( t, s, tdev, runscenes, cf )
 						resp = resp .. "; SSL opt " .. json.encode( getSSLParams( "SMTP" ) )
 					end
 					resp = resp .. EOL
+				elseif act.type == "setvar" then
+					resp = resp .. pfx .. string.format("Set Variable %s=%q", tostring(act.variable), tostring(act.value))
+					if act.reeval then resp = resp .. " (force re-eval)" end
+					resp = resp .. EOL
 				else
 					resp = resp .. pfx .. "Action type " .. tostring(act.type) .. "?"
 					local arr = {}
