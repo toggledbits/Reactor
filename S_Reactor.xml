@@ -128,7 +128,7 @@
 			<name>RepairDevice</name>
 			<argumentList>
 				<argument>
-				  <name>DeviceNum</name>
+				  <name>RepairTarget</name>
 				  <direction>in</direction>
 				  <relatedStateVariable>A_ARG_TYPE_ui4</relatedStateVariable>
 				</argument>
