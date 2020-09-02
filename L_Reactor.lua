@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.8develop-20225"
+local _PLUGIN_VERSION = "3.8develop-20245"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.6/"
 
@@ -5106,6 +5106,7 @@ local function startSensors( pdev )
 			luup.attr_set( "hidden", debugMode and 0 or 1, k )
 			luup.attr_set( "room", luup.attr_get( "room", pdev ) or "0", k )
 			setVar( SENSOR_SID, "Tripped", "0", k )
+			setVar( SENSOR_SID, "ArmedTripped", "0", k )
 			setHMTModeSetting( k )
 			addServiceWatch( k, SENSOR_SID, "Armed", pdev )
 		else
@@ -5469,11 +5470,11 @@ function actionMasterClear( dev )
 	-- Should cause reload immediately.
 end
 
--- luup.call_action("urn:toggledbits-com:serviceId:Reactor", "RepairDevice", { DeviceNum=86 }, 70 )
+-- luup.call_action("urn:toggledbits-com:serviceId:Reactor", "RepairDevice", { RepairTarget=86 }, 70 )
 function actionRepairDevice( dev, settings )
 	D("actionRepairDevice(%1,%2)", dev, settings)
 	if isOpenLuup then return true end -- does nothing on openLuup
-	local target = tonumber( settings.DeviceNum ) or error "Invalid DeviceNum parameter"
+	local target = tonumber( settings.RepairTarget ) or error "Invalid RepairTarget parameter"
 	if not luup.devices[target] then error "Target device does not exist" end
 	L("Repairing device %1 (#%2)", luup.devices[target].description, target)
 	local rc,_,_,ra = luup.call_action( "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "GetUserData", { DataFormat="json" }, 0 ) -- luacheck: ignore 311
@@ -5494,6 +5495,7 @@ function actionRepairDevice( dev, settings )
 				if as == bs then return a.variable < b.variable end
 				return as < bs
 			end )
+			local nstart = #(d.states or {})
 			for _,s in ipairs(d.states or {}) do
 				s.id = #newst
 				if ( s.service == MYSID or s.service == RSSID ) and s.value == "X" then s.value = "" end
@@ -5504,7 +5506,7 @@ function actionRepairDevice( dev, settings )
 			local newdata = { devices={} }
 			newdata.devices["devices_" .. d.id] = d
 			D("actionRepairDevice() repaired data %1", newdata)
-			L("Finished; writing repaired device data to user_data; %d states", #newst)
+			L("Finished; writing repaired device data to user_data; %1 states before, %2 after; this will cause a Luup reload.", nstart, #newst)
 			luup.call_action( "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "ModifyUserData",
 				{ inUserData=json.encode(newdata), DataFormat="json", Reload="1" }, 0 )
 			return true

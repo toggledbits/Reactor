@@ -11,6 +11,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04
 * Internal: restart now clears LuaXP context
 * Internal: correct function name in log message.
 * Internal: update directly from Github (via request)
+* Hotfix 20245-01: The parameter name for the `RepairDevice` action introduced in 3.7 has been changed to `RepairTarget` for better compatibility with Luup requests.
 * Hotfix 20225-01: Fix a small issue that makes creation of new RS require additional Luup reload.
 
 ## Version 3.7 (20190)
