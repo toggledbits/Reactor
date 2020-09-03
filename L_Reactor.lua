@@ -1,6 +1,6 @@
 --[[
 	L_Reactor.lua - Core module for Reactor
-	Copyright 2018,2019 Patrick H. Rigney, All Rights Reserved.
+	Copyright 2018,2019,2020 Patrick H. Rigney, All Rights Reserved.
 	This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
 --]]
 --luacheck: std lua51,module,read globals luup,ignore 542 611 612 614 111/_,no max line length
@@ -3220,7 +3220,7 @@ local function resumeScenes()
 				event="runscene", scene=data.scene, group=data.currgroup, step=data.currstep }
 			scheduleDelay( { id=data.taskid, owner=data.owner, func=execSceneGroups, args={} }, 1 )
 		else
-			D("resumeScenes() skipping resume of %1 for %2; RS no longer exists", 
+			D("resumeScenes() skipping resume of %1 for %2; RS no longer exists",
 				data.scene, data.owner)
 		end
 	end
