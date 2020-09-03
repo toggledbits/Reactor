@@ -3,7 +3,7 @@
  * J_ReactorSensor_UI7.js
  * Configuration interface for ReactorSensor
  *
- * Copyright 2018,2019 Patrick H. Rigney, All Rights Reserved.
+ * Copyright 2018,2019,2020 Patrick H. Rigney, All Rights Reserved.
  * This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
  *
  */
@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.8develop-20245';
+	var pluginVersion = '3.8develop-20247';
 
 	var DEVINFO_MINSERIAL = 482;
 

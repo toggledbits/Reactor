@@ -3,7 +3,7 @@
  * J_Reactor_UI7.js
  * Configuration interface for Reactor master device
  *
- * Copyright 2018,2019 Patrick H. Rigney, All Rights Reserved.
+ * Copyright 2018,2019,2020 Patrick H. Rigney, All Rights Reserved.
  * This file is part Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
  *
  */
@@ -139,7 +139,7 @@ var Reactor = (function(api, $) {
 				".</div>" );
 			return false;
 		}
-		
+
 		/* Go */
 		isALTUI = "undefined" !== typeof(MultiBox);
 		// isOpenLuup = ;

@@ -1,6 +1,6 @@
 --[[
 	L_Reactor.lua - Core module for Reactor
-	Copyright 2018,2019 Patrick H. Rigney, All Rights Reserved.
+	Copyright 2018,2019,2020 Patrick H. Rigney, All Rights Reserved.
 	This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
 --]]
 --luacheck: std lua51,module,read globals luup,ignore 542 611 612 614 111/_,no max line length
@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.8develop-20245"
+local _PLUGIN_VERSION = "3.8develop-20247"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.6/"
 
@@ -154,6 +154,10 @@ end
 local function E(msg, ...) L({level=1,msg=msg}, ...) end
 local function W(msg, ...) L({level=2,msg=msg}, ...) end
 local function T(msg, ...) L(msg, ...) if debug and debug.traceback then luup.log((debug.traceback())) end end
+
+local function timems()
+	return math.floor( socket.gettime() * 1000 + 0.5 ) / 1000
+end
 
 local function getInstallPath()
 	if not installPath then
@@ -663,7 +667,7 @@ local function addEvent( t )
 	sst.eventList = sst.eventList or {}
 	table.insert( sst.eventList, p )
 	while #sst.eventList > 0 and #sst.eventList > maxEvents do table.remove( sst.eventList, 1 ) end
-	if sst.eventLog ~= false then openEventLogFile( dev ) end
+	if sst.eventLog == nil then openEventLogFile( dev ) end
 	if sst.eventLog then pcall( function()
 		sst.eventLog:write( p )
 		sst.eventLog:write( "\n" )
@@ -967,6 +971,8 @@ local function plugin_runOnce( pdev )
 	initVar( "IsHome", "", pdev, MYSID )
 	initVar( "MaxRestartCount", "", pdev, MYSID )
 	initVar( "MaxRestartPeriod", "", pdev, MYSID )
+	initVar( "ActivityCheckpoint", "", pdev, MYSID )
+	initVar( "ActivityMaxExecTime", "", pdev, MYSID )
 	initVar( "RescanDelay", "", pdev, MYSID )
 	initVar( "SMTPServer", "", pdev, MYSID )
 	initVar( "SMTPSender", "", pdev, MYSID )
@@ -2755,8 +2761,9 @@ local function execSceneGroups( tdev, taskid, scd )
 		L("%1 (#%2) attempting to run actions %3 (%4) but system is not yet ready; deferring 5 seconds.",
 			luup.devices[tdev].description, tdev, (scd or {}).name or sst.scene, sst.scene)
 		addEvent{ dev=tdev,
-			msg="Deferring scene execution, system not ready (%(sceneName)s:%(group)s)",
-			event="runscene", scene=sst.scene, sceneName=(scd or {}).name or sst.scene, group=sst.lastgroup+1 }
+			msg="Deferring scene execution, system not ready (%(sceneName)s:%(group)s:%(step)s)",
+			event="runscene", scene=sst.scene, sceneName=(scd or {}).name or sst.scene,
+			group=sst.currgroup, step=sst.currstep }
 		scheduleDelay( { id=sst.taskid, owner=sst.owner, func=execSceneGroups, args={ scd } }, 5 )
 		return taskid
 	end
@@ -2772,49 +2779,57 @@ local function execSceneGroups( tdev, taskid, scd )
 	end
 
 	-- Run next scene group (and keep running groups until no more or delay needed)
-	local nextGroup = sst.lastgroup + 1
-	while nextGroup <= #(scd.groups or {}) do
+	local execBegin = os.time()
+	while sst.currgroup <= #(scd.groups or {}) do
+		local nextGroup = sst.currgroup
+		local sceneGroup = scd.groups[nextGroup]
 		D("execSceneGroups() now at group %1 of scene %2 (%3)", nextGroup, scd.id, scd.name)
 		-- If scene group has a delay, see if we're there yet.
-		local now = os.time() -- update time, as scene groups can take a long time to execute
-		local delay = scd.groups[nextGroup].delay or 0
-		if type(delay) == "string" then _,delay = getValue( delay, nil, tdev ) end
-		if type(delay) ~= "number" then
-			W("%1 (%2) delay at group %3 did not resolve to number; no delay!",
-				luup.devices[tdev].description, tdev, nextGroup)
-			addEvent{ dev=tdev,
-				msg="TROUBLE: Invalid delay in scene group %(group)s of %(sceneName)s: %(delay)q",
-				event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, delay=delay or "nil", ['error']="TROUBLE: invalid delay in scene group" }
-			getSensorState( tdev ).trouble = true
-			delay = 0
-		end
-		if delay > 0 then
-			D("execSceneGroups() delay is %1 %2", delay, scd.groups[nextGroup].delaytype)
-			local delaytype = scd.groups[nextGroup].delaytype or "inline"
-			local tt
-			-- Vera (7.x.x) scenes are always "start" delay type.
-			if delaytype == "start" or not scd.isReactorScene then
-				tt = sst.starttime + delay
-			else
-				tt = (sst.lastgrouptime or sst.starttime) + delay
-			end
-			if tt > now then
-				-- It's not time yet. Schedule task to continue.
-				logActivityStep( "Delay until "..fdatetime(tt),
-					scd, nextGroup, nil, nil, tdev )
-				D("execSceneGroups() scene group %1 must delay to %2", nextGroup, tt)
+		if sst.currstep < 1 then
+			local delay = sceneGroup.delay or 0
+			if type(delay) == "string" then _,delay = getValue( delay, nil, tdev ) end
+			if type(delay) ~= "number" then
+				W("%1 (%2) delay at group %3 did not resolve to number; no delay!",
+					luup.devices[tdev].description, tdev, nextGroup)
 				addEvent{ dev=tdev,
-					msg="Delaying scene %(sceneName)s group %(group)s actions until %(when)s",
-					event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, when=os.date("%X", tt), notice="Scene delay" }
-				scheduleTick( { id=sst.taskid, owner=sst.owner, func=execSceneGroups, args={ scd } }, tt )
-				return taskid
+					msg="TROUBLE: Invalid delay in scene group %(group)s of %(sceneName)s: %(delay)q",
+					event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, delay=delay or "nil", ['error']="TROUBLE: invalid delay in scene group" }
+				getSensorState( tdev ).trouble = true
+				delay = 0
 			end
+			if delay > 0 then
+				D("execSceneGroups() delay is %1 %2", delay, sceneGroup.delaytype)
+				local delaytype = sceneGroup.delaytype or "inline"
+				local tt
+				-- Vera (7.x.x) scenes are always "start" delay type.
+				if delaytype == "start" or not scd.isReactorScene then
+					tt = math.floor( sst.starttime + 0.5 ) + delay
+				else
+					tt = ( sst.lastgrouptime or math.floor( sst.starttime + 0.5 ) ) + delay
+				end
+				if tt > os.time() then
+					-- It's not time yet. Schedule task to continue.
+					logActivityStep( "Delay until "..fdatetime(tt),
+						scd, nextGroup, nil, nil, tdev )
+					D("execSceneGroups() scene group %1 must delay to %2", nextGroup, tt)
+					addEvent{ dev=tdev,
+						msg="Delaying scene %(sceneName)s group %(group)s actions until %(when)s",
+						event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, when=os.date("%X", tt), notice="Scene delay" }
+					scheduleTick( { id=sst.taskid, owner=sst.owner, func=execSceneGroups, args={ scd } }, tt )
+					return taskid
+				else
+					D("execSceneGroup() delay target %1 has passed, moving on...", tt)
+				end
+			end
+			sst.currstep = 1
 		end
 
 		-- Run this group.
-		addEvent{ dev=tdev, msg="Starting %(sceneName)q group %(group)s",
-			event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup }
-		for ix,action in ipairs( scd.groups[nextGroup].actions or {} ) do
+		addEvent{ dev=tdev,
+			msg=(sst.currstep == 1 and "Starting" or "Continuing").." %(sceneName)q group %(group)s at step %(step)s",
+			event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, step=sst.currstep }
+		while sst.currstep <= #(sceneGroup.actions or {}) do
+			local action = sceneGroup.actions[sst.currstep]
 			if not scd.isReactorScene then
 				-- Genuine Vera/Luup scene (just has device actions)
 				local devnum = tonumber( action.device )
@@ -2842,30 +2857,30 @@ local function execSceneGroups( tdev, taskid, scd )
 						devnum = tdev
 						param.Options = json.encode( { contextDevice=sst.options.contextDevice, stopPriorScenes=false } )
 					end
-					logActivityStep( "Vera Scene Action", scd, nextGroup, ix, action, tdev )
+					logActivityStep( "Vera Scene Action", scd, nextGroup, sst.currstep, action, tdev )
 					luup.call_action( action.service, action.action, param, devnum )
 				end
 			else
 				-- ReactorScene
-				D("execSceneGroups() %3 step %1: %2", ix, action, scd.id)
+				D("execSceneGroups() %3 step %1: %2", sst.currstep, action, scd.id)
 				if action.type == "comment" then
 					-- If first char is asterisk, emit comment to log file
 					if ( action.comment or ""):byte(1) == 42 then
-						L("%2 (%1) %3 [%4:%5]", tdev, luup.devices[tdev].description,
-							action.comment, scd.id, ix)
+						L("%2 (#%1) %3 [%4:%5:%6]", tdev, luup.devices[tdev].description,
+							action.comment, scd.name or scd.id, sst.currgroup, sst.currstep)
 						addEvent{ dev=tdev,
-							msg="<%(sceneName)s:%(group)s:%(index)s> %(message)s",
+							msg="<%(sceneName)s:%(group)s:%(step)s> %(message)s",
 							event="runscene", scene=scd.id, sceneName=scd.name or scd.id,
-							group=nextGroup, index=ix, message=action.comment or "" }
+							group=nextGroup, step=sst.currstep, message=action.comment or "" }
 					end
 				elseif action.type == "device" then
-					logActivityStep( "Device Action", scd, nextGroup, ix, action, tdev )
+					logActivityStep( "Device Action", scd, nextGroup, sst.currstep, action, tdev )
 					local devnum = tonumber( action.device )
 					if devnum == -1 then devnum = tdev end
 					if devnum == nil or luup.devices[devnum] == nil then
 						addEvent{ dev=tdev,
 							msg="TROUBLE: Device %(xdev)q invalid or does not exist; reference in scene %(sceneName)s group %(group)s step %(step)s",
-							event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, step=ix, xdev=action.device, warning="Invalid device" }
+							event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, step=sst.currstep, xdev=action.device, warning="Invalid device" }
 						W("%5 (%6): invalid device (%4) in scene %1 (%2) group %3; skipping action.",
 							scd.name or "", scd.id, nextGroup, action.device, tdev, luup.devices[tdev].description)
 						getSensorState( tdev ).trouble = true
@@ -2889,12 +2904,29 @@ local function execSceneGroups( tdev, taskid, scd )
 						luup.call_action( action.service, action.action, param, devnum )
 					end
 				elseif action.type == "housemode" then
-					logActivityStep( "Set House Mode", scd, nextGroup, ix, action, tdev )
+					logActivityStep( "Set House Mode", scd, nextGroup, sst.currstep, action, tdev )
 					D("execSceneGroups() setting house mode to %1", action.housemode)
-					luup.call_action( "urn:micasaverde-com:serviceId:HomeAutomationGateway1",
-						"SetHouseMode", { Mode=action.housemode or "1" }, 0 )
+					local newMode = tostring(action.housemode or 1)
+					local currMode = luup.attr_get( "Mode", 0 ) or "1"
+					local transMode = luup.attr_get( "mode_change_mode", 0 ) or ""
+					D("execSceneGroups() current mode is %1 trans mode %2", currMode, transMode)
+					if currMode == newMode then
+						L("%1 (#%2) activity %3:%4:%5 skipping set house mode; already in mode %6",
+							luup.devices[tdev].description, tdev, scd.name or scd.id, nextGroup, sst.currstep,
+							newMode)
+					elseif transMode == newMode then
+						L("%1 (#%2) activity %3:%4:%5 skipping set house mode; timing delay to mode %6 currently in progress.",
+							luup.devices[tdev].description, tdev, scd.name or scd.id, nextGroup, sst.currstep,
+							transMode)
+					end
+					-- Set house mode if check is off, or currMode <> newMode, or not on our way to newMode already
+					if getVarBool( "DisableHouseModeCheck", false, pluginDevice, MYSID ) or
+						( currMode ~= newMode and transMode ~= newMode ) then
+						luup.call_action( "urn:micasaverde-com:serviceId:HomeAutomationGateway1",
+							"SetHouseMode", { Mode=action.housemode or "1" }, 0 )
+					end
 				elseif action.type == "runscene" then
-					logActivityStep( "Run Scene", scd, nextGroup, ix, action, tdev )
+					logActivityStep( "Run Scene", scd, nextGroup, sst.currstep, action, tdev )
 					-- Run scene in same context as this one. Whoa... recursion... depth???
 					local scene = getValue( action.scene, nil, tdev )
 					D("execSceneGroups() launching scene %1 (%2) from scene %3",
@@ -2903,14 +2935,33 @@ local function execSceneGroups( tdev, taskid, scd )
 						luup.call_action( "urn:micasaverde-com:serviceId:HomeAutomationGateway1",
 							"RunScene", { SceneNum=scene }, 0 )
 					else
-						-- Not running as job here because we want in-line execution of scene actions (the Reactor way).
-						local options = { contextDevice=sst.options.contextDevice, stopPriorScenes=false }
-						runScene( scene, tdev, options )
+						-- In the case of resuming an activity with a Run Scene action, the target scene may already
+						-- by on the list of running scenes. In that case, we want to let it resume from wherever
+						-- *it* was; if we call runscene() here, it will restart it from its beginning, which is not
+						-- desirable (particularly if a scene device is causing crashes).
+						local found = false
+						for _, _sc in pairs(sceneState) do
+							if tostring(_sc.scene) == tostring(scene) and (_sc.options or {}).parentAction and
+								_sc.options.parentAction.sig == sst.sig and
+								_sc.options.parentAction.dev == tdev and _sc.options.parentAction.sc == scd.id and
+								_sc.options.parentAction.gr == nextGroup and _sc.options.parentAction.st == sst.currstep then
+								D("execSceneGroups() skipping (re)start of scene %1; it's already running for %2:%3:%4 (%5)",
+									scene, scd.name or scd.id, nextGroup, sst.currstep, sst.sig)
+								found = true
+								break
+							end
+						end
+						if not found then
+							-- Not running; start it. No job here, we want in-line execution (at least for group 1).
+							local options = { contextDevice=sst.options.contextDevice, stopPriorScenes=false }
+							options.parentAction = { sig=sst.sig, dev=tdev, sc=scd.id, gr=nextGroup, st=sst.currstep }
+							runScene( scene, tdev, options )
+						end
 					end
 				elseif action.type == "runlua" then
-					logActivityStep( "Run Lua", scd, nextGroup, ix, action, tdev )
+					logActivityStep( "Run Lua", scd, nextGroup, sst.currstep, action, tdev )
 					local fname = string.format("rs%s_sc%s_gr%d_ac%d",
-						tostring(tdev), tostring(scd.id), nextGroup, ix )
+						tostring(tdev), tostring(scd.id), nextGroup, sst.currstep )
 					D("execSceneGroups() running Lua for %1 (chunk name %2)", scd.id, fname)
 					local lua = action.lua
 					if ( action.encoded_lua or 0 ) ~= 0 then
@@ -2918,7 +2969,7 @@ local function execSceneGroups( tdev, taskid, scd )
 						if lua == nil then
 							addEvent{ dev=tdev,
 								msg="TROUBLE: Can't decode Lua for activity %(sceneName)s group %(group)s step %(step)s",
-								event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, step=ix, ['error']="Can't decode Lua" }
+								event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, step=sst.currstep, ['error']="Can't decode Lua" }
 							W("Aborting scene %1 (%2) run, unable to decode scene Lua", scd.id, scd.name)
 							getSensorState( tdev ).trouble = true
 							stopScene( tdev, nil, tdev ) -- stop all scenes in context.
@@ -2928,26 +2979,26 @@ local function execSceneGroups( tdev, taskid, scd )
 					local more, err = execLua( fname, lua, nil, tdev )
 					if err then
 						W("%1 (%2) aborting scene %3 Lua execution at group step %4, Lua run failed: %5",
-							luup.devices[tdev].description, tdev, scd.id, ix, err)
+							luup.devices[tdev].description, tdev, scd.id, sst.currstep, err)
 						L{level=2,msg="Lua:\n"..lua} -- concat to avoid formatting
 						addEvent{ dev=tdev,
 							msg="TROUBLE: Lua error in activity %(sceneName)s group %(group)s step %(step)s: %(error)s",
-							event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, step=ix, ['error']=err }
+							event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, step=sst.currstep, ['error']=err }
 						getSensorState( tdev ).trouble = true
 						-- Throw on the brakes! (stop all scenes in context)
 						stopScene( tdev, nil, tdev )
 						return nil
 					elseif more == false then -- N.B. specific test to match exactly boolean type false (but not nil)
 						L("%1 (%2) scene %3 Lua at step %4 returned (%5)%6, stopping actions.",
-							luup.devices[tdev].description, tdev, scd.id, ix, type(more), more)
+							luup.devices[tdev].description, tdev, scd.id, sst.currstep, type(more), more)
 						addEvent{ dev=tdev,
 							msg="Aborting activity %(sceneName)s; group %(group)s step %(step)s Lua returned %(retval)q",
-							event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, step=ix, retval=more }
+							event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, step=sst.currstep, retval=more }
 						stopScene( nil, taskid, tdev ) -- stop just this scene.
 						return nil
 					end
 				elseif action.type == "rungsa" then
-					logActivityStep( "Run Group Activity", scd, nextGroup, ix, action, tdev )
+					logActivityStep( "Run Group Activity", scd, nextGroup, sst.currstep, action, tdev )
 					local device = action.device or -1
 					if device == -1 then
 						device = tdev
@@ -2956,14 +3007,14 @@ local function execSceneGroups( tdev, taskid, scd )
 					if ( action.stopall or 0 ) ~= 0 then opts.stopPriorScenes = true end
 					luup.call_action( RSSID, "RunScene", { SceneNum=action.activity or "error", Options=json.encode(opts) }, device )
 				elseif action.type == "stopgsa" then
-					logActivityStep( "Stop Group Activity", scd, nextGroup, ix, action, tdev )
+					logActivityStep( "Stop Group Activity", scd, nextGroup, sst.currstep, action, tdev )
 					local device = action.device or -1
 					if device == -1 then
 						device = tdev
 					end
 					luup.call_action( RSSID, "StopScene", { SceneNum=action.activity or "" }, device )
 				elseif action.type == "setvar" then
-					logActivityStep( "Set Variable", scd, nextGroup, ix, action, tdev )
+					logActivityStep( "Set Variable", scd, nextGroup, sst.currstep, action, tdev )
 					local success, oldval, newval = doSetVar( action.variable, action.value, tdev )
 					if success then
 						addEvent{ dev=tdev, msg="Variable %(variable)q set to %(newValue)q; was %(oldValue)q",
@@ -2973,15 +3024,15 @@ local function execSceneGroups( tdev, taskid, scd )
 						end
 					else
 						L({level=2,msg="Set Variable action (%1 group %2 action %3) target %4 failed: "..tostring(oldval)},
-							scd.id, nextGroup, ix, action.variable)
+							scd.id, nextGroup, sst.currstep, action.variable)
 						addEvent{ dev=tdev,
 								msg="%(sceneName)s group %(group)s action %(index)s Set Variable %(varname)q failed: %(err)s",
 								event="runscene", scene=scd.id, sceneName=scd.name or scd.id,
-								group=nextGroup, index=ix, varname=action.variable, ['err']=oldval }
+								group=nextGroup, index=sst.currstep, varname=action.variable, ['err']=oldval }
 						getSensorState( tdev ).trouble = true
 					end
 				elseif action.type == "resetlatch" then
-					logActivityStep( "Reset Latch", scd, nextGroup, ix, action, tdev )
+					logActivityStep( "Reset Latch", scd, nextGroup, sst.currstep, action, tdev )
 					local device = action.device or -1
 					local group = action.group or ""
 					if device == -1 or device == tdev then
@@ -2996,46 +3047,71 @@ local function execSceneGroups( tdev, taskid, scd )
 						luup.call_action( RSSID, "ClearLatched", { Group=group }, device )
 					end
 				elseif action.type == "notify" then
-					logActivityStep( "Notify", scd, nextGroup, ix, action, tdev )
+					logActivityStep( "Notify", scd, nextGroup, sst.currstep, action, tdev )
 					local success,err = pcall( doActionNotify, action, scd.id, tdev )
 					if not success then
 						L({level=2,msg="Notify action failed: " .. err .. " (%1 group %2 action %3)"},
-							scd.id, nextGroup, ix)
-						local ev = { dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, index=ix }
+							scd.id, nextGroup, sst.currstep)
+						local ev = { dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, index=sst.currstep }
 						ev.warning = err
 						addEvent(ev)
 						getSensorState( tdev ).trouble = true
 					end
 				elseif action.type == "request" then
-					logActivityStep( "HTTP Request", scd, nextGroup, ix, action, tdev )
+					logActivityStep( "HTTP Request", scd, nextGroup, sst.currstep, action, tdev )
 					local success,err = pcall( doActionRequest, action, scd.id, tdev )
 					if not success then
 						L({level=2,msg="Request action failed: " .. err .. " (%1 group %2 action %3)"},
-							scd.id, nextGroup, ix)
-						local ev = { dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, index=ix }
+							scd.id, nextGroup, sst.currstep)
+						local ev = { dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, index=sst.currstep }
 						ev.warning = err
 						addEvent(ev)
 						getSensorState( tdev ).trouble = true
 					end
 				else
 					W("Unhandled action type %1 at %2 in scene %3 for %4 (%5)",
-						action.type, ix, scd.name or scd.id, tdev, luup.devices[tdev].description)
+						action.type, sst.currstep, scd.name or scd.id, tdev, luup.devices[tdev].description)
 					addEvent{ dev=tdev, event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup,
-						warning="TROUBLE: action #" .. tostring(ix) .. " unrecognized type: " .. tostring(action.type) .. ", ignored." }
+						warning="TROUBLE: action #" .. tostring(sst.currstep) .. " unrecognized type: " .. tostring(action.type) .. ", ignored." }
 					getSensorState( tdev ).trouble = true
 				end
 			end
+
+			-- Finished this group yet?
+			if sst.currstep >= #sceneGroup.actions then
+				-- yes
+				break
+			end
+			-- Bookmark step
+			sst.currstep = sst.currstep + 1
+
+			-- If we've spent too long running this scene/activity, take a break
+			if os.time() >= ( execBegin + getVarNumeric( "ActivityMaxExecTime", 15, pluginDevice, MYSID ) ) then
+				D("execSceneGroups() taking a break from scene %1 group %2 at step %3; last exec %4s >= limit",
+					scd.name or scd.id, sst.currgroup, sst.currstep, os.time()-execBegin)
+				luup.variable_set( MYSID, "runscene", json.encode(sceneState), pluginDevice )
+				scheduleDelay( { id=sst.taskid, owner=sst.owner, func=execSceneGroups, args={ scd } }, 0 )
+				return taskid
+			end
+
+			-- Checkpoint every 5 steps
+			if 0 == ( sst.currstep % getVarNumeric( "ActivityCheckpoint", 5, pluginDevice, MYSID ) ) then
+				D("execSceneGroups() checkpoint scene %1 group %2 at step %3", scd.name or scd.id,
+					sst.currgroup, sst.currstep)
+				luup.variable_set( MYSID, "runscene", json.encode(sceneState), pluginDevice )
+			end
 		end
 
-		-- Finished this group. Save position.
-		sst.lastgroup = nextGroup
+		-- Finished this group; set up next, checkpoint.
+		sst.currgroup = sst.currgroup + 1
+		sst.currstep = 0
 		sst.lastgrouptime = os.time()
 		luup.variable_set( MYSID, "runscene", json.encode(sceneState), pluginDevice )
-		nextGroup = nextGroup + 1 -- ...and we're moving on...
 	end
 
 	-- We've run out of groups!
-	addEvent{ dev=tdev, msg="Activity %(sceneName)q finished", event="endscene", scene=scd.id, sceneName=scd.name or scd.id }
+	addEvent{ dev=tdev, msg="Activity %(sceneName)q finished in %(dt)ss", event="endscene",
+		scene=scd.id, sceneName=scd.name or scd.id, dt=timems()-sst.starttime }
 	D("execSceneGroups(%3) reached end of scene %1 (%2)", scd.id, scd.name, taskid)
 	stopScene( nil, taskid, tdev )
 	return nil
@@ -3106,12 +3182,15 @@ local function execScene( scd, tdev, options )
 
 	-- We are going to run groups. Set up for it.
 	D("execScene() setting up to run groups for scene")
-	local now = os.time()
+	local now = timems()
+	local sig = string.format("%x:%x", math.floor(now), math.floor(now*1000)%1000)
 	sceneState[taskid] = {
 		scene=scd.id,   -- scene ID
+		sig=sig,        -- run signature
 		starttime=now,  -- original start time for scene
-		lastgroup=0,    -- last group to finish
-		lastgrouptime=now,
+		currgroup=1,    -- current (next) group to run
+		currstep=0,     -- current (next) step to run
+		lastgrouptime=os.time(),
 		taskid=taskid,  -- timer task ID
 		context=ctx,    -- context device (device requesting scene run)
 		options=options,    -- options
@@ -3133,9 +3212,17 @@ local function resumeScenes()
 	end
 	sceneState = d or {}
 	for _,data in pairs( sceneState ) do
-		addEvent{ dev=data.owner, msg="Resuming run after reload (%(scene)s)",
-			event="runscene", scene=data.scene }
-		scheduleDelay( { id=data.taskid, owner=data.owner, func=execSceneGroups, args={} }, 1 )
+		if luup.devices[data.owner] then
+			D("resumeScenes() resume %1 from group %2 step %3 for %4 (#%5)", data.scene,
+				data.currgroup, data.currstep, luup.devices[data.owner].description,
+				data.owner)
+			addEvent{ dev=data.owner, msg="Resuming run after reload (%(scene)s:%(group)s:%(step)s)",
+				event="runscene", scene=data.scene, group=data.currgroup, step=data.currstep }
+			scheduleDelay( { id=data.taskid, owner=data.owner, func=execSceneGroups, args={} }, 1 )
+		else
+			D("resumeScenes() skipping resume of %1 for %2; RS no longer exists",
+				data.scene, data.owner)
+		end
 	end
 end
 
@@ -4827,7 +4914,10 @@ local function masterTick(pdev)
 	-- Vera Secure has battery, check it.
 	if hasBattery then
 		local st,err = pcall( checkSystemBattery, pdev )
-		if not st then W("Battery check failed: %1", err) end
+		if not st then E("Battery check failed: %1", err) end
+	else
+		setVar( MYSID, "SystemPowerSource", "", pdev )
+		setVar( MYSID, "SystemBatteryLevel", "", pdev )
 	end
 
 	local netState = true
@@ -5067,7 +5157,7 @@ local function startSensors( pdev )
 	scheduleTick( { id=tostring(pdev), func=masterTick, owner=pdev }, tt, { replace=true } )
 
 	-- Resume any scenes that were running prior to restart
-	resumeScenes( pdev )
+	resumeScenes()
 
 	local isRecovery = getVarBool( "recoverymode", false, pdev, MYSID )
 
@@ -5158,6 +5248,7 @@ end
 -- Start plugin running.
 function startPlugin( pdev, ptask ) -- N.B. can be run as task
 	D("startPlugin(%1,%2)", pdev, ptask)
+
 --[[
 	local uilang = luup.attr_get('ui_lang', 0) or "en"
 	local plang = getReactorVar( "lang", "" )
@@ -5306,7 +5397,7 @@ function startPlugin( pdev, ptask ) -- N.B. can be run as task
 	setVar( MYSID, "_UIV", _UIVERSION, pdev )
 
 	-- System type (id 35=Edge, 36=Plus, 37=Secure)
---	hasBattery = luup.modelID == nil or luup.modelID == 37
+	hasBattery = luup.modelID == nil or luup.modelID == 37
 
 	-- Check for ALTUI and OpenLuup
 	local failmsg = false
@@ -5943,6 +6034,8 @@ function tick(p)
 		D("tick() return %2 from task %1, err=%3", v.id, success, err)
 		if not success then
 			addEvent{ dev=v.owner, event="error", message="tick failed", reason=err }
+		else
+			D("tick() task %1 next run %2", v.id, v.when)
 		end
 	end
 
@@ -6006,7 +6099,7 @@ local function sensorWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
 			act=enabled and "" or " (ignored/disabled)" }
 	end
 	if enabled then
-		local holdOff = getVarNumeric( "WatchResponseHoldOff", -1, tdev, RSSID )
+		local holdOff = getVarNumeric( "WatchResponseHoldOff", 0, tdev, RSSID )
 		if holdOff < 0 then
 			-- Immediate update.
 			updateSensor( tdev )
@@ -6688,6 +6781,7 @@ SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 			for _,v in ipairs( { "UseReactorScenes", "LogEventsToFile", "EventLogMaxKB", "Retrigger",
 				"AutoUntrip", "MaxUpdateRate", "MaxChangeRate", "FailOnTrouble", "ContinuousTimer",
 				"ForceGeofenceMode", "StateCacheExpiry", "SuppressLuupRestartUpdate",
+				"ActivityCheckpoint", "ActivityMaxExecTime", "WatchResponseHoldOff",
 				"UseLegacyTripBehavior", "SSLProtocol", "SSLVerify", "SSLOptions",
 				"RequestActionResponseLimit", "RequestActionTimeout", "RequestActionUseCurl",
 				"RequestActionCurlOptions", "RequestActionTimeout",
