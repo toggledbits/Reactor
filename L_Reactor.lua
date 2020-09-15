@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.8develop-20258"
+local _PLUGIN_VERSION = "3.8develop-20259"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.6/"
 
@@ -3624,7 +3624,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		-- Weekday; Lua 1=Sunday, 2=Monday, ..., 7=Saturday
 		local nextDay = os.time{year=ndt.year,month=ndt.month,day=ndt.day+1,hour=0,['min']=0,sec=0}
 		D("evaluateCondition() weekday condition, setting next check for %1", nextDay)
-		scheduleTick( { id=tdev, info="weekday "..cond.id }, nextDay )
+		scheduleDelay( { id=tdev, info="weekday "..cond.id }, nextDay-now )
 		local wd = split( cond.value )
 		local op = cond.operator or ""
 		D("evaluateCondition() weekday %1 among %2", val, wd)
@@ -3832,8 +3832,8 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 			D("evaluateCondition() compare tmnow %1 %2 %3 and %4", tmnow, op, stt, ett)
 			-- Before doing condition check, schedule next time for condition check
 			local edge = ( tmnow < stt ) and stt or ( ( tmnow < ett ) and ett or nil )
-			if edge ~= nil and not sst.timetest then
-				scheduleTick( { id=tdev,info="trangeFULL "..cond.id }, edge )
+			if edge ~= nil then
+				scheduleDelay( { id=tdev,info="trangeFULL "..cond.id }, edge-now )
 			else
 				D("evaluateCondition() cond %1 past end time, not scheduling further checks", cond.id)
 			end
@@ -3928,9 +3928,13 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		-- Find next trigger time.
 		if cs.laststate then
 			-- We are currently true (in a pulse); end pulse and schedule next interval.
-			while expected <= now do expected = expected + interval end
+			if now >= expected then
+				local d = math.floor( ( now - expected ) / interval ) + 1
+				expected = expected + d * interval
+			end
+			-- while expected <= now do expected = expected + interval end
 			D("evaluateCondition() resetting, next %1", expected)
-			scheduleTick( { id=tdev, info="interval "..cond.id }, expected )
+			scheduleDelay( { id=tdev, info="interval "..cond.id }, expected-now )
 			return lastTrue,false
 		end
 		-- Not in a pulse. Did we fully miss an interval?
@@ -3943,14 +3947,14 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		elseif now < expected then
 			-- Still need to wait...
 			D("evaluateCondition() too early, delaying %1 seconds until %2", expected-now, expected)
-			scheduleTick( { id=tdev,info="interval "..cond.id }, expected )
+			scheduleDelay( { id=tdev,info="interval "..cond.id }, expected-now )
 			return lastTrue,false
 		end
 		-- Go true.
 		D("evaluateCondition() triggering interval condition %1", cond.id)
 		-- On time of 1 second (use reset delay to extend)
 		scheduleDelay( { id=tdev,info="interval "..cond.id }, 0 )
-		return cond.basedate and expected or now,true
+		return now,true
 
 	elseif cond.type == "ishome" then
 		-- Geofence, is user home?
@@ -4041,7 +4045,6 @@ local function processCondition( cond, grp, cdata, tdev )
 
 	-- Preserve the result of the condition eval. We are edge-triggered,
 	-- so only save changes, with timestamp.
-cs.statechanged = nil -- DEVELOPMENT
 	if state ~= cs.laststate then
 		D("processCondition() recording %1 state change", cond.id)
 		-- ??? At certain times, Vera gets a time that is in the future, or so it appears. It looks like the TZ offset isn't applied, randomly.
@@ -6088,7 +6091,7 @@ local function sensorWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
 		end
 	elseif sid == RSSID and var == "TestTime" then
 		if newVal == "" then
-			deleteVar( RSSID, "tref", dev )
+			setVar( RSSID, "tref", "", dev )
 		else
 			-- Set reference time. If test time has no seconds, sync reference time to 0sec as well.
 			local tr = os.time()
@@ -6543,6 +6546,8 @@ function RG( grp, condState, level, r )
 			r = r .. string.format("%02dh:%02dm", tonumber(cond.hours) or 0, tonumber(cond.mins) or 0)
 			if cond.relto == "condtrue" then
 				r = r .. " relative to <" .. (cond.relcond or "?") .. "> true"
+			else
+				r = r .. " relative to " .. (cond.basedate or "") .. "," .. (cond.basetime or "-,-")
 			end
 		elseif condtype == "var" then
 			r = r .. string.format("%s %s %s", tostring(cond.var), tostring(cond.operator),
@@ -7119,7 +7124,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			if f then f:close() end
 			local p
 			if usesCompressed then
-				p = io.popen( "pluto-lzo d '"..ff.."' /proc/self/fd/1 | md5sum" )
+				p = io.popen( "pluto-lzo d '"..ff..".lzo' /proc/self/fd/1 | md5sum" )
 			else
 				p = io.popen( "md5sum '"..ff.."'" )
 			end
@@ -7131,7 +7136,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 					sum = "[failed to compute hash]"
 				end
 				p:close()
-				inf.files[fn] = { compressed=usesCompressed or nil, check=sum }
+				inf.files[fn] = { compressed=usesCompressed or nil, check=sum.."" }
 			else
 				inf.files[fn] = { notice="No data" }
 			end
