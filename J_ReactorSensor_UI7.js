@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.8develop-20247';
+	var pluginVersion = '3.8develop-20258';
 
 	var DEVINFO_MINSERIAL = 482;
 
@@ -1301,10 +1301,26 @@ var ReactorSensor = (function(api, $) {
 					if ( ! isEmpty( cond.basetime ) ) {
 						t = cond.basetime.split(/,/);
 						str += " (relative to ";
-						if ( t.length == 2 ) {
-							str += t[0] + ":" + t[1];
+						if ( ! isEmpty( cond.basedate ) ) {
+							var d = cond.basedate.split(/,/);
+							try {
+								var dt = new Date(
+									parseInt( d[0] ),
+									parseInt( d[1] - 1 ),
+									parseInt( d[2] ),
+									parseInt( t[0] ),
+									parseInt( t[1] ),
+									0, 0 );
+								str += ftime( dt, dateFormat + " " + timeFormat );
+							} catch ( e ) {
+								str += String( cond.basedate ) + ' ' + String( cond.basetime );
+							}
 						} else {
-							str += String( cond.basetime );
+							if ( t.length == 2 ) {
+								str += t[0] + ":" + t[1];
+							} else {
+								str += String( cond.basetime );
+							}
 						}
 						str += ")";
 					}
@@ -2344,7 +2360,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 					break;
 
 				case 'interval':
-					removeConditionProperties( cond, "days,hours,mins,basetime,relto,relcond,options" );
+					removeConditionProperties( cond, "days,hours,mins,basetime,basedate,relto,relcond,options" );
 					var nmin = 0;
 					var v = $('div.params .re-days', $row).val() || "0";
 					if ( v.match( varRefPattern ) ) {
@@ -2409,10 +2425,22 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 							$( 'div.params select.re-relcond', $row ).addClass( 'tberror' );
 						}
 						delete cond.basetime;
+						delete cond.basedate;
 					} else {
+						var ry = $( 'div.params input.re-relyear', $row ).val() || "";
+						if ( isEmpty( ry ) ) {
+							delete cond.basedate;
+							$( '.re-reldate', $row ).prop( 'disabled', true );
+						} else {
+							$( '.re-reldate', $row ).prop( 'disabled', false );
+							cond.basedate = ry + "," +
+								( $( 'div.params select.re-relmon', $row ).val() || "1" ) +
+								"," +
+								( $( 'div.params select.re-relday', $row ).val() || "1" );
+						}
 						var rh = $( 'div.params select.re-relhour', $row ).val() || "00";
 						var rm = $( 'div.params select.re-relmin', $row ).val() || "00";
-						if ( rh == "00" && rm == "00" ) {
+						if ( rh == "00" && rm == "00" && isEmpty( cond.basedate ) ) {
 							delete cond.basetime;
 						} else {
 							cond.basetime = rh + "," + rm;
@@ -3583,6 +3611,15 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 					mm.append( $( '<option/>' ).val( "condtrue" ).text( "Condition TRUE" ) );
 					el.append( mm );
 					fs = $( '<fieldset class="re-reltimeset" />' );
+					fs.append('<input type="text" placeholder="yyyy" class="re-relyear narrow datespec form-control form-control-sm" autocomplete="off">');
+					mm = $('<select class="form-control form-control-sm re-relmon re-reldate">').appendTo( fs );
+					for ( k=1; k<=12; k++ ) {
+						$( '<option/>').val( k ).text( monthName[k] ).appendTo( mm );
+					}
+					mm = $('<select class="form-control form-control-sm re-relday re-reldate">').appendTo( fs );
+					for ( k=1; k<=31; k++) {
+						$( '<option/>' ).val( k ).text( k ).appendTo( mm );
+					}
 					mm = $('<select class="form-control form-control-sm re-relhour"/>');
 					for ( k=0; k<24; k++ ) {
 						v = ( k < 10 ? "0" : "" ) + String(k);
@@ -3627,6 +3664,14 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 							mm = cond.basetime.split(/,/);
 							menuSelectDefaultInsert( $( '.re-relhour', container ), mm[0] || '00' );
 							menuSelectDefaultInsert( $( '.re-relmin', container ), mm[1] || '00' );
+						}
+						if ( ! isEmpty( cond.basedate ) ) {
+							mm = cond.basedate.split(/,/);
+							$( 'input.re-relyear', container ).val( mm[0] );
+							menuSelectDefaultFirst( $( '.re-relmon', container ), mm[1] || "1" );
+							menuSelectDefaultFirst( $( '.re-relday', container ), mm[2] || "1" );
+						} else {
+							$( '.re-reldate', container ).prop( 'disabled', true );
 						}
 					}
 					$("select,input", container).on( 'change.reactor', function( ev ) {

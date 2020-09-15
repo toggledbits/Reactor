@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.8develop-20247"
+local _PLUGIN_VERSION = "3.8develop-20258"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.6/"
 
@@ -3335,7 +3335,7 @@ local function doNextCondCheck( taskinfo, nowMSM, startMSM, endMSM, testing )
 end
 
 -- Compute the next interval after lastTrue that's aligned to baseTime
-local function getNextInterval( lastTrue, interval, baseTime)
+local function getNextInterval( lastTrue, interval, baseTime )
 	D("getNextInterval(%1,%2,%3,%4)", lastTrue, interval, baseTime)
 	if not baseTime then
 		local t = os.date("*t", lastTrue)
@@ -3906,8 +3906,8 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 				scheduleDelay( { id=tdev, info="interval "..cond.id }, 1 )
 				return now,true
 			end
-			lastTrue = cs.lastvalue
-			local tpart = os.date("*t", cs.lastvalue)
+			lastTrue = cs.lastvalue or 0
+			local tpart = os.date("*t", lastTrue)
 			tpart.hour = 0
 			tpart.min = 0
 			tpart.sec = 0
@@ -3915,6 +3915,12 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 			if #pt == 2 then
 				tpart.hour = tonumber(pt[1]) or 0
 				tpart.min = tonumber(pt[2]) or 0
+			end
+			pt = split( cond.basedate or "" )
+			if #pt == 3 then
+				tpart.year = tonumber(pt[1])
+				tpart.month = tonumber(pt[2]) or 1
+				tpart.day = tonumber(pt[3]) or 1
 			end
 			local baseTime = os.time(tpart)
 			expected = getNextInterval( lastTrue, interval, baseTime )
@@ -3944,7 +3950,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		D("evaluateCondition() triggering interval condition %1", cond.id)
 		-- On time of 1 second (use reset delay to extend)
 		scheduleDelay( { id=tdev,info="interval "..cond.id }, 0 )
-		return now,true
+		return cond.basedate and expected or now,true
 
 	elseif cond.type == "ishome" then
 		-- Geofence, is user home?
