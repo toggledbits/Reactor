@@ -3,7 +3,7 @@
  * J_ReactorSensor_UI7.js
  * Configuration interface for ReactorSensor
  *
- * Copyright 2018,2019 Patrick H. Rigney, All Rights Reserved.
+ * Copyright 2018,2019,2020 Patrick H. Rigney, All Rights Reserved.
  * This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
  *
  */
@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.7hotfix-20245';
+	var pluginVersion = '3.8RC1-20262';
 
 	var DEVINFO_MINSERIAL = 482;
 
@@ -1798,7 +1798,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 </style>');
 		}
 
-		api.setCpanelContent( '<div id="reactorstatus" class="reactortab"></div>' );
+		api.setCpanelContent( '<div id="reactorstatus" class="reactortab">Loading...</div>' );
 		inStatusPanel = true; /* Tell the event handler it's OK */
 		api.registerEventHandler('on_ui_deviceStatusChanged', ReactorSensor, 'onUIDeviceStatusChanged');
 

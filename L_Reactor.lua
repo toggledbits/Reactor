@@ -1,6 +1,6 @@
 --[[
 	L_Reactor.lua - Core module for Reactor
-	Copyright 2018,2019 Patrick H. Rigney, All Rights Reserved.
+	Copyright 2018,2019,2020 Patrick H. Rigney, All Rights Reserved.
 	This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
 --]]
 --luacheck: std lua51,module,read globals luup,ignore 542 611 612 614 111/_,no max line length
@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.7hotfix-20245"
+local _PLUGIN_VERSION = "3.8RC1-20262"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.6/"
 
@@ -153,6 +153,10 @@ end
 local function E(msg, ...) L({level=1,msg=msg}, ...) end
 local function W(msg, ...) L({level=2,msg=msg}, ...) end
 local function T(msg, ...) L(msg, ...) if debug and debug.traceback then luup.log((debug.traceback())) end end
+
+local function timems()
+	return math.floor( socket.gettime() * 1000 + 0.5 ) / 1000
+end
 
 local function getInstallPath()
 	if not installPath then
@@ -591,7 +595,7 @@ local function addEvent( t )
 	sst.eventList = sst.eventList or {}
 	table.insert( sst.eventList, p )
 	while #sst.eventList > 0 and #sst.eventList > maxEvents do table.remove( sst.eventList, 1 ) end
-	if sst.eventLog ~= false then openEventLogFile( dev ) end
+	if sst.eventLog == nil then openEventLogFile( dev ) end
 	if sst.eventLog then pcall( function()
 		sst.eventLog:write( p )
 		sst.eventLog:write( "\n" )
@@ -1260,8 +1264,12 @@ end
 local function clearConditionState( tdev )
 	D("clearConditionState(%1)", tdev)
 	luup.variable_set( RSSID, "cstate", "", tdev )
-	getSensorState( tdev ).condState = nil
+	local sst = getSensorState( tdev )
+	sst.condState = nil
+	sst.ctx = nil
+	sst.trouble = nil
 	setVar( SENSOR_SID, "Tripped", "0", tdev )
+	setVar( SENSOR_SID, "Trouble", "0", tdev )
 	setVar( SWITCH_SID, "Target", "0", tdev )
 	setVar( SWITCH_SID, "Status", "0", tdev )
 	return loadCleanState( tdev )
@@ -1835,6 +1843,17 @@ local function getExpressionContext( cdata, tdev )
 		-- only return one value (gsub returns 2)
 		return ( str:gsub( "%%([a-f0-9][a-f0-9])", function( m ) return string.char( tonumber( m, 16 ) or 49 ) end ) )
 	end
+	ctx.__functions.b64 = function( args )
+		local str = unpack( args )
+		local mime = require "mime"
+		return ( mime.b64(str or "") )
+	end
+	ctx.__functions.unb64 = function( args )
+		local str = unpack( args )
+		local mime = require "mime"
+		return ( mime.unb64(str or "") )
+	end
+
 	-- Append an element to an array, returns the array.
 	ctx.__functions.arraypush = function( args )
 		addEvent{ dev=tdev, msg="WARNING: Expression function arraypush() is deprecated; please use push()" }
@@ -2218,7 +2237,7 @@ local function doSyslogDatagram( pack, tdev )
 	-- local socket = require "socket"
 	local udp = socket.udp()
 	if udp then
-		D("doActionNotify() sending SysLog UDP datagram to %1", pack.hostip)
+		D("doSyslogDatagram() sending SysLog UDP datagram to %1", pack.hostip)
 		udp:setsockname("*", 0)
 		local stat,err = udp:sendto( datagram, pack.hostip, 514 )
 		udp:close()
@@ -3144,7 +3163,7 @@ local function doNextCondCheck( taskinfo, nowMSM, startMSM, endMSM, testing )
 end
 
 -- Compute the next interval after lastTrue that's aligned to baseTime
-local function getNextInterval( lastTrue, interval, baseTime)
+local function getNextInterval( lastTrue, interval, baseTime )
 	D("getNextInterval(%1,%2,%3,%4)", lastTrue, interval, baseTime)
 	if not baseTime then
 		local t = os.date("*t", lastTrue)
@@ -3433,7 +3452,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		-- Weekday; Lua 1=Sunday, 2=Monday, ..., 7=Saturday
 		local nextDay = os.time{year=ndt.year,month=ndt.month,day=ndt.day+1,hour=0,['min']=0,sec=0}
 		D("evaluateCondition() weekday condition, setting next check for %1", nextDay)
-		scheduleTick( { id=tdev, info="weekday "..cond.id }, nextDay )
+		scheduleDelay( { id=tdev, info="weekday "..cond.id }, nextDay-now )
 		local wd = split( cond.value )
 		local op = cond.operator or ""
 		D("evaluateCondition() weekday %1 among %2", val, wd)
@@ -3641,8 +3660,8 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 			D("evaluateCondition() compare tmnow %1 %2 %3 and %4", tmnow, op, stt, ett)
 			-- Before doing condition check, schedule next time for condition check
 			local edge = ( tmnow < stt ) and stt or ( ( tmnow < ett ) and ett or nil )
-			if edge ~= nil and not sst.timetest then
-				scheduleTick( { id=tdev,info="trangeFULL "..cond.id }, edge )
+			if edge ~= nil then
+				scheduleDelay( { id=tdev,info="trangeFULL "..cond.id }, edge-now )
 			else
 				D("evaluateCondition() cond %1 past end time, not scheduling further checks", cond.id)
 			end
@@ -3715,8 +3734,8 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 				scheduleDelay( { id=tdev, info="interval "..cond.id }, 1 )
 				return now,true
 			end
-			lastTrue = cs.lastvalue
-			local tpart = os.date("*t", cs.lastvalue)
+			lastTrue = cs.lastvalue or 0
+			local tpart = os.date("*t", lastTrue)
 			tpart.hour = 0
 			tpart.min = 0
 			tpart.sec = 0
@@ -3731,9 +3750,13 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		-- Find next trigger time.
 		if cs.laststate then
 			-- We are currently true (in a pulse); end pulse and schedule next interval.
-			while expected <= now do expected = expected + interval end
+			if now >= expected then
+				local d = math.floor( ( now - expected ) / interval ) + 1
+				expected = expected + d * interval
+			end
+			-- while expected <= now do expected = expected + interval end
 			D("evaluateCondition() resetting, next %1", expected)
-			scheduleTick( { id=tdev, info="interval "..cond.id }, expected )
+			scheduleDelay( { id=tdev, info="interval "..cond.id }, expected-now )
 			return lastTrue,false
 		end
 		-- Not in a pulse. Did we fully miss an interval?
@@ -3746,7 +3769,7 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		elseif now < expected then
 			-- Still need to wait...
 			D("evaluateCondition() too early, delaying %1 seconds until %2", expected-now, expected)
-			scheduleTick( { id=tdev,info="interval "..cond.id }, expected )
+			scheduleDelay( { id=tdev,info="interval "..cond.id }, expected-now )
 			return lastTrue,false
 		end
 		-- Go true.
@@ -3844,7 +3867,6 @@ local function processCondition( cond, grp, cdata, tdev )
 
 	-- Preserve the result of the condition eval. We are edge-triggered,
 	-- so only save changes, with timestamp.
-cs.statechanged = nil -- DEVELOPMENT
 	if state ~= cs.laststate then
 		D("processCondition() recording %1 state change", cond.id)
 		-- ??? At certain times, Vera gets a time that is in the future, or so it appears. It looks like the TZ offset isn't applied, randomly.
@@ -4920,6 +4942,7 @@ local function startSensor( tdev, pdev, isReload )
 	sst.eventList = sst.eventList or {}
 	sst.configData = nil
 	sst.condState = nil
+	sst.ctx = nil
 	sst.updateRate = initRate( 60, 15 )
 	sst.updateThrottled = false
 	sst.changeRate = initRate( 60, 15 )
@@ -4961,7 +4984,7 @@ local function startSensors( pdev )
 	scheduleTick( { id=tostring(pdev), func=masterTick, owner=pdev }, tt, { replace=true } )
 
 	-- Resume any scenes that were running prior to restart
-	resumeScenes( pdev )
+	resumeScenes()
 
 	local isRecovery = getVarBool( "recoverymode", false, pdev, MYSID )
 
@@ -5000,6 +5023,7 @@ local function startSensors( pdev )
 			luup.attr_set( "hidden", debugMode and 0 or 1, k )
 			luup.attr_set( "room", luup.attr_get( "room", pdev ) or "0", k )
 			setVar( SENSOR_SID, "Tripped", "0", k )
+			setVar( SENSOR_SID, "ArmedTripped", "0", k )
 			setHMTModeSetting( k )
 			addServiceWatch( k, SENSOR_SID, "Armed", pdev )
 		else
@@ -5836,6 +5860,8 @@ function tick(p)
 		D("tick() return %2 from task %1, err=%3", v.id, success, err)
 		if not success then
 			addEvent{ dev=v.owner, event="error", message="tick failed", reason=err }
+		else
+			D("tick() task %1 next run %2", v.id, v.when)
 		end
 	end
 
@@ -5882,7 +5908,7 @@ local function sensorWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
 		end
 	elseif sid == RSSID and var == "TestTime" then
 		if newVal == "" then
-			deleteVar( RSSID, "tref", dev )
+			setVar( RSSID, "tref", "", dev )
 		else
 			-- Set reference time. If test time has no seconds, sync reference time to 0sec as well.
 			local tr = os.time()
@@ -6026,7 +6052,9 @@ local function getReactorScene( t, s, tdev, runscenes, cf )
 					resp = resp .. pfx .. "Run Lua:" .. EOL
 					resp = resp .. getLuaSummary( act.lua, act.encoded_lua, pfx .. "%6d: %s" )
 				elseif act.type == "runscene" then
-					resp = resp .. pfx .. "Run scene " .. tostring(act.scene) .. " " .. ((luup.scenes[act.scene] or {}).description or (act.sceneName or "").."?") .. EOL
+					resp = resp .. pfx .. "Run scene " .. tostring(act.scene) .. " " .. ((luup.scenes[act.scene] or {}).description or (act.sceneName or "").."?")
+					resp = resp .. ( ( ( act.usevera or 0 ) ~= 0 ) and " (via luup)" or " (via int exec)" )
+					resp = resp .. EOL
 					if not runscenes[tostring(act.scene)] then
 						runscenes[tostring(act.scene)] = getSceneData( act.scene, tdev )
 					end
@@ -6100,6 +6128,10 @@ local function getReactorScene( t, s, tdev, runscenes, cf )
 					if act.method == "SM" then
 						resp = resp .. "; SSL opt " .. json.encode( getSSLParams( "SMTP" ) )
 					end
+					resp = resp .. EOL
+				elseif act.type == "setvar" then
+					resp = resp .. pfx .. string.format("Set Variable %s=%q", tostring(act.variable), tostring(act.value))
+					if act.reeval then resp = resp .. " (force re-eval)" end
 					resp = resp .. EOL
 				else
 					resp = resp .. pfx .. "Action type " .. tostring(act.type) .. "?"
@@ -6331,6 +6363,8 @@ function RG( grp, condState, level, r )
 			r = r .. string.format("%02dh:%02dm", tonumber(cond.hours) or 0, tonumber(cond.mins) or 0)
 			if cond.relto == "condtrue" then
 				r = r .. " relative to <" .. (cond.relcond or "?") .. "> true"
+			else
+				r = r .. " relative to " .. (cond.basedate or "") .. "," .. (cond.basetime or "-,-")
 			end
 		elseif condtype == "var" then
 			r = r .. string.format("%s %s %s", tostring(cond.var), tostring(cond.operator),
@@ -6607,6 +6641,8 @@ SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 	return r
 end
 
+local MIMETYPE_JSON = "application/json"
+
 function request( lul_request, lul_parameters, lul_outputformat )
 	D("request(%1,%2,%3) luup.device=%4", lul_request, lul_parameters, lul_outputformat, luup.device)
 	local action = lul_parameters['action'] or lul_parameters['command'] or ""
@@ -6629,7 +6665,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			luup.variable_set( MYSID, "scenedata", "{}", pluginDevice )
 		end
 		local status, msg = pcall( loadScene, tonumber(lul_parameters.scene or 0), pluginDevice )
-		return json.encode( { status=status,message=msg } ), "application/json"
+		return json.encode( { status=status,message=msg } ), MIMETYPE_JSON
 
 	elseif action == "purge" then
 		-- Purge scene data
@@ -6640,7 +6676,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 	elseif action == "clearconditionstate" then
 		if luup.devices[deviceNum] and luup.devices[deviceNum].device_type == RSTYPE then
 			clearConditionState( deviceNum )
-			return json.encode( { status=true } ), "application/json"
+			return json.encode( { status=true } ), MIMETYPE_JSON
 		end
 		L({level=2,msg="Invalid clearconditionstate action device %1"}, deviceNum)
 		return "ERROR\nInvalid device in request", "text/plain"
@@ -6667,7 +6703,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		for _,n in ipairs( children ) do
 			pcall( actionRestart, n )
 		end
-		return '{"status":true,"message":"Plugin state cleared"}', "application/json"
+		return '{"status":true,"message":"Plugin state cleared"}', MIMETYPE_JSON
 
 	elseif action == "summary" then
 		D("request() generating summary for %1", deviceNum )
@@ -6677,7 +6713,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 
 	elseif action == "tryexpression" then
 		if luup.devices[deviceNum] == nil or luup.devices[deviceNum].device_type ~= RSTYPE then
-			return json.encode{ status=false, message="Invalid device number" }, "application/json"
+			return json.encode{ status=false, message="Invalid device number" }, MIMETYPE_JSON
 		end
 		local expr = lul_parameters['expr'] or ""
 		local sst = getSensorState( deviceNum )
@@ -6686,17 +6722,17 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		-- if debugMode then luaxp._DEBUG = D end
 		D("request() tryexpression expr=%1", expr)
 		if expr:match( "^%s*$" ) then
-			return json.encode( { status=true, resultValue="", err={ message="no expression" }, expression=expr } ), "application/json"
+			return json.encode( { status=true, resultValue="", err={ message="no expression" }, expression=expr } ), MIMETYPE_JSON
 		end
 		local result, err = luaxp.evaluate( expr, ctx )
-		return json.encode( { status=true, resultValue=result, err=err or false, expression=expr } ), "application/json"
+		return json.encode( { status=true, resultValue=result, err=err or false, expression=expr } ), MIMETYPE_JSON
 
 	elseif action == "testlua" then
 		local _,err = loadstring( lul_parameters.lua or "" )
 		if err then
-			return json.encode{ status=false, message=err }, "application/json"
+			return json.encode{ status=false, message=err }, MIMETYPE_JSON
 		end
-		return json.encode{ status=true, message="Lua OK" }, "application/json"
+		return json.encode{ status=true, message="Lua OK" }, MIMETYPE_JSON
 
 	elseif action == "infoupdate" then
 		-- Fetch and install updated deviceinfo file; these will change more frequently than the plugin.
@@ -6714,7 +6750,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		local https = require("ssl.https")
 		local ltn12 = require("ltn12")
 		local f = io.open( tmpPath , "w" )
-		if not f then return json.encode{ status=false, message="A temporary file could not be opened", path=tmpPath }, "application/json" end
+		if not f then return json.encode{ status=false, message="A temporary file could not be opened", path=tmpPath }, MIMETYPE_JSON end
 		local body = "action=fetch&fv=" .. luup.version .. "&pv=" .. _PLUGIN_VERSION
 		local req =  {
 			method = "POST",
@@ -6730,7 +6766,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		http.TIMEOUT = 30
 		https.TIMEOUT = 30
 		local cond, httpStatus, httpHeaders = https.request( req )
-		D("doMatchQuery() returned from request(), cond=%1, httpStatus=%2, httpHeaders=%3", cond, httpStatus, httpHeaders)
+		D("request() returned from request(), cond=%1, httpStatus=%2, httpHeaders=%3", cond, httpStatus, httpHeaders)
 		-- No need to close f, the sink does it for us.
 		-- Handle special errors from socket library
 		if tonumber(httpStatus) == nil then
@@ -6751,13 +6787,13 @@ function request( lul_request, lul_parameters, lul_outputformat )
 				return json.encode{ status=false, exitStatus=es,
 					message="The download was successful but the updated file could not be installed;" ..
 					" please move " .. tmpPath .. " to " .. targetPath },
-					"application/json"
+					MIMETYPE_JSON
 			end
 			os.remove( tmpPath )
-			return json.encode{ status=true, message="Device info updated" }, "application/json"
+			return json.encode{ status=true, message="Device info updated" }, MIMETYPE_JSON
 		end
 		os.remove( tmpPath )
-		return json.encode{ status=false, message="Download failed (" .. tostring(httpStatus) .. ")" }, "application/json"
+		return json.encode{ status=false, message="Download failed (" .. tostring(httpStatus) .. ")" }, MIMETYPE_JSON
 
 	elseif action == "submitdevice" then
 
@@ -6771,7 +6807,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			method = "POST",
 			url = "https://www.toggledbits.com/deviceinfo/submitdevice.php",
 			redirect = false,
-			headers = { ['Content-Length']=string.len( body ), ['Content-Type']="application/json" },
+			headers = { ['Content-Length']=string.len( body ), ['Content-Type']=MIMETYPE_JSON },
 			source = ltn12.source.string( body ),
 			sink = ltn12.sink.table(resp),
 			verify = getReactorVar( "SSLVerify", "none" ),
@@ -6781,16 +6817,16 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		http.TIMEOUT = 30
 		https.TIMEOUT = 30
 		local cond, httpStatus, httpHeaders = https.request( req )
-		D("doMatchQuery() returned from request(), cond=%1, httpStatus=%2, httpHeaders=%3", cond, httpStatus, httpHeaders)
+		D("request() returned from request(), cond=%1, httpStatus=%2, httpHeaders=%3", cond, httpStatus, httpHeaders)
 		-- Handle special errors from socket library
 		if tonumber(httpStatus) == nil then
 			respBody = httpStatus
 			httpStatus = 500
 		end
 		if httpStatus == 200 then
-			return json.encode( { status=true, message="OK" } ), "application/json"
+			return json.encode( { status=true, message="OK" } ), MIMETYPE_JSON
 		end
-		return json.encode( { status=false, message="Can't send device info, status " .. httpStatus } ), "application/json"
+		return json.encode( { status=false, message="Can't send device info, status " .. httpStatus } ), MIMETYPE_JSON
 
 	elseif action == "config" or action == "backup" then
 		local st = { _comment="Reactor configuration " .. os.date("%x %X"), timestamp=os.time(), version=_PLUGIN_VERSION, sensors={} }
@@ -6826,11 +6862,11 @@ function request( lul_request, lul_parameters, lul_outputformat )
 				end
 			else
 				return json.encode( { status=false, message=string.format( "Can't write %s: %s", bfile, tostring(ferr) ) } ),
-					"application/json"
+					MIMETYPE_JSON
 			end
-			return json.encode( { status=true, message="Done!", file=bfile } ), "application/json"
+			return json.encode( { status=true, message="Done!", file=bfile } ), MIMETYPE_JSON
 		end
-		return bdata, "application/json"
+		return bdata, MIMETYPE_JSON
 
 	elseif action == "getcurrentbackup" then
 		local bfile = getInstallPath() .. "reactor-config-backup.json"
@@ -6844,12 +6880,12 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		end
 		if not f then f = io.open( bfile, "r" ) end
 		if not f then
-			return '{"backupstatus":false}', "application/json"
+			return '{"backupstatus":false}', MIMETYPE_JSON
 		else
 			local r = f:read( "*a" )
 			f:close()
 			os.remove( tfile )
-			return r, "application/json"
+			return r, MIMETYPE_JSON
 		end
 
 	elseif action == "status" then
@@ -6890,7 +6926,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 				table.insert( st.devices, devinfo )
 			end
 		end
-		return alt_json_encode( st ), "application/json"
+		return alt_json_encode( st ), MIMETYPE_JSON
 
 	elseif action == "files" then
 		local path = getInstallPath()
@@ -6904,7 +6940,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			if f then f:close() end
 			local p
 			if usesCompressed then
-				p = io.popen( "pluto-lzo d '"..ff.."' /proc/self/fd/1 | md5sum" )
+				p = io.popen( "pluto-lzo d '"..ff..".lzo' /proc/self/fd/1 | md5sum" )
 			else
 				p = io.popen( "md5sum '"..ff.."'" )
 			end
@@ -6921,11 +6957,11 @@ function request( lul_request, lul_parameters, lul_outputformat )
 				inf.files[fn] = { notice="No data" }
 			end
 		end
-		return alt_json_encode( inf ), "application/json"
+		return alt_json_encode( inf ), MIMETYPE_JSON
 
 	elseif action == "alive" then
 		local loadtime = getVarNumeric( "LoadTime", 0, pluginDevice, MYSID )
-		return alt_json_encode( { status=true, loadtime=loadtime } ), "application/json"
+		return alt_json_encode( { status=true, loadtime=loadtime } ), MIMETYPE_JSON
 
 	else
 		return "%REACTOR-REQUEST-F-NOTIMPL, requested action is not implemented", "text/plain"
