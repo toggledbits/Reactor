@@ -4,7 +4,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04
 
 **DEPRECATION NOTICE:** The expression functions `arraypush()`, `arraypop()`, `arrayunshift()` and `arrayshift()` have been made first-class functions in the LuaXP module under the names `push()`, `pop()`, `unshift()` and `shift()` respectively. The `array...()` versions are now deprecated, and will be removed from a future release. Please convert to the new functions, which for all practical purposes are identical (so you just need to change the names in your expressions and it's done).
 
-## Version 3.8 (RC1-20262)
+## Version 3.8 (20262)
 
 * Enhancement: The functions `b64()` and `unb64()` are now available in expressions to (respectively) Base64 encode and decode a string.
 * Fix: fix delay computation when using TestTime for certain date conditions and condition options.
