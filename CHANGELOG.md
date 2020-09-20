@@ -4,20 +4,23 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04
 
 **DEPRECATION NOTICE:** The expression functions `arraypush()`, `arraypop()`, `arrayunshift()` and `arrayshift()` have been made first-class functions in the LuaXP module under the names `push()`, `pop()`, `unshift()` and `shift()` respectively. The `array...()` versions are now deprecated, and will be removed from a future release. Please convert to the new functions, which for all practical purposes are identical (so you just need to change the names in your expressions and it's done).
 
-## Version 3.8 (20259)
+## Version 3.9 development (20264)
 
 * Enhancement: Allow interval "relative to" time to include absolute date.
-* Enhancement: The functions `b64()` and `unb64()` are now available in expressions to (respectively) Base64 encode and decode a string.
 * Enhancement: Loadable functions can be used to create user-specific/custom functions for expressions. See the docs.
+* Internal: update directly from Github (via request).
+* Internal: change default WatchResponseHoldOff to 0; watch responses now run in zero-task timing.
+* Internal: action execution now has time limit, pauses (zero-ms yield) when exceeded.
+
+## Version 3.8 (20262)
+
+* Enhancement: The functions `b64()` and `unb64()` are now available in expressions to (respectively) Base64 encode and decode a string.
 * Fix: fix delay computation when using TestTime for certain date conditions and condition options.
 * Internal: Show all current interval options in Logic Summary (was missing some info).
 * Internal: Fix checksums on file list debug page for compressed files.
 * Internal: restart now clears LuaXP context.
 * Internal: correct function name in log message.
-* Internal: update directly from Github (via request).
 * Internal: fix setvar action display in Logic Summary.
-* Internal: change default WatchResponseHoldOff to 0; watch responses now run in zero-task timing.
-* Internal: action execution now has time limit, pauses (zero-ms yield) when exceeded.
 * Hotfix 20245-01: The parameter name for the `RepairDevice` action introduced in 3.7 has been changed to `RepairTarget` for better compatibility with Luup requests.
 * Hotfix 20225-01: Fix a small issue that makes creation of new RS require additional Luup reload.
 
