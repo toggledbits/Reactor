@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.8develop-20264"
+local _PLUGIN_VERSION = "3.8develop-20267"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.6/"
 
@@ -983,6 +983,9 @@ local function plugin_runOnce( pdev )
 	initVar( "SMTPPort", "", pdev, MYSID )
 	initVar( "ProwlAPIKey", "", pdev, MYSID )
 	initVar( "ProwlProvider", "", pdev, MYSID )
+	initVar( "PushoverToken", "", pdev, MYSID )
+	initVar( "PushoverUser", "", pdev, MYSID )
+	initVar( "PushoverDefaultDevice", "", pdev, MYSID )
 	initVar( "RequireValidClock", "0", pdev, MYSID )
 	initVar( "DefaultCollapseConditions", "", pdev, MYSID )
 
@@ -2438,6 +2441,10 @@ local function doSMTPSend( from, to, subject, body, cc, bcc )
 	return
 end
 
+local function SQ( str ) 
+	return '"' .. (str:gsub('[$`\\"]', '\\%1')) .. '"'
+end
+
 -- Perform notify action
 local function doActionNotify( action, scid, tdev )
 	local nid = action.notifyid
@@ -2488,6 +2495,40 @@ local function doActionNotify( action, scid, tdev )
 				if st ~= 0 or ht ~= 200 then
 					L({level=2,msg="Prowl send returned %1 httpStatus=%2 [%3]"}, st, ht, baseurl)
 					error( "Prowl send request failed (" .. tostring(st) .. ", " .. tostring(ht) .. ")" )
+				end
+			end
+		elseif action.method == "PO" then -- Pushover
+			local ptoken = getReactorVar( "PushoverToken", "" )
+			local puser = getReactorVar( "PushoverUser", "" )
+			if ptoken == "" or puser == "" then
+				error "Pushover token or user not set"
+			else
+				local pdevice = getReactorVar( "PushoverDefaultDevice", "" )
+				local baseurl = getReactorVar( "PushoverURL", "https://api.pushover.net/1/messages.json" )
+				local cmd = 'curl -s -m 15 -X POST -o /tmp/reactor-pushover-resp.txt'
+				cmd = cmd .. string.format(" --form-string token=%s", ptoken)
+				cmd = cmd .. string.format(" --form-string user=%s", puser)
+				cmd = cmd .. string.format(" --form-string message=%s", SQ(msg))
+				if ( action.title or "" ) ~= "" then
+					cmd = cmd .. string.format(" --form-string title=%s", SQ(action.title))
+				else
+					cmd = cmd .. string.format(" --form-string title=%s", SQ(luup.devices[tdev].description))
+				end
+				pdevice = action.podevice or pdevice
+				if pdevice ~= "" then
+					cmd = cmd .. string.format(" --form-string device=%s", SQ(pdevice))
+				end
+				if ( action.priority or "" ) ~= "" then
+					cmd = cmd .. string.format(" --form-string priority=%s", SQ(action.priority))
+				end
+				if ( action.sound or "" ) ~= "" then
+					cmd = cmd .. string.format(" --form-string sound=%s", SQ(action.sound))
+				end
+				cmd = cmd .. " '" .. baseurl .. "'"
+				D("doActionNotify() pushover notify exec: %1", cmd)
+				local st = os.execute( cmd )
+				if st ~= 0 then
+					W("Failed to send Pushover message, status %1, command: %2", st, cmd)
 				end
 			end
 		elseif action.method == "SD" then -- Syslog Datagram

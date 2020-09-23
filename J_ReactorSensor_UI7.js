@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.8develop-20264';
+	var pluginVersion = '3.8develop-20267';
 
 	var DEVINFO_MINSERIAL = 482;
 
@@ -121,11 +121,25 @@ var ReactorSensor = (function(api, $) {
 		  { id: "", name: "Vera-native" }
 		, { id: "SM", name: "SMTP Mail", users: false, extra: [
 				{ id: "recipient", label: "Recipient(s):", placeholder: "blank=default recipient; comma-separate multiple", optional: true },
-				{ id: "subject", label: "Subject:", placeholder: "blank=default subject (RS name)", optional: true }
+				{ id: "subject", label: "Subject:", placeholder: "blank=this ReactorSensor's name", optional: true }
 			], config: { name: "SMTPServer" } }
 		, { id: "PR", name: "Prowl", users: false, requiresUnsafeLua: true, extra: [
 				{ id: "priority", label: "Priority:", type: "select", default: "0", values: [ "-2=Very low", "-1=Low", "0=Normal", "1=High", "2=Emergency" ] }
 			], config: { name: "ProwlAPIKey" } }
+		, { id: "PO", name: "Pushover", users: false, requiresUnsafeLua: true, extra: [
+				{ id: "title", label: "Message Title", placeholder: "blank=this ReactorSensor's name", default: "", optional: true },
+				{ id: "podevice", label: "Device:", placeholder: "optional", default: "", optional: true },
+				{ id: "priority", label: "Priority:", type: "select", default: "0", values: [ "-2=Very low", "-1=Low", "0=Normal", "1=High" ] }, /* 2=Emergency doesn't seem to work, no alert is received 2020-09-23 */
+				{ id: "sound", label: "Sound:", type: "select", default: "", optional: true,
+					values: [ 
+						"=(device default)", "none=(none/silent)", "vibrate=(vibrate only)", "pushover=Pushover",
+						"bike=Bike", "bugle=Bugle", "cashregister=Cash Register", "classical=Classical", "cosmic=Cosmic", "falling=Falling",
+						"gamelan=Gamelan", "incoming=Incoming", "intermission=Intermission", "magic=Magic", "mechanical=Mechanical",
+						"pianobar=Piano Bar", "siren=Siren", "spacealarm=Space Alarm", "tugboat=Tug Boat", "alien=Alien Alarm (long)",
+						"climb=Climb (long)", "persistent=Persistent (long)", "echo=Pushover Echo (long)", "updown=Up Down (long)"
+					] 
+				}
+			], config: { name: "PushoverToken" } }
 		, { id: "SD", name: "Syslog", users: false, extra: [
 				{ id: "hostip", label: "Syslog Server IP:", placeholder: "Host IP4 Address", validpattern: "^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}$" },
 				{ id: "facility", label: "Facility:", type: "select", default: "23", values: [ "0=kern","1=user","2=mail","3-daemon","4=auth","5=syslog","6=lp","7=news","8=uucp","9=clock","10=security","11=FTP","12=NTP","13=audit","14=alert","16=local0","17=local1","18=local2","19=local3","20=local4","21=local5","22=local6","23=local7" ] },
@@ -5935,12 +5949,12 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					xf = $( '<input class="form-control form-control-sm" />' )
 						.attr( 'placeholder', fld.placeholder || "" );
 				}
-				if ( fld.default ) {
+				if ( ! isEmpty( fld.default ) ) {
 					xf.val( fld.default );
 				}
 				xf.addClass( 're-extra-' + fld.id )
 					.on( 'change.reactor', handleActionValueChange );
-				if ( fld.label ) {
+				if ( ! isEmpty( fld.label ) ) {
 					/* Wrap the field in a label */
 					xf = $( '<label/>' )
 						.text( fld.label )
@@ -5987,7 +6001,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 			lf = ninfo.extra ? ninfo.extra.length : 0;
 			for ( f=0; f<lf; f++ ) {
 				fld = ninfo.extra[f];
-				$( '.re-extra-' + fld.id, $row ).val( action[fld.id] || "" );
+				$( '.re-extra-' + fld.id, $row ).val( action[fld.id] || fld.default || "" );
 			}
 			if ( devVeraAlerts ) {
 				$( '<div class="vanotice"/>' )
