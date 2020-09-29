@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.9develop-20267"
+local _PLUGIN_VERSION = "3.9develop-20273"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.6/"
 
@@ -661,7 +661,7 @@ local function addEvent( t )
 	else
 		p = dump(t)
 	end
-	p = os.date("%Y-%m-%d %H:%M:%S") .. ": " .. p
+	p = string.format( "%s.%03d: %s", os.date("%Y-%m-%d %H:%M:%S"), math.floor( socket.gettime() * 1000.0 + 0.5 ) % 1000, p)
 	local dev = t.dev or pluginDevice
 	local sst = getSensorState( dev )
 	sst.eventList = sst.eventList or {}
@@ -7152,6 +7152,21 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			end
 		end
 		return alt_json_encode( st ), MIMETYPE_JSON
+
+	elseif action == "allevents" then
+		local allEvents = {}
+		for k,v in pairs( luup.devices ) do
+			if v.device_type == RSTYPE and v.device_num_parent == pluginDevice then
+				local sst = getSensorState( k )
+				local tag = string.format( " [#%04d]", k )
+				table.insert( allEvents, "0000-00-00 00:00:00.000: " .. v.description .. tag )
+				for _,e in ipairs( sst.eventList or {} ) do
+					table.insert( allEvents, e .. tag )
+				end
+			end
+		end
+		table.sort( allEvents )
+		return alt_json_encode( allEvents ), MIMETYPE_JSON
 
 	elseif action == "files" then
 		local path = getInstallPath()
