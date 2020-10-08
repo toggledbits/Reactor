@@ -4333,7 +4333,7 @@ local function processCondition( cond, grp, cdata, tdev )
 			D("processCondition() reset edge last %1 (from %2)", lastFalse, cs.stateedge)
 			local holdend = lastFalse + condopt.holdtime
 			if holdend > now then
-				D("processCondition() continue reset delay until %1", cs.holduntil)
+				D("processCondition() continue reset delay until %1", holdend)
 				state = true
 				cs.holduntil = holdend
 				scheduleDelay( tostring(tdev), holdend - now )
