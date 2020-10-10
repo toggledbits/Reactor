@@ -9,6 +9,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04
 * Enhancement: Notifications via Pushover are now supported by the Notify action. DOCS NEED: sign up and verify your email address; copy user key to PushoverUser; go to "Your Applications" and create a new application; put API token in PushoverToken.
 * Enhancement: Allow interval "relative to" time to include absolute date.
 * Enhancement: Loadable functions can be used to create user-specific/custom functions for expressions. See the docs.
+* Fix/Enhancement: Bug in firmware for Vera3/Lite 1040 and below handling of ModeSetting delays house mode response; work around to restore performance.
 * Internal: update directly from Github (via request).
 * Internal: change default WatchResponseHoldOff to 0; watch responses now run in zero-task timing.
 * Internal: action execution now has time limit, pauses (zero-ms yield) when exceeded.

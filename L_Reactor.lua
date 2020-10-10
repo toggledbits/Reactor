@@ -536,6 +536,12 @@ end
 local function setHMTModeSetting( hmtdev )
 	local chm = luup.attr_get( 'Mode', 0 ) or "1"
 	local armed = getVarBool( "Armed", false, hmtdev, SENSOR_SID )
+	if (not isOpenLuup) and luup.version_minor <= 1040 then
+		-- Ancient Luup does not disarm correctly per ModeSettings, so on each cycle, reset armed state and
+		-- set/force ModeSettings accordingly.
+		luup.call_action( "urn:micasaverde-com:serviceId:SecuritySensor1", "SetArmed", { newArmedValue="0" }, hmtdev )
+		armed = false
+	end
 	local s = {}
 	for ix=1,4 do
 		table.insert( s, string.format( "%d:%s", ix, ( tostring(ix) == chm ) and ( armed and "A" or "" ) or ( armed and "" or "A" ) ) )
@@ -968,6 +974,7 @@ local function plugin_runOnce( pdev )
 	initVar( "LastDST", "0", pdev, MYSID )
 	initVar( "ClockValid", "1", pdev, MYSID )
 	initVar( "NetworkStatus", "1", pdev, MYSID )
+	initVar( "InternetCheckInterval", "", pdev, MYSID )
 	initVar( "IsHome", "", pdev, MYSID )
 	initVar( "MaxRestartCount", "", pdev, MYSID )
 	initVar( "MaxRestartPeriod", "", pdev, MYSID )
@@ -4972,6 +4979,11 @@ local function masterTick(pdev)
 
 	local netState = true
 	local checkInterval = getVarNumeric( "InternetCheckInterval", 5, pdev, MYSID )
+	-- Temporary
+	if luup.version_minor == 5245 and not isOpenLuup then
+		W("Internet check disabled due to firmware 5245 bug.")
+		checkInterval = 0
+	end
 	if checkInterval > 0 then
 		netState = getVarBool( "NetworkStatus", true, pdev, MYSID )
 		D("masterTick() before probe, stored network state is %1, last check %2 at %3", netState, lastNetCheckState, lastNetCheckTime)
