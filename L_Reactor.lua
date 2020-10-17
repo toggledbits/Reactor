@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.8-20262"
+local _PLUGIN_VERSION = "3.8-20291"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.6/"
 
@@ -4820,7 +4820,7 @@ local function masterTick(pdev)
 			-- Getting geofence data can be a long-running task because of handling
 			-- userdata, so run as a job, unless using LPeg. LPeg considerably speeds up parsing so
 			-- we can do the task inline.
-			if json and json.using_lpeg and not getVarBool( "ForceGeofenceJob", false, pdev, MYSID ) == 0 then
+			if json and json.using_lpeg and not getVarBool( "ForceGeofenceJob", false, pdev, MYSID ) then
 				pcall( updateGeofences, pdev )
 			else
 				D("masterTick() geofence mode %1, launching geofence update as job", geofenceMode)
