@@ -5925,7 +5925,7 @@ local function sensorWatch( dev, sid, var, oldVal, newVal, tdev, pdev )
 			act=enabled and "" or " (ignored/disabled)" }
 	end
 	if enabled then
-		local holdOff = getVarNumeric( "WatchResponseHoldOff", -1, tdev, RSSID )
+		local holdOff = getVarNumeric( "WatchResponseHoldOff", 0, tdev, RSSID )
 		if holdOff < 0 then
 			-- Immediate update.
 			updateSensor( tdev )
