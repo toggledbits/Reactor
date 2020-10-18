@@ -13,7 +13,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04
 * Internal: update directly from Github (via request).
 * Internal: change default WatchResponseHoldOff to 0; watch responses now run in zero-task timing.
 * Internal: action execution now has time limit, pauses (zero-ms yield) when exceeded.
-
+* Hotfix 20291-01: Fix an error that makes geofence updating run as a job in all circumstances (normally only runs as a job when the JSON library is an older than 2.5+LPeg). This will primarily benefit Plus/Secure users who have install available library updates (mostly developers and power users).
 
 ## Version 3.8 (20262)
 
