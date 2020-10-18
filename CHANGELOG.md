@@ -4,7 +4,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04
 
 **DEPRECATION NOTICE:** The expression functions `arraypush()`, `arraypop()`, `arrayunshift()` and `arrayshift()` have been made first-class functions in the LuaXP module under the names `push()`, `pop()`, `unshift()` and `shift()` respectively. The `array...()` versions are now deprecated, and will be removed from a future release. Please convert to the new functions, which for all practical purposes are identical (so you just need to change the names in your expressions and it's done).
 
-## Version 3.9 development (20291)
+## Version 3.9 development (20292)
 
 * Enhancement: Notifications via Pushover are now supported by the Notify action. DOCS NEED: sign up and verify your email address; copy user key to PushoverUser; go to "Your Applications" and create a new application; put API token in PushoverToken.
 * Enhancement: Allow interval "relative to" time to include absolute date.
@@ -14,8 +14,6 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04
 * Internal: change default WatchResponseHoldOff to 0; watch responses now run in zero-task timing.
 * Internal: action execution now has time limit, pauses (zero-ms yield) when exceeded.
 * Hotfix 20291-01: Fix an error that makes geofence updating run as a job in all circumstances (normally only runs as a job when the JSON library is an older than 2.5+LPeg). This will primarily benefit Plus/Secure users who have install available library updates (mostly developers and power users).
-* Hotfix 20245-01: The parameter name for the `RepairDevice` action introduced in 3.7 has been changed to `RepairTarget` for better compatibility with Luup requests.
-* Hotfix 20225-01: Fix a small issue that makes creation of new RS require additional Luup reload.
 
 ## Version 3.8 (20262)
 
@@ -26,6 +24,8 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04
 * Internal: restart now clears LuaXP context.
 * Internal: correct function name in log message.
 * Internal: fix setvar action display in Logic Summary.
+* Hotfix 20245-01: The parameter name for the `RepairDevice` action introduced in 3.7 has been changed to `RepairTarget` for better compatibility with Luup requests.
+* Hotfix 20225-01: Fix a small issue that makes creation of new RS require additional Luup reload.
 
 ## Version 3.7 (20190)
 
