@@ -53,6 +53,7 @@ local clockStable = true
 local clockValid = true
 local lastNetCheckTime = 0
 local lastNetCheckState = false
+local lastInetDaemonUpdate = 0
 local netFailCount = 0
 local lastProbeSite
 local luaEnv -- global state for all runLua actions
@@ -5014,37 +5015,57 @@ local function masterTick(pdev)
 
 	local netState = getVarBool( "NetworkStatus", true, pdev, MYSID )
 	local checkInterval = getVarNumeric( "InternetCheckInterval", 5, pdev, MYSID )
-	if checkInterval > 0 and isOpenLuup then
-		-- Brute-force check
-		D("masterTick() before probe, stored network state is %1, last check %2 at %3", netState, lastNetCheckState, lastNetCheckTime)
-		-- Check periodically or more frequently when known down
-		if not lastNetCheckState or now >= ( lastNetCheckTime + 60 * checkInterval - 5 ) then
-			lastNetCheckTime = now
-			local st
-			st, lastNetCheckState = pcall( checkInternetState, pdev )
-			if not st then
-				W("Failed to complete Internet check probes: %1", lastNetCheckState)
-				lastNetCheckState = true -- keep from doing too many probes while there's a problem
-				setVar( MYSID, "NetworkStatus", "", pdev )
-			else
-				if not lastNetCheckState then
-					netFailCount = netFailCount + 1
-					L({level=2,"All Internet probes have failed %1 times"}, netFailCount)
-					if netFailCount >= 3 then
-						netState = false
-					end
+	if checkInterval > 0 then
+		if isOpenLuup and lastInetDaemonUpdate == 0 then
+			-- Brute-force check on openLuup when script check isn't implemented/running
+			D("masterTick() before probe, stored network state is %1, last check %2 at %3", netState, lastNetCheckState, lastNetCheckTime)
+			-- Check periodically or more frequently when known down
+			if not lastNetCheckState or now >= ( lastNetCheckTime + 60 * checkInterval - 5 ) then
+				lastNetCheckTime = now
+				local st
+				st, lastNetCheckState = pcall( checkInternetState, pdev )
+				if not st then
+					W("Failed to complete Internet check probes: %1", lastNetCheckState)
+					lastNetCheckState = true -- keep from doing too many probes while there's a problem
+					setVar( MYSID, "NetworkStatus", "", pdev )
 				else
-					netState = true
-					netFailCount = 0
+					if not lastNetCheckState then
+						netFailCount = netFailCount + 1
+						L({level=2,"All Internet probes have failed %1 times"}, netFailCount)
+						if netFailCount >= 3 then
+							netState = false
+						end
+					else
+						netState = true
+						netFailCount = 0
+					end
+					updateNetworkStatusHistory( netState and "U" or "D" )
 				end
-				updateNetworkStatusHistory( netState and "U" or "D" )
+			end
+		else
+			-- Script/daemon check running, we hope -- check it.
+			D("masterTick() network status by daemon, last update %1", lastInetDaemonUpdate)
+			if lastInetDaemonUpdate > 0 and os.time() >= ( lastInetDaemonUpdate + 3 * 60 * checkInterval ) then
+				-- We've missed at least three check intervals
+				W("Internet check daemon may have stalled/stopped; no update since %1 (%2m ago)",
+					os.date("%x %X", lastInetDaemonUpdate), math.floor( ( os.time() - lastInetDaemonUpdate ) / 60 ) )
+				if isOpenLuup then
+					W("Falling back to internal Internet check until script resumes.")
+					lastInetDaemonUpdate = 0
+				else
+					setVar( MYSID, "NetworkStatus", "", pdev )
+					netState = true
+					if not getVarBool( "SuppressInetDaemonRestart", false, pdev, MYSID ) then
+						os.execute( "/etc/init.d/reactor_internet_check restart" )
+					end
+				end
 			end
 		end
 	end
 
 	-- Check DST change. Re-eval all conditions if changed, just to be safe.
 	if not netState then
-		L{level=2,msg="Skipping DST check; WAN is down, time may be (or become) inaccurate"}
+		W("No Internet access; skipping DST check")
 	else
 		local dstflag = os.date("*t", now).isdst
 		local dot = dstflag and "1" or "0"
@@ -7251,8 +7272,11 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		if lul_parameters.state == nil then
 			return "OK:"..getVar( "NetworkStatus", "", pluginDevice, MYSID )..":", "text/plain"
 		end
+		lastInetDaemonUpdate = os.time()
 		local newstate = tonumber(lul_parameters.state) or ""
-		setVar( MYSID, "NetworkStatus", newstate, pluginDevice )
+		if tostring(newstate) ~= setVar( MYSID, "NetworkStatus", newstate, pluginDevice ) then
+			L("Internet state change notification to %1", newstate)
+		end
 		local flag = "X"
 		if newstate ~= "" then flag = (newstate == 0) and "D" or "U" end
 		updateNetworkStatusHistory( flag, pluginDevice )
