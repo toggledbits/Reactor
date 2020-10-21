@@ -11,11 +11,11 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.9develop-20295"
+local _PLUGIN_VERSION = "3.9develop-20295.1440"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.9/"
 
-local _CONFIGVERSION	= 20262
+local _CONFIGVERSION	= 20263
 local _CDATAVERSION		= 20045	-- must coincide with JS
 local _UIVERSION		= 20190	-- must coincide with JS
 	  _SVCVERSION		= 20185	-- must coincide with impl file (not local)
@@ -1027,16 +1027,19 @@ local function plugin_runOnce( pdev )
 	deleteVar( RSSID, "cdata", pdev )
 	deleteVar( RSSID, "NotifyQueue", pdev )
 
+	-- On version change or file missing...
+	if not isOpenLuup and
+		( s < _CONFIGVERSION or not file_exists( "/etc/cmh-ludl/reactor_internet_check.sh" ) ) then
+		-- Install reactor_internet_check daemon
+		L("Updating reactor_internet_check daemon...")
+		os.execute( "pluto-lzo d /etc/cmh-ludl/reactor_internet_check.sh.lzo /etc/cmh-ludl/reactor_internet_check.sh" )
+		os.execute( "chmod +rx /etc/cmh-ludl/reactor_internet_check.sh" )
+		os.execute( "/etc/cmh-ludl/reactor_internet_check.sh -I" )
+	end
+
 	-- Update version last.
 	if s < _CONFIGVERSION then
 		os.remove( "/etc/cmh-ludl/Reactor.log" )
-		if not isOpenLuup then
-			-- Install reactor_internet_check daemon
-			L("Updating reactor_internet_check daemon...")
-			os.execute( "pluto-lzo d /etc/cmh-ludl/reactor_internet_check.sh.lzo /etc/cmh-ludl/reactor_internet_check.sh" )
-			os.execute( "chmod +rx /etc/cmh-ludl/reactor_internet_check.sh" )
-			os.execute( "/etc/cmh-ludl/reactor_internet_check.sh -I" )
-		end
 		luup.variable_set( MYSID, "Version", _CONFIGVERSION, pdev )
 	end
 end
@@ -2467,7 +2470,7 @@ local function doSMTPSend( from, to, subject, body, cc, bcc )
 	return
 end
 
-local function SQ( str ) 
+local function SQ( str )
 	return '"' .. (str:gsub('[$`\\"]', '\\%1')) .. '"'
 end
 
