@@ -10,8 +10,8 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04
 * Enhancement: Allow interval "relative to" time to include absolute date.
 * Enhancement: Loadable functions can be used to create user-specific/custom functions for expressions. See the docs.
 * Fix/Enhancement: Bug in firmware for Vera3/Lite 1040 and below handling of ModeSetting delays house mode response; work around to restore performance.
-* Fix/Enhancement: Internet availability test is now offloaded to a script that runs as a daemon.
-* Internal: update directly from Github (via request).
+* Fix/Enhancement: Internet availability test is now offloaded to a script that runs as a daemon. **openLuup users:** please see https://www.toggledbits.com/static/reactor/docs/3.9/Network-Status/ for updated information on considerations for this platform.
+* Internal: update directly from Github (via request, some distrubitions).
 * Internal: change default WatchResponseHoldOff to 0; watch responses now run in zero-task timing.
 * Internal: action execution now has time limit, pauses (zero-ms yield) when exceeded.
 * Hotfix 20291-01: Fix an error that makes geofence updating run as a job in all circumstances (normally only runs as a job when the JSON library is an older than 2.5+LPeg). This will primarily benefit Plus/Secure users who have install available library updates (mostly developers and power users).
