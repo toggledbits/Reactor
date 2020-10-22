@@ -4933,7 +4933,7 @@ end
 
 local function checkInternetState( pdev )
 	D("checkInternetState(%1)", pdev)
-	local sites = split ( ( getReactorVar( "InternetCheckSites", "8.8.8.8,8.8.4.4,1.1.1.1,www.facebook.com,www.amazon.com,www.google.com" ) ) )
+	local sites = split ( ( getReactorVar( "InternetCheckSites", "8.8.8.8,8.8.4.4,1.1.1.1,www.facebook.com,www.amazon.com,www.google.com", pdev ) ) )
 	if not sites or #sites < 3 then
 		error("Misconfiguration: at least three sites are required in InternetCheckSites")
 	end
