@@ -4,7 +4,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04
 
 **DEPRECATION NOTICE:** The expression functions `arraypush()`, `arraypop()`, `arrayunshift()` and `arrayshift()` have been made first-class functions in the LuaXP module under the names `push()`, `pop()`, `unshift()` and `shift()` respectively. The `array...()` versions are now deprecated, and will be removed from a future release. Please convert to the new functions, which for all practical purposes are identical (so you just need to change the names in your expressions and it's done).
 
-## Version 3.9 development (20292)
+## Version 3.9 development (20300)
 
 * Enhancement: Notifications via Pushover are now supported by the Notify action. DOCS NEED: sign up and verify your email address; copy user key to PushoverUser; go to "Your Applications" and create a new application; put API token in PushoverToken.
 * Enhancement: Allow interval "relative to" time to include absolute date.
@@ -14,6 +14,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04
 * Internal: update directly from Github (via request, some distrubitions).
 * Internal: change default WatchResponseHoldOff to 0; watch responses now run in zero-task timing.
 * Internal: action execution now has time limit, pauses (zero-ms yield) when exceeded.
+* Hotfix 20300-01: Fix an error in the event log pathname when rotating the event log (diagnostic only).
 * Hotfix 20291-01: Fix an error that makes geofence updating run as a job in all circumstances (normally only runs as a job when the JSON library is an older than 2.5+LPeg). This will primarily benefit Plus/Secure users who have install available library updates (mostly developers and power users).
 
 ## Version 3.8 (20262)

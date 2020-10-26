@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.9develop-20295.1440"
+local _PLUGIN_VERSION = "3.9develop-20300.1025"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.9/"
 
@@ -5191,7 +5191,7 @@ local function startSensor( tdev, pdev, isReload )
 					L("Rotating event log...")
 					sst.eventLog:close()
 					os.execute( "pluto-lzo c '" .. path .. "' '" .. path .. ".lzo'" )
-					sst.eventLog = io.open( "path", "w" )
+					sst.eventLog = io.open( path, "w" )
 				end
 				if sst.eventLog:seek() == 0 then
 					sst.eventLog:write( os.date("%Y-%m-%d %H:%M:%S") .. ": New log file started\n" )
