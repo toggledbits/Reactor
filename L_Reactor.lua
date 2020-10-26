@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.8hotfix-20292"
+local _PLUGIN_VERSION = "3.8hotfix-20300"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.6/"
 
@@ -563,7 +563,7 @@ local function openEventLogFile( tdev )
 			sst.eventLog = false -- stop trying
 		else
 			sst.eventLogName = path
-			sst.eventLog:write(string.format("%s Event log opened\n", os.date("%x %X")))
+			sst.eventLog:write(string.format("%s Event log opened\n", os.date("%Y-%m-%d %X")))
 		end
 	else
 		D("openEventLogFile() event log file disabled for this RS %1", tdev)
@@ -4918,7 +4918,7 @@ local function startSensor( tdev, pdev, isReload )
 					L("Rotating event log...")
 					sst.eventLog:close()
 					os.execute( "pluto-lzo c '" .. path .. "' '" .. path .. ".lzo'" )
-					sst.eventLog = io.open( "path", "w" )
+					sst.eventLog = io.open( path, "w" )
 				end
 				if sst.eventLog:seek() == 0 then
 					sst.eventLog:write( os.date("%Y-%m-%d %H:%M:%S") .. ": New log file started\n" )
