@@ -21,7 +21,7 @@ var Reactor = (function(api, $) {
 
 	var _UIVERSION = 20190;     /* must coincide with Lua core */
 
-	var _DOCURL = "https://www.toggledbits.com/static/reactor/docs/3.6/";
+	var _DOCURL = "https://www.toggledbits.com/static/reactor/docs/3.9/";
 
 	var myModule = {};
 
