@@ -11,6 +11,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04
 * Enhancement: Loadable functions can be used to create user-specific/custom functions for expressions. See the docs.
 * Fix/Enhancement: Bug in firmware for Vera3/Lite 1040 and below handling of ModeSetting delays house mode response; work around to restore performance.
 * Fix/Enhancement: Internet availability test is now offloaded to a script that runs as a daemon. **openLuup users:** please see https://www.toggledbits.com/static/reactor/docs/3.9/Network-Status/ for updated information on considerations for this platform.
+* Fix: fieldset positioning got a bit strange on recent releases of Chrome and Brave for Windows, maybe Mac. Firefox was not affected.
 * Internal: update directly from Github (via request, some distrubitions).
 * Internal: change default WatchResponseHoldOff to 0; watch responses now run in zero-task timing.
 * Internal: action execution now has time limit, pauses (zero-ms yield) when exceeded.

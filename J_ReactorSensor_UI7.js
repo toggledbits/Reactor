@@ -25,7 +25,7 @@ var ReactorSensor = (function(api, $) {
 
 	var _CDATAVERSION = 20045;  /* must coincide with Lua core */
 
-	var _DOCURL = "https://www.toggledbits.com/static/reactor/docs/3.6/";
+	var _DOCURL = "https://www.toggledbits.com/static/reactor/docs/3.9/";
 
 	var myModule = {};
 
@@ -2279,9 +2279,9 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 						} else {
 							var losOtros;
 							if ( pdiv.hasClass('start') ) {
-								losOtros = $('fieldset.re-endfields input.year', $row);
+								losOtros = $('div.re-endfields input.year', $row);
 							} else {
-								losOtros = $('fieldset.re-startfields input.year', $row);
+								losOtros = $('div.re-startfields input.year', $row);
 							}
 							if ( newval === "" && losOtros.val() !== "" ) {
 								losOtros.val("");
@@ -2290,57 +2290,57 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 							}
 						}
 					}
-					var mon = $("fieldset.re-startfields select.monthmenu", $row).val() || "";
+					var mon = $("div.re-startfields select.monthmenu", $row).val() || "";
 					if ( isEmpty( mon ) ) {
 						/* No/any month. Disable years. */
 						$( '.datespec', $row ).val( "" ).prop( 'disabled', true );
 						/* Ending month must also be blank */
-						$( 'fieldset.re-endfields select.monthmenu', $row ).val( "" );
+						$( 'div.re-endfields select.monthmenu', $row ).val( "" );
 					} else {
 						/* Month specified, year becomes optional, but either both
 						   years must be specified or neither for between/not. */
 						$( '.datespec', $row ).prop( 'disabled', false );
-						$( 'fieldset.re-startfields select.daymenu:has(option[value=""]:selected)', $row ).addClass( 'tberror' );
+						$( 'div.re-startfields select.daymenu:has(option[value=""]:selected)', $row ).addClass( 'tberror' );
 						if ( between ) {
-							$( 'fieldset.re-endfields select.daymenu:has(option[value=""]:selected)', $row ).addClass( 'tberror' );
-							var y1 = $( 'fieldset.re-startfields input.year', $row ).val() || "";
-							var y2 = $( 'fieldset.re-endfields input.year', $row ).val() || "";
+							$( 'div.re-endfields select.daymenu:has(option[value=""]:selected)', $row ).addClass( 'tberror' );
+							var y1 = $( 'div.re-startfields input.year', $row ).val() || "";
+							var y2 = $( 'div.re-endfields input.year', $row ).val() || "";
 							if ( isEmpty( y1 ) !== isEmpty( y2 ) ) {
 								$( '.datespec', $row ).addClass( 'tberror' );
 							}
-							var m2 = $( 'fieldset.re-endfields select.monthmenu', $row ).val() || "";
+							var m2 = $( 'div.re-endfields select.monthmenu', $row ).val() || "";
 							if ( isEmpty( m2 ) ) {
 								/* Ending month may not be blank--flag both start/end */
 								$( 'select.monthmenu', $row ).addClass( 'tberror' );
 							}
 						}
 					}
-					var dom = $( 'fieldset.re-startfields select.daymenu', $row ).val() || "";
+					var dom = $( 'div.re-startfields select.daymenu', $row ).val() || "";
 					if ( isEmpty( dom ) ) {
 						/* Start day is blank. So must be end day */
-						$( 'fieldset.re-endfields select.daymenu', $row ).val( "" );
+						$( 'div.re-endfields select.daymenu', $row ).val( "" );
 					} else if ( between ) {
 						/* Between with start day, end day must also be specified. */
-						$( 'fieldset.re-endfields select.daymenu:has(option[value=""]:selected)', $row ).addClass( 'tberror' );
+						$( 'div.re-endfields select.daymenu:has(option[value=""]:selected)', $row ).addClass( 'tberror' );
 					}
 
 					/* Fetch and load */
 					res = [];
-					res.push( isEmpty( mon ) ? "" : $("fieldset.re-startfields input.year", $row).val() || "" );
+					res.push( isEmpty( mon ) ? "" : $("div.re-startfields input.year", $row).val() || "" );
 					res.push( mon );
-					res.push( $("fieldset.re-startfields select.daymenu", $row).val() || "" );
-					res.push( $("fieldset.re-startfields select.hourmenu", $row).val() || "0" );
-					res.push( $("fieldset.re-startfields select.minmenu", $row).val() || "0" );
+					res.push( $("div.re-startfields select.daymenu", $row).val() || "" );
+					res.push( $("div.re-startfields select.hourmenu", $row).val() || "0" );
+					res.push( $("div.re-startfields select.minmenu", $row).val() || "0" );
 					if ( ! between ) {
 						Array.prototype.push.apply( res, ["","","","",""] );
-						$('fieldset.re-endfields', $row).hide();
+						$('div.re-endfields', $row).hide();
 					} else {
-						$('fieldset.re-endfields', $row).show();
-						res.push( isEmpty( mon ) ? "" : $("fieldset.re-endfields input.year", $row).val() || "" );
-						res.push( isEmpty( mon ) ? "" : $("fieldset.re-endfields select.monthmenu", $row).val() || "" );
-						res.push( $("fieldset.re-endfields select.daymenu", $row).val() || "" );
-						res.push( $("fieldset.re-endfields select.hourmenu", $row).val() || "0" );
-						res.push( $("fieldset.re-endfields select.minmenu", $row).val() || "0" );
+						$('div.re-endfields', $row).show();
+						res.push( isEmpty( mon ) ? "" : $("div.re-endfields input.year", $row).val() || "" );
+						res.push( isEmpty( mon ) ? "" : $("div.re-endfields select.monthmenu", $row).val() || "" );
+						res.push( $("div.re-endfields select.daymenu", $row).val() || "" );
+						res.push( $("div.re-endfields select.hourmenu", $row).val() || "0" );
+						res.push( $("div.re-endfields select.minmenu", $row).val() || "0" );
 					}
 					cond.value = res.join(',');
 					break;
@@ -2358,7 +2358,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 					}
 					res.push( whence + ( offset < 0 ? '' : '+' ) + String(offset) );
 					if ( cond.operator == "bet" || cond.operator == "nob" ) {
-						$( 'fieldset.re-endfields', $row ).show();
+						$( 'div.re-endfields', $row ).show();
 						whence = $('select.re-sunend', $row).val() || "sunset";
 						offset = getInteger( $('input.re-endoffset', $row).val() || "0" );
 						if ( isNaN( offset ) ) {
@@ -2367,7 +2367,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 						}
 						res.push( whence + ( offset < 0 ? '' : '+' ) + String(offset) );
 					} else {
-						$( 'fieldset.re-endfields', $row ).hide();
+						$( 'div.re-endfields', $row ).hide();
 						res.push("");
 					}
 					cond.value = res.join(',');
@@ -2800,13 +2800,13 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 
 			if ( "housemode" === cond.type ) {
 				if ( "change" == ( cond.operator || "is" ) ) {
-					$( 'fieldset.re-modechecks', $row ).hide();
-					$( 'fieldset.re-modeselects', $row ).show();
+					$( 'div.re-modechecks', $row ).hide();
+					$( 'div.re-modeselects', $row ).show();
 					menuSelectDefaultInsert( $( 'select.re-frommode', $row ), vv.length > 0 ? vv[0] : "" );
 					menuSelectDefaultInsert( $( 'select.re-tomode', $row   ), vv.length > 1 ? vv[1] : "" );
 				} else {
-					$( 'fieldset.re-modechecks', $row ).show();
-					$( 'fieldset.re-modeselects', $row ).hide();
+					$( 'div.re-modechecks', $row ).show();
+					$( 'div.re-modeselects', $row ).hide();
 					vv.forEach( function( ov ) {
 						$('input#' + idSelector( cond.id + '-mode-' + ov ), $row).prop('checked', true);
 					});
@@ -2877,7 +2877,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 						$inp.show();
 					}
 				}
-				var $opt = $( 'fieldset.re-nocaseopt', $row );
+				var $opt = $( 'div.re-nocaseopt', $row );
 				if ( 0 === ( op.numeric || 0 ) && false !== op.nocase ) {
 					$opt.show();
 					$( 'input.nocase', $opt ).prop( 'checked', coalesce( cond.nocase, 1 ) !== 0 );
@@ -2977,7 +2977,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 			/* Output Control */
 			var out = $( '<div/>', { "id": "outputopt", "class": "form-inline tboptgroup" } ).appendTo( $container );
 			$( '<div class="opttitle">Output Control</div>' ).append( getWiki( 'Condition-Options' ) ).appendTo( out );
-			var fs = $( '<fieldset class="opt-fs"/> ').appendTo( out );
+			var fs = $( '<div class="opt-fs"/> ').appendTo( out );
 			var rid = "output" + getUID();
 			getRadio( rid, "", "Follow (default) - output remains true while condition matches", "opt-output" )
 				.appendTo( fs );
@@ -2989,7 +2989,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 			   do any legacy configs prior to this restriction being added are still editable. */
 			if ( ( false !== displayed.pulse && !(cond.operator || "=").match( /^(update|change)/ ) ) ||
 				condOpts.pulsetime ) {
-				fs = $( '<fieldset class="opt-fs" />' ).appendTo( out );
+				fs = $( '<div class="opt-fs" />' ).appendTo( out );
 				getRadio( rid, "P", "Pulse - output goes true for", "opt-output" ).appendTo( fs );
 				$( '<input type="number" class="form-control form-control-sm narrow pulseopts re-pulsetime"> seconds</label>' )
 					.appendTo( fs );
@@ -2997,7 +2997,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 					.appendTo( fs );
 			}
 			if ( false !== displayed.latch ) {
-				fs = $( '<fieldset class="opt-fs" />' ).appendTo( out );
+				fs = $( '<div class="opt-fs" />' ).appendTo( out );
 				getRadio( rid, "L", "Latch - output is held true until external reset", "opt-output" )
 					.appendTo( fs );
 			}
@@ -3030,7 +3030,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 				$( '<div class="opttitle">Restrictions</div>' ).append( getWiki( 'Condition-Options' ) ).appendTo( rst );
 				/* Sequence (predecessor condition) */
 				if ( displayed.sequence ) {
-					fs = $( '<fieldset class="opt-fs form-inline"/>' ).appendTo( rst );
+					fs = $( '<div class="opt-fs form-inline"/>' ).appendTo( rst );
 					var $preds = $('<select class="form-control form-control-sm re-predecessor"><option value="">(any time/no sequence)</option></select>');
 					/* Add groups that are not ancestor of condition */
 					DOtraverse( (getConditionIndex()).root, function( node ) {
@@ -3055,13 +3055,13 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 
 				/* Duration */
 				if ( displayed.duration ) {
-					fs = $( '<fieldset class="opt-fs form-inline"/>' ).appendTo( rst );
+					fs = $( '<div class="opt-fs form-inline"/>' ).appendTo( rst );
 					fs.append('<label>Condition must be sustained for&nbsp;</label><select class="form-control form-control-sm re-durop"><option value="ge">at least</option><option value="lt">less than</option></select><input type="text" class="form-control form-control-sm narrow re-duration" autocomplete="off"><label>&nbsp;seconds</label>');
 				}
 
 				/* Repeat */
 				if ( displayed.repeat ) {
-					fs = $( '<fieldset class="opt-fs form-inline" />' ).appendTo( rst );
+					fs = $( '<div class="opt-fs form-inline" />' ).appendTo( rst );
 					fs.append('<label>Condition must repeat <input type="text" class="form-control form-control-sm narrow re-repeatcount" autocomplete="off"> times within <input type="text" class="form-control form-control-sm narrow re-repeatspan" autocomplete="off"> seconds</label>');
 				}
 
@@ -3140,11 +3140,11 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 			var row = el.closest( 'div.cond-container' );
 			var val = el.val() || "is";
 			if ( "at" === val || "notat" === val ) {
-				$( 'fieldset.re-geolong', row ).show();
-				$( 'fieldset.re-geoquick', row ).hide();
+				$( 'div.re-geolong', row ).show();
+				$( 'div.re-geoquick', row ).hide();
 			} else {
-				$( 'fieldset.re-geolong', row ).hide();
-				$( 'fieldset.re-geoquick', row ).show();
+				$( 'div.re-geolong', row ).hide();
+				$( 'div.re-geoquick', row ).show();
 			}
 			handleConditionRowChange( ev );
 		}
@@ -3327,7 +3327,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 							delete cond.deviceName; /* remove old form */
 							configModified = true;
 						}
-						fs = $('<fieldset class="vargroup"/>')
+						fs = $('<div class="vargroup"/>')
 							.appendTo( container );
 						try {
 							fs.append( makeEventMenu( cond, row ) );
@@ -3345,7 +3345,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 					}
 					container.append( makeServiceOpMenu( cond.operator ) );
 					container.append('<input type="text" id="' + cond.id + '-value" class="operand form-control form-control-sm" autocomplete="off" list="reactorvarlist">');
-					v = $( '<fieldset class="re-nocaseopt" />' ).appendTo( container );
+					v = $( '<div class="re-nocaseopt" />' ).appendTo( container );
 					getCheckbox( cond.id + "-nocase", "1", "Ignore&nbsp;case", "nocase" )
 						.appendTo( v );
 					container.append('<div class="currval" />');
@@ -3439,16 +3439,16 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 					mm.on( 'change.reactor', handleConditionOperatorChange );
 					container.append( mm );
 					container.append( " " );
-					// Checkboxes in their own fieldset
-					var d = $( '<fieldset class="condfields form-inline re-modechecks"/>' );
+					// Checkboxes in their own div
+					var d = $( '<div class="condfields form-inline re-modechecks"/>' );
 					for ( k=1; k<=4; k++ ) {
 						getCheckbox( cond.id + '-mode-' + k, k, houseModeName[k] || k, "hmode" )
 							.appendTo( d );
 					}
 					container.append( d );
 					$( "input.hmode", container ).on( 'change.reactor', handleConditionRowChange );
-					// Menus in a separate fieldset
-					d = $( '<fieldset class="condfields re-modeselects"/>' );
+					// Menus in a separate div
+					d = $( '<div class="condfields re-modeselects"/>' );
 					mm = $( '<select class="form-control form-control-sm"/>' );
 					mm.append( '<option value="">(any)</option>' );
 					for ( k=1; k<=4; k++ ) {
@@ -3467,7 +3467,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 				case 'weekday':
 					container.append(
 						'<select class="wdcond form-control form-control-sm"><option value="">Every</option><option value="1">First</option><option value="2">2nd</option><option value="3">3rd</option><option value="4">4th</option><option value="5">5th</option><option value="last">Last</option></select>');
-					fs = $( '<fieldset class="re-wdopts" />' );
+					fs = $( '<div class="re-wdopts" />' );
 					getCheckbox( cond.id + '-wd-1', '1', 'Sun', 'wdopt' ).appendTo( fs );
 					getCheckbox( cond.id + '-wd-2', '2', 'Mon', 'wdopt' ).appendTo( fs );
 					getCheckbox( cond.id + '-wd-3', '3', 'Tue', 'wdopt' ).appendTo( fs );
@@ -3488,15 +3488,15 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 					container.append( makeDateTimeOpMenu( cond.operator ) );
 					$("select.opmenu", container).append('<option value="before">before</option>');
 					$("select.opmenu", container).append('<option value="after">after</option>');
-					container.append('<fieldset class="re-startfields">' +
+					container.append('<div class="re-startfields">' +
 						'<select class="re-sunstart" />'+
 						' offset&nbsp;<input type="text" value="" class="tiny form-control form-control-sm re-startoffset" autocomplete="off">&nbsp;minutes' +
-						'</fieldset>'
+						'</div>'
 					);
-					container.append('<fieldset class="re-endfields">&nbsp;and ' +
+					container.append('<div class="re-endfields">&nbsp;and ' +
 						'<select class="re-sunend"></select> '+
 						' offset&nbsp;<input type="text" value="" class="tiny form-control form-control-sm re-endoffset" autocomplete="off">&nbsp;minutes' +
-						'</fieldset>'
+						'</div>'
 					);
 					mm = $('<select class="form-control form-control-sm">' +
 						'<option value="sunrise">Sunrise</option><option value="sunset">Sunset</option>' +
@@ -3510,9 +3510,9 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 					op = menuSelectDefaultFirst( $("select.opmenu", container), cond.operator );
 					$("select.opmenu", container).on( 'change.reactor', handleConditionRowChange );
 					if ( "bet" === op || "nob" === op ) {
-						$("fieldset.re-endfields", container).show();
+						$("div.re-endfields", container).show();
 					} else {
-						$("fieldset.re-endfields", container).hide();
+						$("div.re-endfields", container).hide();
 					}
 					/* Start */
 					var vals = ( cond.value || "sunrise+0,sunset+0" ).split(/,/);
@@ -3557,13 +3557,13 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 					for ( var mn=0; mn<60; mn+=5 ) {
 						mins.append('<option value="' + mn + '">:' + (mn < 10 ? '0' : '') + mn + '</option>');
 					}
-					container.append('<fieldset class="re-startfields" />').append('<fieldset class="re-endfields">&nbsp;and </fieldset>');
-					$("fieldset.re-startfields", container).append( months.clone() )
+					container.append('<div class="re-startfields" />').append('<div class="re-endfields">&nbsp;and </div>');
+					$("div.re-startfields", container).append( months.clone() )
 						.append( days.clone() )
 						.append('<input type="text" placeholder="yyyy or blank" title="Leave blank for any year" class="year narrow datespec form-control form-control-sm" autocomplete="off">')
 						.append( hours.clone() )
 						.append( mins.clone() );
-					$("fieldset.re-endfields", container).append( months )
+					$("div.re-endfields", container).append( months )
 						.append( days )
 						.append('<input type="text" placeholder="yyyy" class="year narrow datespec form-control form-control-sm" autocomplete="off">')
 						.append( hours )
@@ -3575,15 +3575,15 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 					/* Restore values. */
 					op = menuSelectDefaultFirst( $( "select.opmenu", container ), cond.operator );
 					if ( "bet" === op || "nob" === op ) {
-						$("fieldset.re-endfields", container).show();
+						$("div.re-endfields", container).show();
 					} else {
-						$("fieldset.re-endfields", container).hide();
+						$("div.re-endfields", container).hide();
 					}
 					var vlist = (cond.value || "").split(',');
-					var flist = [ 'fieldset.re-startfields input.year', 'fieldset.re-startfields select.monthmenu','fieldset.re-startfields select.daymenu',
-								  'fieldset.re-startfields select.hourmenu', 'fieldset.re-startfields select.minmenu',
-								  'fieldset.re-endfields input.year','fieldset.re-endfields select.monthmenu', 'fieldset.re-endfields select.daymenu',
-								  'fieldset.re-endfields select.hourmenu','fieldset.re-endfields select.minmenu'
+					var flist = [ 'div.re-startfields input.year', 'div.re-startfields select.monthmenu','div.re-startfields select.daymenu',
+								  'div.re-startfields select.hourmenu', 'div.re-startfields select.minmenu',
+								  'div.re-endfields input.year','div.re-endfields select.monthmenu', 'div.re-endfields select.daymenu',
+								  'div.re-endfields select.hourmenu','div.re-endfields select.minmenu'
 					];
 					var lfx = flist.length;
 					for ( var fx=0; fx<lfx; fx++ ) {
@@ -3601,30 +3601,31 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 					break;
 
 				case 'interval':
-					fs = $( '<fieldset />' );
+					fs = $( '<div />' );
 					el = $( '<label>every </label>' );
 					el.append( '<input title="Enter an integer >= 0; hours and minutes must be 0!" value="0" class="tiny text-center form-control form-control-sm re-days">' );
 					el.append( ' days ' );
 					fs.append( el );
 					fs.append( " " );
-					el = $( '<label> </label>' );
+					el = $( '<label/>' );
 					el.append( '<input title="Enter an integer >= 0" class="tiny text-center form-control form-control-sm re-hours">' );
 					el.append( ' hours ' );
 					fs.append( el );
 					fs.append( " " );
-					el = $( '<label> </label> ');
+					el = $( '<label/>');
 					el.append( '<input title="Enter an integer >= 0" value="0" class="tiny text-center form-control form-control-sm re-mins">' );
 					el.append( ' minutes ');
 					fs.append( el );
 					container.append( fs );
 					container.append( " " );
-					/* Interval relative time or condition (opposing fieldsets) */
+					/* Interval relative time or condition (opposing divs) */
 					el = $( '<label/>' ).text( " relative to ");
 					mm = $( '<select class="form-control form-control-sm re-relto"/>' );
 					mm.append( $( '<option/>' ).val( "" ).text( "Time" ) );
 					mm.append( $( '<option/>' ).val( "condtrue" ).text( "Condition TRUE" ) );
 					el.append( mm );
-					fs = $( '<fieldset class="re-reltimeset" />' );
+					container.append( el );
+					fs = $( '<div class="re-reltimeset" />' );
 					fs.append('<input type="text" placeholder="yyyy" class="re-relyear narrow datespec form-control form-control-sm" autocomplete="off">');
 					mm = $('<select class="form-control form-control-sm re-relmon re-reldate">').appendTo( fs );
 					for ( k=1; k<=12; k++ ) {
@@ -3647,8 +3648,8 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 						mm.append( $('<option/>').val( v ).text( v ) );
 					}
 					fs.append( mm );
-					el.append( fs );
-					fs = $( '<fieldset class="re-relcondset" />' ).hide();
+					container.append( fs );
+					fs = $( '<div class="re-relcondset" />' ).hide();
 					mm = $( '<select class="form-control form-control-sm re-relcond" />' );
 					mm.append( $( '<option/>' ).val( "" ).text( '--choose--' ) );
 					DOtraverse( getConditionIndex().root, function( n ) {
@@ -3659,17 +3660,16 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 						return "comment" !== n.type && n.id != cond.id && !isAncestor( n.id, cond.id );
 					});
 					fs.append( mm );
-					el.append( fs );
-					/* Fin */
-					container.append( $( '<fieldset />' ).append( el ) );
+					container.append( fs );
+
 					$( ".re-days", container ).val( cond.days || 0 );
 					$( ".re-hours", container ).val( cond.hours===undefined ? 1 : cond.hours );
 					$( ".re-mins", container ).val( cond.mins || 0 );
 					$( "select.re-relto", container ).val( cond.relto || "" );
 					if ( "condtrue" === cond.relto ) {
 						/* Relative to condition */
-						$( "fieldset.re-relcondset", container ).show();
-						$( "fieldset.re-reltimeset", container ).hide();
+						$( "div.re-relcondset", container ).show();
+						$( "div.re-reltimeset", container ).hide();
 						var t = cond.relcond || "";
 						menuSelectDefaultInsert( $( "select.re-relcond", container ), t );
 					} else {
@@ -3719,7 +3719,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 						'<select class="geofencecond form-control form-control-sm"><option value="is">Any selected user is home</option><option value="is not">Any selected user is NOT home</option><option value="at">User in geofence</option><option value="notat">User not in geofence</option></select>');
 					mm = $( '<select class="form-control form-control-sm re-userid"/>' );
 					mm.append( $( '<option/>' ).val("").text('--choose user--') );
-					fs = $( '<fieldset class="re-geoquick" />' );
+					fs = $( '<div class="re-geoquick" />' );
 					for ( k in userIx ) {
 						if ( userIx.hasOwnProperty( k ) ) {
 							getCheckbox( cond.id + '-user-' + k, k, userIx[k].name || k, "useropt" )
@@ -3728,7 +3728,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 						}
 					}
 					container.append( fs );
-					fs = $( '<fieldset class="re-geolong" />' );
+					fs = $( '<div class="re-geolong" />' );
 					fs.append( mm );
 					fs.append( '<select class="form-control form-control-sm re-location"/>' );
 					container.append( fs );
@@ -3743,22 +3743,22 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 					$("select.re-userid", container).on( 'change.reactor', handleGeofenceUserChange );
 					$("select.re-location", container).on( 'change.reactor', handleConditionRowChange );
 					if ( op === "at" || op === "notat" ) {
-						$( 'fieldset.re-geoquick', container ).hide();
-						$( 'fieldset.re-geolong', container ).show();
+						$( 'div.re-geoquick', container ).hide();
+						$( 'div.re-geolong', container ).show();
 						mm = ( cond.value || "" ).split(',');
 						if ( mm.length > 0 ) {
 							menuSelectDefaultInsert( $( 'select.re-userid', container ), mm[0] );
 							updateGeofenceLocations( container, mm[1] );
 						}
 					} else {
-						$( 'fieldset.re-geoquick', container ).show();
-						$( 'fieldset.re-geolong', container ).hide();
+						$( 'div.re-geoquick', container ).show();
+						$( 'div.re-geolong', container ).hide();
 						(cond.value || "").split(',').forEach( function( val ) {
 							if ( ! isEmpty( val ) ) {
 								var $c = $('input.useropt[value="' + val + '"]', container);
 								if ( 0 === $c.length ) {
 									$c = getCheckbox( cond.id + '-user-' + val, val, val + "?&nbsp;(unknown&nbsp;user)", "useropt" );
-									$c.appendTo( $( 'fieldset.re-geoquick', container ) );
+									$c.appendTo( $( 'div.re-geoquick', container ) );
 								}
 								$c.prop('checked', true);
 							}
@@ -4478,12 +4478,12 @@ div#tab-conds.reactortab div.cond-cond.tberror { border-left: 4px solid red; } \
 div#tab-conds.reactortab div.condopts { padding-left: 32px; } \
 div#tab-conds.reactortab div.cond-type { display: inline-block; vertical-align: top; } \
 div#tab-conds.reactortab div.params { display: inline-block; clear: right; } \
-div#tab-conds.reactortab div.params fieldset { display: inline-block; border: none; margin: 0 4px; padding: 0 0; } \
+div#tab-conds.reactortab div.params div,label { display: inline-block; border: none; margin: 0 4px; padding: 0 0; } \
 div#tab-conds.reactortab div.currval { font-family: "Courier New", Courier, monospace; font-size: 0.9em; margin: 8px 0px; display: block; } \
 div#tab-conds.reactortab div.warning { color: red; } \
 div#tab-conds.reactortab button.md-btn.attn { background-color: #ff8; background-image: linear-gradient( to bottom, #fff, #ff8 );} \
 div#tab-conds.reactortab button.md-btn.draghandle { cursor: grab; } \
-div#tab-conds.reactortab fieldset.vargroup { display: inline-block; white-space: nowrap; } \
+div#tab-conds.reactortab div.vargroup { display: inline-block; white-space: nowrap; } \
 div#tab-conds.reactortab div.eventlist { display: inline-block; } \
 div#tab-conds.reactortab div.eventlist button { padding: 5px 0px; border-radius: 4px 0 0 4px; background-color: #ccc; background-image: linear-gradient( to bottom, #fff, #e6e6e6 ); background-repeat: repeat-x; } \
 div#tab-conds.reactortab div.eventlist button i { font-size: 21px; color: #666; vertical-align:middle; } \
@@ -4491,9 +4491,9 @@ div#tab-conds.reactortab .varmenu { border-left: none; border-top-left-radius: 0
 div#tab-conds.reactortab div.tboptgroup { background: #fff; border: 1px solid grey; border-radius: 12px; padding: 12px 12px; } \
 div#tab-conds.reactortab div#restrictopt { margin-top: 4px; } \
 div#tab-conds.reactortab div.opttitle { font-size: 1.15em; font-weight: bold; } \
-div#tab-conds.reactortab fieldset.condfields { display: inline-block; } \
-div#tab-conds.reactortab fieldset.opt-fs { display: block; border-bottom: 1px solid #ccc; margin: 4px 0 0 16px; padding: 4px 0; } \
-div#tab-conds.reactortab fieldset.opt-fs input[type=radio] { margin-left: -16px; } \
+div#tab-conds.reactortab div.condfields { display: inline-block; } \
+div#tab-conds.reactortab div.opt-fs { display: block; border-bottom: 1px solid #ccc; margin: 4px 0 0 16px; padding: 4px 0; } \
+div#tab-conds.reactortab div.opt-fs input[type=radio] { margin-left: -16px; } \
 div#tab-conds.reactortab input.titleedit { font-size: 12px; height: 24px; } \
 div#tab-conds.reactortab input.re-comment { width: 100% !important; } \
 </style>');
@@ -5205,8 +5205,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 			case "notify":
 				var method = $( 'select.re-method', row ).val() || "";
 				var ninfo = arrayFindValue( notifyMethods, function( v ) { return v.id === method; } ) || notifyMethods[0];
-				if ( false !== ninfo.users && 0 === $("fieldset.re-users input:checked", row ).length ) {
-					$( 'fieldset.re-users', row ).addClass( 'tberror' );
+				if ( false !== ninfo.users && 0 === $("div.re-users input:checked", row ).length ) {
+					$( 'div.re-users', row ).addClass( 'tberror' );
 				}
 				/* Message cannot be empty. */
 				dev = $( 'input.re-message', row );
@@ -5247,7 +5247,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					$( '.re-reqheads', row ).val( "Content-Type: application/x-www-form-urlencoded\n" + pd );
 				}
 				/* We don't validate post data */
-				$( 'fieldset.re-reqdatafs', row ).toggle( "POST" === rmethod );
+				$( 'div.re-reqdatafs', row ).toggle( "POST" === rmethod );
 				break;
 
 			default:
@@ -5705,7 +5705,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				case "notify":
 					var nid = $( 'input.re-notifyid', row ).val() || "";
 					var method = $( 'select.re-method', row ).val() || "";
-					var ua = $( 'fieldset.re-users input:checked', row );
+					var ua = $( 'div.re-users input:checked', row );
 					var users = [], unames = [];
 					ua.each( function() {
 						var val = $(this).val();
@@ -5917,16 +5917,16 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 	function changeNotifyActionMethod( $row, method, action ) {
 		var ninfo = arrayFindValue( notifyMethods, function( v ) { return v.id === method; } ) || notifyMethods[0];
 		$( "select.re-method", $row ).val( ninfo.id ); /* override */
-		// $( 'fieldset.re-users', $row ).toggle( false !== ninfo.users );
-		$( 'fieldset.re-users', $row ).toggleClass( 'tbhidden', false === ninfo.users )
+		// $( 'div.re-users', $row ).toggle( false !== ninfo.users );
+		$( 'div.re-users', $row ).toggleClass( 'tbhidden', false === ninfo.users )
 			.toggleClass( 'tbinline', false !== ninfo.users );
-		$( 'fieldset.re-extrafields', $row ).remove();
+		$( 'div.re-extrafields', $row ).remove();
 		$( 'div.vanotice', $row ).hide();
 		$( 'div.notifynotice', $row ).remove();
 		/*  Do not clear message or users (even if we don't use them) */
 		var f, lf, fld;
 		if ( ninfo.extra ) {
-			var $extra = $( '<fieldset class="re-extrafields" />' )
+			var $extra = $( '<div class="re-extrafields" />' )
 				.appendTo( $( 'div.actiondata', $row ) );
 			lf = ninfo.extra.length;
 			for ( f=0; f<lf; f++ ) {
@@ -5989,10 +5989,10 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					ua = ua.split( /,/ );
 					lf = ua.length;
 					for ( f=0; f<lf; f++ ) {
-						var $c = $( 'fieldset.re-users input[value="' + ua[f] + '"]', $row );
+						var $c = $( 'div.re-users input[value="' + ua[f] + '"]', $row );
 						if ( 0 === $c.length ) {
 							$c = getCheckbox( getUID( 'chk' ), ua[f], ua[f] + '?&nbsp;(unknown&nbsp;user)' );
-							$c.appendTo( $( 'fieldset.re-users', $row ) );
+							$c.appendTo( $( 'div.re-users', $row ) );
 						}
 						$c.prop( 'checked', true );
 					}
@@ -6740,7 +6740,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				break;
 
 			case "device":
-				$fs = $( '<fieldset class="form-inline"/>' ).appendTo( ct );
+				$fs = $( '<div class="form-inline"/>' ).appendTo( ct );
 				$fs.append( makeDeviceMenu( "", "" ) );
 				$fs.append('<select class="form-control form-control-sm re-actionmenu"></select>');
 				$( 'select.devicemenu', $fs ).on( 'change.reactor', handleActionDeviceChange );
@@ -6749,7 +6749,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				break;
 
 			case "housemode":
-				$fs = $( '<fieldset class="form-inline"/>' ).appendTo( ct );
+				$fs = $( '<div class="form-inline"/>' ).appendTo( ct );
 				$m = $( '<select class="form-control form-control-sm re-mode">')
 					.append( '<option value="1">Home</option>' ).append( '<option value="2">Away</option>' )
 					.append( '<option value="3">Night</option>' ).append( '<option value="4">Vacation</option>' )
@@ -6758,7 +6758,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				break;
 
 			case "delay":
-				$fs = $( '<fieldset class="form-inline"/>' ).appendTo( ct );
+				$fs = $( '<div class="form-inline"/>' ).appendTo( ct );
 				$fs.append('<label>for <input type="text" id="' +
 					pfx + 'delay" class="argument narrow form-control form-control-sm" title="Enter delay time as seconds, MM:SS, or HH:MM:SS" placeholder="delay time" list="reactorvarlist"></label>');
 				$fs.append('<select class="form-control form-control-sm re-delaytype"><option value="inline">from this point</option><option value="start">from start of actions</option></select>');
@@ -6767,7 +6767,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				break;
 
 			case "runscene":
-				$fs = $( '<fieldset class="form-inline"/>' ).appendTo( ct );
+				$fs = $( '<div class="form-inline"/>' ).appendTo( ct );
 				$m = makeSceneMenu()
 					.prepend('<option value="" selected>--choose--</option>')
 					.val("")
@@ -6796,7 +6796,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				break;
 
 			case "rungsa":
-				$fs = $( '<fieldset class="form-inline"/>' ).appendTo( ct );
+				$fs = $( '<div class="form-inline"/>' ).appendTo( ct );
 				makeDeviceMenu( "", "", function( devobj ) {
 						return devobj.device_type === deviceType;
 					})
@@ -6826,7 +6826,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				break;
 
 			case "stopgsa":
-				$fs = $( '<fieldset class="form-inline"/>' ).appendTo( ct );
+				$fs = $( '<div class="form-inline"/>' ).appendTo( ct );
 				makeDeviceMenu( "", "", function( devobj ) {
 						return devobj.device_type === deviceType;
 					})
@@ -6855,7 +6855,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				break;
 
 			case "setvar":
-				$fs = $( '<fieldset class="form-inline"/>' ).appendTo( ct );
+				$fs = $( '<div class="form-inline"/>' ).appendTo( ct );
 				$m = $( '<select/>', { class: "form-control form-control-sm re-variable" } )
 					.appendTo( $fs );
 				var cdata = getConfiguration();
@@ -6899,7 +6899,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				break;
 
 			case "resetlatch":
-				$fs = $( '<fieldset class="form-inline"/>' ).appendTo( ct );
+				$fs = $( '<div class="form-inline"/>' ).appendTo( ct );
 				makeDeviceMenu( "", "", function( devobj ) {
 						return devobj.device_type === deviceType;
 					})
@@ -6928,7 +6928,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				break;
 
 			case "notify":
-				$fs = $( '<fieldset class="form-inline"/>' ).appendTo( ct );
+				$fs = $( '<div class="form-inline"/>' ).appendTo( ct );
 				$( '<div class="actionfooter" />' ).appendTo( ct );
 				$('<input type="hidden" class="re-notifyid" value="">').appendTo( $fs );
 				$m = $( '<select class="form-control form-control-sm re-method" />' );
@@ -6948,7 +6948,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					.on( 'change.reactor', handleActionValueChange )
 					.appendTo( $fs );
 				/* User FS appends as separate group, so message field can grow max */
-				var $ufs = $('<fieldset class="form-inline re-users" />').appendTo( ct );
+				var $ufs = $('<div class="form-inline re-users" />').appendTo( ct );
 				for ( var k in userIx ) {
 					if ( userIx.hasOwnProperty( k ) ) {
 						getCheckbox( getUID( "chk" ), k, userIx[k].name || k )
@@ -6960,7 +6960,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				break;
 
 			case "request":
-				$fs = $( '<fieldset class="form-inline"/>' ).appendTo( ct );
+				$fs = $( '<div class="form-inline"/>' ).appendTo( ct );
 				$m = $( '<select class="form-control form-control-sm re-method" />' );
 				$( '<option/>' ).val( "GET" ).text( "GET" ).appendTo( $m );
 				$( '<option/>' ).val( "POST" ).text( "POST" ).appendTo( $m );
@@ -6968,26 +6968,26 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				$m.on( 'change.reactor', handleActionValueChange )
 					.appendTo( $fs );
 
-				$fs = $( '<fieldset class="re-fullwidth" />' ).appendTo( ct );
+				$fs = $( '<div class="re-fullwidth" />' ).appendTo( ct );
 				var $lb = $( '<label class="re-fullwidth" />' ).text( "Request URL:" ).appendTo( $fs );
 				$( '<textarea class="form-control re-reqfield re-requrl"></textarea>' )
 					.attr( 'placeholder', "Request URL")
 					.on( 'change.reactor', handleActionValueChange )
 					.appendTo( $lb );
 
-				$fs = $( '<fieldset/>' ).appendTo( ct );
+				$fs = $( '<div/>' ).appendTo( ct );
 				$lb = $( '<label class="re-fullwidth" />' ).text( "Request Headers:" ).appendTo( $fs );
 				$( '<textarea class="form-control re-reqfield re-reqheads"></textarea>' )
 					.on( 'change.reactor', handleActionValueChange )
 					.appendTo( $lb );
 
-				$fs = $( '<fieldset class="re-reqdatafs" />' ).hide().appendTo( ct );
+				$fs = $( '<div class="re-reqdatafs" />' ).hide().appendTo( ct );
 				$lb = $( '<label class="re-fullwidth" />' ).text( "POST data:" ).appendTo( $fs );
 				$( '<textarea class="form-control re-reqfield re-reqdata"></textarea>' )
 					.on( 'change.reactor', handleActionValueChange )
 					.appendTo( $lb );
 
-				$fs = $( '<fieldset class="form-inline"/>' ).appendTo( ct );
+				$fs = $( '<div class="form-inline"/>' ).appendTo( ct );
 				$lb = $( '<label />' ).text( "Capture response to:" ).appendTo( $fs );
 				$m = $( '<select class="form-control re-reqtarget"/>' )
 					.on( "change.reactor", handleActionValueChange );
@@ -7521,7 +7521,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						$( 'textarea.re-reqheads', newRow )
 							.val( Array.isArray( act.headers ) ? act.headers.join("\n") : "" );
 						$( 'textarea.re-reqdata', newRow ).val( act.data || "" );
-						$( 'fieldset.re-reqdatafs', newRow ).toggle( "POST" === act.method );
+						$( 'div.re-reqdatafs', newRow ).toggle( "POST" === act.method );
 						var $opt = $( 'select.re-reqtarget option[value="' + (act.target || "") + '"]', newRow );
 						if ( 0 === $opt.length ) {
 							$( '<option/>' ).val( act.target ).text( act.target + " ?")
