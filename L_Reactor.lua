@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.9develop-20301.1820"
+local _PLUGIN_VERSION = "3.9develop-20308.1545"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.9/"
 
@@ -2556,9 +2556,9 @@ local function doActionNotify( action, scid, tdev )
 				end
 				cmd = cmd .. " '" .. baseurl .. "'"
 				D("doActionNotify() pushover notify exec: %1", cmd)
-				local st = os.execute( cmd )
+				local st = os.execute( cmd ) -- N.B. return value cannot be relied upon
 				if st ~= 0 then
-					W("Failed to send Pushover message, status %1, command: %2", st, cmd)
+					W("Pushover: %2 returned %1", st, cmd)
 				end
 			end
 		elseif action.method == "SD" then -- Syslog Datagram
@@ -7064,17 +7064,16 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			httpStatus = 500
 		end
 		if httpStatus == 200 then
-			local es
 			if isOpenLuup then
 				-- openLuup just copies file, no compression.
-				es = os.execute( "mv -f '" .. tmpPath .. "' '" .. targetPath .. "'" )
+				os.execute( "mv -f '" .. tmpPath .. "' '" .. targetPath .. "'" )
 			else
 				-- Save to compressed (LZO) file on Vera Luup.
 				os.remove( targetPath ) -- remove uncompressed if present
-				es = os.execute( string.format( "pluto-lzo c '%s' '%s.lzo'", tmpPath, targetPath ) )
+				os.execute( string.format( "pluto-lzo c '%s' '%s.lzo'", tmpPath, targetPath ) )
 			end
-			if es ~= 0 then
-				return json.encode{ status=false, exitStatus=es,
+			if not file_exists( targetPath ) then
+				return json.encode{ status=false,
 					message="The download was successful but the updated file could not be installed;" ..
 					" please move " .. tmpPath .. " to " .. targetPath },
 					MIMETYPE_JSON
@@ -7302,8 +7301,9 @@ function request( lul_request, lul_parameters, lul_outputformat )
 				os.execute( 'rm -rf /tmp/reactor' )
 				os.execute( 'mkdir -p /tmp/reactor' )
 				D("request() fetching %1", d.zipball_url)
-				local st = os.execute( "curl -s -L -o /tmp/reactor/latest.zip -m 30 '" .. d.zipball_url .. "'" )
-				if st == 0 then
+				-- N.B. return value of os.execute() from within Luup is unreliable.
+				os.execute( "curl -s -q -k -L -o /tmp/reactor/latest.zip -m 30 '" .. d.zipball_url .. "'" )
+				if file_exists( "/tmp/reactor/latest.zip" ) then
 					os.execute( 'unzip -o /tmp/reactor/latest.zip -d /tmp/reactor' )
 					-- Copy/LZO the files
 					local ufiles = {}
