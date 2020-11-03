@@ -2670,7 +2670,7 @@ local function doActionRequest( action, scid, tdev )
 	local respBody
 	local r = {}
 	if action.usecurl or getVarBool( "RequestActionUseCurl", false, tdev, RSSID ) then
-		local req = string.format( "curl -m %d -o -", timeout )
+		local req = string.format( "curl -s -m %d -o -", timeout )
 		if getVarBool( "RequestActionFollowRedirects", false, tdev, RSSID ) then
 			req = req .. " -L"
 		end
@@ -7070,7 +7070,9 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			else
 				-- Save to compressed (LZO) file on Vera Luup.
 				os.remove( targetPath ) -- remove uncompressed if present
-				os.execute( string.format( "pluto-lzo c '%s' '%s.lzo'", tmpPath, targetPath ) )
+				targetPath = targetPath .. ".lzo"
+				os.remove( targetPath )
+				os.execute( string.format( "pluto-lzo c '%s' '%s'", tmpPath, targetPath ) )
 			end
 			if not file_exists( targetPath ) then
 				return json.encode{ status=false,
@@ -7287,7 +7289,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		assert(not isOpenLuup, "Use AltAppStore to update Reactor on openLuup")
 		local lfs = require "lfs"
 		local f = io.popen(
-			'curl -s -o - -m 15 https://api.github.com/repos/toggledbits/Reactor/releases/' ..
+			'curl -s -L -o - -m 15 https://api.github.com/repos/toggledbits/Reactor/releases/' ..
 			lul_parameters.release )
 		if not f then
 			return json.encode( { status=false, message="Unable to fetch Github releases" } ), MIMETYPE_JSON
@@ -7302,7 +7304,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 				os.execute( 'mkdir -p /tmp/reactor' )
 				D("request() fetching %1", d.zipball_url)
 				-- N.B. return value of os.execute() from within Luup is unreliable.
-				os.execute( "curl -s -q -k -L -o /tmp/reactor/latest.zip -m 30 '" .. d.zipball_url .. "'" )
+				os.execute( "curl -s -L -o /tmp/reactor/latest.zip -m 30 '" .. d.zipball_url .. "'" )
 				if file_exists( "/tmp/reactor/latest.zip" ) then
 					os.execute( 'unzip -o /tmp/reactor/latest.zip -d /tmp/reactor' )
 					-- Copy/LZO the files
