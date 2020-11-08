@@ -138,8 +138,9 @@ var ReactorSensor = (function(api, $) {
 						"pianobar=Piano Bar", "siren=Siren", "spacealarm=Space Alarm", "tugboat=Tug Boat", "alien=Alien Alarm (long)",
 						"climb=Climb (long)", "persistent=Persistent (long)", "echo=Pushover Echo (long)", "updown=Up Down (long)"
 					] 
-				}
-			], config: { name: "PushoverToken" } }
+				},
+				{ id: "token", label: "Pushover Token:", placeholder: "blank=from Reactor config", default:"", optional: true }
+			], config: { name: "PushoverUser" } }
 		, { id: "SD", name: "Syslog", users: false, extra: [
 				{ id: "hostip", label: "Syslog Server IP:", placeholder: "Host IP4 Address", validpattern: "^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}$" },
 				{ id: "facility", label: "Facility:", type: "select", default: "23", values: [ "0=kern","1=user","2=mail","3-daemon","4=auth","5=syslog","6=lp","7=news","8=uucp","9=clock","10=security","11=FTP","12=NTP","13=audit","14=alert","16=local0","17=local1","18=local2","19=local3","20=local4","21=local5","22=local6","23=local7" ] },

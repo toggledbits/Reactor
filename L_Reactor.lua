@@ -2528,7 +2528,7 @@ local function doActionNotify( action, scid, tdev )
 				end
 			end
 		elseif action.method == "PO" then -- Pushover
-			local ptoken = getReactorVar( "PushoverToken", "" )
+			local ptoken = ( "" ~= ( action.token or "" ) ) and action.token or getReactorVar( "PushoverToken", "" )
 			local puser = getReactorVar( "PushoverUser", "" )
 			if ptoken == "" or puser == "" then
 				error "Pushover token or user not set"
@@ -2556,7 +2556,7 @@ local function doActionNotify( action, scid, tdev )
 				end
 				cmd = cmd .. " '" .. baseurl .. "'"
 				D("doActionNotify() pushover notify exec: %1", cmd)
-				local st = os.execute( cmd ) -- N.B. return value cannot be relied upon
+				local st = os.execute( cmd ) -- N.B. return value cannot be relied upon under Luup
 				if st ~= 0 then
 					W("Pushover: %2 returned %1", st, cmd)
 				end
