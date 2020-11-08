@@ -7238,7 +7238,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 
 	elseif action == "files" then
 		local path = getInstallPath()
-		local inf = { timestamp=os.time(), files={}, pluginVersion=_PLUGIN_VERSION, serviceVersion=_SVCVERSION, installpath=path }
+		local inf = { timestamp=os.time(), sys=luup.modelID or luup.attr_get('model',0), files={}, pluginVersion=_PLUGIN_VERSION, serviceVersion=_SVCVERSION, installpath=path }
 		for _,fn in ipairs( { "D_ReactorDeviceInfo.json", "D_ReactorSensor_UI7.json", "D_ReactorSensor.xml", "D_Reactor_UI7.json",
 			"D_Reactor.xml", "I_Reactor.xml", "J_Reactor_ALTUI.js", "J_ReactorSensor_ALTUI.js", "J_ReactorSensor_UI7.js",
 			"J_Reactor_UI7.js", "L_LuaXP_Reactor.lua", "L_Reactor.lua", "S_ReactorSensor.xml", "S_Reactor.xml" } ) do
@@ -7264,6 +7264,11 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			else
 				inf.files[fn] = { notice="No data" }
 			end
+		end
+		local p = io.popen("df -kh "..path)
+		if p then
+			inf.df = p:read("*a")
+			p:close()
 		end
 		return alt_json_encode( inf ), MIMETYPE_JSON
 
