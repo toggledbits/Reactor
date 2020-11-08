@@ -6,7 +6,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04
 
 ## Version 3.9 Hotfixes (20313)
 
-* Hotfix 20313-01: Improve RS startup improvements from develop for smoother start of new RS.
+* Hotfix 20313-01: Import RS startup improvements from develop for smoother start of new RS.
 * Hotfix 20300-01: Fix an error in the event log pathname when rotating the event log (diagnostic only).
 * Hotfix 20291-01: Fix an error that makes geofence updating run as a job in all circumstances (normally only runs as a job when the JSON library is an older than 2.5+LPeg). This will primarily benefit Plus/Secure users who have install available library updates (mostly developers and power users).
 
