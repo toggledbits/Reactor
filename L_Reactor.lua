@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.9develop-20308.1545"
+local _PLUGIN_VERSION = "3.9develop-20313.1035"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.9/"
 
@@ -5222,12 +5222,13 @@ local function startSensor( tdev, pdev, isReload )
 	sst.changeThrottled = false
 	sst.isRestart = true -- cleared by processSensorUpdate
 
+	-- Load the config data (enabled or not; we'll toss is not needed).
+	-- This helps ensure we don't throw errors on the UI for new RSs.
+	getSensorConfig( tdev, true )
+
 	if isEnabled( tdev ) then
 		addEvent{ dev=tdev, msg=isReload and "Starting (Luup Startup/Reload)" or "Restarting", event='start' }
 		setMessage("Starting...", tdev)
-
-		-- Load the config data.
-		getSensorConfig( tdev, true )
 
 		-- Clean and restore our condition state.
 		loadCleanState( tdev )
@@ -5243,6 +5244,7 @@ local function startSensor( tdev, pdev, isReload )
 	else
 		L({level=2,"%1 (#%2) is disabled"}, luup.devices[tdev].description, tdev)
 		addEvent{ dev=tdev, msg="Aborting; disabled", event='disabled at start-up' }
+		sst.configData = nil
 		showDisabled( tdev )
 	end
 	return true
@@ -5660,7 +5662,7 @@ function actionAddSensor( pdev, count )
 	local vv = string.format( "%s,Enabled=1\n,room=%s", RSSID, luup.attr_get( "room", pdev ) or "0" )
 	for k = 1,count do
 		highd = highd + 1
-		D("addSensor() creating child %3/%4 as r%1s%2", pdev, highd, k, count)
+		D("addSensor() creating child %3/%4 as r%1s%2 with %5", pdev, highd, k, count, vv)
 		luup.chdev.append( pdev, ptr, string.format("r%ds%d", pdev, highd),
 			"Reactor Sensor " .. highd, "", "D_ReactorSensor.xml", "", vv, false )
 	end

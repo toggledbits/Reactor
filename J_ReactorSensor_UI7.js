@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.9develop-20301';
+	var pluginVersion = '3.9develop-20313';
 
 	var DEVINFO_MINSERIAL = 482;
 
@@ -445,6 +445,9 @@ var ReactorSensor = (function(api, $) {
 			console.log( "ReactorSensor " + myid + ": EMPTY DATA" );
 			alert( 'Reactor has detected that the Vera UI may be badly out of sync with the Vera itself. To remedy this, please (1) reload Luup or reboot your Vera, and then (2) do a "hard-refresh" of your browser (refresh with cache flush). Do not edit any devices or do anything else until this issue has been remedied.' );
 			throw "empty configuration";
+		} else if ( "###" === s ) {
+			alert( 'Please go back out to the device list and make sure this ReactorSensor is ENABLED before re-entering configuration.' );
+			throw "reset configuration";
 		}
 		var cdata;
 		try {
