@@ -392,6 +392,9 @@ var ReactorSensor = (function(api, $) {
 			console.log( "ReactorSensor " + myid + ": EMPTY DATA" );
 			alert( 'Reactor has detected that the Vera UI may be badly out of sync with the Vera itself. To remedy this, please (1) reload Luup or reboot your Vera, and then (2) do a "hard-refresh" of your browser (refresh with cache flush). Do not edit any devices or do anything else until this issue has been remedied.' );
 			throw "empty configuration";
+		} else if ( "###" === s ) {
+			alert( 'Please go back out to the device list and make sure this ReactorSensor is ENABLED before re-entering configuration.' );
+			throw "reset configuration";
 		}
 		var cdata;
 		try {
