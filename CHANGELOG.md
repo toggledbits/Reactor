@@ -4,7 +4,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04
 
 **DEPRECATION NOTICE:** The expression functions `arraypush()`, `arraypop()`, `arrayunshift()` and `arrayshift()` have been made first-class functions in the LuaXP module under the names `push()`, `pop()`, `unshift()` and `shift()` respectively. The `array...()` versions are now deprecated, and will be removed from a future release. Please convert to the new functions, which for all practical purposes are identical (so you just need to change the names in your expressions and it's done).
 
-## Version 3.9 development (20301)
+## Version 3.9 development (20313)
 
 * Enhancement: Notifications via Pushover are now supported by the Notify action. DOCS NEED: sign up and verify your email address; copy user key to PushoverUser; go to "Your Applications" and create a new application; put API token in PushoverToken.
 * Enhancement: Allow interval "relative to" time to include absolute date.
@@ -12,6 +12,7 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04
 * Fix/Enhancement: Bug in firmware for Vera3/Lite 1040 and below handling of ModeSetting delays house mode response; work around to restore performance.
 * Fix/Enhancement: Internet availability test is now offloaded to a script that runs as a daemon. **openLuup users:** please see https://www.toggledbits.com/static/reactor/docs/3.9/Network-Status/ for updated information on considerations for this platform.
 * Fix: fieldset positioning got a bit strange on recent releases of Chrome and Brave for Windows, maybe Mac. Firefox was not affected.
+* Internal: further improvements to smooth startup of new RS (also published as hotfix 20313-01).
 * Internal: update directly from Github (via request, some distrubitions).
 * Internal: change default WatchResponseHoldOff to 0; watch responses now run in zero-task timing.
 * Internal: action execution now has time limit, pauses (zero-ms yield) when exceeded.
