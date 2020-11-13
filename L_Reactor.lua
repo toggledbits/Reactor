@@ -6407,7 +6407,7 @@ local function getReactorScene( t, s, tdev, runscenes, cf )
 					end
 					local mv = {
 						SM={"SMTPServer","SMTPPort","SMTPSender","SMTPDefaultRecipient","SMTPDefaultSubject","SMTPUsername","*SMTPPassword"},
-						PR={"ProwlProvider","ProwlSubject","ProwlURL","*ProwlAPIKey"}.
+						PR={"ProwlProvider","ProwlSubject","ProwlURL","*ProwlAPIKey"},
 						PO={"PushoverUser","PushoverDefaultDevice","*PushoverToken"}
 					}
 					for _,v in ipairs( mv[tostring(act.method)] or {} ) do
