@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.9develop-20313.1035"
+local _PLUGIN_VERSION = "3.9develop-20318.1220"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.9/"
 
@@ -6407,7 +6407,8 @@ local function getReactorScene( t, s, tdev, runscenes, cf )
 					end
 					local mv = {
 						SM={"SMTPServer","SMTPPort","SMTPSender","SMTPDefaultRecipient","SMTPDefaultSubject","SMTPUsername","*SMTPPassword"},
-						PR={"ProwlProvider","ProwlSubject","ProwlURL","*ProwlAPIKey"}
+						PR={"ProwlProvider","ProwlSubject","ProwlURL","*ProwlAPIKey"}.
+						PO={"PushoverUser","PushoverDefaultDevice","*PushoverToken"}
 					}
 					for _,v in ipairs( mv[tostring(act.method)] or {} ) do
 						local m,n = v:match("^(%*)(.*)")
