@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.9develop-20318';
+	var pluginVersion = '3.9develop-20320';
 
 	var DEVINFO_MINSERIAL = 482;
 
@@ -6201,7 +6201,9 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					inp.append('<option value="0">0/off/false</option>');
 					inp.append('<option value="1">1/on/true</option>');
 					/* Add variables */
-					appendVariables( inp );
+					if ( !parm.novars ) {
+						appendVariables( inp );
+					}
 					/* Force default when available and not optional, otherwise first */
 					if ( undefined !== parm.default && !parm.optional ) {
 						inp.val( parm.default );
@@ -7414,6 +7416,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						var lua = "";
 						if ( act.lua ) {
 							lua = (act.encoded_lua || 0) != 0 ? atob( act.lua ) : act.lua;
+							lua = decodeURIComponent(escape(lua)); /* decode from UTF-8 */
 						}
 						$( 'textarea.re-luacode', newRow ).val( lua ).trigger( 'reactorinit' );
 						break;
