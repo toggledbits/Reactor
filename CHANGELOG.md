@@ -4,8 +4,9 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04
 
 **DEPRECATION NOTICE:** The expression functions `arraypush()`, `arraypop()`, `arrayunshift()` and `arrayshift()` have been made first-class functions in the LuaXP module under the names `push()`, `pop()`, `unshift()` and `shift()` respectively. The `array...()` versions are now deprecated, and will be removed from a future release. Please convert to the new functions, which for all practical purposes are identical (so you just need to change the names in your expressions and it's done).
 
-## Version 3.9 development (20320)
+## Version 3.9 development (20321)
 
+* Enhancement: Direct support for the VeraTelegram plugin in the Notify action.
 * Enhancement: Notifications via Pushover are now supported by the Notify action. DOCS NEED: sign up and verify your email address; copy user key to PushoverUser; go to "Your Applications" and create a new application; put API token in PushoverToken.
 * Enhancement: Allow interval "relative to" time to include absolute date.
 * Enhancement: Loadable functions can be used to create user-specific/custom functions for expressions. See the docs.
