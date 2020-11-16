@@ -64,6 +64,7 @@ local isALTUI = false
 local isOpenLuup = false
 local unsafeLua = true
 local devVeraAlerts = false
+local devVeraTelegram = false
 local installPath
 
 local TICKOFFS = 5 -- cond tasks try to run TICKOFFS seconds after top of minute
@@ -2560,6 +2561,16 @@ local function doActionNotify( action, scid, tdev )
 				if st ~= 0 then
 					W("Pushover: %2 returned %1", st, cmd)
 				end
+			end
+		elseif action.method == "VT" then -- VeraTelegram
+			if devVeraTelegram then
+				luup.call_action( "urn:bochicchio-com:serviceId:VeraTelegram1", "Send", 
+					{ Text=msg, ImageUrl=action.imageurl, VideoUrl=action.videourl,
+					  ChatID=action.chatid, DisableNotification=action.disablenotification },
+					devVeraTelegram )
+			else
+				W("Attempt to use VeraTelegram notification method, but the plugin is not installed/started.")
+				error("Can't send VeraTelegram notification; plugin is not installed/started")
 			end
 		elseif action.method == "SD" then -- Syslog Datagram
 			-- See https://tools.ietf.org/html/rfc5424#page-9
@@ -5377,6 +5388,7 @@ function startPlugin( pdev, ptask ) -- N.B. can be run as task
 	isOpenLuup = luup.openLuup ~= nil -- a starting point
 	unsafeLua = true
 	devVeraAlerts = false
+	devVeraTelegram = false
 	sensorState = {}
 	watchData = {}
 	sceneData = {}
@@ -5548,6 +5560,9 @@ function startPlugin( pdev, ptask ) -- N.B. can be run as task
 		elseif v.device_type == "urn:richardgreen:device:VeraAlert:1" and v.device_num_parent == 0 then
 			devVeraAlerts = k
 			L("Detected VeraAlerts (%1)", k)
+		elseif v.device_type == "urn:bochicchio-com:device:VeraTelegram:1" and v.device_num_parent == 0 then
+			devVeraTelegram = k
+			L("Detected VeraTelegram (%1)", k)
 		elseif v.device_num_parent == pdev and v.device_type == RSTYPE then
 			addEvent{ dev=k, msg="Reactor startup (Luup reload)" }
 		elseif v.device_type == MYTYPE and k < pdev then

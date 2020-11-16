@@ -7,7 +7,7 @@
  * This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
  *
  */
-/* globals api,jQuery,unescape,ace,Promise,setTimeout,MultiBox,console,alert,confirm,window,navigator,atob,btoa */
+/* globals api,jQuery,unescape,escape,ace,Promise,setTimeout,MultiBox,console,alert,confirm,window,navigator,atob,btoa */
 /* jshint multistr: true, laxcomma: true, undef: true, unused: false */
 
 //"use strict"; // fails on UI7, works fine with ALTUI
@@ -49,6 +49,7 @@ var ReactorSensor = (function(api, $) {
 	var isOpenLuup = false;
 	var isALTUI = false;
 	var devVeraAlerts = false;
+	var devVeraTelegram = false;
 	var dateFormat = "%F"; /* ISO8601 defaults */
 	var timeFormat = "%T";
 	var unsafeLua = true;
@@ -150,6 +151,12 @@ var ReactorSensor = (function(api, $) {
 				{ id: "url", label: "URL:", type: "textarea", placeholder: "URL", validpattern: "^https?://", default: "http://localhost/alert?message={message}", fullwidth: true }
 			] }
 		, { id: "VA", name: "VeraAlerts" }
+		, { id: "VT", name: "VeraTelegram", users: false, extra: [
+				{ id: "imageurl", label: "Image URL:", type: "textarea", placeholder: "URL", validpattern: "^https?://", default: "", optional: true, fullwidth: true },
+				{ id: "videourl",  label: "Video URL:", type: "textarea", placeholder: "URL", validpattern: "^https?://", default: "", optional: true, fullwidth: true },
+				{ id: "chatid",  label: "Chat ID:", default: "", optional: true },
+				{ id: "disablenotification",  label: "Disable Notification:", type: "select", values: [ "0=No", "1=Yes" ] }
+			] }
 	];
 
 	var msgUnsavedChanges = "You have unsaved changes! Press OK to save them, or Cancel to discard them.";
@@ -645,6 +652,7 @@ var ReactorSensor = (function(api, $) {
 			isALTUI = "undefined" !== typeof(MultiBox);
 			unsafeLua = true;
 			devVeraAlerts = false;
+			devVeraTelegram = false;
 
 			/* Try to establish date format */
 			var ud = api.getUserData();
@@ -667,6 +675,8 @@ var ReactorSensor = (function(api, $) {
 					isOpenLuup = devobj.id;
 				} else if ( devobj.device_type === "urn:richardgreen:device:VeraAlert:1" && devobj.id_parent == 0 ) {
 					devVeraAlerts = devobj.id;
+				} else if ( devobj.device_type === "urn:bochicchio-com:device:VeraTelegram:1" && devobj.id_parent == 0 ) {
+					devVeraTelegram = devobj.id;
 				}
 			});
 
@@ -5221,9 +5231,12 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				for ( var f=0; f<lf; f++ ) {
 					dev = $( '.re-extra-' + ninfo.extra[f].id, row );
 					var vv = (dev.val() || "").trim();
-					var fails = isEmpty( vv ) && !ninfo.extra[f].optional;
-					fails = fails || ( undefined !== ninfo.extra[f].validpattern &&
-						null === vv.match( ninfo.extra[f].validpattern ) );
+					var fails = false;
+					if ( isEmpty( vv ) ) {
+						fails = true !== ninfo.extra[f].optional;
+					} else if ( ninfo.extra[f].validpattern && !vv.match( ninfo.extra[f].validpattern ) ) {
+						fails = true;
+					}
 					dev.toggleClass( 'tberror', fails );
 				}
 				break;
@@ -6942,9 +6955,12 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				for ( k=0; k<lk; ++k ) {
 					if ( "VA" === notifyMethods[k].id && !devVeraAlerts ) continue;
 					if ( "" === notifyMethods[k].id && isOpenLuup ) continue;
-					$( '<option/>' ).val( notifyMethods[k].id )
+					var $opt = $( '<option/>' ).val( notifyMethods[k].id )
 						.text( notifyMethods[k].name )
 						.appendTo( $m );
+					if ( "VT" === notifyMethods[k].id && !devVeraTelegram ) {
+						$opt.prop( 'disabled', true );
+					}
 				}
 				menuSelectDefaultFirst( $m, "" );
 				$m.on( 'change.reactor', handleNotifyActionMethodChange )
@@ -7510,6 +7526,10 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 							if ( !devVeraAlerts && "VA" === act.method ) {
 								$( '<option/>' ).val("VA")
 									.text("VeraAlerts Direct (not running)")
+									.appendTo( $m );
+							} else if ( !devVeraTelegram && "VT" == act.method ) {
+								$( '<option/>' ).val("VT")
+									.text("VeraTelegram (plugin not installed)")
 									.appendTo( $m );
 							} else {
 								$( '<option/>' ).val( act.method )
