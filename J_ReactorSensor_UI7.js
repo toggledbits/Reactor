@@ -155,7 +155,7 @@ var ReactorSensor = (function(api, $) {
 				{ id: "imageurl", label: "Image URL:", type: "textarea", placeholder: "URL", validpattern: "^https?://", default: "", optional: true, fullwidth: true },
 				{ id: "videourl",  label: "Video URL:", type: "textarea", placeholder: "URL", validpattern: "^https?://", default: "", optional: true, fullwidth: true },
 				{ id: "chatid",  label: "Chat ID:", default: "", optional: true },
-				{ id: "disablenotification",  label: "Disable Notification:", type: "select", values: [ "0=No", "1=Yes" ] }
+				{ id: "disablenotification",  label: "Disable Notification:", type: "select", values: [ "False=No", "True=Yes" ] }
 			] }
 	];
 
