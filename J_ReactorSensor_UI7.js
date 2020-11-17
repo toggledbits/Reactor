@@ -4492,7 +4492,7 @@ div#tab-conds.reactortab div.cond-cond.tberror { border-left: 4px solid red; } \
 div#tab-conds.reactortab div.condopts { padding-left: 32px; } \
 div#tab-conds.reactortab div.cond-type { display: inline-block; vertical-align: top; } \
 div#tab-conds.reactortab div.params { display: inline-block; clear: right; } \
-div#tab-conds.reactortab div.params div,label { display: inline-block; border: none; margin: 0 4px; padding: 0 0; } \
+div#tab-conds.reactortab div.params > div,label { display: inline-block; border: none; margin: 0 4px; padding: 0 0; } \
 div#tab-conds.reactortab div.currval { font-family: "Courier New", Courier, monospace; font-size: 0.9em; margin: 8px 0px; display: block; } \
 div#tab-conds.reactortab div.warning { color: red; } \
 div#tab-conds.reactortab button.md-btn.attn { background-color: #ff8; background-image: linear-gradient( to bottom, #fff, #ff8 );} \
@@ -5224,13 +5224,19 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				}
 				/* Message cannot be empty. */
 				dev = $( 'input.re-message', row );
-				if ( isEmpty( dev.val() ) ) {
+				var vv = (dev.val() || "").trim();
+				dev.val( vv );
+				if ( isEmpty( vv ) ) {
 					dev.addClass( 'tberror' );
+				} else if ( null !== vv.match(/{[^}]+}/) ) {
+					/* Check substitution validity and syntax */
+					$( 'div.nativesub' ).toggle( "" === method );
+					$( 'div.subformat' ).toggle( !vv.match( varRefPattern ) );
 				}
 				var lf = ninfo.extra ? ninfo.extra.length : 0;
 				for ( var f=0; f<lf; f++ ) {
 					dev = $( '.re-extra-' + ninfo.extra[f].id, row );
-					var vv = (dev.val() || "").trim();
+					vv = (dev.val() || "").trim();
 					var fails = false;
 					if ( isEmpty( vv ) ) {
 						fails = true !== ninfo.extra[f].optional;
@@ -6969,6 +6975,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					.attr( 'placeholder', 'Enter notification message' )
 					.on( 'change.reactor', handleActionValueChange )
 					.appendTo( $fs );
+				$('<div class="nativesub">WARNING! Variable/expression substitutions are not supported in Vera-native notifications!</div>').hide().appendTo( $fs );
+				$('<div class="subformat">WARNING! Inline substititons like <tt>"Humidity is {n}%"</tt> are not supported; the correct form is <tt>{ expression }</tt>, like this: <tt>{ "Humidity is " .. n .. "%" }</tt></div>').hide().appendTo( $fs );
 				/* User FS appends as separate group, so message field can grow max */
 				var $ufs = $('<div class="form-inline re-users" />').appendTo( ct );
 				for ( var k in userIx ) {
@@ -7527,7 +7535,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 								$( '<option/>' ).val("VA")
 									.text("VeraAlerts Direct (not running)")
 									.appendTo( $m );
-							} else if ( !devVeraTelegram && "VT" == act.method ) {
+							} else if ( !devVeraTelegram && "VT" === act.method ) {
 								$( '<option/>' ).val("VT")
 									.text("VeraTelegram (plugin not installed)")
 									.appendTo( $m );

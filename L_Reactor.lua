@@ -97,7 +97,7 @@ local function dump(t, seen)
 		elseif type(v) == "string" then
 			val = string.format("%q", v)
 		elseif type(v) == "number" and (math.abs(v-os.time()) <= 86400) then
-			val = tostring(v) .. "(" .. os.date("%x.%X", v) .. ")"
+			val = tostring(v) .. "(" .. os.date("%Y-%m-%d.%X", v) .. ")"
 		else
 			val = tostring(v)
 		end
@@ -126,7 +126,7 @@ local function L(msg, ...) -- luacheck: ignore 212
 			elseif type(val) == "string" then
 				return string.format("%q", val)
 			elseif type(val) == "number" and math.abs(val-os.time()) <= 86400 then
-				return tostring(val) .. "(" .. os.date("%x.%X", val) .. ")"
+				return tostring(val) .. "(" .. os.date("%Y-%m-%d.%X", val) .. ")"
 			end
 			return tostring(val)
 		end
@@ -324,6 +324,7 @@ end
 local function getVar( name, dflt, dev, sid )
 	assert ( name ~= nil and dev ~= nil )
 	local s,t = luup.variable_get( sid or RSSID, name, dev )
+--	if debugMode and s == nil then T({level=2,msg="Undefined state variable %1/%2 on #%3"}, sid or RSSID, name, dev) end
 	if s == nil or s == "" then return dflt,0 end
 	return s,t
 end
@@ -655,7 +656,8 @@ local function openEventLogFile( tdev )
 			sst.eventLog = false -- stop trying
 		else
 			sst.eventLogName = path
-			sst.eventLog:write(string.format("%s Event log opened\n", os.date("%x %X")))
+			sst.eventLog:write(string.format("%s ***: Event log opened for %s (#%s)\n",
+				os.date("%Y-%m-%d %X"), luup.devices[tdev].description, tdev))
 		end
 	else
 		D("openEventLogFile() event log file disabled for this RS %1", tdev)
@@ -730,7 +732,7 @@ local function clearOwnerTasks( owner )
 	end
 	for _,tid in ipairs( del ) do
 		D("clearOwnerTasks() clearing task %1", tickTasks[tid])
-		tickTasks[tid] = nil
+		clearTask( tid )
 	end
 end
 
@@ -937,6 +939,8 @@ local function sensor_runOnce( tdev )
 	initVar( "WatchResponseHoldOff", "", tdev, RSSID )
 	initVar( "LogEventsToFile", "", tdev, RSSID )
 	initVar( "EventLogMaxKB", "", tdev, RSSID )
+	initVar( "TestTime", "", tdev, RSSID )
+	initVar( "TestHouseMode", "", tdev, RSSID )
 
 	initVar( "Armed", 0, tdev, SENSOR_SID )
 	initVar( "Tripped", 0, tdev, SENSOR_SID )
@@ -2472,6 +2476,7 @@ local function doSMTPSend( from, to, subject, body, cc, bcc )
 	return
 end
 
+-- Shell quote string
 local function SQ( str )
 	return '"' .. (str:gsub('[$`\\"]', '\\%1')) .. '"'
 end
@@ -2564,7 +2569,7 @@ local function doActionNotify( action, scid, tdev )
 			end
 		elseif action.method == "VT" then -- VeraTelegram
 			if devVeraTelegram then
-				luup.call_action( "urn:bochicchio-com:serviceId:VeraTelegram1", "Send", 
+				luup.call_action( "urn:bochicchio-com:serviceId:VeraTelegram1", "Send",
 					{ Text=msg, ImageUrl=action.imageurl, VideoUrl=action.videourl,
 					  ChatID=action.chatid, DisableNotification=action.disablenotification },
 					devVeraTelegram )
@@ -2874,7 +2879,7 @@ local function execSceneGroups( tdev, taskid, scd )
 				W("%1 (%2) delay at group %3 did not resolve to number; no delay!",
 					luup.devices[tdev].description, tdev, nextGroup)
 				addEvent{ dev=tdev,
-					msg="TROUBLE: Invalid delay in scene group %(group)s of %(sceneName)s: %(delay)q",
+					msg="TROUBLE: Invalid delay in scene group %(group)s of %(sceneName)q: %(delay)q",
 					event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, delay=delay or "nil", ['error']="TROUBLE: invalid delay in scene group" }
 				getSensorState( tdev ).trouble = true
 				delay = 0
@@ -2895,8 +2900,8 @@ local function execSceneGroups( tdev, taskid, scd )
 						scd, nextGroup, nil, nil, tdev )
 					D("execSceneGroups() scene group %1 must delay to %2", nextGroup, tt)
 					addEvent{ dev=tdev,
-						msg="Delaying scene %(sceneName)s group %(group)s actions until %(when)s",
-						event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, when=os.date("%X", tt), notice="Scene delay" }
+						msg="Delaying scene %(sceneName)q group %(group)s actions until %(when)s",
+						event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, when=ftime(tt), notice="Scene delay" }
 					scheduleTick( { id=sst.taskid, owner=sst.owner, func=execSceneGroups, args={ scd } }, tt )
 					return taskid
 				else
@@ -3050,7 +3055,7 @@ local function execSceneGroups( tdev, taskid, scd )
 						lua = mime.unb64( lua )
 						if lua == nil then
 							addEvent{ dev=tdev,
-								msg="TROUBLE: Can't decode Lua for activity %(sceneName)s group %(group)s step %(step)s",
+								msg="TROUBLE: Can't decode Lua for activity %(sceneName)q group %(group)s step %(step)s",
 								event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, step=sst.currstep, ['error']="Can't decode Lua" }
 							W("Aborting scene %1 (%2) run, unable to decode scene Lua", scd.id, scd.name)
 							getSensorState( tdev ).trouble = true
@@ -3064,7 +3069,7 @@ local function execSceneGroups( tdev, taskid, scd )
 							luup.devices[tdev].description, tdev, scd.id, sst.currstep, err)
 						L{level=2,msg="Lua:\n"..lua} -- concat to avoid formatting
 						addEvent{ dev=tdev,
-							msg="TROUBLE: Lua error in activity %(sceneName)s group %(group)s step %(step)s: %(error)s",
+							msg="TROUBLE: Lua error in activity %(sceneName)q group %(group)s step %(step)s: %(error)s",
 							event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, step=sst.currstep, ['error']=err }
 						getSensorState( tdev ).trouble = true
 						-- Throw on the brakes! (stop all scenes in context)
@@ -3074,7 +3079,7 @@ local function execSceneGroups( tdev, taskid, scd )
 						L("%1 (%2) scene %3 Lua at step %4 returned (%5)%6, stopping actions.",
 							luup.devices[tdev].description, tdev, scd.id, sst.currstep, type(more), more)
 						addEvent{ dev=tdev,
-							msg="Aborting activity %(sceneName)s; group %(group)s step %(step)s Lua returned %(retval)q",
+							msg="Aborting activity %(sceneName)q; group %(group)s step %(step)s Lua returned %(retval)q",
 							event="runscene", scene=scd.id, sceneName=scd.name or scd.id, group=nextGroup, step=sst.currstep, retval=more }
 						stopScene( nil, taskid, tdev ) -- stop just this scene.
 						return nil
@@ -3102,13 +3107,13 @@ local function execSceneGroups( tdev, taskid, scd )
 						addEvent{ dev=tdev, msg="Variable %(variable)q set to %(newValue)q; was %(oldValue)q",
 							variable=action.variable, newValue=newval, oldValue=oldval }
 						if (action.reeval or 0) ~= 0 then
-							scheduleDelay( tdev, 1 )
+							scheduleDelay( tdev, 0 ) -- trigger re-eval
 						end
 					else
 						L({level=2,msg="Set Variable action (%1 group %2 action %3) target %4 failed: "..tostring(oldval)},
 							scd.id, nextGroup, sst.currstep, action.variable)
 						addEvent{ dev=tdev,
-								msg="%(sceneName)s group %(group)s action %(index)s Set Variable %(varname)q failed: %(err)s",
+								msg="%(sceneName)q group %(group)s action %(index)s Set Variable %(varname)q failed: %(err)s",
 								event="runscene", scene=scd.id, sceneName=scd.name or scd.id,
 								group=nextGroup, index=sst.currstep, varname=action.variable, ['err']=oldval }
 						getSensorState( tdev ).trouble = true
@@ -3212,14 +3217,14 @@ local function execScene( scd, tdev, options )
 	end
 
 	if ( not scd.isReactorScene ) and ( scd.paused or 0 ) ~= 0 then
-		addEvent{ dev=tdev, msg="Launch of %(sceneName)s (#%(scene)s) blocked; scene is paused.",
+		addEvent{ dev=tdev, msg="Launch of %(sceneName)q (#%(scene)s) blocked; scene is paused.",
 			event="startscene", scene=scd.id, sceneName=scd.name or scd.id}
 		return nil
 	end
 
 	-- And here ve go...
 	addEvent{ dev=tdev,
-		msg="Launching scene/activity %(sceneName)s",
+		msg="Launching scene/activity %(sceneName)q",
 		event="startscene", scene=scd.id, sceneName=scd.name or scd.id}
 
 	-- If there's (Luup) scene lua, try to run it.
@@ -4023,9 +4028,9 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 		if ( now - expected ) > 60 then
 			local late = now - expected
 			addEvent{ dev=tdev,
-				msg="Condition %(cond)s inserting missed interval (late %(late)s)",
+				msg="Condition %(cond)s inserting missed interval (late %(late)ss)",
 				event='condition', cond=cond.id, late=late }
-			D("evaluationCondition() hitting missed interval, expected %1 late %2", expected, late)
+			D("evaluationCondition() hitting missed interval, expected %1 late %2s", expected, late)
 		elseif now < expected then
 			-- Still need to wait...
 			D("evaluateCondition() too early, delaying %1 seconds until %2", expected-now, expected)
@@ -4975,7 +4980,7 @@ local function updateNetworkStatusHistory( flag, pdev )
 	nstates = split( nstates, "," )
 	local t,s = nstates[#nstates]:match( "^(%d+):(.*)" )
 	if s ~= flag then
-		L("Detected network state change (%1) last %2 at %3", flag, s, os.date("%x %X", t))
+		L("Detected network state change (%1) last %2 at %3", flag, s, fdatetime(t))
 		table.insert( nstates, os.time() .. ":" .. flag )
 		while #nstates > 10 do table.remove( nstates, 1 ) end
 		setVar( MYSID, "ns", table.concat( nstates, "," ), pdev )
@@ -5059,7 +5064,7 @@ local function masterTick(pdev)
 			if lastInetDaemonUpdate > 0 and os.time() >= ( lastInetDaemonUpdate + 3 * 60 * checkInterval ) then
 				-- We've missed at least three check intervals
 				W("Internet check daemon may have stalled/stopped; no update since %1 (%2m ago)",
-					os.date("%x %X", lastInetDaemonUpdate), math.floor( ( os.time() - lastInetDaemonUpdate ) / 60 ) )
+					fdatetime(lastInetDaemonUpdate), math.floor( ( os.time() - lastInetDaemonUpdate ) / 60 ) )
 				if isOpenLuup then
 					W("Falling back to internal Internet check until script resumes.")
 					lastInetDaemonUpdate = 0
@@ -5559,10 +5564,10 @@ function startPlugin( pdev, ptask ) -- N.B. can be run as task
 			end
 		elseif v.device_type == "urn:richardgreen:device:VeraAlert:1" and v.device_num_parent == 0 then
 			devVeraAlerts = k
-			L("Detected VeraAlerts (%1)", k)
+			L("Detected VeraAlerts (#%1)", k)
 		elseif v.device_type == "urn:bochicchio-com:device:VeraTelegram:1" and v.device_num_parent == 0 then
 			devVeraTelegram = k
-			L("Detected VeraTelegram (%1)", k)
+			L("Detected VeraTelegram (#%1)", k)
 		elseif v.device_num_parent == pdev and v.device_type == RSTYPE then
 			addEvent{ dev=k, msg="Reactor startup (Luup reload)" }
 		elseif v.device_type == MYTYPE and k < pdev then
@@ -6808,7 +6813,7 @@ SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 			if not cdata then
 				r = r .. "    **** UNPARSEABLE CONFIGURATION ****" .. EOL
 			else
-				r = r .. string.format("    Version %s.%s %s", cdata.version or 0, cdata.serial or 0, os.date("%x %X", cdata.timestamp or 0)) .. EOL
+				r = r .. string.format("    Version %s.%s %s", cdata.version or 0, cdata.serial or 0, os.date("%Y-%m-%d %X", cdata.timestamp or 0)) .. EOL
 				r = r .. string.format("    Message/status: %s", getVar( "Message", "", n ) ) .. EOL
 				local s = getVarNumeric( "TestTime", 0, n, RSSID )
 				if s > 0 then
@@ -7138,7 +7143,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		return json.encode( { status=false, message="Can't send device info, status " .. httpStatus } ), MIMETYPE_JSON
 
 	elseif action == "config" or action == "backup" then
-		local st = { _comment="Reactor configuration " .. os.date("%x %X"), timestamp=os.time(), version=_PLUGIN_VERSION, sensors={} }
+		local st = { _comment="Reactor configuration " .. os.date("%Y-%m-%d %X"), timestamp=os.time(), version=_PLUGIN_VERSION, sensors={} }
 		for k,v in pairs( luup.devices ) do
 			if v.device_type == RSTYPE then
 				local key = tostring(k)
