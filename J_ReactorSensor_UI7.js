@@ -205,6 +205,7 @@ var ReactorSensor = (function(api, $) {
 	div.reactortab button.md-btn { line-height: 1em; cursor: pointer; color: #333; background-color: #fff; padding: 1px 0px 0px 0px; border: 1px solid transparent; border-radius: 4px; box-shadow: #ccc 2px 2px; background-image: linear-gradient( to bottom, #fff, #e6e6e6 ); background-repeat: repeat-x; } \
 	div.reactortab button.md-btn i { font-size: 16pt; line-height: 1em; } \
 	div.reactortab optgroup { color: #333; font-weight: bold; } \
+	div.reactortab .re-dropdown { border: 1px solid black; padding: 4px 4px; background-color: #fff; color: #000;} \
 	div.reactortab .dropdown-item { display: block; width: 100%; padding: 2px 12px; clear: both; font-weight: normal; color: #000; text-align: inherit; white-space: nowrap; background-color: transparent; border: 0; } \
 	div.reactortab .dropdown-item:hover { color: #fff; background-color: #66aaff; text-decoration: none; } \
 	div.reactortab .dropdown-divider { border-top: 1px solid #999; margin: 0.5em 0; } \
@@ -3178,7 +3179,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 			var btnid = getUID('btn');
 			el.append( '<button class="btn btn-default dropdown-toggle re-triggers" type="button" data-toggle="dropdown" title="Click for device-defined events"><i class="material-icons" aria-haspopup="true" aria-expanded="false">arrow_right</i></button>' );
 			$( 'button.device-triggers', el ).attr( 'id', btnid );
-			var mm = $( '<div class="dropdown-menu" role="menu" />' ).attr( 'aria-labelledby', btnid );
+			var mm = $( '<div class="dropdown-menu re-dropdown" role="menu" />' ).attr( 'aria-labelledby', btnid );
 			el.append( mm );
 			var myid = api.getCpanelDeviceId();
 			var myself = -1 === cond.device || cond.device === myid;
