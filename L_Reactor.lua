@@ -4673,7 +4673,7 @@ local function processSensorUpdate( tdev, sst )
 
 	local t2 = socket.gettime()
 	addEvent{dev=tdev,event='update',msg="Sensor update completed; %(dtime)ss",
-		dtime=string.format("%.3f", t2-t1)}
+		dtime=string.format( "%.3f", t2-t1 )}
 
 	D("processSensorUpdate() finished")
 end

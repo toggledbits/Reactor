@@ -132,13 +132,13 @@ var ReactorSensor = (function(api, $) {
 				{ id: "podevice", label: "Device:", placeholder: "optional", default: "", optional: true },
 				{ id: "priority", label: "Priority:", type: "select", default: "0", values: [ "-2=Very low", "-1=Low", "0=Normal", "1=High" ] }, /* 2=Emergency doesn't seem to work, no alert is received 2020-09-23 */
 				{ id: "sound", label: "Sound:", type: "select", default: "", optional: true,
-					values: [ 
+					values: [
 						"=(device default)", "none=(none/silent)", "vibrate=(vibrate only)", "pushover=Pushover",
 						"bike=Bike", "bugle=Bugle", "cashregister=Cash Register", "classical=Classical", "cosmic=Cosmic", "falling=Falling",
 						"gamelan=Gamelan", "incoming=Incoming", "intermission=Intermission", "magic=Magic", "mechanical=Mechanical",
 						"pianobar=Piano Bar", "siren=Siren", "spacealarm=Space Alarm", "tugboat=Tug Boat", "alien=Alien Alarm (long)",
 						"climb=Climb (long)", "persistent=Persistent (long)", "echo=Pushover Echo (long)", "updown=Up Down (long)"
-					] 
+					]
 				},
 				{ id: "token", label: "Pushover Token:", placeholder: "blank=from Reactor config", default:"", optional: true }
 			], config: { name: "PushoverUser" } }
