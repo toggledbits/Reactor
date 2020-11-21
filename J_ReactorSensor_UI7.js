@@ -1604,8 +1604,10 @@ var ReactorSensor = (function(api, $) {
 		} else {
 			var gs = cstate[ grp.id ] || {};
 			getCondState( grp, gs.laststate, cstate, $( 'span.currentvalue', grpel ) );
-			if ( gs.evalstate ) {
-				grpel.addClass( "truestate" ).removeClass( "falsestate" );
+			if ( "undefined" === typeof gs.evalstate || null === gs.evalstate ) {
+				grpel.addClass( "nostate" );
+			} else if ( gs.evalstate ) {
+				grpel.addClass( "truestate" );
 			}
 		}
 		container.append( grpel );
@@ -1852,6 +1854,8 @@ var ReactorSensor = (function(api, $) {
 div#reactorstatus div.reactorgroup { position: relative; border-radius: 4px; border: none; margin: 8px 0; } \
 div#reactorstatus div#variables.reactorgroup { border: 1px solid #039 } \
 div#reactorstatus div.reactorgroup.groupdisabled * { background-color: #ccc !important; color: #000 !important } \
+div#reactorstatus div.reactorgroup.truestate > div.grouptitle > button.condbtn { background-color: #0b0; color: #fff; } \
+div#reactorstatus div.reactorgroup.nostate > div.grouptitle > button.condbtn { background-color: #ccc; color: #000; } \
 div#reactorstatus div.grouptitle { color: #fff; background-color: #039; min-height: 32px; line-height: 2em; border: 1px solid #000; border-radius: inherit; } \
 div#reactorstatus div.grouptitle span.re-title { margin-left: 1em; } \
 div#reactorstatus div.grouptitle button.condbtn { background-color: #bce8f1; color: #000; width: 5em; border: none; padding: 6px 6px; } \
@@ -1859,7 +1863,6 @@ div#reactorstatus div.grpbody { position: relative; padding: 0; background-color
 div#reactorstatus div.grpcond { list-style: none; padding: 0 0 0 44px; margin: 0; } \
 div#reactorstatus .cond { position: relative; min-height: 2em; margin: 8px 0; padding: 0; border-radius: 4px; border: 1px solid #0c6099; background: #fff; } \
 div#reactorstatus .cond.truestate { color: #00aa00; font-weight: bold; } \
-div#reactorstatus div.reactorgroup.truestate > div.grouptitle > button.condbtn { background-color: #0b0; color: #fff; } \
 div#reactorstatus div.condind { display: inline-block; margin: 0 8px 0 0; padding: 0 4px; } \
 div#reactorstatus div.condtext { display: inline-block; width: 50%; margin: 0; padding-top: 4px; vertical-align: top; } \
 div#reactorstatus div.currentvalue { display: inline-block; margin-left: 1em; padding-top: 4px; vertical-align: top; } \
@@ -2022,9 +2025,9 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 					if ( devobj.device_type == deviceType ) {
 						/* Never allow group states, as these should be done using a grpstate cond */
 						if ( st.service === "urn:toggledbits-com:serviceId:ReactorGroup" ) continue;
-						/* If own RS, very limited list of variables allowed */
+						/* If own RS, eliminate "private" states */
 						if ( device == myid && st.service !== "urn:toggledbits-com:serviceId:ReactorValues" &&
-							!st.variable.match( /^(TripCount|Runtime|Armed|LastTrip)$/ ) ) continue;
+							st.variable.match( /^([a-z_])/ ) ) continue;
 					}
 					var vnm = st.variable.toLowerCase();
 					if ( undefined === mm[vnm] ) {

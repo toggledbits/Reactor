@@ -1697,7 +1697,7 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
 	else
 		local changed
 		-- Make sure lastvalue luaxp.NULL is the true current luaxp.NULL
-		if luaxp.isNull( vs.lastvalue ) then vs.lastvalue = luaxp.NULL end
+		if vs.lastvalue == nil or luaxp.isNull( vs.lastvalue ) then vs.lastvalue = luaxp.NULL end
 		if luaxp.isNull( result ) and not luaxp.isNull( vs.lastvalue ) then
 			changed = true
 		elseif type(vs.lastvalue) == "table" and type(result) == "table" then
@@ -4128,7 +4128,6 @@ local function processCondition( cond, grp, cdata, tdev )
 	D("processCondition() group %1 cond %2 result %3 timer %4", (grp or {}).id,
 		cond.id, state, condTimer)
 	if condTimer then L({level=2,msg="Condition %1 in %2 returns true condition timer!"}, cond, grp.name or grp.id ) end
-	if state == nil then return newvalue, nil end -- as if it doesn't exist
 
 	-- Preserve the result of the condition eval. We are edge-triggered,
 	-- so only save changes, with timestamp.
@@ -4165,6 +4164,18 @@ local function processCondition( cond, grp, cdata, tdev )
 		cs.priorvalue = cs.lastvalue
 		cs.lastvalue = newvalue
 		cs.valuestamp = now
+	end
+
+	-- If state is nil (NUL group, for example), force evalstate and don't bother with options.
+	if state == nil then
+		if state ~= cs.evalstate then
+			cs.evalstate = nil
+			cs.evalstamp = now
+			cs.changed = true
+		else
+			cs.changed = nil
+		end
+		return newvalue, state, condTimer
 	end
 
 	-- Check for predecessor/sequence
@@ -4496,6 +4507,7 @@ evaluateGroup = function( grp, parentGroup, cdata, tdev )
 		resetLatched( grp.id, tdev )
 	end
 
+	D("processGroup() %1 returning %2,%2,%3", grp.id, passed, hasTimer)
 	return passed, passed, hasTimer -- allow pass of nil state for no data
 end
 
@@ -4532,7 +4544,7 @@ local function processSensorUpdate( tdev, sst )
 		-- Reload sensor state if cache purged
 		loadCleanState( tdev )
 
-		local currTrip = (sst.condState.root or {}).evalstate or false
+		local currTrip = (sst.condState.root or {}).evalstate
 		local retrig = getVarBool( "Retrigger", false, tdev, RSSID )
 
 		-- Mark a stable base of time.
@@ -4556,9 +4568,6 @@ local function processSensorUpdate( tdev, sst )
 
 		local newTrip
 		_,newTrip,hasTimer = processCondition( cdata.conditions.root, nil, cdata, tdev )
-		if newTrip == nil then
-			newTrip = false -- null from root equiv to false here
-		end
 		D("processSensorUpdate() root was %1 now %2, retrig %3", currTrip, newTrip, retrig)
 
 		-- Save the condition state immediately. This helps the status UI show more
@@ -4574,13 +4583,13 @@ local function processSensorUpdate( tdev, sst )
 			-- If not changing state, require >5s delta before update, to dampen
 			-- update cycles for RSs that watch their own Runtime. Always update
 			-- when newTrip false and currTrip true (changing tripped state).
-			if delta > 5 or not newTrip then
+			if delta > 5 or newTrip == false then -- explicit boolean, nil possible
 				local rt = delta + getVarNumeric( "Runtime", 0, tdev, RSSID )
 				D("processSensorUpdate() currently tripped, adding %1 seconds to runtime, now total %2", delta, rt)
 				setVar( RSSID, "Runtime", rt, tdev )
 				setVar( RSSID, "lastacc", now, tdev )
 			end
-		else
+		elseif currTrip == false then
 			-- Update on each false/untrip result, too.
 			setVar( RSSID, "lastacc", now, tdev )
 		end
@@ -4625,7 +4634,9 @@ local function processSensorUpdate( tdev, sst )
 				D("processSensorUpdate() new trippped state %1", newTrip)
 				rateBump( sst.changeRate )
 				sst.changeThrottled = false
-				trip( newTrip, tdev )
+				if newTrip ~= nil then
+					trip( newTrip, tdev )
+				end
 			else
 				if not sst.changeThrottled then
 					L({level=2,msg="%2 (#%1) trip state changing too fast (%4 > %3/min)! Throttling..."},
@@ -4639,7 +4650,7 @@ local function processSensorUpdate( tdev, sst )
 			end
 		end
 		if not sst.changeThrottled then
-			setMessage( newTrip and "Tripped" or "Not tripped", tdev )
+			setMessage( newTrip == nil and "" or ( newTrip and "Tripped" or "Not tripped" ), tdev )
 		end
 	else
 		if not sst.updateThrottled then
