@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.8hotfix-20320"
+local _PLUGIN_VERSION = "3.8hotfix-20326"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.6/"
 
@@ -1585,7 +1585,7 @@ local function evaluateVariable( vname, ctx, cdata, tdev )
 	else
 		local changed
 		-- Make sure lastvalue luaxp.NULL is the true current luaxp.NULL
-		if luaxp.isNull( vs.lastvalue ) then vs.lastvalue = luaxp.NULL end
+		if vs.lastvalue == nil or luaxp.isNull( vs.lastvalue ) then vs.lastvalue = luaxp.NULL end
 		if luaxp.isNull( result ) and not luaxp.isNull( vs.lastvalue ) then
 			changed = true
 		elseif type(vs.lastvalue) == "table" and type(result) == "table" then
