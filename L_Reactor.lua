@@ -5187,7 +5187,7 @@ local function cleanSensorState( tdev, taskid )
 				end
 			elseif st.service == GRPSID then
 				local gid = st.variable:gsub( "^GroupStatus_", "" )
-				if not ( groups[gid] and groups[gid].operator ~= "nul" ) then
+				if not groups[gid] then
 					D("cleanSensorState() removing orphan group state %1 from #%2", st.variable, tdev)
 					deleteVar( st.service, st.variable, tdev )
 				end
