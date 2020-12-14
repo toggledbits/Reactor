@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.9develop-20326.1310"
+local _PLUGIN_VERSION = "3.9develop-20349.1010"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.9/"
 
@@ -2157,6 +2157,7 @@ local function execLua( fname, luafragment, extarg, tdev )
 		luaEnv.Reactor = {}
 		luaEnv.__reactor_getdevice = function() end
 		luaEnv.__reactor_getscript = function() end
+		luaEnv.dump = stringify
 		luaEnv.print =  function( ... )  -- luacheck: ignore 212
 							local dev = luaEnv.__reactor_getdevice() or 0
 							local msg = ""
@@ -2176,6 +2177,7 @@ local function execLua( fname, luafragment, extarg, tdev )
 		-- This is a 5.1-ism. See http://lua-users.org/wiki/GeneralizedPairsAndIpairs
 		luaEnv.rawnxt = luaEnv.next
 		luaEnv.next =   function( t, k )
+							if type(t) ~= "table" then error("Table expected, got " + type(t)) end
 							local m = getmetatable(t)
 							local n = m and m.__next or luaEnv.rawnxt
 							return n( t, k )
@@ -2239,21 +2241,43 @@ local function execLua( fname, luafragment, extarg, tdev )
 	_R.dump = stringify -- handy
 	local condState = loadCleanState( tdev ) or {}
 	local cf = getSensorConfig( tdev )
+	function _merge( dest, src )
+		dest = dest or {}
+		for k,v in pairs( src or {} ) do
+			dest[k] = v
+		end
+		return dest
+	end
 	traverse( cf.conditions.root or { id="root" } , function( cond )
-		local gs = condState[cond.id]
-		if not gs then
-			D("execLua() condition %1 has no state, ignored", cond.id)
-		elseif ( cond.type or "group" ) == "group" then
-			_R.groups[cond.id] = { id=cond.id, name=cond.name, state=gs.evalstate, since=gs.evalstamp, changed=gs.changed }
-			if cond.name then _R.groups[cond.name] = _R.groups[cond.id] end
+		local gs = condState[cond.id] or {}
+		-- Every type of condition gets a conditions table entry, including groups. That means there
+		-- is some redundancy between Reactor.groups and Reactor.conditions, but they are useful as
+		-- separate tables.
+		_R.conditions[cond.id] = _merge( _R.conditions[cond.id],
+			{ id=cond.id, type=cond.type, state=gs.evalstate, since=gs.evalstamp, changed=gs.changed } )
+		if ( cond.type or "group" ) == "group" then
+			local O = _R.conditions[cond.id]
+			_R.groups[cond.id] = O
+			if cond.name then _R.groups[cond.name] = O end -- index by name as well
+			O.op = (cond.invert and "not " or "") .. (cond.operator or "and")
+			O.disabled = cond.disabled or false
+			-- Add group's conditions as array of conditions table references
+			O.conditions = {}
+			for _,v in ipairs( cond.conditions or {} ) do
+				-- If condition hasn't been seen yet, pre-create a stub.
+				_R.conditions[v.id] = _merge( _R.conditions[v.id], { id=v.id, parent=O } )
+				table.insert( O.conditions, _R.conditions[v.id] )
+			end
 			if gs.changed then
-				if gs.evalstate then _R.trip[cond.id] = _R.groups[cond.id]
-				else _R.untrip[cond.id] = _R.groups[cond.id] end
+				if gs.evalstate then
+					_R.trip[cond.id] = O
+				else
+					_R.untrip[cond.id] = O
+				end
 			end
 		else
-			-- As of 3.5, conditions are also published in Reactors.conditions
-			_R.conditions[cond.id] = { id=cond.id, state=gs.evalstate, since=gs.evalstamp,
-				changed=gs.changed, currentvalue=gs.lastvalue, priorvalue=gs.priorvalue }
+			_R.conditions[cond.id] = _merge( _R.conditions[cond.id],
+				{ currentvalue=gs.lastvalue, priorvalue=gs.priorvalue } );
 		end
 	end)
 
