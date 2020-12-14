@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.9develop-20349.1010"
+local _PLUGIN_VERSION = "3.9develop-20349.1835"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.9/"
 
@@ -2162,7 +2162,7 @@ local function execLua( fname, luafragment, extarg, tdev )
 							local dev = luaEnv.__reactor_getdevice() or 0
 							local msg = ""
 							for _,v in ipairs( arg or {} ) do
-								msg = msg .. tostring( v or "(nil)" ) .. " "
+								msg = msg .. ( v == nil and "nil" or tostring( v ) ) .. " "
 							end
 							msg = msg:gsub( "/r/n?", "/n" ):gsub( "%s+$", "" )
 							luup.log( ((luup.devices[dev] or {}).description or "?") ..
@@ -2257,8 +2257,12 @@ local function execLua( fname, luafragment, extarg, tdev )
 			{ id=cond.id, type=cond.type, state=gs.evalstate, since=gs.evalstamp, changed=gs.changed } )
 		if ( cond.type or "group" ) == "group" then
 			local O = _R.conditions[cond.id]
-			_R.groups[cond.id] = O
-			if cond.name then _R.groups[cond.name] = O end -- index by name as well
+			_R.groups[cond.id] = O -- Legacy
+			if cond.name then  -- index by name as well
+				_R.conditions[cond.name] = O
+				_R.groups[cond.name] = O
+			end
+			O.name = cond.name or cond.id
 			O.op = (cond.invert and "not " or "") .. (cond.operator or "and")
 			O.disabled = cond.disabled or false
 			-- Add group's conditions as array of conditions table references
