@@ -4,9 +4,12 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04
 
 **DEPRECATION NOTICE:** The expression functions `arraypush()`, `arraypop()`, `arrayunshift()` and `arrayshift()` have been made first-class functions in the LuaXP module under the names `push()`, `pop()`, `unshift()` and `shift()` respectively. The `array...()` versions are now deprecated, and will be removed from a future release. Please convert to the new functions, which for all practical purposes are identical (so you just need to change the names in your expressions and it's done).
 
+**DEPRECATION NOTICE:** The `Reactor.groups` table is now deprecated; use `Reactor.conditions` instead (just change the name in your code, it works the same). See [the Reactor documentation](https://www.toggledbits.com/static/reactor/docs/Run-Lua-Action/) for more information.
+
 ## Version 3.9 development (20349)
 
-* Enhancement: The `Reactor.groups` context for *Run Lua* actions now contains a subtable `conditions`; the keys in this table are condition IDs for child conditions of the group, and the value at each key is the condition's status info (same as Reactor.conditions for that condition). Likewise the `Reactor.conditions` entries have been extended with the key `group`, the value of which the parent group of each condition element. See [the Reactor documentation](https://www.toggledbits.com/static/reactor/docs/Run-Lua-Action/) for more information.
+* DEPRECATION: The `Reactor.groups` table is now deprecated; use `Reactor.conditions` instead (just change the name in your code, it works the same). See [the Reactor documentation](https://www.toggledbits.com/static/reactor/docs/Run-Lua-Action/) for more information.
+* Enhancement: In the `Reactor.conditions` table, if the condition is actually a group, the subkey `conditions` will be an array containing the group's conditions. See [the Reactor documentation](https://www.toggledbits.com/static/reactor/docs/Run-Lua-Action/) for more information.
 * Enhancement: Direct support for the VeraTelegram plugin in the Notify action.
 * Enhancement: Notifications via Pushover are now supported by the Notify action. DOCS NEED: sign up and verify your email address; copy user key to PushoverUser; go to "Your Applications" and create a new application; put API token in PushoverToken.
 * Enhancement: Allow interval "relative to" time to include absolute date.
