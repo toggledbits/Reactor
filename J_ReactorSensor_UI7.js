@@ -828,14 +828,14 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 				}
 			}
 			if ( !validALTUI ) {
-				alert("The version of ALTUI cannot be confirmed to be compatible with this version of the Reactor UI and is not supported. Incompatibilities may cause loss of functionality or errors that result in data/configuration loss, and it is recommended that you upgrade/downgrade to a compatible version of ALTUI before continuing. Supported versions are: " + av_range + ". You are running " + String(av));
+				alert("The running version of ALTUI has not been confirmed to be compatible with this version of the Reactor UI and is therefore not supported. Incompatibilities may cause loss of functionality or errors that result in data/configuration loss, and it is recommended that you up/downgrade to a compatible version of ALTUI before continuing. Supported versions are: " + av_range + ". You are running " + String(av));
 			}
 		}
 
 		/* Load ACE. */
 		s = getParentState( "UseACE", myid ) || "1";
 		if ( "1" === s && ! window.ace ) {
-			s = getParentState( "ACEURL" ) || "https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.2/ace.js";
+			s = getParentState( "ACEURL" ) || "https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js";
 			$( "head" ).append( '<script src="' + s + '"></script>' );
 		}
 
@@ -4875,7 +4875,7 @@ div#tab-conds.reactortab input.re-comment { width: 100% !important; } \
 	function getVariableRow() {
 		var el = $('<div class="row varexp"></div>');
 		el.append( '<div class="col-xs-12 col-sm-12 col-md-2 re-varname"></div>' );
-		el.append( '<div class="col-xs-12 col-sm-9 col-md-8"><textarea class="expr form-control form-control-sm" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="off"></textarea><div class="currval" /></div>');
+		el.append( '<div class="col-xs-12 col-sm-9 col-md-8"><textarea class="expr form-control form-control-sm" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="off"></textarea><div class="currval"></div></div>');
 		// ??? devices_other is an alternate for insert state variable
 		el.append( '<div class="col-xs-12 col-sm-3 col-md-2 text-right">\
 <button class="btn md-btn draghandle" title="Change order (drag)"><i class="material-icons">reorder</i></button>\
@@ -4937,7 +4937,7 @@ div#tab-conds.reactortab input.re-comment { width: 100% !important; } \
 		var gel = $('<div class="vargroup"></div>');
 		gel.append('<div class="row"><div class="tblisttitle col-xs-6 col-sm-6"><span class="re-title">Defined Variables</span></div><div class="tblisttitle col-xs-6 col-sm-6 text-right"><button class="btn btn-xs btn-success saveconf">Save</button> <button class="btn btn-xs btn-danger revertconf">Revert</button></div></div>');
 
-		var list = $( '<div class="varlist tb-sortable" />' );
+		var list = $( '<div class="varlist tb-sortable"></div>' );
 		gel.append( list );
 
 		var myid = api.getCpanelDeviceId();
@@ -4989,7 +4989,7 @@ div#tab-conds.reactortab input.re-comment { width: 100% !important; } \
 		}
 
 		/* Add "Add" button */
-		$( '<div class="row buttonrow" />' )
+		$( '<div class="row buttonrow"></div>' )
 			.append( '<div class="col-xs-12 col-sm-12"><button id="addvar" class="btn btn-sm btn-success">Add Variable/Expression</button></div>' )
 			.appendTo( gel );
 		$( 'button#addvar', gel ).closest( 'div' ).append( getWiki( 'Expressions-&-Variables' ) );
@@ -5055,7 +5055,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 			html += '<div class="row"><div class="col-xs-12 col-sm-12">Note that "Last Result" values shown here do not update dynamically. For help with expressions and functions, please <a href="' + _DOCURL +
 				'/Expressions-&-Variables/" target="_blank">see the Reactor Documentation</a>.</div></div>';
 
-			html += '<div id="reactorvars"/>';
+			html += '<div id="reactorvars"></div>';
 
 			html += '</div>'; //.reactortab
 
@@ -5065,7 +5065,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 
 			if ( checkRemoteAccess() ) {
 				$( 'div.reactortab' ).prepend(
-					$( '<div class="remotealert re-alertblock" />' ).text( msgRemoteAlert )
+					$( '<div class="remotealert re-alertblock"></div>' ).text( msgRemoteAlert )
 				);
 			}
 
@@ -5105,7 +5105,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				return;
 			} else if ( data.status === false ) { /* specific false, not undefined */
 				el.addClass( "tberror" );
-				$( 'div.actiondata' , row ).prepend( '<div class="tberrmsg"/>' );
+				$( 'div.actiondata' , row ).prepend( '<div class="tberrmsg"></div>' );
 				$( 'div.tberrmsg', row ).text( data.message || "Error in Lua" );
 			}
 		}).fail( function( stat ) {
@@ -5116,7 +5116,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 	function makeSceneMenu() {
 		var ud = api.getUserData();
 		var scenes = api.cloneObject( ud.scenes || [] );
-		var menu = $( '<select class="form-control form-control-sm re-scene" />' );
+		var menu = $( '<select class="form-control form-control-sm re-scene"></select>' );
 		/* If lots of scenes, sort by room; otherwise, use straight as-is */
 		var i, l;
 		if ( true || scenes.length > 10 ) {
@@ -5147,7 +5147,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					if ( xg && $( 'option:first', xg ).length > 0 ) {
 						menu.append( xg );
 					}
-					xg = $( '<optgroup />' )
+					xg = $( '<optgroup></optgroup>' )
 						.attr( 'label', ( rid[r] || {} ).name || ( "Room " + String(r) ) );
 					lastRoom = r;
 				}
@@ -6030,7 +6030,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 	function appendVariables( menu ) {
 		var cd = getConfiguration();
 		var hasOne = false;
-		var xg = $( '<optgroup label="Variables" />' );
+		var xg = $( '<optgroup label="Variables"></optgroup>' );
 		for ( var vname in ( cd.variables || {} ) ) {
 			if ( cd.variables.hasOwnProperty( vname ) ) {
 				hasOne = true;
@@ -6055,14 +6055,14 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 		/*  Do not clear message or users (even if we don't use them) */
 		var f, lf, fld;
 		if ( ninfo.extra ) {
-			var $extra = $( '<div class="re-extrafields" />' )
+			var $extra = $( '<div class="re-extrafields"></div>' )
 				.appendTo( $( 'div.actiondata', $row ) );
 			lf = ninfo.extra.length;
 			for ( f=0; f<lf; f++ ) {
 				fld = ninfo.extra[f];
 				var xf;
 				if ( "select" === fld.type ) {
-					xf = $( '<select class="form-control form-control-sm" />' );
+					xf = $( '<select class="form-control form-control-sm"></select>' );
 					var lv = fld.values ? fld.values.length : 0;
 					for ( var vi=0; vi<lv; vi++ ) {
 						var pm = fld.values[vi].match( "^([^=]*)=(.*)$" );
@@ -6072,10 +6072,10 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						}
 					}
 				} else if ( "textarea" === fld.type ) {
-					xf = $( '<textarea class="form-control form-control-sm" />' )
+					xf = $( '<textarea class="form-control form-control-sm"></textarea>' )
 						.attr( 'placeholder', fld.placeholder || "" );
 				} else {
-					xf = $( '<input class="form-control form-control-sm" />' )
+					xf = $( '<input class="form-control form-control-sm">' )
 						.attr( 'placeholder', fld.placeholder || "" );
 				}
 				if ( ! isEmpty( fld.default ) ) {
@@ -6085,7 +6085,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					.on( 'change.reactor', handleActionValueChange );
 				if ( ! isEmpty( fld.label ) ) {
 					/* Wrap the field in a label */
-					xf = $( '<label/>' )
+					xf = $( '<label></label>' )
 						.text( fld.label )
 						.toggleClass( "re-fullwidth", fld.fullwidth )
 						.append( xf );
@@ -6133,7 +6133,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				$( '.re-extra-' + fld.id, $row ).val( action[fld.id] || fld.default || "" );
 			}
 			if ( devVeraAlerts ) {
-				$( '<div class="vanotice"/>' )
+				$( '<div class="vanotice"></div>' )
 					.text("NOTE: This notification has been modified by VeraAlerts. The message text can only be changed there. You may change recipients here, but you must go into VeraAlerts \"Edit\" mode after so that it updates its data. Delivery and filtering of this message is under control of VeraAlerts.")
 					.toggle( isVA )
 					.appendTo( $( 'div.actionfooter', $row ) );
@@ -6143,7 +6143,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 		if ( ninfo.config ) {
 			var s = getParentState( ninfo.config.name );
 			if ( isEmpty(s) ) {
-				$( '<div class="notifynotice"/>' )
+				$( '<div class="notifynotice"></div>' )
 					.text( ninfo.config.warning || ninfo.config.message || "This method requires additional configuration that has not been completed." )
 					.appendTo( $( 'div.actionfooter', $row ) );
 				$( 'div.notifynotice', $row ).append( getWiki( 'Notify-Action' ) );
@@ -6208,7 +6208,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						var dlid = ("data-" + action.service + '-' + action.name + '-' + parm.name).replace( /[^a-z0-9-]/ig, "-" );
 						if ( 0 == $( 'datalist#' + idSelector( dlid ) ).length ) {
 							/* Datalist doesn't exist yet, create it */
-							inp = $('<datalist class="argdata" id="' + dlid + '"/>');
+							inp = $('<datalist class="argdata"></datalist>').attr( 'id', dlid );
 							lj = parm.values.length;
 							for ( j=0; j<lj; j++ ) {
 								opt = $( '<option></option>' );
@@ -6235,7 +6235,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						inp = $( '<input class="argument form-control form-control-sm" placeholder="Click for predefined values" list="' + dlid + '">' );
 					} else {
 						/* Standard select menu */
-						inp = $( '<select class="argument form-control form-control-sm"/>' );
+						inp = $( '<select class="argument form-control form-control-sm"></select>' );
 						if ( parm.optional ) {
 							inp.append( '<option value="">(unspecified)</option>' );
 						}
@@ -6268,8 +6268,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					}
 				} else if ( parm.type == "scene" ) {
 					inp = makeSceneMenu();
-					var topItem = $( '<option value="" />' );
-					topItem.text( parm.optional ? "(unspecified)" : "--choose--" );
+					var topItem = $( '<option></option>' ).val("")
+						.text( parm.optional ? "(unspecified)" : "--choose--" );
 					inp.prepend( topItem );
 					if ( 0 !== ( parm._reactor_with_activities || 0 ) ) {
 						/* Show activities in traversal order */
@@ -6319,7 +6319,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					appendVariables( inp );
 				} else if ( parm.type == "boolean" ) {
 					/* Menu */
-					inp = $('<select class="argument form-control form-control-sm"/>');
+					inp = $('<select class="argument form-control form-control-sm"></select>');
 					if ( parm.optional ) {
 						inp.prepend( '<option value="">(not specified)</option>' );
 					}
@@ -6336,7 +6336,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						$( 'option:first', inp ).prop( 'selected', true );
 					}
 				} else if ( false && parm.type == "ui1" && parm.min !== undefined && parm.max !== undefined ) {
-					inp = $('<div class="argument tbslider"/>');
+					inp = $('<div class="argument tbslider"></div>');
 					inp.slider({
 						min: parm.min, max: parm.max, step: parm.step || 1,
 						range: "min",
@@ -6375,7 +6375,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				inp.on( 'change.reactor', handleActionValueChange );
 				/* If there is more than one parameter, wrap each in a label. */
 				if ( action.parameters.length > 1 ) {
-					var label = $("<label/>");
+					var label = $("<label></label>");
 					label.attr("for", pfx + '-' + parm.name );
 					label.text( ( parm.label || parm.name ) + ":" );
 					label.append( '&nbsp;' );
@@ -6572,7 +6572,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 		var i, j, lj, key;
 		var l = data.serviceList ? data.serviceList.length : 0;
 		for ( i=0; i<l; i++ ) {
-			var section = $( "<select/>" );
+			var section = $( "<select></select>" );
 			var service = data.serviceList[i];
 			var opt;
 			lj = service.actionList ? service.actionList.length : 0;
@@ -6613,7 +6613,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				hasAction = true;
 			}
 			if ( $("option", section).length > 0 ) {
-				opt = $( '<optgroup />' ).attr( 'label', service.serviceId.replace(/^([^:]+:)+/, "") );
+				opt = $( '<optgroup></optgroup>' ).attr( 'label', service.serviceId.replace(/^([^:]+:)+/, "") );
 				opt.append( section.children() );
 				actionMenu.append( opt );
 			}
@@ -6622,7 +6622,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 		try {
 			var over = getDeviceOverride( dev );
 			if ( over ) {
-				var known = $( '<optgroup />' ).attr( 'label', 'Common Actions' );
+				var known = $( '<optgroup></optgroup>' ).attr( 'label', 'Common Actions' );
 				lj = over.length;
 				for ( j=0; j<lj; j++ ) {
 					var thisover = over[j];
@@ -6672,7 +6672,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 			alert(String(e));
 		}
 
-		var lopt = $( '<option selected/>' ).val( "" ).text( hasAction ? "--choose action--" : "(invalid device--no actions)" );
+		var lopt = $( '<option selected></option>' ).val( "" ).text( hasAction ? "--choose action--" : "(invalid device--no actions)" );
 		actionMenu.prepend( lopt );
 		actionMenu.prop( 'disabled', false );
 
@@ -6769,7 +6769,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 	/* Convert plain textarea to ACE. Keep the textarea as shadow field for content
 	 * that's synced with ACE content--it's easier to read from that (and consistent) */
 	function doEditor( field ) {
-		var ediv = $( '<div class="editor"/>' );
+		var ediv = $( '<div class="editor"></div>' );
 		ediv.insertAfter( field );
 		var editor = ace.edit( ediv.get(0), {
 			minLines: 8,
@@ -6871,7 +6871,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				break;
 
 			case "device":
-				$fs = $( '<div class="form-inline"/>' ).appendTo( ct );
+				$fs = $( '<div class="form-inline"></div>' ).appendTo( ct );
 				$fs.append( makeDeviceMenu( "", "" ) );
 				$fs.append('<select class="form-control form-control-sm re-actionmenu"></select>');
 				$( 'select.devicemenu', $fs ).on( 'change.reactor', handleActionDeviceChange );
@@ -6880,7 +6880,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				break;
 
 			case "housemode":
-				$fs = $( '<div class="form-inline"/>' ).appendTo( ct );
+				$fs = $( '<div class="form-inline"></div>' ).appendTo( ct );
 				$m = $( '<select class="form-control form-control-sm re-mode">')
 					.append( '<option value="1">Home</option>' ).append( '<option value="2">Away</option>' )
 					.append( '<option value="3">Night</option>' ).append( '<option value="4">Vacation</option>' )
@@ -6889,7 +6889,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				break;
 
 			case "delay":
-				$fs = $( '<div class="form-inline"/>' ).appendTo( ct );
+				$fs = $( '<div class="form-inline"></div>' ).appendTo( ct );
 				$fs.append('<label>for <input type="text" id="' +
 					pfx + 'delay" class="argument narrow form-control form-control-sm" title="Enter delay time as seconds, MM:SS, or HH:MM:SS" placeholder="delay time" list="reactorvarlist"></label>');
 				$fs.append('<select class="form-control form-control-sm re-delaytype"><option value="inline">from this point</option><option value="start">from start of actions</option></select>');
@@ -6898,7 +6898,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				break;
 
 			case "runscene":
-				$fs = $( '<div class="form-inline"/>' ).appendTo( ct );
+				$fs = $( '<div class="form-inline"></div>' ).appendTo( ct );
 				$m = makeSceneMenu()
 					.prepend('<option value="" selected>--choose--</option>')
 					.val("")
@@ -6917,7 +6917,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 
 			case "runlua":
 				/* Handle upgrade to ACE separately */
-				ct.append( '<textarea wrap="off" autocorrect="off" autocomplete="off" autocapitalize="off" spellcheck="off" class="re-luacode form-control form-control-sm" rows="6"/>' );
+				ct.append( '<textarea wrap="off" autocorrect="off" autocomplete="off" autocapitalize="off" spellcheck="off" class="re-luacode form-control form-control-sm" rows="6"></textarea>' );
 				if ( window.ace ) {
 					doEditor( $( 'textarea.re-luacode', ct ) );
 				} else {
@@ -6927,7 +6927,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				break;
 
 			case "rungsa":
-				$fs = $( '<div class="form-inline"/>' ).appendTo( ct );
+				$fs = $( '<div class="form-inline"></div>' ).appendTo( ct );
 				makeDeviceMenu( "", "", function( devobj ) {
 						return devobj.device_type === deviceType;
 					})
@@ -6945,7 +6945,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						}
 						handleActionValueChange( ev );
 					}).appendTo( $fs );
-				$m = $( '<select/>', { class: "form-control form-control-sm re-activity" } )
+				$m = $( '<select></select>', { class: "form-control form-control-sm re-activity" } )
 					.appendTo( $fs );
 				makeDeviceActivityMenu( -1, $m )
 					.val( "root.true" )
@@ -6957,7 +6957,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				break;
 
 			case "stopgsa":
-				$fs = $( '<div class="form-inline"/>' ).appendTo( ct );
+				$fs = $( '<div class="form-inline"></div>' ).appendTo( ct );
 				makeDeviceMenu( "", "", function( devobj ) {
 						return devobj.device_type === deviceType;
 					})
@@ -6977,7 +6977,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						}
 						handleActionValueChange( ev );
 					}).appendTo( $fs );
-				$m = $( '<select/>', { class: "form-control form-control-sm re-activity" } )
+				$m = $( '<select></select>', { class: "form-control form-control-sm re-activity" } )
 					.appendTo( $fs );
 				makeDeviceActivityMenu( -1, $m )
 					.prepend( '<option value="">(all activities)</option>' )
@@ -6986,8 +6986,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				break;
 
 			case "setvar":
-				$fs = $( '<div class="form-inline"/>' ).appendTo( ct );
-				$m = $( '<select/>', { class: "form-control form-control-sm re-variable" } )
+				$fs = $( '<div class="form-inline"></div>' ).appendTo( ct );
+				$m = $( '<select></select>', { class: "form-control form-control-sm re-variable" } )
 					.appendTo( $fs );
 				var cdata = getConfiguration();
 				var vix = [];
@@ -7030,7 +7030,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				break;
 
 			case "resetlatch":
-				$fs = $( '<div class="form-inline"/>' ).appendTo( ct );
+				$fs = $( '<div class="form-inline"></div>' ).appendTo( ct );
 				makeDeviceMenu( "", "", function( devobj ) {
 						return devobj.device_type === deviceType;
 					})
@@ -7049,7 +7049,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						}
 						handleActionValueChange( ev );
 					}).appendTo( $fs );
-				$m = $( '<select class="form-control form-control-sm re-group" />' )
+				$m = $( '<select class="form-control form-control-sm re-group"></select>' )
 					.appendTo( $fs );
 				makeDeviceGroupMenu( -1, $m )
 					.prepend( '<option value="*">(all groups)</option>' )
@@ -7059,10 +7059,10 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				break;
 
 			case "notify":
-				$fs = $( '<div class="form-inline"/>' ).appendTo( ct );
-				$( '<div class="actionfooter" />' ).appendTo( ct );
+				$fs = $( '<div class="form-inline"></div>' ).appendTo( ct );
+				$( '<div class="actionfooter"></div>' ).appendTo( ct );
 				$('<input type="hidden" class="re-notifyid" value="">').appendTo( $fs );
-				$m = $( '<select class="form-control form-control-sm re-method" />' );
+				$m = $( '<select class="form-control form-control-sm re-method"></select>' );
 				var lk = notifyMethods.length;
 				for ( k=0; k<lk; ++k ) {
 					if ( "VA" === notifyMethods[k].id && !devVeraAlerts ) continue;
@@ -7084,7 +7084,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				$('<div class="nativesub">WARNING! Variable/expression substitutions are not supported in Vera-native notifications!</div>').hide().appendTo( $fs );
 				$('<div class="subformat">WARNING! Inline substititons like <tt>"Humidity is {n}%"</tt> are not supported; the correct form is <tt>{ expression }</tt>, like this: <tt>{ "Humidity is " .. n .. "%" }</tt></div>').hide().appendTo( $fs );
 				/* User FS appends as separate group, so message field can grow max */
-				var $ufs = $('<div class="form-inline re-users" />').appendTo( ct );
+				var $ufs = $('<div class="form-inline re-users"></div>').appendTo( ct );
 				for ( var k in userIx ) {
 					if ( userIx.hasOwnProperty( k ) ) {
 						getCheckbox( getUID( "chk" ), k, userIx[k].name || k )
@@ -7096,36 +7096,36 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				break;
 
 			case "request":
-				$fs = $( '<div class="form-inline"/>' ).appendTo( ct );
-				$m = $( '<select class="form-control form-control-sm re-method" />' );
+				$fs = $( '<div class="form-inline"></div>' ).appendTo( ct );
+				$m = $( '<select class="form-control form-control-sm re-method"></select>' );
 				$( '<option></option>' ).val( "GET" ).text( "GET" ).appendTo( $m );
 				$( '<option></option>' ).val( "POST" ).text( "POST" ).appendTo( $m );
 				menuSelectDefaultFirst( $m, "GET" );
 				$m.on( 'change.reactor', handleActionValueChange )
 					.appendTo( $fs );
 
-				$fs = $( '<div class="re-fullwidth" />' ).appendTo( ct );
-				var $lb = $( '<label class="re-fullwidth" />' ).text( "Request URL:" ).appendTo( $fs );
+				$fs = $( '<div class="re-fullwidth"></div>' ).appendTo( ct );
+				var $lb = $( '<label class="re-fullwidth"></label>' ).text( "Request URL:" ).appendTo( $fs );
 				$( '<textarea class="form-control re-reqfield re-requrl"></textarea>' )
 					.attr( 'placeholder', "Request URL")
 					.on( 'change.reactor', handleActionValueChange )
 					.appendTo( $lb );
 
-				$fs = $( '<div/>' ).appendTo( ct );
-				$lb = $( '<label class="re-fullwidth" />' ).text( "Request Headers:" ).appendTo( $fs );
+				$fs = $( '<div></div>' ).appendTo( ct );
+				$lb = $( '<label class="re-fullwidth"></label>' ).text( "Request Headers:" ).appendTo( $fs );
 				$( '<textarea class="form-control re-reqfield re-reqheads"></textarea>' )
 					.on( 'change.reactor', handleActionValueChange )
 					.appendTo( $lb );
 
-				$fs = $( '<div class="re-reqdatafs" />' ).hide().appendTo( ct );
-				$lb = $( '<label class="re-fullwidth" />' ).text( "POST data:" ).appendTo( $fs );
+				$fs = $( '<div class="re-reqdatafs"></div>' ).hide().appendTo( ct );
+				$lb = $( '<label class="re-fullwidth"></label>' ).text( "POST data:" ).appendTo( $fs );
 				$( '<textarea class="form-control re-reqfield re-reqdata"></textarea>' )
 					.on( 'change.reactor', handleActionValueChange )
 					.appendTo( $lb );
 
-				$fs = $( '<div class="form-inline"/>' ).appendTo( ct );
-				$lb = $( '<label />' ).text( "Capture response to:" ).appendTo( $fs );
-				$m = $( '<select class="form-control re-reqtarget"/>' )
+				$fs = $( '<div class="form-inline"></div>' ).appendTo( ct );
+				$lb = $( '<label></label>' ).text( "Capture response to:" ).appendTo( $fs );
+				$m = $( '<select class="form-control re-reqtarget"></select>' )
 					.on( "change.reactor", handleActionValueChange );
 				$( '<option></option>' ).val( "" ).text( "(ignore/discard response)" )
 					.appendTo( $m );
@@ -7137,7 +7137,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				}
 				$m.appendTo( $lb );
 
-				$('<div/>').html("Substitutions are available in all request fields using <tt>{expr}</tt> syntax.")
+				$('<div></div>').html("Substitutions are available in all request fields using <tt>{expr}</tt> syntax.")
 					.appendTo( ct );
 				break;
 
@@ -7381,7 +7381,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 											var a = action.arguments[j];
 											if ( 0 === $( '#' + idSelector( pfx + a.name ), row ).length ) {
 												var inp = $( '<input class="argument form-control form-control-sm">' ).attr('id', a.name);
-												var lbl = $( '<label/>' ).attr('for', a.name).text(a.name).addClass('tbrequired').append(inp);
+												var lbl = $( '<label></label>' ).attr('for', a.name).text(a.name).addClass('tbrequired').append(inp);
 												$( 'div.actiondata', row ).append( lbl );
 											}
 											$( '#' + idSelector( pfx + a.name ), row ).val( a.value || "" );
@@ -7514,7 +7514,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 									fld = $( '<input class="argument form-control form-control-sm">' )
 										.attr( 'id', pfx + action.parameters[j].name )
 										.on( "change.reactor", handleActionValueChange );
-									var lbl = $( '<label/>' )
+									var lbl = $( '<label></label>' )
 										.attr( 'for', pfx + action.parameters[j].name )
 										.addClass( 'optarg' )
 										.text( action.parameters[j].name + ' (unrecognized parameter):' )
@@ -7732,17 +7732,17 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 
 	/* */
 	function getActionListContainer() {
-		var el = $( "<div/>" ).addClass( "actionlist" );
-		var row = $( '<div class="row"/>' );
+		var el = $( "<div></div>" ).addClass( "actionlist" );
+		var row = $( '<div class="row"></div>' );
 		row.append( '\
 <div class="tblisttitle col-xs-9 col-sm-9 col-lg-10"> \
   <span class="re-title">?title?</span> \
   <button class="btn md-btn re-tryactivity" title="Run activity now"><i class="material-icons">directions_run</i></button> \
   <button class="btn md-btn re-collapse" title="Collapse action"><i class="material-icons">expand_less</i></button> \
-  <span class="re-titlemessage" /> \
+  <span class="re-titlemessage"></span> \
 </div> \
 <div class="tblisttitle col-xs-3 col-sm-3 col-lg-2 text-right"> \
-  <div class="re-titlewarning" /> \
+  <div class="re-titlewarning"></div> \
   <div class="btn-group"> \
 	<button class="btn btn-xs btn-success saveconf">Save</button> \
 	<button class="btn btn-xs btn-danger revertconf">Revert</button> \
@@ -7750,17 +7750,17 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 </div>' );
 		el.append( row );
 		/* activity-group is container for actionrows and buttonrow */
-		var g = $( '<div class="activity-group" />' );
-		row = $( '<div class="row buttonrow"/>' );
+		var g = $( '<div class="activity-group"></div>' );
+		row = $( '<div class="row buttonrow"></div>' );
 		row.append( '\
 <div class="col-xs-12 col-sm-12"> \
   <div class="btn-group"> \
 	<button class="addaction btn btn-sm btn-success">Add Action</button> \
 	<div class="btn-group"> \
 	  <button class="btn btn-sm btn-default dropdown-toggle re-global-import" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" title="Import activity or scene to this activity"> \
-		Copy From <span class="caret" /> \
+		Copy From <span class="caret"></span> \
 	  </button> \
-	  <ul class="dropdown-menu re-activities-list" /> \
+	  <ul class="dropdown-menu re-activities-list"></ul> \
 	</div> \
   </div> \
 </div>' );
@@ -7814,9 +7814,9 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 		var cd = getConfiguration( myid );
 		var container = $( 'div#re-activities' ).empty();
 
-		var el = $( '<div class="form-inline" />' )
+		var el = $( '<div class="form-inline"></div>' )
 			.append( $( "<label>" ).text( "Show Activities: " )
-				.append( $( '<select id="whatshow" class="form-control form-control-sm" />' )
+				.append( $( '<select id="whatshow" class="form-control form-control-sm"></select>' )
 					.append( $( '<option value="">All</option>' ) )
 					.append( $( '<option value="inuse">In Use</option>' ) )
 					.append( $( '<option value="true">True Only</option>' ) )
@@ -7831,12 +7831,12 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 		$( 'select#whatshow', container ).on( 'change.reactor', handleActivityVisChange )
 			.val( showWhich );
 
-		var ul = $( '<ul />' );
+		var ul = $( '<ul></ul>' );
 		var showedAny = false;
 		var orderly = function( gr ) {
 			if ( "nul" !== gr.operator ) {
-				ul.append( $( '<li />' ).attr( 'id', gr.id + ".true" ).text( ( gr.name || gr.id ) + " True" ) );
-				ul.append( $( '<li />' ).attr( 'id', gr.id + ".false" ).text( ( gr.name || gr.id ) + " False" ) );
+				ul.append( $( '<li></li>' ).attr( 'id', gr.id + ".true" ).text( ( gr.name || gr.id ) + " True" ) );
+				ul.append( $( '<li></li>' ).attr( 'id', gr.id + ".false" ).text( ( gr.name || gr.id ) + " False" ) );
 				var scene = gr.id + '.true';
 				el = getActionListContainer();
 				el.attr( 'id', scene );
@@ -7871,11 +7871,11 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 		orderly( ( cd.conditions || {} ).root || [ { id: "root", conditions: [] } ] );
 
 		if ( ! showedAny ) {
-			container.append( $( '<div/>' )
+			container.append( $( '<div></div>' )
 				.html( '<em>There are no groups eligible for activities.</em>' ) );
 		} else {
 			container.append(
-				$( '<div class="re-alertbox re-filteralert" />' )
+				$( '<div class="re-alertbox re-filteralert"></div>' )
 					.text( 'Not all possible activities are being shown. Choose "All" from the "Show Activities" menu at top to see everything.' )
 			);
 			$( 'select#whatshow', container ).trigger( 'change.reactor' );
@@ -7929,7 +7929,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 			$( 'div#tbcopyright' ).append('<span> Reactor device info ver ' + String(deviceInfo.serial) + '</span>');
 			if ( checkRemoteAccess() ) {
 				$( 'div.reactortab' ).prepend(
-					$( '<div class="remotealert re-alertblock" />' ).text( msgRemoteAlert )
+					$( '<div class="remotealert re-alertblock"></div>' ).text( msgRemoteAlert )
 				);
 			}
 		}
@@ -7939,7 +7939,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 			var cd = getConfiguration( myid );
 
 			/* Set up a data list with our variables */
-			var dl = $( '<datalist id="reactorvarlist" />' );
+			var dl = $( '<datalist id="reactorvarlist"></datalist>' );
 			if ( cd.variables ) {
 				for ( var vname in cd.variables ) {
 					if ( cd.variables.hasOwnProperty( vname ) ) {
@@ -7953,7 +7953,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 			redrawActivities();
 
 			if ( undefined !== deviceInfo ) {
-				var uc = $( '<div id="di-ver-check"/>' );
+				var uc = $( '<div id="di-ver-check"></div>' );
 				$('div#tab-actions').prepend( uc );
 				$.ajax({
 					url: "https://www.toggledbits.com/deviceinfo/checkupdate.php",
@@ -8064,7 +8064,7 @@ div#tab-actions.reactortab button.re-activemode { color: #6f6; } \
 
 				html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>Activities</h3></div></div>';
 
-				html += '<div id="re-activities"/>';
+				html += '<div id="re-activities"></div>';
 
 				html += '</div>'; // tab-actions
 
@@ -8123,7 +8123,7 @@ div#tab-actions.reactortab button.re-activemode { color: #6f6; } \
 				data = data.substring( pos+36 );
 				pos = data.search( keypat );
 			}
-			$( 'div#rslogdata' ).empty().append( '<h3>Debug Log Snippet</h3><pre/>' );
+			$( 'div#rslogdata' ).empty().append( '<h3>Debug Log Snippet</h3><pre></pre>' );
 			var lines = data.split( /\r?\n/ );
 			var k = 0, n = 0;
 			var nmax = parseInt( api.getDeviceState( api.getCpanelDeviceId(), serviceId, "MaxLogSnippet" ) || "" );
@@ -8684,7 +8684,7 @@ textarea#devspyoutput { width: 100%; font-family: monospace; } \
 </div>'; /* row */
 
 		html += '<div class="row"> \
-  <div class="col-sm-2 col-md-4 col-lg-3 col-xl-2"><span id="testhousemode"/></div> \
+  <div class="col-sm-2 col-md-4 col-lg-3 col-xl-2"><span id="testhousemode"></div> \
   <div class="col-sm-10 col-md-8 col-lg-9 col-xl-10 form-inline"> \
 	<select class="form-control form-control-sm" id="mode"> \
 	  <option value="1">Home</option> \
@@ -8867,17 +8867,17 @@ textarea#devspyoutput { width: 100%; font-family: monospace; } \
 			$( 'option[value=""]', $mm ).text("(no change)");
 			$( 'option[value="-1"]', $mm ).remove();
 			var $ct = $('div#re-devicerepair');
-			var $row = $('<div class="row"/>').appendTo( $ct );
+			var $row = $('<div class="row"></div>').appendTo( $ct );
 			$( '<div class="col-xs-12 col-sm-12"><h3>Device Repair</h3><p>This tool identifies missing or suspect devices and allows you to reassign them, without having to go in and edit each individual condition and action. If the device is listed here, it is either missing entirely, or its name has changed since you last edited the ReactorSensor configuration. <em>This tool does not repair device references in Expressions</em>, including <tt>getstate()</tt>. You will need to do those manually.</p><p>It is always a good idea to <strong>back up your ReactorSensors</strong> (from the Reactor master device) before making reassignments/repairs.</p></div>' )
 				.appendTo( $row );
-			$row = $('<div class="row"/>').appendTo( $ct );
-			$( '<div class="col-xs-12 col-sm-8 col-md-6 col-lg-6 col-xl-4" />' ).html( '<b>Missing/Suspect Device</b>' )
+			$row = $('<div class="row"></div>').appendTo( $ct );
+			$( '<div class="col-xs-12 col-sm-8 col-md-6 col-lg-6 col-xl-4"></div>' ).html( '<b>Missing/Suspect Device</b>' )
 				.appendTo( $row );
-			$( '<div class="col-xs-12 col-sm-4 col-md-6 col-lg-6 col-xl-3" />' ).html( '<b>Replace With</b>' )
+			$( '<div class="col-xs-12 col-sm-4 col-md-6 col-lg-6 col-xl-3"></div>' ).html( '<b>Replace With</b>' )
 				.appendTo( $row );
 			for ( var ds in lost ) {
-				$row = $('<div class="row re-lost-device" />' ).attr( 'id', ds ).appendTo( $ct );
-				$( '<div class="col-xs-12 col-sm-8 col-md-6 col-lg-6 col-xl-4" />' )
+				$row = $('<div class="row re-lost-device"></div>' ).attr( 'id', ds ).appendTo( $ct );
+				$( '<div class="col-xs-12 col-sm-8 col-md-6 col-lg-6 col-xl-4"></div>' )
 					.text( "#" + ds + " last known as \"" + (lost[ds].lastname || "") +
 						"\"; used in " + ( lost[ds].cond ? lost[ds].cond.length : 0 ) +
 						" conditions and " + ( lost[ds].act ? lost[ds].act.length : 0 ) +
@@ -8885,7 +8885,7 @@ textarea#devspyoutput { width: 100%; font-family: monospace; } \
 						( lost[ds].newname ? ( "; current device name \"" + lost[ds].newname + '"' ) : "; missing" ) +
 						"."
 					).appendTo( $row );
-				$( '<div class="col-xs-12 col-sm-8 col-md-6 col-lg-6 col-xl-3"><select /></div>' )
+				$( '<div class="col-xs-12 col-sm-8 col-md-6 col-lg-6 col-xl-3"><select></select></div>' )
 					.appendTo( $row );
 				var $mx = $mm.clone().attr( 'id', 'lost' + ds );
 				$( 'select', $row ).replaceWith( $mx );
@@ -8904,8 +8904,8 @@ textarea#devspyoutput { width: 100%; font-family: monospace; } \
 						.text( pending ? "Changes pending (unsaved)" : "" );
 				});
 			}
-			$row = $('<div class="row"/>').appendTo( $ct );
-			$( '<div class="col-xs-12 col-sm-12"><button id="re-make-repairs" class="btn btn-sm btn-primary">Apply and Save</button><span id="re-repairstatus"/></div>' )
+			$row = $('<div class="row"></div>').appendTo( $ct );
+			$( '<div class="col-xs-12 col-sm-12"><button id="re-make-repairs" class="btn btn-sm btn-primary">Apply and Save</button><span id="re-repairstatus"></span></div>' )
 				.appendTo( $row );
 			$( 'button#re-make-repairs', $ct )
 				.prop( 'disabled', true )
@@ -8918,7 +8918,7 @@ textarea#devspyoutput { width: 100%; font-family: monospace; } \
 
 		/* Tools get log fetcher */
 		if ( ! isOpenLuup ) {
-			$( '<div id="rslogdata"/>' ).insertAfter( 'div#tbcopyright' );
+			$( '<div id="rslogdata"></div>' ).insertAfter( 'div#tbcopyright' );
 			$( 'a#grablog', container ).on( 'click', grabLog );
 		}
 
