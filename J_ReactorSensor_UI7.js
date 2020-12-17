@@ -27,6 +27,9 @@ var ReactorSensor = (function(api, $) {
 
 	var _DOCURL = "https://www.toggledbits.com/static/reactor/docs/3.9/";
 
+	var _MIN_ALTUI_VERSION = [ 2, 46, 2536 ];
+	var	_MAX_ALTUI_VERSION = [ 2, 49, 2545 ];
+
 	var myModule = {};
 
 	var serviceId = "urn:toggledbits-com:serviceId:ReactorSensor";
@@ -216,14 +219,14 @@ var ReactorSensor = (function(api, $) {
 	div.reactortab .vanotice { font-size: 0.9em; line-height: 1.5em; color: #666; margin-top: 4px; } \
 	div.reactortab div.re-alertblock { margin: 4px 4px; padding: 8px 8px; border: 2px solid red; color: red; border-radius: 8px; font-size: 0.9em; } \
 </style>');
-        if ( isALTUI ) {
-            $head.append( '<style id="reactor-platform-styles">/* ALTUI */</style>' );
-        } else {
-            /* Vera */
-            $head.append( '<style id="reactor-platform-styles">/* Vera */\
+		if ( isALTUI ) {
+			$head.append( '<style id="reactor-platform-styles">/* ALTUI */</style>' );
+		} else {
+			/* Vera */
+			$head.append( '<style id="reactor-platform-styles">/* Vera */\
 div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow: row wrap; flex-flow: row wrap; align-items: center; } \
 </style>' );
-        }
+		}
 	}
 
 	/* Return footer */
@@ -231,7 +234,7 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 		var html = '';
 		html += '<div class="clearfix">';
 		html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
-		html += '<div id="tbcopyright">Reactor ver ' + pluginVersion + ' &copy; 2018,2019 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
+		html += '<div id="tbcopyright">Reactor ver ' + pluginVersion + ' &copy; 2018,2019,2020 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
 			' All Rights Reserved. Please check out the <a href="' + _DOCURL + '" target="_blank">online documentation</a>' +
 			' and <a href="https://community.getvera.com/c/plugins-and-plugin-development/reactor" target="_blank">community forums</a> for support.</div>';
 		try {
@@ -313,7 +316,7 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 	function menuSelectDefaultInsert( $mm, val, txt ) {
 		var $opt = $( 'option[value=' + quot( val ) + ']', $mm );
 		if ( 0 === $opt.length ) {
-			$opt = $( '<option/>' ).val( val ).text( txt || ( val + '? (missing)' ) );
+			$opt = $( '<option></option>' ).val( val ).text( txt || ( val + '? (missing)' ) );
 			$mm.addClass( "tberror" ).append( $opt );
 		}
 		val = $opt.val(); /* actual value now */
@@ -323,7 +326,7 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 
 	/** getWiki - Get (as jQuery) a link to Wiki for topic */
 	function getWiki( where ) {
-		var $v = $( '<a/>', {
+		var $v = $( '<a></a>', {
 			"class": "tbdocslink",
 			"alt": "Link to documentation for topic",
 			"title": "Link to documentation for topic",
@@ -426,24 +429,24 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 
 	/* Generate an inline checkbox. */
 	function getCheckbox( id, value, label, classes, help ) {
-		var $div = $( '<div class="checkbox checkbox-inline"/>' );
-        if ( isALTUI ) {
-            $div.removeClass().addClass( 'form-check' );
-            $('<input>').attr( { type: 'checkbox', id: id } )
-                .val( value )
-                .addClass( 'form-check-input' )
-                .appendTo( $div );
-            $('<label></label>').attr( 'for', id )
-                .addClass( 'form-check-label' )
-                .html( label )
-                .appendTo( $div );
-        } else {
-            $( '<input type="checkbox" />' ).attr( 'id', id ).val( value )
-                .addClass( classes || "" )
-                .appendTo( $div );
-            $( '<label/>' ).attr( 'for', id ).html( label )
-                .appendTo( $div );
-        }
+		var $div = $( '<div class="checkbox checkbox-inline"></div>' );
+		if ( isALTUI ) {
+			$div.removeClass().addClass( 'form-check' );
+			$('<input>').attr( { type: 'checkbox', id: id } )
+				.val( value )
+				.addClass( 'form-check-input' )
+				.appendTo( $div );
+			$('<label></label>').attr( 'for', id )
+				.addClass( 'form-check-label' )
+				.html( label )
+				.appendTo( $div );
+		} else {
+			$( '<input type="checkbox">' ).attr( 'id', id ).val( value )
+				.addClass( classes || "" )
+				.appendTo( $div );
+			$( '<label></label>' ).attr( 'for', id ).html( label )
+				.appendTo( $div );
+		}
 		if ( help ) {
 			getWiki( help ).appendTo( $div );
 		}
@@ -452,27 +455,27 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 
 	/* Generate an inline radio button */
 	function getRadio( name, ix, value, label, classes ) {
-        var $div;
-        if ( isALTUI ) {
-            $div = $( '<div></div>' ).addClass( 'form-check' );
-            $('<input>').attr( { type: 'radio', id: name + ix, name: name } )
-                .val( value )
-                .addClass( 'form-check-input' )
-                .addClass( classes || "" )
-                .appendTo( $div );
-            $('<label></label>').attr( 'for', name + ix )
-                .addClass( 'form-check-label' )
-                .html( label )
-                .appendTo( $div );
-        } else {
-            $div = $( '<label class="radio"></label>' )
-                .html( label );
-            $( '<input type="radio">' )
-                .attr( { id: name+ix, name: name } )
-                .val( value )
-                .addClass( classes || "" )
-                .prependTo( $div );
-        }
+		var $div;
+		if ( isALTUI ) {
+			$div = $( '<div></div>' ).addClass( 'form-check' );
+			$('<input>').attr( { type: 'radio', id: name + ix, name: name } )
+				.val( value )
+				.addClass( 'form-check-input' )
+				.addClass( classes || "" )
+				.appendTo( $div );
+			$('<label></label>').attr( 'for', name + ix )
+				.addClass( 'form-check-label' )
+				.html( label )
+				.appendTo( $div );
+		} else {
+			$div = $( '<label class="radio"></label>' )
+				.html( label );
+			$( '<input type="radio">' )
+				.attr( { id: name+ix, name: name } )
+				.val( value )
+				.addClass( classes || "" )
+				.prependTo( $div );
+		}
 		return $div;
 	}
 
@@ -673,6 +676,7 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 	/* Initialize the module */
 	function initModule( myid ) {
 		myid = myid || api.getCpanelDeviceId();
+		var ud = api.getUserData();
 		if ( !moduleReady ) {
 
 			/* Initialize module data */
@@ -692,7 +696,6 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 			devVeraTelegram = false;
 
 			/* Try to establish date format */
-			var ud = api.getUserData();
 			dateFormat = "%F"; /* ISO8601 default */
 			timeFormat = "%T";
 			var cfd = parseInt( getParentState( "ForceISODateTime", myid ) || "0" );
@@ -714,6 +717,8 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 					devVeraAlerts = devobj.id;
 				} else if ( devobj.device_type === "urn:bochicchio-com:device:VeraTelegram:1" && devobj.id_parent == 0 ) {
 					devVeraTelegram = devobj.id;
+				} else if ( devobj.device_type === "urn:schemas-upnp-org:device:altui:1" && devobj.id_parent == 0 ) {
+					isALTUI = devobj.id;
 				}
 			});
 
@@ -769,6 +774,62 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 		if ( undefined === Promise ) {
 			alert( "Warning! The browser you are using does not support features required by this interface. The recommended browsers are Firefox, Chrome, Safari, and Edge. If you are using a modern version of one of these browsers and getting this message, please report to rigpapa via the Vera Community forums." );
 			return false;
+		}
+
+		if ( isALTUI ) {
+			console.log("initModule() supported ALTUI versions:",_MIN_ALTUI_VERSION.join('.'),"to",_MAX_ALTUI_VERSION.join('.'));
+			var validALTUI = false;
+			var av;
+			var av_range = "v" + _MIN_ALTUI_VERSION.join('.') + " to v" + _MAX_ALTUI_VERSION.join('.');
+			try {
+				var np = ( ud.InstalledPlugins2 || [] ).length;
+				for ( var xp=0; xp<np; xp++ ) {
+					var plugin = ud.InstalledPlugins2[xp];
+					if ( plugin.id == 8246 ) {
+						if ( plugin.VersionMajor === "Github" ) {
+							/* Minor version check */
+							av = parseInt( plugin.VersionMinor );
+							console.log("initModule(): ALTUI release",plugin.VersionMinor,"from InstalledPlugins2");
+							av_range = String(_MIN_ALTUI_VERSION[2]) + " to " + String(_MAX_ALTUI_VERSION[2] );
+							if ( !isNaN( av ) && av >= _MIN_ALTUI_VERSION[2] && av <= _MAX_ALTUI_VERSION[2] ) {
+								validALTUI = true;
+							}
+						} else {
+							av = plugin.VersionMajor;
+						}
+						break;
+					}
+				}
+			} catch( e ) {
+				console.log("initModule(): InstalledPlugins2 ALTUI check threw", e);
+			}
+			if ( !validALTUI ) {
+				try {
+					if ( !av ) {
+						console.log("initModule() using Version state variable for ALTUI version info");
+						av = api.getDeviceState( isALTUI, "urn:upnp-org:serviceId:altui1",
+							"Version", { dynamic: false } ) || "unknown";
+					}
+					console.log("initModule() checking major version",av);
+					var m = av.match( /^v?(\d+)\.(\d+)(.*)/i );
+					if ( m && m.length > 2 ) {
+						m[1] = parseInt( m[1] );
+						m[2] = parseInt( m[2] );
+						if ( ! ( isNaN( m[1] ) || isNaN( m[2] ) ) ) {
+							if ( m[1] >= _MIN_ALTUI_VERSION[0] && m[1] <= _MAX_ALTUI_VERSION[0] ) {
+								if ( m[2] >= _MIN_ALTUI_VERSION[1] && m[2] <= _MAX_ALTUI_VERSION[1] ) {
+									validALTUI = true;
+								}
+							}
+						}
+					}
+				} catch ( e ) {
+					console.log("initModule(): ALTUI major version check threw", e);
+				}
+			}
+			if ( !validALTUI ) {
+				alert("The version of ALTUI cannot be confirmed to be compatible with this version of the Reactor UI and is not supported. Incompatibilities may cause loss of functionality or errors that result in data/configuration loss, and it is recommended that you upgrade/downgrade to a compatible version of ALTUI before continuing. Supported versions are: " + av_range + ". You are running " + String(av));
+			}
 		}
 
 		/* Load ACE. */
@@ -1445,7 +1506,7 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 		var el = $('<select class="devicemenu form-control form-control-sm"></select>');
 		getSortedDeviceList().forEach( function( roomObj ) {
 			var haveItem = false;
-			var xg = $( '<optgroup />' ).attr( 'label', roomObj.name );
+			var xg = $( '<optgroup></optgroup>' ).attr( 'label', roomObj.name );
 			var l = roomObj.devices.length;
 			for ( var j=0; j<l; j++ ) {
 				var devobj = roomObj.devices[j];
@@ -1454,15 +1515,15 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 				}
 				haveItem = true;
 				var fn = getDeviceFriendlyName( devobj.id, devobj );
-				xg.append( $( '<option/>' ).val( devobj.id ).text( fn ? fn : '#' + String(devobj.id) + '?' ) );
+				xg.append( $( '<option></option>' ).val( devobj.id ).text( fn ? fn : '#' + String(devobj.id) + '?' ) );
 			}
 			if ( haveItem ) {
 				el.append( xg );
 			}
 		});
 
-		el.prepend( $( '<option/>' ).val( "-1" ).text( "(this ReactorSensor)" ) );
-		el.prepend( $( '<option/>' ).val( "" ).text( "--choose device--" ) );
+		el.prepend( $( '<option></option>' ).val( "-1" ).text( "(this ReactorSensor)" ) );
+		el.prepend( $( '<option></option>' ).val( "" ).text( "--choose device--" ) );
 
 		menuSelectDefaultInsert( el, val, "(missing) #" + String(val) + " " + String(name || "") );
 		return el;
@@ -1587,21 +1648,21 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 			if ( cs.laststate && cs.waituntil ) {
 				id = getUID();
 				el.closest('div.cond').addClass('reactor-timing');
-				el.append( $('<span class="timer"/>').attr( 'id', id ) );
+				el.append( $('<span class="timer"></span>').attr( 'id', id ) );
 				(function( c, t, l ) {
 					setTimeout( function() { updateTime( c, t, "; sustained", false, l ); }, 20 );
 				})( id, cs.statestamp, ( cond.options || {} ).duration );
 			} else if (cs.evalstate && cs.holduntil) {
 				id = getUID();
 				el.closest('div.cond').addClass('reactor-timing');
-				el.append( $('<span class="timer"/>').attr( 'id', id ) );
+				el.append( $('<span class="timer"></span>').attr( 'id', id ) );
 				(function( c, t, l ) {
 					setTimeout( function() { updateTime( c, t, "; reset delayed", true, l ); }, 20 );
 				})( id, cs.holduntil, 0 );
 			} else if ( cs.pulseuntil) {
 				id = getUID();
 				el.closest('div.cond').addClass('reactor-timing');
-				el.append( $('<span class="timer"/>').attr( 'id', id ) );
+				el.append( $('<span class="timer"></span>').attr( 'id', id ) );
 				(function( c, t, l ) {
 					setTimeout( function() { updateTime( c, t, "; pulse ", true, l ); }, 20 );
 				})( id, cs.pulseuntil, 0 );
@@ -1622,9 +1683,9 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 	function showGroupStatus( grp, container, cstate ) {
 		var grpel = $( '\
 <div class="reactorgroup"> \
-  <div class="grouptitle"><button class="btn condbtn"/><span class="re-title">??</span> <span class="currentvalue"/></div> \
+  <div class="grouptitle"><button class="btn condbtn"></button><span class="re-title">??</span> <span class="currentvalue"></span></div> \
   <div class="grpbody"> \
-	<div class="grpcond"/> \
+	<div class="grpcond"></div> \
   </div> \
 </div>' );
 
@@ -1656,7 +1717,7 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 			if ( "group" === ( cond.type || "group" ) ) {
 				showGroupStatus( cond, grpel, cstate );
 			} else {
-				var row = $('<div class="cond" />').attr( 'id', cond.id );
+				var row = $('<div class="cond"></div>').attr( 'id', cond.id );
 				var currentValue = ( cstate[cond.id] || {} ).lastvalue;
 
 				var condType = condTypeName[ cond.type ] !== undefined ? condTypeName[ cond.type ] : cond.type;
@@ -1717,11 +1778,11 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 				/* Apply options to condition description */
 				condDesc += getCondOptionDesc( cond );
 
-				row.append( $( '<div class="condind" />' ).html( '<i class="material-icons">remove</i>' ) );
-				row.append( $( '<div class="condtext" />' ).text( condType + ': ' + condDesc ) );
+				row.append( $( '<div class="condind"></div>' ).html( '<i class="material-icons">remove</i>' ) );
+				row.append( $( '<div class="condtext"></div>' ).text( condType + ': ' + condDesc ) );
 
 				/* Append current value and condition state */
-				var el = $( '<div class="currentvalue" />' );
+				var el = $( '<div class="currentvalue"></div>' );
 				row.append( el );
 				getCondState( cond, currentValue, cstate, el );
 
@@ -1764,7 +1825,7 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 		var s = parseInt( api.getDeviceState( pdev, serviceId, "TestTime" ) || "0" );
 		if ( s && s > 0 ) {
 			var tid = getUID( "clk" );
-			$('<div class="re-alertblock" />').attr( 'id', tid ).text("Test Time is in effect!")
+			$('<div class="re-alertblock"></div>').attr( 'id', tid ).text("Test Time is in effect!")
 				.appendTo( stel );
 			var updateTestClock = function( fid, base ) {
 				if ( !inStatusPanel ) return;
@@ -1783,7 +1844,7 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 
 		var thm = api.getDeviceState( pdev, serviceId, "TestHouseMode" ) || "0";
 		if ( ! ( isEmpty(thm) || "0" === thm ) ) {
-			$('<div class="re-alertblock" />').text("Test House Mode is in effect!")
+			$('<div class="re-alertblock"></div>').text("Test House Mode is in effect!")
 				.appendTo( stel );
 		}
 
@@ -1806,15 +1867,15 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 				}
 				return ( i1 < i2 ) ? -1 : 1;
 			});
-			var grpel = $( '<div class="reactorgroup" id="variables"/>' );
+			var grpel = $( '<div class="reactorgroup" id="variables"></div>' );
 			grpel.append( '<div class="grouptitle"><span class="re-title">Expressions</span></div>' );
-			var body = $( '<div class="groupbody" />' );
+			var body = $( '<div class="groupbody"></div>' );
 			grpel.append( body );
 			var l = vix.length;
 			for ( var ix=0; ix<l; ix++ ) {
 				var vd = vix[ix];
 				var vs = ( cstate.vars || {} )[vd.name] || {};
-				el = $( '<div class="row var" />' );
+				el = $( '<div class="row var"></div>' );
 				var vv = ((cstate.vars || {})[vd.name] || {}).lastvalue;
 				if ( null === vv ) {
 					vv = "(null)";
@@ -1831,9 +1892,9 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 				if ( vv && vv.length > 256 ) {
 					vv = vv.substring( 0, 253 ) + "...";
 				}
-				el.append( $('<div class="col-sm-6 col-md-2 tb-hardwrap" />').text( vd.name ) );
-				el.append( $('<div class="col-sm-12 col-md-7 tb-sm tb-hardwrap" />').text( isEmpty( vd.expression ) ? "(no expression)" : vd.expression ) );
-				el.append( $('<div class="col-sm-6 col-md-3 tb-hardwrap" />').text( "" !== ve ? ve : vv ) );
+				el.append( $('<div class="col-sm-6 col-md-2 tb-hardwrap"></div>').text( vd.name ) );
+				el.append( $('<div class="col-sm-12 col-md-7 tb-sm tb-hardwrap"></div>').text( isEmpty( vd.expression ) ? "(no expression)" : vd.expression ) );
+				el.append( $('<div class="col-sm-6 col-md-3 tb-hardwrap"></div>').text( "" !== ve ? ve : vv ) );
 				if ( "" !== ve ) {
 					el.addClass( 'tb-exprerr' );
 				} else if ( vs.changed ) {
@@ -1931,7 +1992,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 			/*
 			checkUpdate().then( function( data ) {
 				if ( data ) {
-					$( '<div class="re-updatestatus" />' )
+					$( '<div class="re-updatestatus"></div>' )
 						.text( 'An update for Reactor is available. Go to the Tools tab to install it.' )
 						.insertBefore( $( 'div#reactorstatus' ) );
 				}
@@ -2010,7 +2071,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 		 * Make a menu of defined expressions
 		 */
 		function makeExprMenu( currExpr ) {
-			var $el = $( '<select class="exprmenu form-control form-control-sm" />' );
+			var $el = $( '<select class="exprmenu form-control form-control-sm"></select>' );
 			/* Create a list of variables by index, sorted. cdata.variables is a map/hash,
 			   not an array */
 			var cdata = getConfiguration();
@@ -2029,13 +2090,13 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 			});
 			var l = vix.length;
 			for ( var ix=0; ix<l; ix++ ) {
-				$( '<option/>' ).val( vix[ix].name ).text( vix[ix].name ).appendTo( $el );
+				$( '<option></option>' ).val( vix[ix].name ).text( vix[ix].name ).appendTo( $el );
 			}
 			if ( currExpr && 0 === $( "option[value=" + JSON.stringify( currExpr ) + "]", $el ).length ) {
-				$( '<option/>' ).val( currExpr ).text( currExpr + " (undefined)" )
+				$( '<option></option>' ).val( currExpr ).text( currExpr + " (undefined)" )
 					.prependTo( $el );
 			}
-			$( '<option/>' ).val( "" ).text( '--choose--' ).prependTo( $el );
+			$( '<option></option>' ).val( "" ).text( '--choose--' ).prependTo( $el );
 			$el.val( coalesce( currExpr, "" ) );
 			return $el;
 		}
@@ -2108,7 +2169,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 			var el = $('<select class="opmenu form-control form-control-sm"></select>');
 			var l = serviceOps.length;
 			for ( var ix=0; ix<l; ix++ ) {
-				el.append( $('<option/>').val(serviceOps[ix].op).text(serviceOps[ix].desc || serviceOps[ix].op) );
+				el.append( $('<option></option>').val(serviceOps[ix].op).text(serviceOps[ix].desc || serviceOps[ix].op) );
 			}
 
 			if ( undefined !== op ) {
@@ -2130,9 +2191,9 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 
 		/* Make a menu of eligible groups in a ReactorSensor */
 		function makeRSGroupMenu( cond ) {
-			var mm = $( '<select class="form-control form-control-sm re-grpmenu" />' );
+			var mm = $( '<select class="form-control form-control-sm re-grpmenu"></select>' );
 			mm.empty();
-			$( '<option/>' ).val( "" ).text("--choose--").appendTo( mm );
+			$( '<option></option>' ).val( "" ).text("--choose--").appendTo( mm );
 			try {
 				var dc;
 				var myid = api.getCpanelDeviceId();
@@ -2148,7 +2209,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 						/* Don't add ancestors in same RS */
 						if ( "nul" !== grp.operator && ! ( myself && isAncestor( grp.id, cond.id, myid ) ) ) {
 							sel.append(
-								$( '<option/>' ).val( grp.id )
+								$( '<option></option>' ).val( grp.id )
 									.text( "root"===grp.id ? "Tripped/Untripped (root)" : ( grp.name || grp.id ) )
 							);
 						}
@@ -2896,19 +2957,19 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 					var lbl = fmt.match( /^([^%]*)%\d+([^%]*)%\d+(.*)$/ );
 					if ( null !== lbl ) {
 						if ( !isEmpty( lbl[1] ) ) {
-							$( '<label for="' + idSelector( cond.id + '-val1' ) +
-								'" class="re-secondaryinput"/>' )
+							$( '<label class="re-secondaryinput"></label>' )
+								.attr( 'for', cond.id + "-val1" )
 								.text( lbl[1] )
 								.insertBefore( $inp );
 						}
 						if ( !isEmpty( lbl[2] ) ) {
-							$( '<label for="' + idSelector( cond.id + '-val2' ) +
-								'" class="re-secondaryinput">' )
+							$( '<label class="re-secondaryinput"></label>' )
+								.attr( 'for', cond.id + "-val2" )
 								.text( lbl[2] )
 								.insertBefore( $in2 );
 						}
 						if ( !isEmpty( lbl[3] ) ) {
-							$( '<label class="re-secondaryinput">' )
+							$( '<label class="re-secondaryinput"></label>' )
 								.text( lbl[3] )
 								.insertAfter( $in2 );
 						}
@@ -3021,7 +3082,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 			/* Doesn't exist. Create the options container and add options */
 			$( 'i', $el ).text( 'expand_less' );
 			$el.attr( 'title', msgOptionsHide );
-			$container = $( '<div class="condopts" />' ).hide();
+			$container = $( '<div class="condopts"></div>' ).hide();
 
 			var displayed = condOptions[ cond.type || "group" ] || {};
 			var condOpts = cond.options || {};
@@ -3029,7 +3090,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 			/* Options now fall into two general groups: output control, and restrictions. */
 
 			/* Output Control */
-			var out = $( '<div/>', { "id": "outputopt", "class": "tboptgroup" } ).appendTo( $container );
+			var out = $( '<div></div>', { "id": "outputopt", "class": "tboptgroup" } ).appendTo( $container );
 			$( '<div class="opttitle">Output Control</div>' ).append( getWiki( 'Condition-Options' ) ).appendTo( out );
 			var fs = $( '<div class="opt-fs form-inline"></div>').appendTo( out );
 			var rid = "output" + getUID();
@@ -3045,7 +3106,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 				condOpts.pulsetime ) {
 				fs = $( '<div class="opt-fs form-inline"></div>' ).appendTo( out );
 				getRadio( rid, 2, "P", "Pulse - output goes true for", "opt-output" )
-                    .appendTo( fs );
+					.appendTo( fs );
 				$( '<input type="number" class="form-control form-control-sm narrow pulseopts re-pulsetime"> seconds</label>' )
 					.appendTo( fs );
 				$( '<select class="form-control form-control-sm pulseopts re-pulsemode"><option value="">once</option><option value="repeat">repeat</option></select><div class="re-pulsebreakopts form-inline"><label>after <input type="number" class="form-control form-control-sm narrow pulseopts re-pulsebreak"> seconds,</label> <label>up to <input type="number" class="form-control form-control-sm narrow pulseopts re-pulsecount">&nbsp;times&nbsp;(0/blank=no&nbsp;limit)</label></div>' )
@@ -3064,7 +3125,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 				$( 'input.re-pulsetime', out ).val( condOpts.pulsetime || 15 );
 				$( 'input.re-pulsebreak', out ).val( condOpts.pulsebreak || "" );
 				$( 'input.re-pulsecount', out ).val( condOpts.pulsecount || "" );
-                var pbo = (condOpts.pulsebreak || 0) > 0;
+				var pbo = (condOpts.pulsebreak || 0) > 0;
 				$( 'select.re-pulsemode', out ).val( pbo ? "repeat" : "" );
 				$( 'div.re-pulsebreakopts', out ).toggle( pbo );
 				$( '.followopts,.latchopts', out ).prop( 'disabled', true );
@@ -3083,7 +3144,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 
 			/* Restrictions */
 			if ( displayed.sequence || displayed.duration || displayed.repeat ) {
-				var rst = $( '<div/>', { "id": "restrictopt", "class": "tboptgroup" } ).appendTo( $container );
+				var rst = $( '<div></div>', { "id": "restrictopt", "class": "tboptgroup" } ).appendTo( $container );
 				$( '<div class="opttitle">Restrictions</div>' ).append( getWiki( 'Condition-Options' ) ).appendTo( rst );
 				/* Sequence (predecessor condition) */
 				if ( displayed.sequence ) {
@@ -3091,7 +3152,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 					var $preds = $('<select class="form-control form-control-sm re-predecessor"><option value="">(any time/no sequence)</option></select>');
 					/* Add groups that are not ancestor of condition */
 					DOtraverse( (getConditionIndex()).root, function( node ) {
-						$preds.append( $( '<option/>' ).val( node.id ).text( makeConditionDescription( node ) ) );
+						$preds.append( $( '<option></option>' ).val( node.id ).text( makeConditionDescription( node ) ) );
 					}, false, function( node ) {
 						/* If node is not ancestor (line to root) or descendent of cond, allow as predecessor */
 						return "comment" !== node.type && cond.id !== node.id && !isAncestor( node.id, cond.id ) && !isDescendent( node.id, cond.id );
@@ -3163,13 +3224,13 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 				var l = ud.usergeofences ? ud.usergeofences.length : 0;
 				for ( var k=0; k<l; ++k ) {
 					if ( ud.usergeofences[k].iduser == user ) {
-						mm.append( $( '<option/>' ).val( "" ).text( '--choose location--' ) );
+						mm.append( $( '<option></option>' ).val( "" ).text( '--choose location--' ) );
 						$.each( ud.usergeofences[k].geotags || [], function( ix, v ) {
-							mm.append( $( '<option/>' ).val( v.id ).text( v.name ) );
+							mm.append( $( '<option></option>' ).val( v.id ).text( v.name ) );
 						});
 						var el = $( 'option[value="' + (loc || "") + '"]' );
 						if ( el.length == 0 ) {
-							mm.append( $( '<option/>' ).val( loc )
+							mm.append( $( '<option></option>' ).val( loc )
 								.text( "Deleted location " + String(loc) )
 							);
 						}
@@ -3217,11 +3278,11 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 		 * Make event menu from static JSON eventlist for device
 		 */
 		function makeEventMenu( cond, $row ) {
-			var el = $( '<div class="eventlist dropdown" />' );
+			var el = $( '<div class="eventlist dropdown"></div>' );
 			var btnid = getUID('btn');
 			el.append( '<button class="btn btn-default dropdown-toggle re-triggers" type="button" data-toggle="dropdown" title="Click for device-defined events"><i class="material-icons" aria-haspopup="true" aria-expanded="false">arrow_right</i></button>' );
 			$( 'button.device-triggers', el ).attr( 'id', btnid );
-			var mm = $( '<div class="dropdown-menu re-dropdown" role="menu" />' ).attr( 'aria-labelledby', btnid );
+			var mm = $( '<div class="dropdown-menu re-dropdown" role="menu"></div>' ).attr( 'aria-labelledby', btnid );
 			el.append( mm );
 			var myid = api.getCpanelDeviceId();
 			var myself = -1 === cond.device || cond.device === myid;
@@ -3323,11 +3384,11 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 				}
 			}
 			if ( $( 'a', mm ).length > 0 ) {
-				mm.append( $( '<div class="dropdown-divider" />' ) );
-				mm.append( $( '<a href="#" class="dropdown-header" />' )
+				mm.append( $( '<div class="dropdown-divider"></div>' ) );
+				mm.append( $( '<a href="#" class="dropdown-header"></a>' )
 					.text( "In addition to the above device-defined events, you can select any state variable defined on the device and test its value." ) );
 			} else {
-				mm.append( $( '<a href="#" class="dropdown-header" />' ).text( "This device does not define any events." ) );
+				mm.append( $( '<a href="#" class="dropdown-header"></a>' ).text( "This device does not define any events." ) );
 			}
 			return el;
 		}
@@ -3344,7 +3405,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 				row = $( 'div.cond-container#' + idSelector( cond.id ) );
 			}
 			var container = $('div.params', row).empty().addClass("form-inline");
-            container.closest( 'div.cond-body' ).addClass("form-inline");
+			container.closest( 'div.cond-body' ).addClass("form-inline");
 
 			row.children( 'button.re-condmore' ).prop( 'disabled', "comment" === cond.type );
 
@@ -3353,8 +3414,8 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 					break;
 
 				case 'comment':
-                    container.removeClass("form-inline");
-                    container.closest("div.cond-body").removeClass("form-inline");
+					container.removeClass("form-inline");
+					container.closest("div.cond-body").removeClass("form-inline");
 					container.append('<input type="text" class="form-control form-control-sm re-comment" autocomplete="off" placeholder="Type your comment here">');
 					$('input', container).on( 'change.reactor', handleConditionRowChange ).val( cond.comment || "" );
 					if ( "cond0" === cond.id && ( cond.comment || "").match( /^Welcome to your new Reactor/i ) ) {
@@ -3387,7 +3448,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 							delete cond.deviceName; /* remove old form */
 							configModified = true;
 						}
-						fs = $('<div class="vargroup"/>')
+						fs = $('<div class="vargroup"></div>')
 							.appendTo( container );
 						try {
 							fs.append( makeEventMenu( cond, row ) );
@@ -3405,10 +3466,10 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 					}
 					container.append( makeServiceOpMenu( cond.operator ) );
 					container.append('<input type="text" id="' + cond.id + '-value" class="operand form-control form-control-sm" autocomplete="off" list="reactorvarlist">');
-					v = $( '<div class="re-nocaseopt" />' ).appendTo( container );
+					v = $( '<div class="re-nocaseopt"></div>' ).appendTo( container );
 					getCheckbox( cond.id + "-nocase", "1", "Ignore&nbsp;case", "nocase" )
 						.appendTo( v );
-					container.append('<div class="currval" />');
+					container.append('<div class="currval"></div>');
 
 					setUpConditionOpFields( container, cond );
 					$("input.operand", container).on( 'change.reactor', handleConditionRowChange );
@@ -3450,13 +3511,13 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 					/* Create group menu for selected device (if any) */
 					container.append( makeRSGroupMenu( cond ) );
 					/* Make operator menu, short: only boolean and change */
-					mm = $( '<select class="opmenu form-control form-control-sm" />' );
-					mm.append( $( '<option/>' ).val( "istrue" ).text( "is TRUE" ) );
-					mm.append( $( '<option/>' ).val( "isfalse" ).text( "is FALSE" ) );
-					mm.append( $( '<option/>' ).val( "change" ).text( "changes" ) );
+					mm = $( '<select class="opmenu form-control form-control-sm"></select>' );
+					mm.append( $( '<option></option>' ).val( "istrue" ).text( "is TRUE" ) );
+					mm.append( $( '<option></option>' ).val( "isfalse" ).text( "is FALSE" ) );
+					mm.append( $( '<option></option>' ).val( "change" ).text( "changes" ) );
 					container.append( mm );
 					menuSelectDefaultFirst( mm, cond.operator );
-					container.append('<div class="currval" />');
+					container.append('<div class="currval"></div>');
 
 					setUpConditionOpFields( container, cond );
 					$("select.opmenu", container).on( 'change.reactor', handleConditionRowChange );
@@ -3500,7 +3561,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 					container.append( mm );
 					container.append( " " );
 					// Checkboxes in their own div
-					var d = $( '<div class="condfields form-inline re-modechecks"/>' );
+					var d = $( '<div class="condfields form-inline re-modechecks"></div>' );
 					for ( k=1; k<=4; k++ ) {
 						getCheckbox( cond.id + '-mode-' + k, k, houseModeName[k] || k, "hmode" )
 							.appendTo( d );
@@ -3508,11 +3569,11 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 					container.append( d );
 					$( "input.hmode", container ).on( 'change.reactor', handleConditionRowChange );
 					// Menus in a separate div
-					d = $( '<div class="condfields form-inline re-modeselects"/>' );
-					mm = $( '<select class="form-control form-control-sm"/>' );
+					d = $( '<div class="condfields form-inline re-modeselects"></div>' );
+					mm = $( '<select class="form-control form-control-sm"></select>' );
 					mm.append( '<option value="">(any)</option>' );
 					for ( k=1; k<=4; k++ ) {
-						mm.append( $( '<option/>' ).val(k).text( houseModeName[k] ) );
+						mm.append( $( '<option></option>' ).val(k).text( houseModeName[k] ) );
 					}
 					d.append( mm.clone().addClass( 're-frommode' ) );
 					d.append( " to " );
@@ -3527,7 +3588,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 				case 'weekday':
 					container.append(
 						'<select class="wdcond form-control form-control-sm"><option value="">Every</option><option value="1">First</option><option value="2">2nd</option><option value="3">3rd</option><option value="4">4th</option><option value="5">5th</option><option value="last">Last</option></select>');
-					fs = $( '<div class="re-wdopts form-inline" />' );
+					fs = $( '<div class="re-wdopts form-inline"></div>' );
 					getCheckbox( cond.id + '-wd-1', '1', 'Sun', 'wdopt' ).appendTo( fs );
 					getCheckbox( cond.id + '-wd-2', '2', 'Mon', 'wdopt' ).appendTo( fs );
 					getCheckbox( cond.id + '-wd-3', '3', 'Tue', 'wdopt' ).appendTo( fs );
@@ -3549,7 +3610,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 					$("select.opmenu", container).append('<option value="before">before</option>');
 					$("select.opmenu", container).append('<option value="after">after</option>');
 					container.append('<div class="re-startfields">' +
-						'<select class="re-sunstart" />'+
+						'<select class="re-sunstart"></select>'+
 						' offset&nbsp;<input type="text" value="" class="tiny form-control form-control-sm re-startoffset" autocomplete="off">&nbsp;minutes' +
 						'</div>'
 					);
@@ -3617,7 +3678,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 					for ( var mn=0; mn<60; mn+=5 ) {
 						mins.append('<option value="' + mn + '">:' + (mn < 10 ? '0' : '') + mn + '</option>');
 					}
-					container.append('<div class="re-startfields" />').append('<div class="re-endfields">&nbsp;and </div>');
+					container.append('<div class="re-startfields"></div>').append('<div class="re-endfields">&nbsp;and </div>');
 					$("div.re-startfields", container).append( months.clone() )
 						.append( days.clone() )
 						.append('<input type="text" placeholder="yyyy or blank" title="Leave blank for any year" class="year narrow datespec form-control form-control-sm" autocomplete="off">')
@@ -3667,54 +3728,54 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 					el.append( ' days ' );
 					fs.append( el );
 					fs.append( " " );
-					el = $( '<label/>' );
+					el = $( '<label></label>' );
 					el.append( '<input title="Enter an integer >= 0" class="tiny text-center form-control form-control-sm re-hours">' );
 					el.append( ' hours ' );
 					fs.append( el );
 					fs.append( " " );
-					el = $( '<label/>');
+					el = $( '<label></label>');
 					el.append( '<input title="Enter an integer >= 0" value="0" class="tiny text-center form-control form-control-sm re-mins">' );
 					el.append( ' minutes ');
 					fs.append( el );
 					container.append( " " );
 					/* Interval relative time or condition (opposing divs) */
-					el = $( '<label/>' ).text( " relative to ");
-					mm = $( '<select class="form-control form-control-sm re-relto"/>' );
-					mm.append( $( '<option/>' ).val( "" ).text( "Time" ) );
-					mm.append( $( '<option/>' ).val( "condtrue" ).text( "Condition TRUE" ) );
+					el = $( '<label></label>' ).text( " relative to ");
+					mm = $( '<select class="form-control form-control-sm re-relto"></select>' );
+					mm.append( $( '<option></option>' ).val( "" ).text( "Time" ) );
+					mm.append( $( '<option></option>' ).val( "condtrue" ).text( "Condition TRUE" ) );
 					el.append( mm );
 					container.append( el );
 					fs = $( '<div class="re-reltimeset form-inline"></div>' );
 					fs.append('<input type="text" placeholder="yyyy" class="re-relyear narrow datespec form-control form-control-sm" autocomplete="off">');
 					mm = $('<select class="form-control form-control-sm re-relmon re-reldate">').appendTo( fs );
 					for ( k=1; k<=12; k++ ) {
-						$( '<option/>').val( k ).text( monthName[k] ).appendTo( mm );
+						$( '<option></option>').val( k ).text( monthName[k] ).appendTo( mm );
 					}
 					mm = $('<select class="form-control form-control-sm re-relday re-reldate">').appendTo( fs );
 					for ( k=1; k<=31; k++) {
-						$( '<option/>' ).val( k ).text( k ).appendTo( mm );
+						$( '<option></option>' ).val( k ).text( k ).appendTo( mm );
 					}
-					mm = $('<select class="form-control form-control-sm re-relhour"/>');
+					mm = $('<select class="form-control form-control-sm re-relhour"></select>');
 					for ( k=0; k<24; k++ ) {
 						v = ( k < 10 ? "0" : "" ) + String(k);
-						mm.append( $('<option/>').val( v ).text( v ) );
+						mm.append( $('<option></option>').val( v ).text( v ) );
 					}
 					fs.append( mm );
 					fs.append(" : ");
-					mm = $('<select class="form-control form-control-sm re-relmin" />');
+					mm = $('<select class="form-control form-control-sm re-relmin"></select>');
 					for ( k=0; k<60; k+=5 ) {
 						v = ( k < 10 ? "0" : "" ) + String(k);
-						mm.append( $('<option/>').val( v ).text( v ) );
+						mm.append( $('<option></option>').val( v ).text( v ) );
 					}
 					fs.append( mm );
 					container.append( fs );
 					fs = $( '<div class="re-relcondset form-inline"></div>' ).hide();
-					mm = $( '<select class="form-control form-control-sm re-relcond" />' );
-					mm.append( $( '<option/>' ).val( "" ).text( '--choose--' ) );
+					mm = $( '<select class="form-control form-control-sm re-relcond"></select>' );
+					mm.append( $( '<option></option>' ).val( "" ).text( '--choose--' ) );
 					DOtraverse( getConditionIndex().root, function( n ) {
 						var tt = (condTypeName[n.type || "group"] || "?") + ": " +
 							makeConditionDescription( n ) + " <" + String(n.id) + ">";
-						mm.append( $( '<option/>' ).val( n.id ).text( tt ) );
+						mm.append( $( '<option></option>' ).val( n.id ).text( tt ) );
 					}, false, function( n ) {
 						return "comment" !== n.type && n.id != cond.id && !isAncestor( n.id, cond.id );
 					});
@@ -3759,7 +3820,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 								var $mm = $( 'select.re-relcond', $row );
 								$( 'option[value!=""]', $mm ).remove();
 								DOtraverse( getConditionIndex().root, function( n ) {
-									$mm.append( $( '<option/>' ).val( n.id ).text( makeConditionDescription( n ) ) );
+									$mm.append( $( '<option></option>' ).val( n.id ).text( makeConditionDescription( n ) ) );
 								}, false, function( n ) {
 									return "comment" !== n.type && n.id != cond.id && !isAncestor( n.id, cond.id );
 								});
@@ -3776,20 +3837,20 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 				case 'ishome':
 					container.append(
 						'<select class="geofencecond form-control form-control-sm"><option value="is">Any selected user is home</option><option value="is not">Any selected user is NOT home</option><option value="at">User in geofence</option><option value="notat">User not in geofence</option></select>');
-					mm = $( '<select class="form-control form-control-sm re-userid"/>' );
-					mm.append( $( '<option/>' ).val("").text('--choose user--') );
-					fs = $( '<div class="re-geoquick" />' );
+					mm = $( '<select class="form-control form-control-sm re-userid"></select>' );
+					mm.append( $( '<option></option>' ).val("").text('--choose user--') );
+					fs = $( '<div class="re-geoquick"></div>' );
 					for ( k in userIx ) {
 						if ( userIx.hasOwnProperty( k ) ) {
 							getCheckbox( cond.id + '-user-' + k, k, userIx[k].name || k, "useropt" )
 								.appendTo( fs );
-							mm.append( $( '<option/>' ).val( k ).text( ( userIx[k] || {} ).name || k ) );
+							mm.append( $( '<option></option>' ).val( k ).text( ( userIx[k] || {} ).name || k ) );
 						}
 					}
 					container.append( fs );
-					fs = $( '<div class="re-geolong" />' );
+					fs = $( '<div class="re-geolong"></div>' );
 					fs.append( mm );
-					fs.append( '<select class="form-control form-control-sm re-location"/>' );
+					fs.append( '<select class="form-control form-control-sm re-location"></select>' );
 					container.append( fs );
 					if ( !unsafeLua ) {
 						$( '<div class="re-alertbox">It is recommended that "Allow Unsafe Lua" (<em>Users &amp; Account Info &gt; Security</em>) be enabled when using this condition. Otherwise, less efficient methods of acquiring the geofence data must be used and may impact system performance. This setting is currently disabled.</div>' )
@@ -4300,13 +4361,13 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 	<div class="cond-type"> \
 	  <select class="form-control form-control-sm re-condtype"><option value="">--choose--</option></select> \
 	</div> \
-	<div class="params" /> \
+	<div class="params"></div> \
   </div> \
 </div>' );
 
 			[ "comment", "service", "grpstate", "var", "housemode", "sun", "weekday", "trange", "interval", "ishome", "reload" ].forEach( function( k ) {
 				if ( ! ( isOpenLuup && k == "ishome" ) ) {
-					$( "select.re-condtype", el ).append( $( "<option/>" ).val( k ).text( condTypeName[k] ) );
+					$( "select.re-condtype", el ).append( $( "<option></option>" ).val( k ).text( condTypeName[k] ) );
 				}
 			});
 
@@ -4340,11 +4401,11 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 		<button class="btn btn-xs btn-primary re-disable" title="Disabled groups are ignored, as if they did not exist (conditions don\'t run)"> DISABLE </button> \
 	  </div> \
 	  <div class="cond-group-title"> \
-		<span class="re-title" /> \
+		<span class="re-title"></span> \
 		<button class="btn md-btn re-edittitle" title="Edit group name"><i class="material-icons">edit</i></button> \
 		<button class="btn md-btn noroot re-collapse" title="Collapse group"><i class="material-icons">expand_less</i></button> \
 		<button class="btn md-btn noroot re-focus" title="Focus on this group"><i class="material-icons">filter_center_focus</i></button> \
-		<span class="re-titlemessage" /> \
+		<span class="re-titlemessage"></span> \
 	  </div> \
 	</div> \
   </div> \
@@ -4567,7 +4628,7 @@ div#tab-conds.reactortab input.re-comment { width: 100% !important; } \
 				html += '<div class="row"><div class="warning col-xs-12 col-sm-12">WARNING! Retrigger is on! You should avoid using time-related conditions in this ReactorSensor, as they may cause frequent retriggers!</div></div>';
 			}
 
-			html += '<div id="conditions"/>';
+			html += '<div id="conditions"></div>';
 
 			html += '</div>'; /* #tab-conds */
 
@@ -4577,7 +4638,7 @@ div#tab-conds.reactortab input.re-comment { width: 100% !important; } \
 
 			if ( checkRemoteAccess() ) {
 				$( 'div.reactortab' ).prepend(
-					$( '<div class="remotealert re-alertblock" />' ).text( msgRemoteAlert )
+					$( '<div class="remotealert re-alertblock"></div>' ).text( msgRemoteAlert )
 				);
 			}
 
@@ -4587,7 +4648,7 @@ div#tab-conds.reactortab input.re-comment { width: 100% !important; } \
 			if ( cd.variables ) {
 				for ( var vname in cd.variables ) {
 					if ( cd.variables.hasOwnProperty( vname ) ) {
-						var opt = $( '<option/>' ).val( '{'+vname+'}' ).text( '{'+vname+'}' );
+						var opt = $( '<option></option>' ).val( '{'+vname+'}' ).text( '{'+vname+'}' );
 						dl.append( opt );
 					}
 				}
@@ -4777,20 +4838,20 @@ div#tab-conds.reactortab input.re-comment { width: 100% !important; } \
 		/* Remove any prior getstates */
 		$('div#opt-state').remove();
 
-		var el = $( '<div class="col-xs-12 col-md-9 col-md-offset-2 form-inline" />' );
+		var el = $( '<div class="col-xs-12 col-md-9 col-md-offset-2 form-inline"></div>' );
 		el.append( makeDeviceMenu( "", "" ).attr( 'id', 'gsdev' ) );
 		el.append( CondBuilder.makeVariableMenu( parseInt( $( 'select#gsdev', el ).val() ), "", "" )
 			.attr( 'id', 'gsvar' ) );
 		el.append(' ');
 		el.append( '<label class="checkbox-inline"><input id="usename" type="checkbox">&nbsp;Use&nbsp;Name</label>' );
 		el.append(' ');
-		el.append( $( '<button/>' ).attr( 'id', 'getstateinsert' )
+		el.append( $( '<button></button>' ).attr( 'id', 'getstateinsert' )
 			.addClass( "btn btn-xs btn-success" )
 			.text( 'Insert' ) );
-		el.append( $( '<button/>' ).attr( 'id', 'getstatecancel' )
+		el.append( $( '<button></button>' ).attr( 'id', 'getstatecancel' )
 			.addClass( "btn btn-xs btn-default" )
 			.text( 'Cancel' ) );
-		$( '<div id="opt-state" class="row" />' ).append( el ).insertAfter( row );
+		$( '<div id="opt-state" class="row"></div>' ).append( el ).insertAfter( row );
 
 		$( 'select.devicemenu', el ).on( 'change.reactor', handleGetStateOptionChange );
 		$( 'button#getstateinsert', el ).prop( 'disabled', true )
@@ -4814,7 +4875,7 @@ div#tab-conds.reactortab input.re-comment { width: 100% !important; } \
 	function getVariableRow() {
 		var el = $('<div class="row varexp"></div>');
 		el.append( '<div class="col-xs-12 col-sm-12 col-md-2 re-varname"></div>' );
-		el.append( '<div class="col-xs-12 col-sm-9 col-md-8"><textarea class="expr form-control form-control-sm" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="off"/><div class="currval" /></div>');
+		el.append( '<div class="col-xs-12 col-sm-9 col-md-8"><textarea class="expr form-control form-control-sm" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="off"></textarea><div class="currval" /></div>');
 		// ??? devices_other is an alternate for insert state variable
 		el.append( '<div class="col-xs-12 col-sm-3 col-md-2 text-right">\
 <button class="btn md-btn draghandle" title="Change order (drag)"><i class="material-icons">reorder</i></button>\
@@ -5090,7 +5151,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						.attr( 'label', ( rid[r] || {} ).name || ( "Room " + String(r) ) );
 					lastRoom = r;
 				}
-				xg.append( $( '<option/>' ).val( scenes[i].id )
+				xg.append( $( '<option></option>' ).val( scenes[i].id )
 					.text( String(scenes[i].name) + ' (#' + String(scenes[i].id) +
 					( scenes[i].paused ? ", disabled" : "" ) +
 					')' ) );
@@ -5973,7 +6034,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 		for ( var vname in ( cd.variables || {} ) ) {
 			if ( cd.variables.hasOwnProperty( vname ) ) {
 				hasOne = true;
-				xg.append( $( '<option/>' ).val( '{' + vname + '}' )
+				xg.append( $( '<option></option>' ).val( '{' + vname + '}' )
 					.text( '{' + vname + '}' ) );
 			}
 		}
@@ -6006,7 +6067,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					for ( var vi=0; vi<lv; vi++ ) {
 						var pm = fld.values[vi].match( "^([^=]*)=(.*)$" );
 						if ( pm ) {
-							$( '<option/>' ).val( pm[1] ).text( pm[2] )
+							$( '<option></option>' ).val( pm[1] ).text( pm[2] )
 								.appendTo( xf );
 						}
 					}
@@ -6150,7 +6211,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 							inp = $('<datalist class="argdata" id="' + dlid + '"/>');
 							lj = parm.values.length;
 							for ( j=0; j<lj; j++ ) {
-								opt = $( '<option/>' );
+								opt = $( '<option></option>' );
 								if ( "object" === typeof(parm.values[j]) ) {
 									for ( z in parm.values[j] ) {
 										if ( parm.values[j].hasOwnProperty( z ) ) {
@@ -6180,7 +6241,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						}
 						lj = parm.values.length;
 						for ( j=0; j<lj; j++ ) {
-							opt = $( '<option/>' );
+							opt = $( '<option></option>' );
 							if ( "object" === typeof(parm.values[j]) ) {
 								for ( z in parm.values[j] ) {
 									if ( parm.values[j].hasOwnProperty( z ) ) {
@@ -6219,12 +6280,12 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 							DOtraverse( cd.conditions.root,
 								function( node ) {
 									if ( cd.activities[node.id + ".true"] ) {
-										$( '<option/>' ).val( node.id + ".true" )
+										$( '<option></option>' ).val( node.id + ".true" )
 											.text( node.name + " is TRUE" )
 											.appendTo( grp );
 									}
 									if ( cd.activities[node.id + ".false"] ) {
-										$( '<option/>' ).val( node.id + ".false" )
+										$( '<option></option>' ).val( node.id + ".false" )
 											.text( node.name + " is FALSE" )
 											.appendTo( grp );
 									}
@@ -6241,13 +6302,13 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						if ( Array.isArray( parm.extraValues ) ) {
 							lj = parm.extraValues.length;
 							for ( j=0; j<lj; j++ ) {
-								opt = $( '<option/>' ).val( parm.extraValues[j] ).text( parm.extraValues[j] );
+								opt = $( '<option></option>' ).val( parm.extraValues[j] ).text( parm.extraValues[j] );
 								opt.insertAfter( topItem );
 							}
 						} else {
 							for ( var key in parm.extraValues ) {
 								if ( parm.extraValues.hasOwnProperty( key ) ) {
-									opt = $( '<option/>' ).val( key ).text( parm.extraValues[key] );
+									opt = $( '<option></option>' ).val( key ).text( parm.extraValues[key] );
 									opt.insertAfter( topItem );
 								}
 							}
@@ -6545,7 +6606,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					continue;
 				}
 
-				opt = $( '<option/>' ).val( key ).text( actname );
+				opt = $( '<option></option>' ).val( key ).text( actname );
 				if ( nodata ) opt.append(" &diams;").addClass( "nodata" );
 				section.append( opt );
 
@@ -6566,7 +6627,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				for ( j=0; j<lj; j++ ) {
 					var thisover = over[j];
 					key = thisover.service + "/" + thisover.action;
-					var el = $( '<option/>' ).val( key );
+					var el = $( '<option></option>' ).val( key );
 					if ( undefined === actions[key] || actions[key].noddb ) {
 						/* Service+action not in lu_actions or no DDB data for it */
 						el.text( String(thisover.description || thisover.action) );
@@ -6632,7 +6693,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 
 		// Clear the action menu and remove all arguments.
 		actionMenu.empty().prop( 'disabled', true ).show()
-			.append( $( '<option/>' ).val("").text( '(loading...)' ) );
+			.append( $( '<option></option>' ).val("").text( '(loading...)' ) );
 		if ( "number" !== typeof(newVal) ) return;
 
 		/**
@@ -6762,7 +6823,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 			$( 'option[value=""]', $m ).prop( 'disabled', false );
 		}
 		DOtraverse( root || {}, function( node ) {
-			$m.append( $( '<option/>' )
+			$m.append( $( '<option></option>' )
 				.addClass( "groupoption" )
 				.val( node.id )
 				.text( makeConditionDescription( node ) ) );
@@ -6787,8 +6848,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 			grp = null;
 		}
 		DOtraverse( root || {}, function( node ) {
-				$m.append( $( '<option/>' ).val( node.id + ".true" ).text( (node.name || node.id ) + " is true" ) )
-					.append( $( '<option/>' ).val( node.id + ".false" ).text( (node.name || node.id ) + " is false" ) );
+				$m.append( $( '<option></option>' ).val( node.id + ".true" ).text( (node.name || node.id ) + " is true" ) )
+					.append( $( '<option></option>' ).val( node.id + ".false" ).text( (node.name || node.id ) + " is false" ) );
 			}, false, function( node ) {
 				return node.id !== grp && isGroup( node ) && "nul" !== node.operator;
 			}
@@ -6951,10 +7012,10 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				});
 				var lv = vix.length;
 				for ( var iv=0; iv<lv; iv++ ) {
-					$( '<option/>' ).val( vix[iv].name ).text( vix[iv].name )
+					$( '<option></option>' ).val( vix[iv].name ).text( vix[iv].name )
 						.appendTo( $m );
 				}
-				$( '<option/>' ).val( "" ).text( '--choose--' ).prependTo( $m );
+				$( '<option></option>' ).val( "" ).text( '--choose--' ).prependTo( $m );
 				$m.val("").on( 'change.reactor', handleActionValueChange );
 				$fs.append( "<span> = </span>" );
 				$( '<input class="form-control form-control-sm" list="reactorvarlist">' )
@@ -7006,7 +7067,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				for ( k=0; k<lk; ++k ) {
 					if ( "VA" === notifyMethods[k].id && !devVeraAlerts ) continue;
 					if ( "" === notifyMethods[k].id && isOpenLuup ) continue;
-					var $opt = $( '<option/>' ).val( notifyMethods[k].id )
+					var $opt = $( '<option></option>' ).val( notifyMethods[k].id )
 						.text( notifyMethods[k].name )
 						.appendTo( $m );
 					if ( "VT" === notifyMethods[k].id && !devVeraTelegram ) {
@@ -7037,8 +7098,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 			case "request":
 				$fs = $( '<div class="form-inline"/>' ).appendTo( ct );
 				$m = $( '<select class="form-control form-control-sm re-method" />' );
-				$( '<option/>' ).val( "GET" ).text( "GET" ).appendTo( $m );
-				$( '<option/>' ).val( "POST" ).text( "POST" ).appendTo( $m );
+				$( '<option></option>' ).val( "GET" ).text( "GET" ).appendTo( $m );
+				$( '<option></option>' ).val( "POST" ).text( "POST" ).appendTo( $m );
 				menuSelectDefaultFirst( $m, "GET" );
 				$m.on( 'change.reactor', handleActionValueChange )
 					.appendTo( $fs );
@@ -7066,12 +7127,12 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				$lb = $( '<label />' ).text( "Capture response to:" ).appendTo( $fs );
 				$m = $( '<select class="form-control re-reqtarget"/>' )
 					.on( "change.reactor", handleActionValueChange );
-				$( '<option/>' ).val( "" ).text( "(ignore/discard response)" )
+				$( '<option></option>' ).val( "" ).text( "(ignore/discard response)" )
 					.appendTo( $m );
 				var cd = getConfiguration();
 				for ( var vname in ( cd.variables || {} ) ) {
 					if ( cd.variables.hasOwnProperty( vname ) && isEmpty( cd.variables[vname].expression ) ) {
-						$( '<option/>' ).val( vname ).text( vname ).appendTo( $m );
+						$( '<option></option>' ).val( vname ).text( vname ).appendTo( $m );
 					}
 				}
 				$m.appendTo( $lb );
@@ -7300,7 +7361,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 									$( 'select.re-actiontype', newRow).val( "device" );
 									changeActionType( newRow, "device" );
 									if ( 0 == $( 'select.devicemenu option[value="' + act.device + '"]', newRow ).length ) {
-										var opt = $( '<option/>' ).val( act.device ).text( '#' + act.device + ' ' + ( act.devicename || 'name?' ) + ' (missing)' );
+										var opt = $( '<option></option>' ).val( act.device ).text( '#' + act.device + ' ' + ( act.devicename || 'name?' ) + ' (missing)' );
 										// opt.insertAfter( $( 'select.devicemenu option[value=""]:first', newRow ) );
 										$( 'select.devicemenu', newRow ).prepend( opt ).addClass( "tberror" );
 									}
@@ -7310,7 +7371,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 										var pfx = row.attr( 'id' ) + '-';
 										var key = action.service + "/" + action.action;
 										if ( 0 == $( 'select.re-actionmenu option[value="' + key + '"]', row ).length ) {
-											var opt = $( '<option/>' ).val( key ).text( key );
+											var opt = $( '<option></option>' ).val( key ).text( key );
 											$( 'select.re-actionmenu', row ).prepend( opt ).prop( 'disabled', false );
 										}
 										$( 'select.re-actionmenu', row ).val( key );
@@ -7424,7 +7485,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 
 					case "device":
 						if ( 0 === $( 'select.devicemenu option[value="' + act.device + '"]', newRow ).length ) {
-							var opt = $( '<option/>' ).val( act.device ).text( '#' + act.device + ' ' + ( act.devicename || 'name?' ) + ' (missing)' );
+							var opt = $( '<option></option>' ).val( act.device ).text( '#' + act.device + ' ' + ( act.devicename || 'name?' ) + ' (missing)' );
 							// opt.insertAfter( $( 'select.devicemenu option[value=""]:first', newRow ) );
 							$( 'select.devicemenu', newRow ).prepend( opt ).addClass( "tberror" );
 						}
@@ -7433,7 +7494,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 							var pfx = row.attr( 'id' ) + '-';
 							var key = action.service + "/" + action.action;
 							if ( 0 === $( 'select.re-actionmenu option[value="' + key + '"]', row ).length ) {
-								var opt = $( '<option/>' ).val( key ).text( key );
+								var opt = $( '<option></option>' ).val( key ).text( key );
 								$( 'select.re-actionmenu', row ).prepend( opt );
 							}
 							$( 'select.re-actionmenu', row ).val( key ).prop( 'disabled', false );
@@ -7492,7 +7553,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 
 					case "rungsa":
 						if ( undefined !== act.device && 0 === $( 'select.devicemenu option[value="' + act.device + '"]', newRow ).length ) {
-							$( '<option/>' ).val( act.device )
+							$( '<option></option>' ).val( act.device )
 								.text( '#' + act.device + ' ' + ( act.devicename || 'name?' ) + ' (missing)' )
 								.prependTo( $( 'select.devicemenu', newRow )
 								.addClass( "tberror" ) );
@@ -7502,7 +7563,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						$m = $( 'select.re-activity', newRow ).empty();
 						makeDeviceActivityMenu( act.device || -1, $m );
 						if ( 0 === $( 'option[value=' + quot(act.activity) + ']', $m ).length ) {
-							$( '<option/>' ).val( act.activity || "undef" )
+							$( '<option></option>' ).val( act.activity || "undef" )
 								.text( ( act.activity || "name?" ) + " (missing)" )
 								.prependTo( $m.addClass( 'tberror' ) );
 						}
@@ -7512,7 +7573,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 
 					case "stopgsa":
 						if ( undefined !== act.device && 0 === $( 'select.devicemenu option[value="' + act.device + '"]', newRow ).length ) {
-							$( '<option/>' ).val( act.device )
+							$( '<option></option>' ).val( act.device )
 								.text( '#' + act.device + ' ' + ( act.devicename || 'name?' ) + ' (missing)' )
 								.prependTo( $( 'select.devicemenu', newRow )
 								.addClass( "tberror" ) );
@@ -7523,7 +7584,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						makeDeviceActivityMenu( act.device || -1, $m )
 							.prepend( '<option value="">(all activities)</option>' );
 						if ( 0 === $( 'option[value=' + quot(act.activity || "") + ']', $m ).length ) {
-							$( '<option/>' ).val( act.activity || "undef" )
+							$( '<option></option>' ).val( act.activity || "undef" )
 								.text( ( act.activity || "name?" ) + " (missing)" )
 								.prependTo( $m.addClass( 'tberror' ) );
 						}
@@ -7533,7 +7594,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					case "setvar":
 						$m = $( 'select.re-variable', newRow );
 						if ( 0 === $( 'option[value=' + quot(act.variable) + ']', newRow ).length ) {
-							$( '<option/>' ).val( act.variable )
+							$( '<option></option>' ).val( act.variable )
 								.text( act.variable + "? (invalid)" )
 								.appendTo( $m.addClass( 'tberror' ) );
 						}
@@ -7544,7 +7605,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 
 					case "resetlatch":
 						if ( undefined !== act.device && 0 === $( 'select.devicemenu option[value="' + act.device + '"]', newRow ).length ) {
-							$( '<option/>' ).val( act.device )
+							$( '<option></option>' ).val( act.device )
 								.text( '#' + act.device + ' ' + ( act.devicename || 'name?' ) + ' (missing)' )
 								.prependTo( $( 'select.devicemenu', newRow )
 								.addClass( "tberror" ) );
@@ -7554,7 +7615,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						$( 'option.groupoption', $m ).remove();
 						makeDeviceGroupMenu( act.device || -1, $m );
 						if ( 0 === $( 'option[value=' + quot(act.group) + ']', $m ).length ) {
-							$( '<option/>' ).val( act.group || "undef" )
+							$( '<option></option>' ).val( act.group || "undef" )
 								.text( ( act.group || "name?" ) + " (missing)" )
 								.prependTo( $m.addClass( 'tberror' ) );
 						}
@@ -7577,15 +7638,15 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						$m = $( 'select.re-method', newRow );
 						if ( 0 === $( 'option[value="' + (act.method || "") + '"]', $m ).length ) {
 							if ( !devVeraAlerts && "VA" === act.method ) {
-								$( '<option/>' ).val("VA")
+								$( '<option></option>' ).val("VA")
 									.text("VeraAlerts Direct (not running)")
 									.appendTo( $m );
 							} else if ( !devVeraTelegram && "VT" === act.method ) {
-								$( '<option/>' ).val("VT")
+								$( '<option></option>' ).val("VT")
 									.text("VeraTelegram (plugin not installed)")
 									.appendTo( $m );
 							} else {
-								$( '<option/>' ).val( act.method )
+								$( '<option></option>' ).val( act.method )
 									.text( act.method + "? (unrecognized)" )
 									.appendTo( $m );
 							}
@@ -7604,7 +7665,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						$( 'div.re-reqdatafs', newRow ).toggle( "POST" === act.method );
 						var $opt = $( 'select.re-reqtarget option[value="' + (act.target || "") + '"]', newRow );
 						if ( 0 === $opt.length ) {
-							$( '<option/>' ).val( act.target ).text( act.target + " ?")
+							$( '<option></option>' ).val( act.target ).text( act.target + " ?")
 								.appendTo( $( 'select.re-reqtarget', newRow ) );
 						}
 						$( 'select.re-reqtarget', newRow ).val( act.target || "" );
@@ -7615,7 +7676,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						alert( "Action type " + act.type + " unrecognized. Did you downgrade from a higher version of Reactor? I will try to preserve this action, but I can't edit it." );
 						var $am = $( 'select.re-actiontype', newRow );
 						if ( 0 === $( 'option[value="'+act.type+'"]', $am ).length ) {
-							$( '<option/>' ).val( act.type ).text( String(act.type) + ' (unrecognized)' )
+							$( '<option></option>' ).val( act.type ).text( String(act.type) + ' (unrecognized)' )
 								.prependTo( $am );
 						}
 						$am.val( act.type );
@@ -7882,7 +7943,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 			if ( cd.variables ) {
 				for ( var vname in cd.variables ) {
 					if ( cd.variables.hasOwnProperty( vname ) ) {
-						var opt = $( '<option/>' ).val( '{'+vname+'}' ).text( '{'+vname+'}' );
+						var opt = $( '<option></option>' ).val( '{'+vname+'}' ).text( '{'+vname+'}' );
 						dl.append( opt );
 					}
 				}
@@ -8608,37 +8669,77 @@ textarea#devspyoutput { width: 100%; font-family: monospace; } \
 </style>';
 
 		html += '<div id="reactortools" class="reactortab">';
-		html += '<h3>Test Tools</h3>';
 
-		html += '<div class="row">';
-		html += '<div class="col-sm-2 col-md-4 col-lg-3 col-xl-2"><span id="testdateenable"/></div>';
-		html += '<div class="col-sm-10 col-md-8 col-lg-9 col-xl-10 form-inline"><select id="testyear" class="form-control form-control-sm"></select><select id="testmonth" class="form-control form-control-sm"></select><select class="form-control form-control-sm" id="testday"></select><input class="narrow form-control form-control-sm" id="testtime"></div>';
-		html += '</div>'; /* row */
+		html += '<h3>Test Tools</h3> \
+<div class="row"> \
+  <div class="col-sm-2 col-md-4 col-lg-3 col-xl-2"> \
+	<span id="testdateenable"></span> \
+  </div> \
+  <div class="col-sm-10 col-md-8 col-lg-9 col-xl-10 form-inline"> \
+	<select id="testyear" class="form-control form-control-sm"></select> \
+	<select id="testmonth" class="form-control form-control-sm"></select> \
+	<select class="form-control form-control-sm" id="testday"></select> \
+	<input class="narrow form-control form-control-sm" id="testtime"> \
+  </div> \
+</div>'; /* row */
 
-		html += '<div class="row">';
-		html += '<div class="col-sm-2 col-md-4 col-lg-3 col-xl-2"><span id="testhousemode"/></div>';
-		html += '<div class="col-sm-10 col-md-8 col-lg-9 col-xl-10 form-inline"><select class="form-control form-control-sm" id="mode"><option value="1">Home</option><option value="2">Away</option><option value="3">Night</option><option value="4">Vacation</option></select></div>';
-		html += '</div>'; /* row */
+		html += '<div class="row"> \
+  <div class="col-sm-2 col-md-4 col-lg-3 col-xl-2"><span id="testhousemode"/></div> \
+  <div class="col-sm-10 col-md-8 col-lg-9 col-xl-10 form-inline"> \
+	<select class="form-control form-control-sm" id="mode"> \
+	  <option value="1">Home</option> \
+	  <option value="2">Away</option> \
+	  <option value="3">Night</option> \
+	  <option value="4">Vacation</option> \
+	</select> \
+  </div> \
+</div>'; /* row */
 
-		html += '<div class="row">';
-		html += '<div class="col-sm-12 col-md-12">' +
-			'These settings do not change system configuration.' +
-			' They override the system values when your ReactorSensor requests them, allowing you to more easily test your conditions.' +
-			' For example, turn on the "Test Date" checkbox above' +
-			' and use the controls to set a date, then go back to the "Control" tab and press the "Restart" button to force a re-evaluation of the sensor state' +
-			' using your selected date/time. <b>Remember to turn these settings off when you have finished testing!</b></div>';
-		html += '</div>'; /* row */
+		html += '<div class="row"> \
+  <div class="col-sm-12 col-md-12"> \
+	These settings do not change system configuration. They override the system values \
+	when your ReactorSensor requests them, allowing you to more easily test your conditions. \
+	For example, turn on the "Test Date" checkbox above and use the controls to set a date, \
+	then go back to the "Control" tab and press the "Restart" button to force a \
+	re-evaluation of the sensor state using your selected date/time. \
+	<b>Remember to turn these settings off when you have finished testing!</b> \
+  </div> \
+</div>'; /* row */
 
-		html += '<div><h3>Update Device Information Database</h3>The device information database contains information to help smooth out the user interface for device actions. The "Activities" tab will notify you when an update is available. You may update by clicking the button below; this process does not require a Luup restart or browser refresh. The updates are shared by all ReactorSensors, so updating any one of them updates all of them. This process sends information about the versions of your Vera firmware, this plugin, and the current database, but no personally-identifying information. This information is used to select the correct database for your configuration; it is not used for tracking you. <span id="di-ver-info"/><p><button id="updateinfo" class="btn btn-sm btn-success">Update Device Info</button> <span id="status"/></p>';
+		html += '<div>\
+  <h3>Update Device Information Database</h3>\
+  <p>The "Activities" tab will notify you when an update to the Device Information Database is \
+	available. Update by clicking the button below; this does not require a Luup restart or \
+	browser refresh. Updates are shared by all ReactorSensors, so updating once updates all of \
+	them. This process sends information about the versions of your Vera firmware, this plugin, \
+	and the current database, but no personally-identifying information. This information is \
+	used to select the correct database for your configuration; it is not used for tracking you. \
+  </p> \
+  <span id="di-ver-info"></span> \
+  <p><button id="updateinfo" class="btn btn-sm btn-success">Update Device Info</button> \
+	<span id="status"></span> \
+  </p> \
+</div>';
 
 		// html += '<div id="re-updateplugin"><h3>Update Reactor</h3><span id="re-updatestatus">Update information not available at the moment.</span><p><button id="updateplugin" class="btn btn-sm btn-success">Update Reactor Now</button></p></div>';
 
 		/* This feature doesn't work on openLuup -- old form of lu_device request isn't implemented */
 		if ( !isOpenLuup ) {
-			html += '<div id="enhancement" class="form-inline"><h3>Submit Device Data</h3>If you have a device that is missing "Common Actions" or warns you about missing enhancement data in the Activities tab (actions in <i>italics</i>), you can submit the device data to rigpapa for evaluation. This process sends the relevant data about the device. It does not send any identifying information about you or your Vera, and the data is used only for enhancement of the device information database. <p><select id="devices"></select> <button id="submitdata" class="btn btn-sm btn-info">Submit Device Data</button></p></div>';
+			html += '<div id="enhancement" class="form-inline">\
+  <h3>Submit Device Data</h3>\
+  If you have a device that is missing "Common Actions" or warns you about missing enhancement \
+  data in the Activities tab (actions in <i>italics</i>), you can submit the device data to \
+  rigpapa for evaluation. This process sends the relevant data about the device. It does not \
+  send any identifying information about you or your Vera, and the data is used only for \
+  enhancement of the device information database. \
+  <p>\
+	<select id="devices"></select> \
+	<button id="submitdata" class="btn btn-sm btn-info">Submit Device Data</button> \
+  </p>\
+</div>';
 		}
 
-		html += '<div id="re-devicerepair"/>';
+		html += '<div id="re-devicerepair"></div>';
 
 		html += '<div id="troubleshooting"><h3>Troubleshooting &amp; Support</h3>If you are having trouble working out your condition logic, or you think you have found a bug, here are some steps and tools you can use:';
 		html += '<ul><li>Check the <a href="' + _DOCURL + '" target="_blank">Reactor Documentation</a>.</li>\
@@ -8652,9 +8753,21 @@ textarea#devspyoutput { width: 100%; font-family: monospace; } \
 		}
 		html += '</ul></div>';
 
-		html += '<div id="devicespy"><h3>Device Spy</h3>If you\'re trying to figure out what state variables are changing on a device, choose the device below, and then perform operations on the device any way that is consistent with what you want to detect. The list will show you what state variables are changing. <strong>Due to the way in which Vera handles state variables and UI7, not all variables may be shown.</strong> This display is therefore not entirely conclusive: it is meant as an assistive tool, not an authoritative tool. \
-<div class="form-inline"><select id="devspydev" class="form-control form-control-sm"><option value="">--choose--</option></select></div> \
-<textarea id="devspyoutput" rows="16" wrap="off" class="form-control form-control-sm" /> \
+		html += '<div id="devicespy">\
+  <h3>Device Spy</h3>\
+  If you\'re trying to figure out what state variables are changing on a device, choose \
+  the device below, and then perform operations on the device any way that is consistent \
+  with what you want to detect. The list will show you what state variables are changing. \
+  <strong>Due to the way in which Vera handles state variables and UI7, not all variables \
+	may be shown.</strong> \
+  This display is therefore not entirely conclusive: it is meant as an assistive tool, \
+  not an authoritative tool. \
+  <div class="form-inline"> \
+	<select id="devspydev" class="form-control form-control-sm">\
+	  <option value="">--choose--</option>\
+	</select>\
+  </div> \
+  <textarea id="devspyoutput" rows="16" wrap="off" class="form-control form-control-sm"></textarea> \
 </div>';
 
 		html += '</div>'; /* .reactortab */
@@ -8777,7 +8890,7 @@ textarea#devspyoutput { width: 100%; font-family: monospace; } \
 				var $mx = $mm.clone().attr( 'id', 'lost' + ds );
 				$( 'select', $row ).replaceWith( $mx );
 				if ( undefined !== lost[ds].newname ) {
-					$( '<option/>' ).val("*").text("(keep device #, update to current name)")
+					$( '<option></option>' ).val("*").text("(keep device #, update to current name)")
 						.prependTo( $mx );
 				} else {
 					$( 'option[value="*"]', $mx ).remove();
