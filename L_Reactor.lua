@@ -5856,6 +5856,8 @@ function actionSetEnabled( enabled, tdev )
 			luup.call_action( RSSID, "Restart", {}, tdev )
 		else
 			L("Disabling %1 (#%2)", luup.devices[tdev].description, tdev)
+			setVar( RSSID, "Trouble", "0", tdev )
+			luup.set_failure( 0, tdev )
 			showDisabled( tdev )
 		end
 	end
