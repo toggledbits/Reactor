@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.9develop-20349.1835"
+local _PLUGIN_VERSION = "3.9develop-20352.1600"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.9/"
 
@@ -3520,7 +3520,8 @@ local function doComparison( cond, op, vv, vn, rv, cv, cn, tdev )
 		-- Loading the context ensures that LuaXP is loaded (in case the test is invoked without
 		-- first having created variables)
 		local _ = getSensorState( tdev ).ctx or getExpressionContext( getSensorConfig( tdev ), tdev )
-		return tostring( rv ), luaxp.isNull( rv ) -- the only place we use rv so far
+		local isnull = luaxp.isNull( rv ) -- the only place we use rv so far
+		return isnull and "null" or vv, isnull
 	elseif op == "change" then
 		local cs = getSensorState( tdev ).condState[ cond.id ]
 		if cv ~= "" and cv ~= "," then

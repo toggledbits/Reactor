@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.9develop-20349.1835';
+	var pluginVersion = '3.9develop-20352.1600';
 
 	var DEVINFO_MINSERIAL = 482;
 
@@ -216,6 +216,14 @@ var ReactorSensor = (function(api, $) {
 	div.reactortab .vanotice { font-size: 0.9em; line-height: 1.5em; color: #666; margin-top: 4px; } \
 	div.reactortab div.re-alertblock { margin: 4px 4px; padding: 8px 8px; border: 2px solid red; color: red; border-radius: 8px; font-size: 0.9em; } \
 </style>');
+        if ( isALTUI ) {
+            $head.append( '<style id="reactor-platform-styles">/* ALTUI */</style>' );
+        } else {
+            /* Vera */
+            $head.append( '<style id="reactor-platform-styles">/* Vera */\
+div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow: row wrap; flex-flow: row wrap; align-items: center; } \
+</style>' );
+        }
 	}
 
 	/* Return footer */
@@ -419,11 +427,23 @@ var ReactorSensor = (function(api, $) {
 	/* Generate an inline checkbox. */
 	function getCheckbox( id, value, label, classes, help ) {
 		var $div = $( '<div class="checkbox checkbox-inline"/>' );
-		$( '<input type="checkbox" />' ).attr( 'id', id ).val( value )
-			.addClass( classes || "" )
-			.appendTo( $div );
-		$( '<label/>' ).attr( 'for', id ).html( label )
-			.appendTo( $div );
+        if ( isALTUI ) {
+            $div.removeClass().addClass( 'form-check' );
+            $('<input>').attr( { type: 'checkbox', id: id } )
+                .val( value )
+                .addClass( 'form-check-input' )
+                .appendTo( $div );
+            $('<label></label>').attr( 'for', id )
+                .addClass( 'form-check-label' )
+                .html( label )
+                .appendTo( $div );
+        } else {
+            $( '<input type="checkbox" />' ).attr( 'id', id ).val( value )
+                .addClass( classes || "" )
+                .appendTo( $div );
+            $( '<label/>' ).attr( 'for', id ).html( label )
+                .appendTo( $div );
+        }
 		if ( help ) {
 			getWiki( help ).appendTo( $div );
 		}
@@ -431,12 +451,28 @@ var ReactorSensor = (function(api, $) {
 	}
 
 	/* Generate an inline radio button */
-	function getRadio( id, value, label, classes ) {
-		var $div = $( '<label class="radio" />' );
-		$( '<input type="radio" />' ).attr( 'id', id ).attr( 'name', id ).val( value )
-			.addClass( classes || "" )
-			.appendTo( $div );
-		$div.append( label );
+	function getRadio( name, ix, value, label, classes ) {
+        var $div;
+        if ( isALTUI ) {
+            $div = $( '<div></div>' ).addClass( 'form-check' );
+            $('<input>').attr( { type: 'radio', id: name + ix, name: name } )
+                .val( value )
+                .addClass( 'form-check-input' )
+                .addClass( classes || "" )
+                .appendTo( $div );
+            $('<label></label>').attr( 'for', name + ix )
+                .addClass( 'form-check-label' )
+                .html( label )
+                .appendTo( $div );
+        } else {
+            $div = $( '<label class="radio"></label>' )
+                .html( label );
+            $( '<input type="radio">' )
+                .attr( { id: name+ix, name: name } )
+                .val( value )
+                .addClass( classes || "" )
+                .prependTo( $div );
+        }
 		return $div;
 	}
 
@@ -2674,7 +2710,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 						}
 					}
 					var repeats = "repeat" === $( 'select.re-pulsemode', $ct ).val();
-					$( "span.re-pulsebreakopts", $ct ).toggle( repeats );
+					$( "div.re-pulsebreakopts", $ct ).toggle( repeats );
 					if ( repeats ) {
 						$f = $( 'input.re-pulsebreak', $ct );
 						pulsetime = parseInt( $f.val() || "" );
@@ -2993,62 +3029,65 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 			/* Options now fall into two general groups: output control, and restrictions. */
 
 			/* Output Control */
-			var out = $( '<div/>', { "id": "outputopt", "class": "form-inline tboptgroup" } ).appendTo( $container );
+			var out = $( '<div/>', { "id": "outputopt", "class": "tboptgroup" } ).appendTo( $container );
 			$( '<div class="opttitle">Output Control</div>' ).append( getWiki( 'Condition-Options' ) ).appendTo( out );
-			var fs = $( '<div class="opt-fs"/> ').appendTo( out );
+			var fs = $( '<div class="opt-fs form-inline"></div>').appendTo( out );
 			var rid = "output" + getUID();
-			getRadio( rid, "", "Follow (default) - output remains true while condition matches", "opt-output" )
+			getRadio( rid, 1, "", "Follow (default) - output remains true while condition matches", "opt-output" )
 				.appendTo( fs );
 			if ( false !== displayed.hold ) {
 				fs.append( '; ' );
-				$( '<label>delay reset <input type="number" class="form-control form-control-sm narrow followopts re-holdtime"> seconds (0=no delay)</label>' ).appendTo( fs );
+				$( '<div><label>delay reset <input type="number" class="form-control form-control-sm narrow followopts re-holdtime"> seconds (0=no delay)</label></div>' ).appendTo( fs );
 			}
 			/* Pulse group is not displayed for update and change operators; always display if configured, though,
 			   do any legacy configs prior to this restriction being added are still editable. */
 			if ( ( false !== displayed.pulse && !(cond.operator || "=").match( /^(update|change)/ ) ) ||
 				condOpts.pulsetime ) {
-				fs = $( '<div class="opt-fs" />' ).appendTo( out );
-				getRadio( rid, "P", "Pulse - output goes true for", "opt-output" ).appendTo( fs );
+				fs = $( '<div class="opt-fs form-inline"></div>' ).appendTo( out );
+				getRadio( rid, 2, "P", "Pulse - output goes true for", "opt-output" )
+                    .appendTo( fs );
 				$( '<input type="number" class="form-control form-control-sm narrow pulseopts re-pulsetime"> seconds</label>' )
 					.appendTo( fs );
-				$( '<select class="form-control form-control-sm pulseopts re-pulsemode"><option value="">once</option><option value="repeat">repeat</option></select><span class="re-pulsebreakopts"><label>after <input type="number" class="form-control form-control-sm narrow pulseopts re-pulsebreak"> seconds,</label> <label>up to <input type="number" class="form-control form-control-sm narrow pulseopts re-pulsecount">&nbsp;times&nbsp;(0/blank=no&nbsp;limit)</label></span>' )
+				$( '<select class="form-control form-control-sm pulseopts re-pulsemode"><option value="">once</option><option value="repeat">repeat</option></select><div class="re-pulsebreakopts form-inline"><label>after <input type="number" class="form-control form-control-sm narrow pulseopts re-pulsebreak"> seconds,</label> <label>up to <input type="number" class="form-control form-control-sm narrow pulseopts re-pulsecount">&nbsp;times&nbsp;(0/blank=no&nbsp;limit)</label></div>' )
 					.appendTo( fs );
 			}
 			if ( false !== displayed.latch ) {
-				fs = $( '<div class="opt-fs" />' ).appendTo( out );
-				getRadio( rid, "L", "Latch - output is held true until external reset", "opt-output" )
+				fs = $( '<div class="opt-fs form-inline"></div>' ).appendTo( out );
+				getRadio( rid, 3, "L", "Latch - output is held true until external reset", "opt-output" )
 					.appendTo( fs );
 			}
 
 			/* Restore/configure */
 			if ( ( condOpts.pulsetime || 0 ) > 0 ) {
 				$( '.pulseopts', out ).prop( 'disabled', false );
-				$( 'input#' + idSelector(rid) + '[value="P"]', out ).prop( 'checked', true );
+				$( 'input#' + idSelector(rid+'2'), out ).prop( 'checked', true );
 				$( 'input.re-pulsetime', out ).val( condOpts.pulsetime || 15 );
 				$( 'input.re-pulsebreak', out ).val( condOpts.pulsebreak || "" );
 				$( 'input.re-pulsecount', out ).val( condOpts.pulsecount || "" );
-				var pbo = (condOpts.pulsebreak || 0) > 0;
+                var pbo = (condOpts.pulsebreak || 0) > 0;
 				$( 'select.re-pulsemode', out ).val( pbo ? "repeat" : "" );
-				$( 'span.re-pulsebreakopts', out ).toggle( pbo );
+				$( 'div.re-pulsebreakopts', out ).toggle( pbo );
 				$( '.followopts,.latchopts', out ).prop( 'disabled', true );
 			} else if ( 0 !== ( condOpts.latch || 0 ) ) {
 				$( '.latchopts', out ).prop( 'disabled', false );
-				$( 'input#' + idSelector(rid) + '[value="L"]', out ).prop( 'checked', true );
+				$( 'input#' + idSelector(rid+'3'), out ).prop( 'checked', true );
 				$( '.followopts,.pulseopts', out ).prop( 'disabled', true );
+				$( 'div.re-pulsebreakopts', out ).toggle( false );
 			} else {
 				$( '.followopts', out ).prop( 'disabled', false );
-				$( 'input#' + idSelector(rid) + '[value=""]', out ).prop( 'checked', true );
+				$( 'input#' + idSelector(rid+'1'), out ).prop( 'checked', true );
 				$( '.latchopts,.pulseopts', out ).prop( 'disabled', true );
+				$( 'div.re-pulsebreakopts', out ).toggle( false );
 				$( 'input.re-holdtime', out ).val( 0 !== (condOpts.holdtime || 0) ? condOpts.holdtime : "" );
 			}
 
 			/* Restrictions */
 			if ( displayed.sequence || displayed.duration || displayed.repeat ) {
-				var rst = $( '<div/>', { "id": "restrictopt", "class": "form-inline tboptgroup" } ).appendTo( $container );
+				var rst = $( '<div/>', { "id": "restrictopt", "class": "tboptgroup" } ).appendTo( $container );
 				$( '<div class="opttitle">Restrictions</div>' ).append( getWiki( 'Condition-Options' ) ).appendTo( rst );
 				/* Sequence (predecessor condition) */
 				if ( displayed.sequence ) {
-					fs = $( '<div class="opt-fs form-inline"/>' ).appendTo( rst );
+					fs = $( '<div class="opt-fs form-inline"></div>' ).appendTo( rst );
 					var $preds = $('<select class="form-control form-control-sm re-predecessor"><option value="">(any time/no sequence)</option></select>');
 					/* Add groups that are not ancestor of condition */
 					DOtraverse( (getConditionIndex()).root, function( node ) {
@@ -3073,13 +3112,13 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 
 				/* Duration */
 				if ( displayed.duration ) {
-					fs = $( '<div class="opt-fs form-inline"/>' ).appendTo( rst );
+					fs = $( '<div class="opt-fs form-inline"></div>' ).appendTo( rst );
 					fs.append('<label>Condition must be sustained for&nbsp;</label><select class="form-control form-control-sm re-durop"><option value="ge">at least</option><option value="lt">less than</option></select><input type="text" class="form-control form-control-sm narrow re-duration" autocomplete="off"><label>&nbsp;seconds</label>');
 				}
 
 				/* Repeat */
 				if ( displayed.repeat ) {
-					fs = $( '<div class="opt-fs form-inline" />' ).appendTo( rst );
+					fs = $( '<div class="opt-fs form-inline"></div>' ).appendTo( rst );
 					fs.append('<label>Condition must repeat <input type="text" class="form-control form-control-sm narrow re-repeatcount" autocomplete="off"> times within <input type="text" class="form-control form-control-sm narrow re-repeatspan" autocomplete="off"> seconds</label>');
 				}
 
@@ -3304,7 +3343,8 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 			if ( undefined === row ) {
 				row = $( 'div.cond-container#' + idSelector( cond.id ) );
 			}
-			var container = $('div.params', row).empty();
+			var container = $('div.params', row).empty().addClass("form-inline");
+            container.closest( 'div.cond-body' ).addClass("form-inline");
 
 			row.children( 'button.re-condmore' ).prop( 'disabled', "comment" === cond.type );
 
@@ -3313,7 +3353,9 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 					break;
 
 				case 'comment':
-					container.append('<input type="text" class="form-control form-control-sm re-comment" autocomplete="off">');
+                    container.removeClass("form-inline");
+                    container.closest("div.cond-body").removeClass("form-inline");
+					container.append('<input type="text" class="form-control form-control-sm re-comment" autocomplete="off" placeholder="Type your comment here">');
 					$('input', container).on( 'change.reactor', handleConditionRowChange ).val( cond.comment || "" );
 					if ( "cond0" === cond.id && ( cond.comment || "").match( /^Welcome to your new Reactor/i ) ) {
 						$( '<div><strong>New to Reactor?</strong> Check out the <a href="https://youtu.be/wkdFjwEuF58" target="_blank">tutorial videos</a>. There\'s also <a href="' +
@@ -3466,7 +3508,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 					container.append( d );
 					$( "input.hmode", container ).on( 'change.reactor', handleConditionRowChange );
 					// Menus in a separate div
-					d = $( '<div class="condfields re-modeselects"/>' );
+					d = $( '<div class="condfields form-inline re-modeselects"/>' );
 					mm = $( '<select class="form-control form-control-sm"/>' );
 					mm.append( '<option value="">(any)</option>' );
 					for ( k=1; k<=4; k++ ) {
@@ -3485,7 +3527,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 				case 'weekday':
 					container.append(
 						'<select class="wdcond form-control form-control-sm"><option value="">Every</option><option value="1">First</option><option value="2">2nd</option><option value="3">3rd</option><option value="4">4th</option><option value="5">5th</option><option value="last">Last</option></select>');
-					fs = $( '<div class="re-wdopts" />' );
+					fs = $( '<div class="re-wdopts form-inline" />' );
 					getCheckbox( cond.id + '-wd-1', '1', 'Sun', 'wdopt' ).appendTo( fs );
 					getCheckbox( cond.id + '-wd-2', '2', 'Mon', 'wdopt' ).appendTo( fs );
 					getCheckbox( cond.id + '-wd-3', '3', 'Tue', 'wdopt' ).appendTo( fs );
@@ -3619,7 +3661,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 					break;
 
 				case 'interval':
-					fs = $( '<div />' );
+					fs = $( '<div class="form-inline"></div>' ).appendTo( container );
 					el = $( '<label>every </label>' );
 					el.append( '<input title="Enter an integer >= 0; hours and minutes must be 0!" value="0" class="tiny text-center form-control form-control-sm re-days">' );
 					el.append( ' days ' );
@@ -3634,7 +3676,6 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 					el.append( '<input title="Enter an integer >= 0" value="0" class="tiny text-center form-control form-control-sm re-mins">' );
 					el.append( ' minutes ');
 					fs.append( el );
-					container.append( fs );
 					container.append( " " );
 					/* Interval relative time or condition (opposing divs) */
 					el = $( '<label/>' ).text( " relative to ");
@@ -3643,7 +3684,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 					mm.append( $( '<option/>' ).val( "condtrue" ).text( "Condition TRUE" ) );
 					el.append( mm );
 					container.append( el );
-					fs = $( '<div class="re-reltimeset" />' );
+					fs = $( '<div class="re-reltimeset form-inline"></div>' );
 					fs.append('<input type="text" placeholder="yyyy" class="re-relyear narrow datespec form-control form-control-sm" autocomplete="off">');
 					mm = $('<select class="form-control form-control-sm re-relmon re-reldate">').appendTo( fs );
 					for ( k=1; k<=12; k++ ) {
@@ -3667,7 +3708,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 					}
 					fs.append( mm );
 					container.append( fs );
-					fs = $( '<div class="re-relcondset" />' ).hide();
+					fs = $( '<div class="re-relcondset form-inline"></div>' ).hide();
 					mm = $( '<select class="form-control form-control-sm re-relcond" />' );
 					mm.append( $( '<option/>' ).val( "" ).text( '--choose--' ) );
 					DOtraverse( getConditionIndex().root, function( n ) {
@@ -4495,8 +4536,8 @@ div#tab-conds.reactortab div.cond-cond.tbmodified:not(.tberror) { } \
 div#tab-conds.reactortab div.cond-cond.tberror { border-left: 4px solid red; } \
 div#tab-conds.reactortab div.condopts { padding-left: 32px; } \
 div#tab-conds.reactortab div.cond-type { display: inline-block; vertical-align: top; } \
-div#tab-conds.reactortab div.params { display: inline-block; clear: right; } \
-div#tab-conds.reactortab div.params > div,label { display: inline-block; border: none; margin: 0 4px; padding: 0 0; } \
+div#tab-conds.reactortab div.paramsX { display: inline-block; clear: right; } \
+div#tab-conds.reactortab div.paramsX > div,label { display: inline-block; border: none; margin: 0 4px; padding: 0 0; } \
 div#tab-conds.reactortab div.currval { font-family: "Courier New", Courier, monospace; font-size: 0.9em; margin: 8px 0px; display: block; } \
 div#tab-conds.reactortab div.warning { color: red; } \
 div#tab-conds.reactortab button.md-btn.attn { background-color: #ff8; background-image: linear-gradient( to bottom, #fff, #ff8 );} \
@@ -4509,8 +4550,8 @@ div#tab-conds.reactortab .varmenu { border-left: none; border-top-left-radius: 0
 div#tab-conds.reactortab div.tboptgroup { background: #fff; border: 1px solid grey; border-radius: 12px; padding: 12px 12px; } \
 div#tab-conds.reactortab div#restrictopt { margin-top: 4px; } \
 div#tab-conds.reactortab div.opttitle { font-size: 1.15em; font-weight: bold; } \
-div#tab-conds.reactortab div.condfields { display: inline-block; } \
-div#tab-conds.reactortab div.opt-fs { display: block; border-bottom: 1px solid #ccc; margin: 4px 0 0 16px; padding: 4px 0; } \
+div#tab-conds.reactortab div.condfieldsX { display: inline-block; } \
+div#tab-conds.reactortab div.opt-fs { border-bottom: 1px solid #ccc; margin: 4px 0 0 16px; padding: 4px 0; } \
 div#tab-conds.reactortab div.opt-fs input[type=radio] { margin-left: -16px; } \
 div#tab-conds.reactortab input.titleedit { font-size: 12px; height: 24px; } \
 div#tab-conds.reactortab input.re-comment { width: 100% !important; } \
