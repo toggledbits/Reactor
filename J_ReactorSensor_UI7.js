@@ -28,7 +28,7 @@ var ReactorSensor = (function(api, $) {
 	var _DOCURL = "https://www.toggledbits.com/static/reactor/docs/3.9/";
 
 	var _MIN_ALTUI_VERSION = [ 2, 46, 2536 ];
-	var	_MAX_ALTUI_VERSION = [ 2, 49, 2545 ];
+	var	_MAX_ALTUI_VERSION = [ 2, 52, 2550 ];
 
 	var myModule = {};
 
@@ -477,6 +477,22 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 				.prependTo( $div );
 		}
 		return $div;
+	}
+
+	/**
+	 * Inconsistencies between versions of UI7, and intra- and inter-ALTUI, 
+	 * have to be resolved with some logic.
+	 */
+	function hideModal() {
+		if ( api.hideMessagePopup ) {
+			api.hideMessagePopup();
+		} else {
+			/* Sigh. Do both on ALTUI, in case amg0 fixes his dialogs some day. */
+			if ( isALTUI ) {
+				$( 'div#showMessagePopup' ).modal( 'hide' );
+			}
+			$( 'div#myModal' ).modal( 'hide' );
+		}
 	}
 
 	/* Load configuration data. As of 3.5, we do not do any updates here. */
@@ -1066,15 +1082,19 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 					timeout: 5000
 				}).done( function( data ) {
 					if ( data && data.status ) {
-						if (dlg) $("#myModal").modal("hide");
+						if (dlg) {
+							hideModal();
+						}
 						resolve( true );
 					} else {
-						if ( ! $("#myModal").is(":visible") ) {
+						if ( ! dlg ) {
 							api.showCustomPopup( msg || "Waiting for Luup ready before operation...", { autoHide: false, category: 3 } );
 							dlg = true;
 						}
 						if ( Date.now() >= expire ) {
-							if (dlg) $("#myModal").modal("hide");
+							if (dlg) {
+								hideModal();
+							}
 							reject( "timeout" );
 						} else {
 							setTimeout( tryAlive, 2000 );
@@ -1082,10 +1102,12 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 					}
 				}).fail( function() {
 					if ( Date.now() >= expire ) {
-						if (dlg) $("#myModal").modal("hide");
+						if (dlg) {
+							hideModal();
+						}
 						reject( "timeout" );
 					} else {
-						if ( ! $("#myModal").is(":visible") ) {
+						if ( ! dlg ) {
 							api.showCustomPopup( msg || "Waiting for Luup ready before operation...", { autoHide: false, category: 3 } );
 							dlg = true;
 						}
@@ -1152,10 +1174,10 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 					api.performActionOnDevice( 0, "urn:micasaverde-com:serviceId:HomeAutomationGateway1", "Reload",
 						{ actionArguments: { Reason: "Reactor saved config needs reload" } } );
 					setTimeout( function() {
-						waitForReloadComplete().then( function() {
-							$("#myModal").modal("hide");
-						}).catch( function(reason) {
-							$("#myModal").modal("hide");
+						waitForReloadComplete().catch( function(reason) {
+							/* Errors here don't matter */
+						}).finally( function() {
+							hideModal();
 						});
 					}, 5000 );
 				}, 5000 );
@@ -8630,21 +8652,21 @@ div#tab-actions.reactortab button.re-activemode { color: #6f6; } \
 						{ actionArguments: { Reason: "Reactor plugin updated by user" } } );
 					setTimeout( function() {
 						waitForReloadComplete().then( function() {
-							$("#myModal").modal("hide");
+							hideModal();
 							alert("Please hard-refresh your browser!");
 						}).catch( function(reason) {
-							$("#myModal").modal("hide");
+							hideModal();
 						});
 					}, 5000 );
 				}, 5000 );
 			} else {
-				$("#myModal").modal("hide");
+				hideModal();
 				alert("Update failed: " + String(data.message));
 			}
 		}).fail( function( /* jqXHR, textStatus, errorThrown */ ) {
-			$("#myModal").modal("hide");
 			alert("Update request failed. Luup may be reloading. Try again in a moment.");
 		}).always( function() {
+			hideModal();
 			$( 'div#re-pluginupdate button' ).prop( 'disabled', false );
 		});
 	}
@@ -8666,12 +8688,13 @@ div#tab-actions.reactortab button.re-activemode { color: #6f6; } \
 
 		html += '<style> \
 textarea#devspyoutput { width: 100%; font-family: monospace; } \
+div.re-testrow { align-items: center; } \
 </style>';
 
 		html += '<div id="reactortools" class="reactortab">';
 
 		html += '<h3>Test Tools</h3> \
-<div class="row"> \
+<div class="row re-testrow"> \
   <div class="col-sm-2 col-md-4 col-lg-3 col-xl-2"> \
 	<span id="testdateenable"></span> \
   </div> \
@@ -8683,8 +8706,8 @@ textarea#devspyoutput { width: 100%; font-family: monospace; } \
   </div> \
 </div>'; /* row */
 
-		html += '<div class="row"> \
-  <div class="col-sm-2 col-md-4 col-lg-3 col-xl-2"><span id="testhousemode"></div> \
+		html += '<div class="row re-testrow"> \
+  <div class="col-sm-2 col-md-4 col-lg-3 col-xl-2"><span id="testhousemode"></span></div> \
   <div class="col-sm-10 col-md-8 col-lg-9 col-xl-10 form-inline"> \
 	<select class="form-control form-control-sm" id="mode"> \
 	  <option value="1">Home</option> \
@@ -8697,28 +8720,32 @@ textarea#devspyoutput { width: 100%; font-family: monospace; } \
 
 		html += '<div class="row"> \
   <div class="col-sm-12 col-md-12"> \
-	These settings do not change system configuration. They override the system values \
-	when your ReactorSensor requests them, allowing you to more easily test your conditions. \
-	For example, turn on the "Test Date" checkbox above and use the controls to set a date, \
-	then go back to the "Control" tab and press the "Restart" button to force a \
-	re-evaluation of the sensor state using your selected date/time. \
-	<b>Remember to turn these settings off when you have finished testing!</b> \
+	<p>These settings do not change system configuration. They override the system values \
+	  when your ReactorSensor requests them, allowing you to more easily test your conditions. \
+	  <b>Remember to turn these settings off when you have finished testing!</b> \
+	</p>\
   </div> \
 </div>'; /* row */
 
 		html += '<div>\
   <h3>Update Device Information Database</h3>\
-  <p>The "Activities" tab will notify you when an update to the Device Information Database is \
-	available. Update by clicking the button below; this does not require a Luup restart or \
-	browser refresh. Updates are shared by all ReactorSensors, so updating once updates all of \
-	them. This process sends information about the versions of your Vera firmware, this plugin, \
-	and the current database, but no personally-identifying information. This information is \
-	used to select the correct database for your configuration; it is not used for tracking you. \
-  </p> \
-  <span id="di-ver-info"></span> \
-  <p><button id="updateinfo" class="btn btn-sm btn-success">Update Device Info</button> \
-	<span id="status"></span> \
-  </p> \
+  <div class="row">\
+    <div class="col-xs-12 col-md-6 col-lg-8">\
+      <p>The "Activities" tab will notify you when an update to the Device Information Database is \
+	    available. Update by clicking the button below; this does not require a Luup restart or \
+	    browser refresh. Updates are shared by all ReactorSensors, so updating once updates all of \
+	    them. This process sends information about the versions of your Vera firmware, this plugin, \
+	    and the current device information database, but no personally-identifying information. This information is \
+	    used to select the correct database for your configuration; it is not used for tracking you. \
+      </p> \
+    </div>\
+	<div class="col-xs-12 col-md-6 col-lg-4">\
+      <span id="di-ver-info">Information about the current database version is not available. Go to the Activities tab to load the current data, then return here and the version info should be shown.</span> \
+      <p><button id="updateinfo" class="btn btn-sm btn-success">Update Device Info</button><br> \
+	    <span id="status"></span> \
+      </p> \
+	</div>\
+  </div>\
 </div>';
 
 		// html += '<div id="re-updateplugin"><h3>Update Reactor</h3><span id="re-updatestatus">Update information not available at the moment.</span><p><button id="updateplugin" class="btn btn-sm btn-success">Update Reactor Now</button></p></div>';
