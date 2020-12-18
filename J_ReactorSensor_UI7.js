@@ -8720,6 +8720,7 @@ div#tab-actions.reactortab button.re-activemode { color: #6f6; } \
 		html += '<style> \
 textarea#devspyoutput { width: 100%; font-family: monospace; } \
 div.re-testrow { align-items: center; } \
+div.re-border-box { border: 1px solid #000; border-radius: 8px; padding: 8px; 8px; } \
 </style>';
 
 		html += '<div id="reactortools" class="reactortab">';
@@ -8770,9 +8771,9 @@ div.re-testrow { align-items: center; } \
 	    used to select the correct database for your configuration; it is not used for tracking you. \
 	  </p> \
 	</div>\
-	<div class="col-xs-12 col-md-6 col-lg-4">\
+	<div class="col-xs-12 col-md-6 col-lg-4 re-border-box">\
 	  <span id="di-ver-info">Information about the current database version is not available. Go to the Activities tab to load the current data, then return here and the version info should be shown.</span> \
-	  <p><button id="updateinfo" class="btn btn-sm btn-success">Update Device Info</button><br> \
+	  <p><button id="updateinfo" class="btn btn-sm btn-primary">Update Device Database</button><br> \
 	    <span id="status"></span> \
 	  </p> \
 	</div>\
@@ -8785,14 +8786,14 @@ div.re-testrow { align-items: center; } \
 		if ( !isOpenLuup ) {
 			html += '<div id="enhancement" class="form-inline">\
   <h3>Submit Device Data</h3>\
-  If you have a device that is missing "Common Actions" or warns you about missing enhancement \
-  data in the Activities tab (actions in <i>italics</i>), you can submit the device data to \
-  rigpapa for evaluation. This process sends the relevant data about the device. It does not \
-  send any identifying information about you or your Vera, and the data is used only for \
-  enhancement of the device information database. \
+  <p>If you have a device that is missing "Common Actions" or warns you about missing enhancement \
+    data in the Activities tab (actions in <i>italics</i>), you can submit the device data to \
+    rigpapa for evaluation. This process sends the relevant data about the device. It does not \
+    send any identifying information about you or your Vera, and the data is used only for \
+    enhancement of the device information database. \
   <p>\
-	<select id="devices"></select> \
-	<button id="submitdata" class="btn btn-sm btn-info">Submit Device Data</button> \
+  <select id="devices"></select> \
+  <button id="submitdata" class="btn btn-sm btn-primary-outline">Submit Device Data</button> \
   </p>\
 </div>';
 		}
@@ -8802,7 +8803,7 @@ div.re-testrow { align-items: center; } \
 		html += '<div id="troubleshooting"><h3>Troubleshooting &amp; Support</h3>If you are having trouble working out your condition logic, or you think you have found a bug, here are some steps and tools you can use:';
 		html += '<ul><li>Check the <a href="' + _DOCURL + '" target="_blank">Reactor Documentation</a>.</li>\
 <li>Generate and examine a <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=summary&device=' + api.getCpanelDeviceId() + '" target="_blank">Logic&nbsp;Summary</a> report. This text-based report shows your ReactorSensor\'s current state, and its event list, which may tell you a lot about what it\'s doing.</li>\
-<li>If the logic summary is not helping you, please post it to the <a href="https://community.getvera.com/c/plugins-and-plugin-development/reactor/178" target="_blank">Reactor Board in the Vera Community Forums</a>. <strong>Be sure to read the instructions in the report header before posting.</strong>. In your post, describe what you are trying to accomplish and/or the problem you are having. <strong>Please do not post screenshots unless asked to do so.</strong>.</li>';
+<li>If the logic summary is not helping you, please go here: <a href="' + _DOCURL + 'Support-%26-Suggestions/" target="_blank">Getting Help &amp; Support</a>.</li>';
 		if ( ! isOpenLuup ) {
 			html += '<li>If you are asked for a "debug log snippet", use this procedure (unless given other instructions in the request):<ol><li>Turn on debug by clicking this link: <a href="' +
 			api.getDataRequestURL() + '?id=lr_Reactor&action=debug&debug=1" target="_blank">Turn debug ON</a></li><li>Restart this sensor to force a re-evaluation of all conditions: <a href="' +
