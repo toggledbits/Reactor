@@ -2,6 +2,8 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04.14b or higher.
 
+NOTE TO ALTUI USERS: All current versions of Reactor REQUIRE AltUI v2.46.2536 to v2.49.2545; versions before or after are not supported. If you are having UI issues and running on a version other than those within the foregoing range, please install a supported version of ALTUI. Since testing of the UI has to happen on a large number of platforms and browsers, it takes time and there necessarily will be a delay in certifying the Reactor UI for new releases of ALTUI.
+
 **DEPRECATION NOTICE:** The expression functions `arraypush()`, `arraypop()`, `arrayunshift()` and `arrayshift()` have been made first-class functions in the LuaXP module under the names `push()`, `pop()`, `unshift()` and `shift()` respectively. The `array...()` versions are now deprecated, and will be removed from a future release. Please convert to the new functions, which for all practical purposes are identical (so you just need to change the names in your expressions and it's done).
 
 **DEPRECATION NOTICE:** The `Reactor.groups` table is now deprecated; use `Reactor.conditions` instead (just change the name in your code, it works the same). See [the Reactor documentation](https://www.toggledbits.com/static/reactor/docs/Run-Lua-Action/) for more information.
