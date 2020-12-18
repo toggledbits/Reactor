@@ -17,6 +17,7 @@ NOTE TO ALTUI USERS: All current versions of Reactor REQUIRE AltUI v2.46.2536 to
 * Enhancement: Allow interval "relative to" time to include absolute date.
 * Enhancement: Loadable functions can be used to create user-specific/custom functions for expressions. See the docs.
 * Fix: Try to clean up field placement/formatting on Firefox under ALTUI (the differences between Vera's ancient Bootstrap/stylesheet and ALTUIs Bootstrap4 are troublesome).
+* Fix: work around ALTUI not implementing control panel close event.
 * Fix: ALTUI's `api.showCustomPopup()` produces different divs than UI7. Provide workaround (and fix to ALTUI requested).
 * Fix/Enhancement: NUL root group now does not manipulate RS tripped state. I count this as both fix and enhancement because (a) it seems logical it should have always worked this way (so fix), and (b) it's not necessary to change, but doing so supports a useful paradigm where an RS can use its own tripped state as a trigger for actions, specifically if the tripped state if changed by an HTTP request from outside the system -- it facilitates driving a reaction externally without additional virtual devices (so enhancement).
 * Fix/Enhancement: Bug in firmware for Vera3/Lite 1040 and below handling of ModeSetting delays house mode response; work around to restore performance.

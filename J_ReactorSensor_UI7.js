@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.9develop-20353.1100';
+	var pluginVersion = '3.9develop-20353.1615';
 
 	var DEVINFO_MINSERIAL = 482;
 
@@ -56,6 +56,8 @@ var ReactorSensor = (function(api, $) {
 	var dateFormat = "%F"; /* ISO8601 defaults */
 	var timeFormat = "%T";
 	var unsafeLua = true;
+
+	var onBeforeCpanelClose; /* forward declaration */
 
 	var condTypeName = {
 		"comment": "Comment",
@@ -480,7 +482,7 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 	}
 
 	/**
-	 * Inconsistencies between versions of UI7, and intra- and inter-ALTUI, 
+	 * ALTUI: Inconsistencies between versions of UI7, and intra- and inter-ALTUI,
 	 * have to be resolved with some logic.
 	 */
 	function hideModal() {
@@ -492,6 +494,31 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 				$( 'div#showMessagePopup' ).modal( 'hide' );
 			}
 			$( 'div#myModal' ).modal( 'hide' );
+		}
+	}
+
+	/**
+	 * ALTUI doesn't implement on_cpanel_close event. Use tab behavior.
+	 * Pass any element on the current tab.
+	 */
+	function captureControlPanelClose( $el ) {
+		if ( isALTUI ) {
+			/** On ALTUI, we break plugin encapsulation by necessity and use
+			 *  its tab handler to help us.
+			 */
+			var paneId = $el.closest( '.tab-pane' ).attr( 'id' );
+			$( 'a[href="#' + paneId + '"]' ).off( 'hide.bs.tab.reactor' )
+				.on( 'hide.bs.tab.reactor', function() {
+					console.log("captureControlPanelClose() ALTUI module tab hide handler");
+					onBeforeCpanelClose();
+				});
+			$( 'a[href="#altui-toggle-control-panel"]' ).off( 'hide.bs.tab.reactor' )
+				.on( 'hide.bs.tab.reactor', function() {
+					console.log("ALTUI control panel hide handler");
+					onBeforeCpanelClose();
+				});
+		} else {
+			api.registerEventHandler('on_ui_cpanel_before_close', ReactorSensor, 'onBeforeCpanelClose');
 		}
 	}
 
@@ -863,9 +890,6 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 		/* Force this false every time, and make the status panel change it. */
 		inStatusPanel = false;
 
-		/* Event handler */
-		api.registerEventHandler('on_ui_cpanel_before_close', ReactorSensor, 'onBeforeCpanelClose');
-
 		return true;
 	}
 
@@ -1208,6 +1232,18 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 		configModified = false;
 	}
 
+	/* Closing the control panel. */
+	onBeforeCpanelClose = function() {
+		console.log( "onBeforeCpanelClose" );
+		if ( configModified ) {
+			if ( confirm( msgUnsavedChanges ) ) {
+				handleSaveClick( undefined );
+			}
+		}
+		configModified = false;
+		clearModule();
+	};
+
 	/**
 	 * Handle revert button click: restore setting to last saved and redisplay.
 	 */
@@ -1233,18 +1269,6 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 		} else {
 			alert("OK, I did the revert, but now I'm lost. Go to the Status tab, and then come back to this tab.");
 		}
-	}
-
-	/* Closing the control panel. */
-	function onBeforeCpanelClose( dev ) {
-		console.log( 'onBeforeCpanelClose ' + String(dev) );
-		if ( configModified ) {
-			if ( confirm( msgUnsavedChanges ) ) {
-				handleSaveClick( undefined );
-			}
-		}
-		configModified = false;
-		clearModule();
 	}
 
 	function conditionValueText( v, forceNumber ) {
@@ -2007,6 +2031,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 		api.setCpanelContent( '<div id="reactorstatus" class="reactortab">Loading...</div>' );
 		inStatusPanel = true; /* Tell the event handler it's OK */
 		api.registerEventHandler('on_ui_deviceStatusChanged', ReactorSensor, 'onUIDeviceStatusChanged');
+		captureControlPanelClose( $('div#reactorstatus') );
 
 		try {
 			updateStatus( myid );
@@ -4560,6 +4585,8 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 			if ( 0 !== parseInt( getParentState( "DefaultCollapseConditions", myid ) || "0" ) ) {
 				$( 'div.reactortab .cond-group-title button.re-collapse').trigger( 'click' );
 			}
+
+			captureControlPanelClose( $('div.reactortab') );
 		}
 
 		/* Public interface */
@@ -5092,6 +5119,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 			}
 
 			redrawVariables();
+
+			captureControlPanelClose( $('div.reactortab') );
 		}
 		catch (e)
 		{
@@ -7999,6 +8028,8 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					console.log( "deviceInfo version check failed: " + String(errorThrown) );
 				});
 			}
+
+			captureControlPanelClose( $('div.reactortab') );
 		}
 		catch (e)
 		{
@@ -8730,20 +8761,20 @@ div.re-testrow { align-items: center; } \
 		html += '<div>\
   <h3>Update Device Information Database</h3>\
   <div class="row">\
-    <div class="col-xs-12 col-md-6 col-lg-8">\
-      <p>The "Activities" tab will notify you when an update to the Device Information Database is \
+	<div class="col-xs-12 col-md-6 col-lg-8">\
+	  <p>The "Activities" tab will notify you when an update to the Device Information Database is \
 	    available. Update by clicking the button below; this does not require a Luup restart or \
 	    browser refresh. Updates are shared by all ReactorSensors, so updating once updates all of \
 	    them. This process sends information about the versions of your Vera firmware, this plugin, \
 	    and the current device information database, but no personally-identifying information. This information is \
 	    used to select the correct database for your configuration; it is not used for tracking you. \
-      </p> \
-    </div>\
+	  </p> \
+	</div>\
 	<div class="col-xs-12 col-md-6 col-lg-4">\
-      <span id="di-ver-info">Information about the current database version is not available. Go to the Activities tab to load the current data, then return here and the version info should be shown.</span> \
-      <p><button id="updateinfo" class="btn btn-sm btn-success">Update Device Info</button><br> \
+	  <span id="di-ver-info">Information about the current database version is not available. Go to the Activities tab to load the current data, then return here and the version info should be shown.</span> \
+	  <p><button id="updateinfo" class="btn btn-sm btn-success">Update Device Info</button><br> \
 	    <span id="status"></span> \
-      </p> \
+	  </p> \
 	</div>\
   </div>\
 </div>';
@@ -8968,6 +8999,7 @@ div.re-testrow { align-items: center; } \
 		*/
 
 		api.registerEventHandler('on_ui_deviceStatusChanged', ReactorSensor, 'spyDeviceChangeHandler');
+		captureControlPanelClose( $('div.reactortab') );
 	}
 
 /** ***************************************************************************
