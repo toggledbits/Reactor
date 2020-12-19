@@ -4,11 +4,13 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04
 
 NOTE TO ALTUI USERS: All current versions of Reactor REQUIRE AltUI v2.46.2536 to v2.49.2545; versions before or after are not supported. If you are having UI issues and running on a version other than those within the foregoing range, please install a supported version of ALTUI. Since testing of the UI has to happen on a large number of platforms and browsers, it takes time and there necessarily will be a delay in certifying the Reactor UI for new releases of ALTUI.
 
+**END OF LIFE NOTICE:** Vera Lite and Vera3 systems are hardware/firmware EOL as of this writing. Reactor 3.9 will be the last version of Reactor tested and certified for these systems. Later versions of Reactor may still run on them, but I will not be testing for them and I will no longer fix platform-specific bugs for them.
+
 **DEPRECATION NOTICE:** The expression functions `arraypush()`, `arraypop()`, `arrayunshift()` and `arrayshift()` have been made first-class functions in the LuaXP module under the names `push()`, `pop()`, `unshift()` and `shift()` respectively. The `array...()` versions are now deprecated, and will be removed from a future release. Please convert to the new functions, which for all practical purposes are identical (so you just need to change the names in your expressions and it's done).
 
 **DEPRECATION NOTICE:** The `Reactor.groups` table is now deprecated; use `Reactor.conditions` instead (just change the name in your code, it works the same). See [the Reactor documentation](https://www.toggledbits.com/static/reactor/docs/Run-Lua-Action/) for more information.
 
-## Version 3.9 development (20353)
+## Version 3.9 development (20354)
 
 * DEPRECATION: The `Reactor.groups` table is now deprecated; use `Reactor.conditions` instead (just change the name in your code, it works the same). See [the Reactor documentation](https://www.toggledbits.com/static/reactor/docs/Run-Lua-Action/) for more information.
 * Enhancement: In the `Reactor.conditions` table, if the condition is actually a group, the subkey `conditions` will be an array containing the group's conditions. See [the Reactor documentation](https://www.toggledbits.com/static/reactor/docs/Run-Lua-Action/) for more information.
@@ -16,8 +18,11 @@ NOTE TO ALTUI USERS: All current versions of Reactor REQUIRE AltUI v2.46.2536 to
 * Enhancement: Notifications via Pushover are now supported by the Notify action. DOCS NEED: sign up and verify your email address; copy user key to PushoverUser; go to "Your Applications" and create a new application; put API token in PushoverToken.
 * Enhancement: Allow interval "relative to" time to include absolute date.
 * Enhancement: Loadable functions can be used to create user-specific/custom functions for expressions. See the docs.
-* Fix: Try to clean up field placement/formatting on Firefox under ALTUI (the differences between Vera's ancient Bootstrap/stylesheet and ALTUIs Bootstrap4 are troublesome).
-* Fix: work around ALTUI not implementing control panel close event.
+* Fix: Try to clean up field placement/formatting on Firefox Android under ALTUI.
+* Fix: Try to resolve more inconsistencies between the ancient jQuery and Bootstrap-ish stylesheet on Vera vs the more current used on ALTUI. They just don't have much in common any more, and it's getting very difficult to work out combinations of published and custom styles that work out cleanly for both. If ALTUI continues to press forward, it will eventually diverge enough from Vera's environment that separate UI code bases will be needed. Given that more than 50% of Reactor's code is in its configuration UI, if it comes to that, I'll likely stop supporting the Luup plugin Reactor for openLuup/ALTUI, because it just doesn't make sense to maintain two very large, separate code bases for different platforms. Multi-System Reactor would be the go-to alternative at that point (and is going to work even better anyway).
+* Fix: ALTUI 2.52 (just released) now uses 3.5.1 jQuery with a [modified HTML prefilter](https://jquery.com/upgrade-guide/3.5/) (breaking security fix); code changes throughout, very disruptive.
+* Fix: work around ALTUI not implementing JS API control panel close event.
+* Fix: work around ALTUI's emulation of `api.showCustomPopup()` uses different element ID for dialog.
 * Fix: ALTUI's `api.showCustomPopup()` produces different divs than UI7. Provide workaround (and fix to ALTUI requested).
 * Fix/Enhancement: NUL root group now does not manipulate RS tripped state. I count this as both fix and enhancement because (a) it seems logical it should have always worked this way (so fix), and (b) it's not necessary to change, but doing so supports a useful paradigm where an RS can use its own tripped state as a trigger for actions, specifically if the tripped state if changed by an HTTP request from outside the system -- it facilitates driving a reaction externally without additional virtual devices (so enhancement).
 * Fix/Enhancement: Bug in firmware for Vera3/Lite 1040 and below handling of ModeSetting delays house mode response; work around to restore performance.

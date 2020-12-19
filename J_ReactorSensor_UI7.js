@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.9develop-20353.1755';
+	var pluginVersion = '3.9develop-20354.1000';
 
 	var DEVINFO_MINSERIAL = 482;
 
@@ -8759,13 +8759,25 @@ div.re-border-box { border: 1px solid #000; border-radius: 8px; padding: 8px; 8p
   </div> \
 </div>'; /* row */
 
+		html += '<div><h3>Troubleshooting &amp; Support</h3>If you are having trouble working out your condition logic, or you think you have found a bug, here are some steps and tools you can use:';
+		html += '<ul><li>Check the <a href="' + _DOCURL + '" target="_blank">Reactor Documentation</a>.</li>\
+<li>Generate and examine a <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=summary&device=' + api.getCpanelDeviceId() + '" target="_blank">Logic&nbsp;Summary</a> report. This text-based report shows your ReactorSensor\'s current state, and its event list, which may tell you a lot about what it\'s doing.</li>\
+<li>If the logic summary is not helping you, please go here: <a href="' + _DOCURL + 'Support-%26-Suggestions/" target="_blank">Getting Help &amp; Support</a>.</li>';
+		if ( ! isOpenLuup ) {
+			html += '<li>If you are asked for a "debug log snippet", use this procedure (unless given other instructions in the request):<ol><li>Turn on debug by clicking this link: <a href="' +
+			api.getDataRequestURL() + '?id=lr_Reactor&action=debug&debug=1" target="_blank">Turn debug ON</a></li><li>Restart this sensor to force a re-evaluation of all conditions: <a href="' +
+			api.getDataRequestURL() + '?id=action&output_format=xml&DeviceNum=' + api.getCpanelDeviceId() + '&serviceId=' +
+			encodeURIComponent( serviceId ) + '&action=Restart" target="_blank">Restart this ReactorSensor</a></li><li><strong>Wait at least 60 seconds, not less.</strong> This is very important&mdash;proceeding too soon may result in incomplete log data. During this period, you should also provide any "stimulus" needed to demonstrate the issue (e.g. turn devices on/off).</li><li>Click this link to <a href="javascript:void(0);" id="grablog">generate the log snippet</a> (the relevant part the log file). It should magically appear at the bottom of this page&mdash;scroll down!</li><li>Post the log snippet to the forum thread, or email it <em>together with your logic summary report and your forum username</em> to <a href="mailto:reactor-logs@toggledbits.com" target="_blank">reactor-logs@toggledbits.com</a>. Note: this email address is for receiving logs only; do not submit questions or other requests to this address.</li></ol>';
+		}
+		html += '</ul></div>';
+
 		html += '<div>\
   <h3>Update Device Information Database</h3>\
   <div class="row">\
 	<div class="col-xs-12 col-md-6 col-lg-8">\
 	  <p>The "Activities" tab will notify you when an update to the Device Information Database is \
-	    available. Update by clicking the button below; this does not require a Luup restart or \
-	    browser refresh. Updates are shared by all ReactorSensors, so updating once updates all of \
+	    available. Clicking the "Update" button updates the database and does not require a Luup reload \
+	    or browser refresh. Updates are shared by all ReactorSensors, so updating one updates all of \
 	    them. This process sends information about the versions of your Vera firmware, this plugin, \
 	    and the current device information database, but no personally-identifying information. This information is \
 	    used to select the correct database for your configuration; it is not used for tracking you. \
@@ -8783,7 +8795,8 @@ div.re-border-box { border: 1px solid #000; border-radius: 8px; padding: 8px; 8p
 		// html += '<div id="re-updateplugin"><h3>Update Reactor</h3><span id="re-updatestatus">Update information not available at the moment.</span><p><button id="updateplugin" class="btn btn-sm btn-success">Update Reactor Now</button></p></div>';
 
 		/* This feature doesn't work on openLuup -- old form of lu_device request isn't implemented */
-		if ( !isOpenLuup ) {
+        /* ??? Temporarily disabled - lu_device request causes immediate crash on 7.31 and 7.32 Plus/Secure systems */
+		if ( false && !isOpenLuup ) {
 			html += '<div id="enhancement" class="form-inline">\
   <h3>Submit Device Data</h3>\
   <p>If you have a device that is missing "Common Actions" or warns you about missing enhancement \
@@ -8799,18 +8812,6 @@ div.re-border-box { border: 1px solid #000; border-radius: 8px; padding: 8px; 8p
 		}
 
 		html += '<div id="re-devicerepair"></div>';
-
-		html += '<div id="troubleshooting"><h3>Troubleshooting &amp; Support</h3>If you are having trouble working out your condition logic, or you think you have found a bug, here are some steps and tools you can use:';
-		html += '<ul><li>Check the <a href="' + _DOCURL + '" target="_blank">Reactor Documentation</a>.</li>\
-<li>Generate and examine a <a href="' + api.getDataRequestURL() + '?id=lr_Reactor&action=summary&device=' + api.getCpanelDeviceId() + '" target="_blank">Logic&nbsp;Summary</a> report. This text-based report shows your ReactorSensor\'s current state, and its event list, which may tell you a lot about what it\'s doing.</li>\
-<li>If the logic summary is not helping you, please go here: <a href="' + _DOCURL + 'Support-%26-Suggestions/" target="_blank">Getting Help &amp; Support</a>.</li>';
-		if ( ! isOpenLuup ) {
-			html += '<li>If you are asked for a "debug log snippet", use this procedure (unless given other instructions in the request):<ol><li>Turn on debug by clicking this link: <a href="' +
-			api.getDataRequestURL() + '?id=lr_Reactor&action=debug&debug=1" target="_blank">Turn debug ON</a></li><li>Restart this sensor to force a re-evaluation of all conditions: <a href="' +
-			api.getDataRequestURL() + '?id=action&output_format=xml&DeviceNum=' + api.getCpanelDeviceId() + '&serviceId=' +
-			encodeURIComponent( serviceId ) + '&action=Restart" target="_blank">Restart this ReactorSensor</a></li><li><strong>Wait at least 60 seconds, not less.</strong> This is very important&mdash;proceeding too soon may result in incomplete log data. During this period, you should also provide any "stimulus" needed to demonstrate the issue (e.g. turn devices on/off).</li><li>Click this link to <a href="javascript:void(0);" id="grablog">generate the log snippet</a> (the relevant part the log file). It should magically appear at the bottom of this page&mdash;scroll down!</li><li>Post the log snippet to the forum thread, or email it <em>together with your logic summary report and your forum username</em> to <a href="mailto:reactor-logs@toggledbits.com" target="_blank">reactor-logs@toggledbits.com</a>. Note: this email address is for receiving logs only; do not submit questions or other requests to this address.</li></ol>';
-		}
-		html += '</ul></div>';
 
 		html += '<div id="devicespy">\
   <h3>Device Spy</h3>\
