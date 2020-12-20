@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.9develop-20354.1000';
+	var pluginVersion = '3.9develop-20355.0930';
 
 	var DEVINFO_MINSERIAL = 482;
 
