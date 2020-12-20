@@ -12,6 +12,10 @@
 
 var ReactorSensor_ALTUI = ( function( window, undefined ) {
 
+    var pluginVersion = "3.9develop-20355.0930";
+
+    var _UIVERSION = 20353;
+
 	function _getStyle() {
 		var style = "button.reactor-cpb { padding: .25rem .5rem; min-width: 4rem; }";
 		return style;
@@ -21,12 +25,16 @@ var ReactorSensor_ALTUI = ( function( window, undefined ) {
 			var html ="";
 			var message = MultiBox.getStatus( device, "urn:toggledbits-com:serviceId:ReactorSensor", "Message");
 			var enab = MultiBox.getStatus( device, "urn:toggledbits-com:serviceId:ReactorSensor", "Enabled");
-			var armed = MultiBox.getStatus( device, "urn:micasaverde-com:serviceId:SecuritySensor1", "Armed");
+			// var armed = MultiBox.getStatus( device, "urn:micasaverde-com:serviceId:SecuritySensor1", "Armed");
+			var vv = MultiBox.getStatus( device, "urn:toggledbits-com:serviceId:ReactorSensor", "_UIV");
+            if ( vv !== String(_UIVERSION) ) {
+                message = "Installation error. Incompatible UI files.";
+            }
 			html += '<div class="pull-right">';
 			html += ALTUI_PluginDisplays.createOnOffButton( enab, "reactor-enabled-" + device.altuiid, _T("Disabled,Enabled"), "pull-right");
 			// html += ALTUI_PluginDisplays.createOnOffButton( armed, "reactor-armed-" + device.altuiid, _T("Disarmed,Armed"), "pull-right");
 			html += '</div>';
-			html += '<div>' + message + '</div>';
+			html += '<div>' + String(message) + '</div>';
 			html += '<div class="clearfix"></div>';
 			html += '<div>';
 			html += ('<button class="btn btn-xs btn-outline-primary reactor-cpb ml-1" id="reactor-reset-{0}">'+_T("Reset")+'</button>').format(device.altuiid);
