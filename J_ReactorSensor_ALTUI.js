@@ -10,9 +10,9 @@
 
 var ReactorSensor_ALTUI = ( function( window, undefined ) {
 
-    var pluginVersion = "3.9develop-20355.0930";
+	var pluginVersion = "3.9develop-20355.0930";
 
-    var _UIVERSION = 20355;
+	var _UIVERSION = 20355;
 
 	function _getStyle() {
 		var style = "button.reactor-cpb { padding: .25rem .5rem; min-width: 4rem; }";
@@ -25,9 +25,9 @@ var ReactorSensor_ALTUI = ( function( window, undefined ) {
 			var enab = MultiBox.getStatus( device, "urn:toggledbits-com:serviceId:ReactorSensor", "Enabled");
 			// var armed = MultiBox.getStatus( device, "urn:micasaverde-com:serviceId:SecuritySensor1", "Armed");
 			var vv = MultiBox.getStatus( device, "urn:toggledbits-com:serviceId:ReactorSensor", "_UIV");
-            if ( vv !== String(_UIVERSION) ) {
-                message = "Installation error. Incompatible UI files.";
-            }
+			if ( vv !== String(_UIVERSION) ) {
+				message = "Installation error. Incompatible UI files.";
+			}
 			html += '<div class="pull-right">';
 			html += ALTUI_PluginDisplays.createOnOffButton( enab, "reactor-enabled-" + device.altuiid, _T("Disabled,Enabled"), "pull-right");
 			// html += ALTUI_PluginDisplays.createOnOffButton( armed, "reactor-armed-" + device.altuiid, _T("Disarmed,Armed"), "pull-right");
@@ -61,13 +61,13 @@ var ReactorSensor_ALTUI = ( function( window, undefined ) {
 					MultiBox.runActionByAltuiID( altuiid, 'urn:toggledbits-com:serviceId:ReactorSensor', 'SetEnabled', {newEnabledValue:newval} );
 			});
 		},
-        /*
+		/*
 		toggleArmed: function (altuiid, htmlid) {
 			ALTUI_PluginDisplays.toggleButton(altuiid, htmlid, 'urn:micasaverde-com:serviceId:SecuritySensor1', 'Armed', function(id, newval) {
 					MultiBox.runActionByAltuiID( altuiid, 'urn:micasaverde-com:serviceId:SecuritySensor1', 'SetArmed', {newArmedValue:newval} );
 			});
 		},
-        */
+		*/
 		/* true exports */
 		deviceDraw: _draw,
 		getStyle: _getStyle
