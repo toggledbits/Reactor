@@ -28,7 +28,7 @@ var ReactorSensor = (function(api, $) {
 	var _DOCURL = "https://www.toggledbits.com/static/reactor/docs/3.9/";
 
 	var _MIN_ALTUI_VERSION = [ 2, 46, 2536 ];
-	var	_MAX_ALTUI_VERSION = [ 2, 52, 2550 ];
+	var	_MAX_ALTUI_VERSION = [ 2, 52, 2552 ];
 
 	var myModule = {};
 
@@ -824,54 +824,20 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 			var validALTUI = false;
 			var av;
 			var av_range = "v" + _MIN_ALTUI_VERSION.join('.') + " to v" + _MAX_ALTUI_VERSION.join('.');
-			try {
-				var np = ( ud.InstalledPlugins2 || [] ).length;
-				for ( var xp=0; xp<np; xp++ ) {
-					var plugin = ud.InstalledPlugins2[xp];
-					if ( plugin.id == 8246 ) {
-						if ( plugin.VersionMajor === "Github" ) {
-							/* Minor version check */
-							av = parseInt( plugin.VersionMinor );
-							console.log("initModule(): ALTUI release",plugin.VersionMinor,"from InstalledPlugins2");
-							av_range = String(_MIN_ALTUI_VERSION[2]) + " to " + String(_MAX_ALTUI_VERSION[2] );
-							if ( !isNaN( av ) && av >= _MIN_ALTUI_VERSION[2] && av <= _MAX_ALTUI_VERSION[2] ) {
-								validALTUI = true;
-							}
-						} else {
-							av = plugin.VersionMajor;
-						}
-						break;
+			if ( "undefined" !== typeof ALTUI_revision ) {
+				av = ALTUI_revision.match( /: *(\d+)/ );
+				if ( null !== av ) {
+					av = parseInt( av[1] );
+					console.log("initModule(): ALTUI release",av,"from ALTUI_revision");
+					av_range = String(_MIN_ALTUI_VERSION[2]) + " to " + String(_MAX_ALTUI_VERSION[2] );
+					if ( !isNaN( av ) && av >= _MIN_ALTUI_VERSION[2] && av <= _MAX_ALTUI_VERSION[2] ) {
+						validALTUI = true;
 					}
-				}
-			} catch( e ) {
-				console.log("initModule(): InstalledPlugins2 ALTUI check threw", e);
-			}
-			if ( !validALTUI ) {
-				try {
-					if ( !av ) {
-						console.log("initModule() using Version state variable for ALTUI version info");
-						av = api.getDeviceState( isALTUI, "urn:upnp-org:serviceId:altui1",
-							"Version", { dynamic: false } ) || "unknown";
-					}
-					console.log("initModule() checking major version",av);
-					var m = av.match( /^v?(\d+)\.(\d+)(.*)/i );
-					if ( m && m.length > 2 ) {
-						m[1] = parseInt( m[1] );
-						m[2] = parseInt( m[2] );
-						if ( ! ( isNaN( m[1] ) || isNaN( m[2] ) ) ) {
-							if ( m[1] >= _MIN_ALTUI_VERSION[0] && m[1] <= _MAX_ALTUI_VERSION[0] ) {
-								if ( m[2] >= _MIN_ALTUI_VERSION[1] && m[2] <= _MAX_ALTUI_VERSION[1] ) {
-									validALTUI = true;
-								}
-							}
-						}
-					}
-				} catch ( e ) {
-					console.log("initModule(): ALTUI major version check threw", e);
 				}
 			}
 			if ( !validALTUI ) {
 				alert("The running version of ALTUI has not been confirmed to be compatible with this version of the Reactor UI and is therefore not supported. Incompatibilities may cause loss of functionality or errors that result in data/configuration loss, and it is recommended that you up/downgrade to a compatible version of ALTUI before continuing. Supported versions are: " + av_range + ". You are running " + String(av));
+				return false;
 			}
 		}
 
@@ -8795,15 +8761,15 @@ div.re-border-box { border: 1px solid #000; border-radius: 8px; padding: 8px; 8p
 		// html += '<div id="re-updateplugin"><h3>Update Reactor</h3><span id="re-updatestatus">Update information not available at the moment.</span><p><button id="updateplugin" class="btn btn-sm btn-success">Update Reactor Now</button></p></div>';
 
 		/* This feature doesn't work on openLuup -- old form of lu_device request isn't implemented */
-        /* ??? Temporarily disabled - lu_device request causes immediate crash on 7.31 and 7.32 Plus/Secure systems */
+		/* ??? Temporarily disabled - lu_device request causes immediate crash on 7.31 and 7.32 Plus/Secure systems */
 		if ( false && !isOpenLuup ) {
 			html += '<div id="enhancement" class="form-inline">\
   <h3>Submit Device Data</h3>\
   <p>If you have a device that is missing "Common Actions" or warns you about missing enhancement \
-    data in the Activities tab (actions in <i>italics</i>), you can submit the device data to \
-    rigpapa for evaluation. This process sends the relevant data about the device. It does not \
-    send any identifying information about you or your Vera, and the data is used only for \
-    enhancement of the device information database. \
+	data in the Activities tab (actions in <i>italics</i>), you can submit the device data to \
+	rigpapa for evaluation. This process sends the relevant data about the device. It does not \
+	send any identifying information about you or your Vera, and the data is used only for \
+	enhancement of the device information database. \
   <p>\
   <select id="devices"></select> \
   <button id="submitdata" class="btn btn-sm btn-primary-outline">Submit Device Data</button> \

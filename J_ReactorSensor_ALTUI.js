@@ -8,8 +8,6 @@
  */
 /* globals window,MultiBox,ALTUI_PluginDisplays,_T */
 
-"use strict";
-
 var ReactorSensor_ALTUI = ( function( window, undefined ) {
 
     var pluginVersion = "3.9develop-20355.0930";
