@@ -21,14 +21,14 @@ var ReactorSensor = (function(api, $) {
 
 	var DEVINFO_MINSERIAL = 482;
 
-	var _UIVERSION = 20353;     /* must coincide with Lua core */
+	var _UIVERSION = 20355;     /* must coincide with Lua core */
 
 	var _CDATAVERSION = 20045;  /* must coincide with Lua core */
 
 	var _DOCURL = "https://www.toggledbits.com/static/reactor/docs/3.9/";
 
-	var _MIN_ALTUI_VERSION = [ 2, 46, 2536 ];
-	var	_MAX_ALTUI_VERSION = [ 2, 52, 2552 ];
+	var _MIN_ALTUI_VERSION = 2536;
+	var	_MAX_ALTUI_VERSION = 2552;
 
 	var myModule = {};
 
@@ -820,17 +820,16 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 		}
 
 		if ( isALTUI ) {
-			console.log("initModule() supported ALTUI versions:",_MIN_ALTUI_VERSION.join('.'),"to",_MAX_ALTUI_VERSION.join('.'));
+			console.log("initModule() supported ALTUI versions:",_MIN_ALTUI_VERSION,"to",_MAX_ALTUI_VERSION);
 			var validALTUI = false;
 			var av;
-			var av_range = "v" + _MIN_ALTUI_VERSION.join('.') + " to v" + _MAX_ALTUI_VERSION.join('.');
+			var av_range = String(_MIN_ALTUI_VERSION) + " to " + String(_MAX_ALTUI_VERSION);
 			if ( "undefined" !== typeof ALTUI_revision ) {
 				av = ALTUI_revision.match( /: *(\d+)/ );
 				if ( null !== av ) {
 					av = parseInt( av[1] );
 					console.log("initModule(): ALTUI release",av,"from ALTUI_revision");
-					av_range = String(_MIN_ALTUI_VERSION[2]) + " to " + String(_MAX_ALTUI_VERSION[2] );
-					if ( !isNaN( av ) && av >= _MIN_ALTUI_VERSION[2] && av <= _MAX_ALTUI_VERSION[2] ) {
+					if ( !isNaN( av ) && av >= _MIN_ALTUI_VERSION && av <= _MAX_ALTUI_VERSION ) {
 						validALTUI = true;
 					}
 				}

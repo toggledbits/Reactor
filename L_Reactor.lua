@@ -17,7 +17,7 @@ local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.9/"
 
 local _CONFIGVERSION	= 20263
 local _CDATAVERSION		= 20045	-- must coincide with JS
-local _UIVERSION		= 20353	-- must coincide with JS
+local _UIVERSION		= 20355	-- must coincide with JS
 	  _SVCVERSION		= 20185	-- must coincide with impl file (not local)
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"

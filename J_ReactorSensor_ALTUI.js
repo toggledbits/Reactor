@@ -12,7 +12,7 @@ var ReactorSensor_ALTUI = ( function( window, undefined ) {
 
     var pluginVersion = "3.9develop-20355.0930";
 
-    var _UIVERSION = 20353;
+    var _UIVERSION = 20355;
 
 	function _getStyle() {
 		var style = "button.reactor-cpb { padding: .25rem .5rem; min-width: 4rem; }";
