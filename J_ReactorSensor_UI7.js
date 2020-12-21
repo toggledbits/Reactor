@@ -7,8 +7,8 @@
  * This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
  *
  */
-/* globals api,jQuery,unescape,escape,ace,Promise,setTimeout,MultiBox,console,alert,confirm,window,navigator,atob,btoa */
-/* jshint multistr: true, laxcomma: true, undef: true, unused: false */
+/* globals api,jQuery,ace,MultiBox,ALTUI_revision,Promise,escape,unescape */
+/* jshint browser: true, devel: true, multistr: true, laxcomma: true, undef: true, unused: false */
 
 //"use strict"; // fails on UI7, works fine with ALTUI
 
@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.9develop-20355.0930';
+	var pluginVersion = '3.9develop-20355.2120';
 
 	var DEVINFO_MINSERIAL = 482;
 
@@ -835,8 +835,18 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 				}
 			}
 			if ( !validALTUI ) {
-				alert("The running version of ALTUI has not been confirmed to be compatible with this version of the Reactor UI and is therefore not supported. Incompatibilities may cause loss of functionality or errors that result in data/configuration loss, and it is recommended that you up/downgrade to a compatible version of ALTUI before continuing. Supported versions are: " + av_range + ". You are running " + String(av));
+				alert("The running version of ALTUI has not been confirmed to be compatible with this version of the Reactor UI and is therefore not supported. Incompatibilities may cause loss of functionality or errors that result in data/configuration loss, and it is recommended that you up/downgrade to a compatible version of ALTUI before continuing.\n\nSupported versions are: " + av_range + ".\nYou are running " + String(av));
 				return false;
+			}
+			try {
+				var jq = String($.fn.jquery).split('.');
+				jq = parseInt( jq[0] ) * 100 + parseInt( jq[1] );
+				if ( jq >= 306 ) {
+					alert("This version of the Reactor UI does not support the version of jQuery you are using on this system. Typically, the jQuery version is determined by the ALTUI version being used, and if that version of ALTUI is supported, its default jQuery is as well. Overriding ALTUI's default to a higher version can result in incompatibilities that could result in configuration corruption.\n\nNot supported: jQuery "+String($.fn.jquery));
+					return false;
+				}
+			} catch( e ) {
+				console.log("initModule() error checking jQuery version:",e);
 			}
 		}
 
