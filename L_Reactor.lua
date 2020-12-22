@@ -3750,32 +3750,17 @@ local function evaluateCondition( cond, grp, cdata, tdev ) -- luacheck: ignore 2
 			D("evaluateCondition() is today %1 %2-%3 the %4th?", val, ndt.month,
 				ndt.day, op)
 			if op == "last" then
-				-- Must be last of this day of the week. If we add a week
+				-- Must be last of this day of the month. If we add a week
 				-- to current date, the new date should be next month.
 				local nt = os.date( "*t", now + ( 7 * 86400 ) )
 				D("evaluateCondition() weekday %1 %2? today=%3, nextweek=%4", val, op, ndt, nt)
 				if nt.month == ndt.month then return val,false end -- same
 			else
 				local nth = tonumber( op )
-				if nth == nil then
-					L({level=2,msg="Invalid op %1 in weekday condition %2 for %3 (%4)"},
-						op, cond.id, (luup.devices[tdev] or {}).description, tdev)
-					addEvent{ dev=tdev, event="condition", condition=cond.id,
-						operator=op, ['error']="TROUBLE: unrecognized operator" }
-					sst.trouble = true
-					return val,nil
-				end
-				-- Move back N-1 weeks; we should still be in same month. Then
-				-- move back one more week, should be in prior month.
-				local pt, ref
-				ref = now
-				if nth > 1 then
-					ref = ref - ( (nth-1) * 7 * 86400 )
-					pt = os.date( "*t", ref )
-					if pt.month ~= ndt.month then return val,false end
-				end
-				pt = os.date( "*t", ref - ( 7 * 86400 ) )
-				if pt.month == ndt.month then return val,false end
+				local bd = 1 + ( nth - 1 ) * 7
+				local ed = bd + 7
+				D("evaluateCondition() day (%3) range check >= %1 and < %2", bd, ed, ndt.day)
+				return val, ndt.day >= bd and ndt.day < ed
 			end
 			D("evaluateCondition() yes, today %1 %2-%3 IS #%4 in month", val,
 				ndt.month, ndt.day, op)

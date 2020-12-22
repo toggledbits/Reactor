@@ -437,6 +437,7 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 			$('<input>').attr( { type: 'checkbox', id: id } )
 				.val( value )
 				.addClass( 'form-check-input' )
+				.addClass( classes || "" )
 				.appendTo( $div );
 			$('<label></label>').attr( 'for', id )
 				.addClass( 'form-check-label' )
