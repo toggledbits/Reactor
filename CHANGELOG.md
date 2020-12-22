@@ -10,7 +10,7 @@ NOTE TO ALTUI USERS: All current versions of Reactor REQUIRE AltUI v2.46.2536 to
 
 **DEPRECATION NOTICE:** The `Reactor.groups` table is now deprecated; use `Reactor.conditions` instead (just change the name in your code, it works the same). See [the Reactor documentation](https://www.toggledbits.com/static/reactor/docs/Run-Lua-Action/) for more information.
 
-## Version 3.9 development (20355)
+## Version 3.9 development (20356)
 
 * DEPRECATION: The `Reactor.groups` table is now deprecated; use `Reactor.conditions` instead (just change the name in your code, it works the same). See [the Reactor documentation](https://www.toggledbits.com/static/reactor/docs/Run-Lua-Action/) for more information.
 * Enhancement: In the `Reactor.conditions` table, if the condition is actually a group, the subkey `conditions` will be an array containing the group's conditions. See [the Reactor documentation](https://www.toggledbits.com/static/reactor/docs/Run-Lua-Action/) for more information.
