@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.9develop-20356.2100"
+local _PLUGIN_VERSION = "3.9develop-20358.1645"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.9/"
 
@@ -614,15 +614,31 @@ end
 -- Add, if not already set, a watch on a device and service.
 local function addServiceWatch( dev, svc, var, target )
 	-- Don't watch our own variables--we update them in sequence anyway
+	dev = tonumber( dev ) or 0
+	if dev < 1 then return end
 	if dev == target and svc == VARSID then return end
 	target = tostring(target)
-	local watchkey = string.format("%d/%s/%s", dev or 0, svc or "X", var or "X")
-	if watchData[watchkey] == nil then
-		D("addServiceWatch() adding system watch for %1", watchkey)
-		luup.variable_watch( "reactorWatch", svc or "X", var or "X", dev or 0 )
-		watchData[watchkey] = watchData[watchkey] or {}
+	local watchkey = string.format("%d/%s/%s", dev, svc or "X", var or "X")
+	if not watchData[watchkey] then
+		-- Add system watch. openLuup variable watches have bugs in compatibility with Vera Luup
+		-- that can cause watches to not be placed (with no notice to us), so use device watches
+		-- only on openLuup.
+		if isOpenLuup then
+			local syskey = tostring(dev) .. "/*/*"
+			D("addServiceWatch() adding system device watch for %1", syskey)
+			if not watchData[syskey] then
+				luup.variable_watch( "reactorWatch", nil, nil, dev )
+				watchData[syskey] = {}
+			end
+		else
+			if not watchData[watchkey] then
+				D("addServiceWatch() adding ssytem variable watch for %1", syskey)
+				luup.variable_watch( "reactorWatch", svc or "X", var or "X", dev )
+			end
+		end
+		watchData[watchkey] = {}
 	end
-	if watchData[watchkey][target] == nil then
+	if not watchData[watchkey][target] then
 		D("addServiceWatch() subscribing %1 to %2", target, watchkey)
 		watchData[watchkey][target] = true
 	-- else D("addServiceWatch() %1 is already subscribed to %2", target, watchkey)
@@ -6315,7 +6331,8 @@ function watch( dev, sid, var, oldVal, newVal )
 					end
 				end
 			end
-		else
+		elseif not isOpenLuup then
+			-- We don't issue this warning for openLuup because we use device watches (for now).
 			D("watch() callback for unregistered/unwatched dev/service/state %1", key)
 		end
 	end
