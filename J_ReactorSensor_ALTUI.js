@@ -3,14 +3,15 @@
  * J_ReactorSensor_ALTUI.js
  * Special presentation for ALTUI for ReactorSensor
  *
- * Copyright 2018,2019 Patrick H. Rigney, All Rights Reserved.
- * This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
+ * Copyright 2018,2019,2020 Patrick H. Rigney, All Rights Reserved.
+ * This file is part of Reactor. Use subject to license; please see
+ * license details at https://www.toggledbits.com/static/reactor/docs/Installation#license-and-use-restrictions
  */
 /* globals window,MultiBox,ALTUI_PluginDisplays,_T */
 
 var ReactorSensor_ALTUI = ( function( window, undefined ) {
 
-	var pluginVersion = "3.9develop-20356.2100";
+	var pluginVersion = "3.9develop-20358.1645";
 
 	var _UIVERSION = 20356;
 

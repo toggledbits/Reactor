@@ -4,7 +4,8 @@
  * Configuration interface for ReactorSensor
  *
  * Copyright 2018,2019,2020 Patrick H. Rigney, All Rights Reserved.
- * This file is part of Reactor. For license information, see LICENSE at https://github.com/toggledbits/Reactor
+ * This file is part of Reactor. Use subject to license; please see
+ * license details at https://www.toggledbits.com/static/reactor/docs/Installation#license-and-use-restrictions
  *
  */
 /* globals api,jQuery,ace,MultiBox,ALTUI_revision,Promise,escape,unescape */
@@ -17,7 +18,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.9develop-20356.2100';
+	var pluginVersion = '3.9develop-20358.1645';
 
 	var DEVINFO_MINSERIAL = 482;
 

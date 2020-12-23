@@ -2,7 +2,7 @@
 
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04.14b or higher.
 
-NOTE TO ALTUI USERS: All current versions of Reactor REQUIRE AltUI v2.46.2536 to v2.49.2545; versions before or after are not supported. If you are having UI issues and running on a version other than those within the foregoing range, please install a supported version of ALTUI. Since testing of the UI has to happen on a large number of platforms and browsers, it takes time and there necessarily will be a delay in certifying the Reactor UI for new releases of ALTUI.
+NOTE TO ALTUI USERS: All current versions of Reactor REQUIRE AltUI 2536 to 2552; versions outside this range *are not supported*. If you are having UI issues and running on a version other than those within the foregoing range, please install a supported version of ALTUI. Since testing of the UI has to happen on a large number of platforms and browsers, it takes time and there necessarily will be a delay in certifying the Reactor UI for new releases of ALTUI.
 
 **END OF LIFE NOTICE:** Vera Lite and Vera3 systems are hardware/firmware EOL as of this writing. Reactor 3.9 will be the last version of Reactor tested and certified for these systems. Later versions of Reactor may still run on them, but I will not be testing for them and I will no longer fix platform-specific bugs for them.
 
