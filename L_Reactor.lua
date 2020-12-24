@@ -6885,8 +6885,8 @@ SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 			r = r .. string.rep( "*", 132 ) .. EOL
 			r = r .. string.format("%s (#%d)%s", tostring(d.description), n, status) .. EOL
 			local xok, cdata = pcall( getSensorConfig, n )
-			if not xok or type cdata ~= "table" then
-				r = r .. "    **** UNPARSEABLE CONFIGURATION ****" .. EOL .. String(cdata) .. EOL
+			if not xok or type(cdata) ~= "table" then
+				r = r .. "    **** UNPARSEABLE CONFIGURATION ****" .. EOL .. tostring(cdata) .. EOL
 			else
 				r = r .. string.format("    Version %s.%s %s", cdata.version or 0, cdata.serial or 0, os.date("%Y-%m-%d %X", cdata.timestamp or 0)) .. EOL
 				r = r .. string.format("    Message/status: %s", getVar( "Message", "", n ) ) .. EOL
