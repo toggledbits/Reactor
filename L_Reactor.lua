@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.8hotfix-20326"
+local _PLUGIN_VERSION = "3.8hotfix-20359"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.6/"
 
@@ -6499,9 +6499,9 @@ SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 			status = status .. ( ( getVarNumeric("Trouble", 0, n, RSSID ) ~= 0 ) and " TROUBLE" or "" )
 			r = r .. string.rep( "*", 132 ) .. EOL
 			r = r .. string.format("%s (#%d)%s", tostring(d.description), n, status) .. EOL
-			local cdata = getSensorConfig( n )
-			if not cdata then
-				r = r .. "    **** UNPARSEABLE CONFIGURATION ****" .. EOL
+			local xok, cdata = pcall( getSensorConfig, n )
+			if not xok or type(cdata) ~= "table" then
+				r = r .. "    **** UNPARSEABLE CONFIGURATION ****" .. EOL .. tostring(cdata) .. EOL
 			else
 				r = r .. string.format("    Version %s.%s %s", cdata.version or 0, cdata.serial or 0, os.date("%x %X", cdata.timestamp or 0)) .. EOL
 				r = r .. string.format("    Message/status: %s", getVar( "Message", "", n ) ) .. EOL
