@@ -1,6 +1,6 @@
 # Change Log #
 
-NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04.14b or higher.
+NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04.14b or higher. Version 2021.01.03 is recommended in particular for users of the Vera and eZLO Bridges.
 
 NOTE TO ALTUI USERS: All current versions of Reactor REQUIRE AltUI 2536 to 2552; versions outside this range *are not supported*. If you are having UI issues and running on a version other than those within the foregoing range, please install a supported version of ALTUI. Since testing of the UI has to happen on a large number of platforms and browsers, it takes time and there necessarily will be a delay in certifying the Reactor UI for new releases of ALTUI.
 

@@ -18,7 +18,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = "3.9develop-20359.1135";
+	var pluginVersion = "3.9develop-21007.1250";
 
 	var DEVINFO_MINSERIAL = 482;
 
@@ -3116,13 +3116,14 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 			/* Output Control */
 			var out = $( '<div></div>', { "id": "outputopt", "class": "tboptgroup" } ).appendTo( $container );
 			$( '<div class="opttitle">Output Control</div>' ).append( getWiki( 'Condition-Options' ) ).appendTo( out );
-			var fs = $( '<div class="opt-fs form-inline"></div>').appendTo( out );
+			var fs = $( '<div class="opt-fs form-inline"></div>' ).appendTo( out );
 			var rid = "output" + getUID();
 			getRadio( rid, 1, "", "Follow (default) - output remains true while condition matches", "opt-output" )
 				.appendTo( fs );
 			if ( false !== displayed.hold ) {
 				fs.append( '; ' );
-				$( '<div><label>delay reset <input type="number" class="form-control form-control-sm narrow followopts re-holdtime"> seconds (0=no delay)</label></div>' ).appendTo( fs );
+				$( '<div><label>delay reset <input type="number" class="form-control form-control-sm narrow followopts re-holdtime"> seconds (0=no delay)</label></div>' )
+                    .appendTo( fs );
 			}
 			/* Pulse group is not displayed for update and change operators; always display if configured, though,
 			   do any legacy configs prior to this restriction being added are still editable. */
@@ -3145,7 +3146,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 			/* Restore/configure */
 			if ( ( condOpts.pulsetime || 0 ) > 0 ) {
 				$( '.pulseopts', out ).prop( 'disabled', false );
-				$( 'input#' + idSelector(rid+'2'), out ).prop( 'checked', true );
+				$( 'input#' + idSelector(rid + '2'), out ).prop( 'checked', true );
 				$( 'input.re-pulsetime', out ).val( condOpts.pulsetime || 15 );
 				$( 'input.re-pulsebreak', out ).val( condOpts.pulsebreak || "" );
 				$( 'input.re-pulsecount', out ).val( condOpts.pulsecount || "" );
@@ -3155,12 +3156,12 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 				$( '.followopts,.latchopts', out ).prop( 'disabled', true );
 			} else if ( 0 !== ( condOpts.latch || 0 ) ) {
 				$( '.latchopts', out ).prop( 'disabled', false );
-				$( 'input#' + idSelector(rid+'3'), out ).prop( 'checked', true );
+				$( 'input#' + idSelector(rid + '3'), out ).prop( 'checked', true );
 				$( '.followopts,.pulseopts', out ).prop( 'disabled', true );
 				$( 'div.re-pulsebreakopts', out ).toggle( false );
 			} else {
 				$( '.followopts', out ).prop( 'disabled', false );
-				$( 'input#' + idSelector(rid+'1'), out ).prop( 'checked', true );
+				$( 'input#' + idSelector(rid + '1'), out ).prop( 'checked', true );
 				$( '.latchopts,.pulseopts', out ).prop( 'disabled', true );
 				$( 'div.re-pulsebreakopts', out ).toggle( false );
 				$( 'input.re-holdtime', out ).val( 0 !== (condOpts.holdtime || 0) ? condOpts.holdtime : "" );
