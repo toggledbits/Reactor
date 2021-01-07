@@ -2,7 +2,7 @@
 	L_Reactor.lua - Core module for Reactor
 	Copyright 2018,2019,2020 Patrick H. Rigney, All Rights Reserved.
 	This file is part of Reactor. 
-	
+
 	RESTRICTED USE LICENSE
 	Reactor is not open source or public domain, and its author reserves all
 	rights, including copyright. That said, you are granted a royalty-free 
@@ -42,7 +42,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.9develop-20359.1135"
+local _PLUGIN_VERSION = "3.9develop-21007.1250"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.9/"
 
@@ -651,22 +651,8 @@ local function addServiceWatch( dev, svc, var, target )
 	target = tostring(target)
 	local watchkey = string.format("%d/%s/%s", dev, svc or "X", var or "X")
 	if not watchData[watchkey] then
-		-- Add system watch. openLuup variable watches have bugs in compatibility with Vera Luup
-		-- that can cause watches to not be placed (with no notice to us), so use device watches
-		-- only on openLuup.
-		if isOpenLuup then
-			local syskey = tostring(dev) .. "/*/*"
-			D("addServiceWatch() adding system device watch for %1", syskey)
-			if not watchData[syskey] then
-				luup.variable_watch( "reactorWatch", nil, nil, dev )
-				watchData[syskey] = {}
-			end
-		else
-			if not watchData[watchkey] then
-				D("addServiceWatch() adding ssytem variable watch for %1", syskey)
-				luup.variable_watch( "reactorWatch", svc or "X", var or "X", dev )
-			end
-		end
+		D("addServiceWatch() adding system variable watch for %1", syskey)
+		luup.variable_watch( "reactorWatch", svc or "X", var or "X", dev )
 		watchData[watchkey] = {}
 	end
 	if not watchData[watchkey][target] then
