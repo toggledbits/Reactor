@@ -18,7 +18,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = "3.9develop-21007.1250";
+	var pluginVersion = "3.9develop-21009.1600";
 
 	var DEVINFO_MINSERIAL = 482;
 
@@ -2045,6 +2045,8 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 	 */
 	var CondBuilder = (function( api, $ ) {
 
+		var redrawGroup; /* fwd decl */
+
 		/**
 		 * Renumber group conditions.
 		 */
@@ -3123,7 +3125,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 			if ( false !== displayed.hold ) {
 				fs.append( '; ' );
 				$( '<div><label>delay reset <input type="number" class="form-control form-control-sm narrow followopts re-holdtime"> seconds (0=no delay)</label></div>' )
-                    .appendTo( fs );
+					.appendTo( fs );
 			}
 			/* Pulse group is not displayed for update and change operators; always display if configured, though,
 			   do any legacy configs prior to this restriction being added are still editable. */
@@ -3993,6 +3995,83 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 			$( 'select.re-condtype', condel ).focus();
 		}
 
+		function shallowcopy( o ) {
+			var res = {};
+			for ( var k in o ) {
+				if ( o.hasOwnProperty( k ) ) {
+					res[k] = o[k];
+				}
+			}
+			return res;
+		}
+
+		/**
+		 *  Import group into current group
+		 */
+		function handleImportGroupClick( event ) {
+			var grpid = $( event.currentTarget ).data( 'id' );
+
+			var $insgrpel = $( event.currentTarget ).closest( '.cond-group' );
+			var insgrpid = $insgrpel.attr( 'id' );
+			var ixCond = getConditionIndex();
+			var insgrp = ixCond[ insgrpid ];
+
+			/** First, (deep) copy structure to temporary (to prevent infinite
+			 *  recursion if some wise guy like me copies a parent into a child).
+			 *  Assign new IDs to each condition. Note we make no attempt to "fix"
+			 *  options when copying, like sequence restrictions.
+			 */
+			var cp = function( s, d ) {
+				(s.conditions || []).forEach( function( node ) {
+					var c = shallowcopy( node );
+					c.id = getUID( isGroup( c ) ? 'grp' : 'cond' );
+					ixCond[ c.id ] = c;
+					d.conditions.push( c );
+					if ( isGroup( node ) ) {
+						c.conditions = [];
+						c.name = c.name + ' Copy';
+						cp( node, c );
+					}
+				});
+			};
+			var t = { conditions: [] };
+			cp( ixCond[ grpid ], t );
+
+			/* Append the copied conditions */
+			insgrp.conditions = (insgrp.conditions || []).concat( t.conditions );
+
+
+			/* Now redraw the recipient group */
+			var $parent = $insgrpel.parent();
+			$insgrpel.remove();
+			redrawGroup( false, insgrp, $parent, insgrp.__depth );
+
+			reindexConditions( insgrp );
+
+			refreshGroupMenus();
+
+			configModified = true;
+			updateSaveControls();
+		}
+
+		/**
+		 * Refresh group list for import
+		 */
+		function refreshGroupMenus() {
+			var cdata = getConfiguration();
+			var ix = getConditionIndex(); /* Ensure depths are computed */
+			var $ul = $( '<ul></ul>' );
+			DOtraverse( cdata.conditions.root, function( node ) {
+				$( '<li></li>')
+					.addClass( 'dropdown-item' )
+					.data( 'id', node.id ).attr( 'data-group', node.id )
+					.html( ("&nbsp;").repeat( 2*(node.__depth||0) ) + ( node.name || node.id ) )
+					.appendTo( $ul );
+			}, false, isGroup );
+			$( 'ul.dropdown-menu.re-condgroup-menu' ).empty().append( $ul.children() );
+			$( 'ul.dropdown-menu.re-condgroup-menu li' ).on( 'click.reactor', handleImportGroupClick );
+		}
+
 		function handleTitleChange( ev ) {
 			var input = $( ev.currentTarget );
 			var grpid = input.closest( 'div.cond-container.cond-group' ).attr( 'id' );
@@ -4014,6 +4093,8 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 				input.closest( 'div.cond-group' ).addClass( 'tbmodified' );
 				grp.name = newname;
 				configModified = true;
+
+				refreshGroupMenus();
 			}
 
 			/* Remove input field and replace text */
@@ -4187,6 +4268,9 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 
 			$grpEl.remove();
 			deleteCondition( grpId, ixCond, getConfiguration(), grp.__parent, true );
+
+			refreshGroupMenus();
+
 			configModified = true;
 			$el.closest( 'div.cond-container.cond-group' ).addClass( 'tbmodified' ); // ??? NO! Parent group!
 			updateSaveControls();
@@ -4219,6 +4303,8 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 			$container.append( $condgroup );
 			$condgroup.addClass( 'level' + newgrp.__depth ).addClass( 'levelmod' + (newgrp.__depth % 4) );
 			$condgroup.addClass( 'tbmodified' );
+
+			refreshGroupMenus();
 
 			configModified = true;
 			updateSaveControls();
@@ -4440,6 +4526,10 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 	<div class="cond-group-actions"> \
 	  <button class="btn md-btn re-addcond" title="Add condition to this group"><i class="material-icons">playlist_add</i></button> \
 	  <button class="btn md-btn re-addgroup" title="Add subgroup to this group"><i class="material-icons">library_add</i></button> \
+	  <div class="btn-group noroot"> \
+	    <button class="btn md-btn re-importgroup dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" title="Copy/import another group to this group"><i class="material-icons">save_alt</i></button> \
+	    <ul class="dropdown-menu re-dropdown re-condgroup-menu"></ul> \
+	  </div> \
 	</div> \
   </div> \
 </div>' );
@@ -4487,9 +4577,9 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 			return el;
 		}
 
-		function redrawGroup( myid, grp, container, depth ) {
+		redrawGroup = function( myid, grp, container, depth ) {
 			container = container || $( 'div#conditions' );
-			depth = depth || 0;
+			depth = depth || grp.__depth || 0;
 
 			var el = getGroupTemplate( grp.id );
 			container.append( el );
@@ -4531,7 +4621,7 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 					redrawGroup( myid, cond, container, depth + 1 );
 				}
 			}
-		}
+		};
 
 		/**
 		 * Redraw the conditions from the current cdata
@@ -4542,6 +4632,8 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 
 			var cdata = getConfiguration( myid );
 			redrawGroup( myid, cdata.conditions.root );
+
+			refreshGroupMenus();
 
 			$( 'div.cond-cond', container ).has( '.tberror' ).addClass( 'tberror' );
 
