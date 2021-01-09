@@ -1,36 +1,36 @@
 --[[
 	L_Reactor.lua - Core module for Reactor
 	Copyright 2018,2019,2020 Patrick H. Rigney, All Rights Reserved.
-	This file is part of Reactor. 
+	This file is part of Reactor.
 
 	RESTRICTED USE LICENSE
 	Reactor is not open source or public domain, and its author reserves all
-	rights, including copyright. That said, you are granted a royalty-free 
-	license to use Reactor on any Vera or openLuup system you own for the 
-	purpose of creating automations. Except with express prior permission of 
-	its author, you may	not distribute it in whole or in part. You may not 
+	rights, including copyright. That said, you are granted a royalty-free
+	license to use Reactor on any Vera or openLuup system you own for the
+	purpose of creating automations. Except with express prior permission of
+	its author, you may	not distribute it in whole or in part. You may not
 	reverse engineer it, or produce derivative works from its source code and
-	original files and data, but any automations and configuration data you 
+	original files and data, but any automations and configuration data you
 	create for use with Reactor are, of course, yours to do with as you please
-	(these are not considered derivative works here). The public storage and 
-	display of Reactor's source code on Github or any other medium is a 
+	(these are not considered derivative works here). The public storage and
+	display of Reactor's source code on Github or any other medium is a
 	requirement for its distribution and use in the environments in which it is
-	designed to operate, and Reactor shall not be construed as having been 
-	"published" into the public domain or "Open Source" or for any other 
-	purpose or use that is inconsistent with this license. Reactor is offered 
-	"AS-IS" and "AS-AVAILABLE" together with any and all defects; all 
-	warranties, including but not limited to all express or implied warranties 
-	of fitness, are hereby disclaimed, and you agree to indemnify and hold 
-	harmless the author from any cause arising, of whatever nature, that may 
-	result for your use or inability to use Reactor. Your sole remedy for any 
+	designed to operate, and Reactor shall not be construed as having been
+	"published" into the public domain or "Open Source" or for any other
+	purpose or use that is inconsistent with this license. Reactor is offered
+	"AS-IS" and "AS-AVAILABLE" together with any and all defects; all
+	warranties, including but not limited to all express or implied warranties
+	of fitness, are hereby disclaimed, and you agree to indemnify and hold
+	harmless the author from any cause arising, of whatever nature, that may
+	result for your use or inability to use Reactor. Your sole remedy for any
 	defect or non-conformity is to stop using Reactor. Your use of Reactor (as
 	evidenced by its presence, in whole or part, on any storage or media of any
-	type in your posession) constitutes your express agreement to all terms of 
-	this license without reservation, limitation, or exclusion. If you do not 
-	agree to all of the foregoing, or if the laws of your jurisdiction exclude 
-	or limit any of the foregoing terms or conditions, you may not use Reactor 
-	and all rights granted you hereunder are withdrawn, null, and void. Your 
-	violation of any of the terms hereof contemporaneously and summarily 
+	type in your posession) constitutes your express agreement to all terms of
+	this license without reservation, limitation, or exclusion. If you do not
+	agree to all of the foregoing, or if the laws of your jurisdiction exclude
+	or limit any of the foregoing terms or conditions, you may not use Reactor
+	and all rights granted you hereunder are withdrawn, null, and void. Your
+	violation of any of the terms hereof contemporaneously and summarily
 	terminates your license and any and all rights granted you hereunder.
 
 --]]
@@ -42,7 +42,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.9develop-21007.1250"
+local _PLUGIN_VERSION = "3.9develop-21009.1600"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.9/"
 
