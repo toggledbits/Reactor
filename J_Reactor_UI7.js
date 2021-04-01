@@ -18,9 +18,9 @@ var Reactor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '72acc6ea-f24d-11e8-bd87-74d4351650de';
 
-	var pluginVersion = "3.9develop-21009.1600";
+	var pluginVersion = "3.9develop-21091.1000";
 
-	var _UIVERSION = 20356;     /* must coincide with Lua core */
+	var _UIVERSION = 21091;     /* must coincide with Lua core */
 
 	var _DOCURL = "https://www.toggledbits.com/static/reactor/docs/3.9/";
 
@@ -142,7 +142,8 @@ var Reactor = (function(api, $) {
 		}
 
 		/* Go */
-		isALTUI = "undefined" !== typeof(MultiBox);
+		isALTUI = "undefined" !== typeof(MultiBox) && null !== document.location.href.match( /id=lr_ALTUI/i );
+		console.log("isALTUI=",isALTUI);
 		// isOpenLuup = ;
 
 		/* Try to establish date format */

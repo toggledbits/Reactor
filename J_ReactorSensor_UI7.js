@@ -18,11 +18,11 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = "3.9develop-21009.1600";
+	var pluginVersion = "3.9develop-21091.1000";
 
 	var DEVINFO_MINSERIAL = 482;
 
-	var _UIVERSION = 20356;     /* must coincide with Lua core */
+	var _UIVERSION = 21091;     /* must coincide with Lua core */
 
 	var _CDATAVERSION = 20045;  /* must coincide with Lua core */
 
@@ -735,7 +735,8 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 			clearModule();
 
 			isOpenLuup = false;
-			isALTUI = "undefined" !== typeof(MultiBox);
+			isALTUI = "undefined" !== typeof(MultiBox) && null !== document.location.href.match( /id=lr_ALTUI/i );
+			console.log("isALTUI=",isALTUI);
 			unsafeLua = true;
 			devVeraAlerts = false;
 			devVeraTelegram = false;
@@ -762,7 +763,8 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 					devVeraAlerts = devobj.id;
 				} else if ( devobj.device_type === "urn:bochicchio-com:device:VeraTelegram:1" && devobj.id_parent == 0 ) {
 					devVeraTelegram = devobj.id;
-				} else if ( devobj.device_type === "urn:schemas-upnp-org:device:altui:1" && devobj.id_parent == 0 ) {
+				} else if ( devobj.device_type === "urn:schemas-upnp-org:device:altui:1" && devobj.id_parent == 0 &&
+					null !== document.location.href.match( /id=lr_ALTUI/i ) ) {
 					isALTUI = devobj.id;
 				}
 			});
@@ -837,7 +839,7 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 				}
 			}
 			if ( !validALTUI ) {
-				alert("The running version of ALTUI has not been confirmed to be compatible with this version of the Reactor UI and is therefore not supported. Incompatibilities may cause loss of functionality or errors that result in data/configuration loss, and it is recommended that you up/downgrade to a compatible version of ALTUI before continuing.\n\nSupported versions are: " + av_range + ".\nYou are running " + String(av));
+				alert("The running version of ALTUI has not been confirmed to be compatible with this version of the Reactor UI and is therefore not supported. Incompatibilities may cause loss of functionality or errors that result in data/configuration loss, and it is recommended that you up/downgrade to a compatible version of ALTUI before continuing.\n\nSupported versions are: " + av_range + ".\nYou are running " + String( ALTUI_revision ));
 				return false;
 			}
 			try {
