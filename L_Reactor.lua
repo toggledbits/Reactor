@@ -582,10 +582,11 @@ end
 local function setHMTModeSetting( hmtdev )
 	local chm = luup.attr_get( 'Mode', 0 ) or "1"
 	local armed = getVarBool( "Armed", false, hmtdev, SENSOR_SID )
-	if (not isOpenLuup) and luup.version_minor <= 1040 then
+	if ( not isOpenLuup ) and ( luup.version_minor <= 1040 or luup.version_minor >= 5372 ) then
 		-- Ancient Luup does not disarm correctly per ModeSettings, so on each cycle, reset armed state and
 		-- set/force ModeSettings accordingly.
-		luup.call_action( "urn:micasaverde-com:serviceId:SecuritySensor1", "SetArmed", { newArmedValue="0" }, hmtdev )
+		-- PHR 2021-04-21: And they broke it again in 7.32 Beta (5372/3/4). Bozos.
+		luup.call_action( SENSOR_SID, "SetArmed", { newArmedValue="0" }, hmtdev )
 		armed = false
 	end
 	local s = {}
