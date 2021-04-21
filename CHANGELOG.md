@@ -35,6 +35,7 @@ NOTE TO ALTUI USERS: All current versions of Reactor REQUIRE AltUI 2536 to 2552;
 * Internal: update directly from Github (via request, some distrubitions).
 * Internal: change default WatchResponseHoldOff to 0; watch responses now run in zero-task timing.
 * Internal: action execution now has time limit, pauses (zero-ms yield) when exceeded.
+* Hotfix 21111-01: Vera firmware beta 7.32 5372/3/4 breaks house mode arming/disarming, workaround for HMT.
 * Hotfix 20359-01: Fix a runtime error when a new, never-run, disabled RS is encountered in the master logic summary.
 * Hotfix 20320-01: Looks like UTF-8 handling has changed, so try to catch up.
 * Hotfix 20300-01: Fix an error in the event log pathname when rotating the event log (diagnostic only).
