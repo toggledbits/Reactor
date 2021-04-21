@@ -8985,7 +8985,8 @@ div.re-border-box { border: 1px solid #000; border-radius: 8px; padding: 8px; 8p
 					// get the right message.
 					$( 'span#di-ver-info', container ).html( "Your database is up to date!" );
 				} else {
-					msg.text( "The update could not be retrieved. If this problem persists, consult the documentation." );
+					msg.text( "The update could not be retrieved. If this problem persists, consult the documentation. " +
+                        tostring( msg.message ) );
 				}
 			}).fail( function( /* jqXHR, textStatus, errorThrown */ ) {
 				msg.text( "The update failed; Vera busy/restarting. Try again in a moment." );
