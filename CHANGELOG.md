@@ -4,8 +4,9 @@ NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04
 
 **DEPRECATION NOTICE:** The expression functions `arraypush()`, `arraypop()`, `arrayunshift()` and `arrayshift()` have been made first-class functions in the LuaXP module under the names `push()`, `pop()`, `unshift()` and `shift()` respectively. The `array...()` versions are now deprecated, and will be removed from a future release. Please convert to the new functions, which for all practical purposes are identical (so you just need to change the names in your expressions and it's done).
 
-## Version 3.8 Hotfixes (20359)
+## Version 3.8 Hotfixes (21111)
 
+* Hotfix 21111-01: Workaround for broken house mode arming/disarming (for HMT) in 7.32 Beta (5372/3/4).
 * Hotfix 20359-01: Fix runtime error when master device Logic Summary encounters a new, disabled, never-run RS.
 * Hotfix 20326-01: Fix null handling for LuaXP (regression from underlying LuaXP change).
 * Hotfix 20320-01: Fix UTF-8 unraveling in RunLua (may be underlying change in firmware data handling).

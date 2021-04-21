@@ -17,7 +17,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = '3.8hotfix-20320';
+	var pluginVersion = '3.8hotfix-21111';
 
 	var DEVINFO_MINSERIAL = 482;
 
@@ -8516,7 +8516,7 @@ textarea#devspyoutput { width: 100%; font-family: monospace; } \
 					$( 'span#di-ver-info', container ).html( "Your database is up to date!" );
 				} else {
 					msg.text( "The update could not be retrieved. If this problem persists, consult the documentation. " +
-                        tostring( msg.message ) );
+                        String( msg.message ) );
 				}
 			}).fail( function( /* jqXHR, textStatus, errorThrown */ ) {
 				msg.text( "The update failed; Vera busy/restarting. Try again in a moment." );
