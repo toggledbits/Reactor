@@ -385,6 +385,9 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 	}
 
 	function checkUpdate() {
+        if ( isOpenLuup ) {
+            return Promise.resolve( false );
+        }
 		return new Promise( function( resolve, reject ) {
 			$.ajax({
 				url: api.getDataRequestURL(),

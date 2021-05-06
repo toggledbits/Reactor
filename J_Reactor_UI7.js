@@ -32,7 +32,7 @@ var Reactor = (function(api, $) {
 
 	var dateFormat = "%F"; /* ISO8601 default */
 	var timeFormat = "%T";
-	// unused: var isOpenLuup = false;
+	var isOpenLuup = false;
 	var isALTUI = false;
 	var backupInfo = false;
 
@@ -143,8 +143,16 @@ var Reactor = (function(api, $) {
 
 		/* Go */
 		isALTUI = "undefined" !== typeof(MultiBox) && null !== document.location.href.match( /id=lr_ALTUI/i );
-		console.log("isALTUI=",isALTUI);
-		// isOpenLuup = ;
+		isOpenLuup = false;
+		var dl = api.getListOfDevices();
+		var n = dl.length;
+		for ( var k=0; k<n; ++k ) {
+			if ( "openLuup" === dl[ k ].device_type && "0" === String( dl[ k ].id_parent ) ) {
+				isOpenLuup = k;
+				break;
+			}
+		}
+		console.log("isALTUI=", isALTUI,", isOpenLuup=", isOpenLuup);
 
 		/* Try to establish date format */
 		var ud = api.getUserData();
@@ -438,15 +446,43 @@ var Reactor = (function(api, $) {
 			html += '<div class="row"><div class="col-xs-12 col-sm-12"><h3>Backup and Restore</h3></div></div>';
 			html += '<div class="row"><div class="col-xs-12 col-sm-12">You may back up your Reactor configuration here, or restore a previously backed-up configuration.</div></div>';
 
-			html += '<div class="row"><div class="col-xs-12 col-sm-12"><h4>Most Recent Backup</h4>' +
-				'<div id="mostrecent"/>' +
-				'</div></div>';
-			html += '<div class="row"><div class="col-xs-12 col-sm-12"><h4>Back Up Current Configuration</h4>Press this button to back up your current Reactor configuration: <button id="dobackup" class="btn btn-sm btn-success">Back Up Now</button></div></div>';
-			html += '<div class="row"><div class="col-xs-12 col-sm-12"><h4>Restore from Backup</h4><p>Tip: Read the <a href="' +
-				_DOCURL + 'Backup-&-Restore" target="_blank">online documentation</a>.</p><p>To restore from the current backup (info above), select the item to restore (or ALL to restore everything), and then press the "Begin Restore" button. <b>WARNING:</b> Restoring will overwrite the configuration of any current ReactorSensor having the same name(s). If you want to restore from another backup file (e.g. one you downloaded previously from this or another system), please read the linked documentation above before proceeding.</p><div class="form-inline"><label>Restore: <select id="restoreitem" class="form-control form-control-sm" disabled><option value="">ALL</option></select></label> <label>to device: <select id="restoretarget" class="form-control form-control-sm" disabled><option value="">with matching name</option></select> <button id="dorestore" class="btn btn-sm btn-warning">Begin Restore</button></div><div id="renameblock"><label><input id="renamers" type="checkbox" class="form-checkbox form-checkbox-sm"> Rename target ReactorSensor to match restored configuration</label></div><div id="restorestatus"/></div></div>';
+			html += '<div class="row">\
+  <div class="col-xs-12 col-sm-12">\
+	<h4>Most Recent Backup</h4>\
+	<div id="mostrecent"></div>\
+  </div>\
+</div>';
+			html += '<div class="row">\
+  <div class="col-xs-12 col-sm-12">\
+	<h4>Back Up Current Configuration</h4>\
+	Press this button to back up your current Reactor configuration: <button id="dobackup" class="btn btn-sm btn-success">Back Up Now</button> \
+  </div>\
+</div>';
+			html += '<div class="row">\
+  <div class="col-xs-12 col-sm-12">\
+	<h4>Restore from Backup</h4>\
+	<p>Tip: Read the <a href="' +
+				_DOCURL + 'Backup-&-Restore" target="_blank">online documentation</a>.</p>\
+	<p>To restore from the current backup (info above), select the item to restore (or ALL to restore everything), and then press the \
+	"Begin Restore" button. <b>WARNING:</b> Restoring will overwrite the configuration of any current ReactorSensor having the same \
+	name(s). If you want to restore from another backup file (e.g. one you downloaded previously from this or another system), please \
+	read the linked documentation above before proceeding.</p>\
+	<div class="form-inline">\
+	  <label>Restore: <select id="restoreitem" class="form-control form-control-sm" disabled><option value="">ALL</option></select></label>\
+	  <label>to device: <select id="restoretarget" class="form-control form-control-sm" disabled><option value="">with matching name</option></select> \
+	  <button id="dorestore" class="btn btn-sm btn-warning">Begin Restore</button>\
+	</div>\
+	<div id="renameblock">\
+	  <label>\
+		<input id="renamers" type="checkbox" class="form-checkbox form-checkbox-sm"> \
+		Rename target ReactorSensor to match restored configuration\
+	  </label>\
+	</div>\
+	<div id="restorestatus"></div>\
+  </div>\
+</div>';
 
-			html += '\
-<div class="row"> \
+			html += '<div class="row mt-3"> \
   <div class="col-xs-12 col-sm-12"> \
 	<h3>Bulk Create New ReactorSensors</h3> \
 	<div>To create multiple ReactorSensors at once, select the number of sensors and click "Create ReactorSensors". This operation causes a Luup reload, and you will need to hard-refresh your browser. \
@@ -516,74 +552,77 @@ The Reactor Plugin for Vera is a community-supported project. If you find Reacto
 making a donation via PayPal or crypto <a href="https://www.toggledbits.com/donate" target="_blank">here</a>. \
 ' )
 				.appendTo( $body );
-			$( '<hr></hr>' ).appendTo( $body );
-			var $list = $( '<ul id="re-releases"><li>Loading release information...</li></ul>' )
-				.appendTo( $body );
-			$.ajax({
-				url: api.getDataRequestURL(),
-				data: {
-					id: "lr_Reactor",
-					action: "updateplugin",
-					r: Math.random()
-				},
-				dataType: "json",
-				cache: false,
-				timeout: 15000
-			}).done( function( data ) {
-				$list.empty();
-				if ( data.status ) {
-					data.data.forEach( function( rel ) {
-						var pubtime = Date.parse( rel.published_at );
-						if ( pubtime < 1600616760000 ) { // v3.8 2020-09-20T15:46:00Z
-							return;
-						}
-						var $el = $( '<li></li>' ).attr( 'id', 're-rel-' + rel.id ).appendTo( $list );
-						$( '<button class="btn btn-sm btn-success re-rel-install">Install</button>' ).appendTo( $el );
-						$( '<span class="re-rel-name">name</span>' ).text( rel.name ).appendTo( $el );
-						$( '<span class="re-rel-status"></span>').appendTo( $el );
-						$( '<pre></pre>' ).text( rel.body ).appendTo( $el );
-					});
-					$( 'button.re-rel-install', $list ).on( 'click.reactor', function( event ) {
-						var $el = $( event.currentTarget ).closest( 'li' );
-						var rel = $el.attr( 'id' ).replace( /^re-rel-/, "" );
-						$( 'button', $el ).prop( 'disabled', true );
-						$( 'li', $list ).not( 'li#' + $el.attr( 'id' ) ).remove();
-						$( '.re-rel-status', $el ).text( 'Installing... please wait...' );
-						$.ajax({
-							url: api.getDataRequestURL(),
-							data: {
-								id: "lr_Reactor",
-								action: "updateplugin",
-								release: rel,
-								r: Math.random()
-							},
-							dataType: 'json',
-							cache: false,
-							timeout: 32000
-						}).done( function( res ) {
-							if ( res.status ) {
-								$( '.re-rel-status', $el ).text( "" );
-								$( 'pre', $el ).remove();
-								$( '<div class="re-rel-note"><h4>Install Finalizing!</h4><p>The installation is finalizing \
-in the background with a Luup reload. You must now \
-<a href="https://www.howtogeek.com/672607/how-to-hard-refresh-your-web-browser-to-bypass-your-cache/" target="_blank">hard-refresh \
-your browser</a> to make sure that the correct UI implementation files load to match the installed Reactor core. Please do it now.</p>\
-</div>' )
-									.appendTo( $el );
-							} else {
-								$( 'span.re-rel-status', $el ).css( 'color', 'red' ).text( 'Update failed; ' + res.message );
+
+			if ( false === isOpenLuup ) {
+				$( '<hr></hr>' ).appendTo( $body );
+				var $list = $( '<ul id="re-releases"><li>Loading release information...</li></ul>' )
+					.appendTo( $body );
+				$.ajax({
+					url: api.getDataRequestURL(),
+					data: {
+						id: "lr_Reactor",
+						action: "updateplugin",
+						r: Math.random()
+					},
+					dataType: "json",
+					cache: false,
+					timeout: 15000
+				}).done( function( data ) {
+					$list.empty();
+					if ( data.status ) {
+						data.data.forEach( function( rel ) {
+							var pubtime = Date.parse( rel.published_at );
+							if ( pubtime < 1600616760000 ) { // v3.8 2020-09-20T15:46:00Z
+								return;
 							}
-						}).fail( function( jqXHR, textStatus, textM ) {
-							console.log( jqXHR, textStatus, textM );
-							$( 'span.re-rel-status', $el ).css( 'color', 'red' ).text( 'Update failed; try again later.' );
+							var $el = $( '<li></li>' ).attr( 'id', 're-rel-' + rel.id ).appendTo( $list );
+							$( '<button class="btn btn-sm btn-success re-rel-install">Install</button>' ).appendTo( $el );
+							$( '<span class="re-rel-name">name</span>' ).text( rel.name ).appendTo( $el );
+							$( '<span class="re-rel-status"></span>').appendTo( $el );
+							$( '<pre></pre>' ).text( rel.body ).appendTo( $el );
 						});
-					});
-				} else {
-					$list.text( 'Release information is not available right now; try again later. ' + data.message );
-				}
-			}).fail( function( /* jqXHR, textStatus, errorThrown */ ) {
-				$list.empty().text( "Can't load release information. " );
-			});
+						$( 'button.re-rel-install', $list ).on( 'click.reactor', function( event ) {
+							var $el = $( event.currentTarget ).closest( 'li' );
+							var rel = $el.attr( 'id' ).replace( /^re-rel-/, "" );
+							$( 'button', $el ).prop( 'disabled', true );
+							$( 'li', $list ).not( 'li#' + $el.attr( 'id' ) ).remove();
+							$( '.re-rel-status', $el ).text( 'Installing... please wait...' );
+							$.ajax({
+								url: api.getDataRequestURL(),
+								data: {
+									id: "lr_Reactor",
+									action: "updateplugin",
+									release: rel,
+									r: Math.random()
+								},
+								dataType: 'json',
+								cache: false,
+								timeout: 32000
+							}).done( function( res ) {
+								if ( res.status ) {
+									$( '.re-rel-status', $el ).text( "" );
+									$( 'pre', $el ).remove();
+									$( '<div class="re-rel-note"><h4>Install Finalizing!</h4><p>The installation is finalizing \
+	in the background with a Luup reload. You must now \
+	<a href="https://www.howtogeek.com/672607/how-to-hard-refresh-your-web-browser-to-bypass-your-cache/" target="_blank">hard-refresh \
+	your browser</a> to make sure that the correct UI implementation files load to match the installed Reactor core. Please do it now.</p>\
+	</div>' )
+										.appendTo( $el );
+								} else {
+									$( 'span.re-rel-status', $el ).css( 'color', 'red' ).text( 'Update failed; ' + res.message );
+								}
+							}).fail( function( jqXHR, textStatus, textM ) {
+								console.log( jqXHR, textStatus, textM );
+								$( 'span.re-rel-status', $el ).css( 'color', 'red' ).text( 'Update failed; try again later.' );
+							});
+						});
+					} else {
+						$list.text( 'Release information is not available right now; try again later. ' + data.message );
+					}
+				}).fail( function( /* jqXHR, textStatus, errorThrown */ ) {
+					$list.empty().text( "Can't load release information. " );
+				});
+			}
 		} catch( err ) {
 			console.error( err );
 		}
