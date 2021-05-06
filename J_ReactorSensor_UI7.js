@@ -387,8 +387,10 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 	function checkUpdate() {
 		return new Promise( function( resolve, reject ) {
 			$.ajax({
-				url: "https://api.github.com/repos/toggledbits/Reactor/releases",
+				url: api.getDataRequestURL(),
 				data: {
+					id: "lr_Reactor",
+					action: "updateplugin",
 					r: Math.random()
 				},
 				dataType: "json",
@@ -397,14 +399,21 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 			}).fail( function( /* jqXHR, textStatus, errorThrown */ ) {
 				reject();
 			}).done( function( data ) {
+				if ( !data.status ) {
+					reject( data.message );
+					return;
+				}
+
 				var newest = false;
-				for ( var j=0; j<data.length; ++j ) {
-					var rel = data[j];
+				for ( var j=0; j<data.data.length; ++j ) {
+					var rel = data.data[j];
 					if ( "master" === rel.target_commitish || "hotfix" === rel.target_commitish ) {
 						var pubtime = Date.parse( rel.published_at );
-						rel.published_at = pubtime;
-						if ( !newest || pubtime > rel.published_at ) {
-							newest = rel;
+						if ( pubtime >= 1620345600000 ) { // 2021-05-07T00:00:00Z
+							rel.published_at = pubtime;
+							if ( !newest || pubtime > newest.published_at ) {
+								newest = rel;
+							}
 						}
 					}
 				}
@@ -2004,6 +2013,7 @@ div#reactorstatus .tb-sm { font-family: Courier,Courier New,monospace; font-size
 div#reactorstatus div.cond.re-cond-error { border: 3px solid red; } \
 div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 @keyframes pulse { 0% { background-color: #fff; } 50% { background-color: #cfc; } 100% { background-color: #fff; } } \
+div.re-updatestatus { margin: 8px 0; padding: 8px 8px; border: 3px solid #0c0; border-radius: 8px; font-weight: bold; text-align: center; } \
 </style>');
 		}
 
@@ -2015,15 +2025,13 @@ div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 		try {
 			updateStatus( myid );
 
-			/*
 			checkUpdate().then( function( data ) {
 				if ( data ) {
 					$( '<div class="re-updatestatus"></div>' )
-						.text( 'An update for Reactor is available. Go to the Tools tab to install it.' )
+						.text( 'An update for Reactor is available. The latest release is ' + data.name + '. Go to the About tab on the master device to install it.' )
 						.insertBefore( $( 'div#reactorstatus' ) );
 				}
 			});
-			*/
 		}
 		catch ( e ) {
 			inStatusPanel = false; /* stop updates */
@@ -8986,7 +8994,7 @@ div.re-border-box { border: 1px solid #000; border-radius: 8px; padding: 8px; 8p
 					$( 'span#di-ver-info', container ).html( "Your database is up to date!" );
 				} else {
 					msg.text( "The update could not be retrieved. If this problem persists, consult the documentation. " +
-                        String( msg.message ) );
+						String( msg.message ) );
 				}
 			}).fail( function( /* jqXHR, textStatus, errorThrown */ ) {
 				msg.text( "The update failed; Vera busy/restarting. Try again in a moment." );
@@ -9056,22 +9064,6 @@ div.re-border-box { border: 1px solid #000; border-radius: 8px; padding: 8px; 8p
 		}
 
 		updateToolsVersionDisplay();
-
-		/*
-		$( 'div#re-updateplugin' ).toggle( false );
-		checkUpdate().then( function( data ) {
-			if ( data ) {
-				$( 'div#re-updateplugin' ).toggle( true );
-				$( 'div#re-updateplugin #re-updatestatus' )
-					.html( "An update to Reactor is available: " + String(data.name) +
-						". Click to update; a restart of Luup is required after." +
-						' <a href="' + data.html_url + '" target="_blank">More Information</a>' );
-				$( 'div#re-updateplugin button' ).on( 'click.reactor', function() { doPluginUpdate( data.id ); } );
-			}
-		}).catch( function() {
-			// nada
-		});
-		*/
 
 		api.registerEventHandler('on_ui_deviceStatusChanged', ReactorSensor, 'spyDeviceChangeHandler');
 		captureControlPanelClose( $('div.reactortab') );
