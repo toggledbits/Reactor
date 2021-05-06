@@ -18,15 +18,6 @@
 				"value": "0"
 			}]
 		},{
-			"img": "https://www.toggledbits.com/assets/reactor/reactorsensor-tripped.png",
-			"conditions": [{
-				"service": "urn:micasaverde-com:serviceId:SecuritySensor1",
-				"variable": "Tripped",
-				"operator": "!=",
-				"value": "0",
-				"category_num": 4
-			}]
-		}, {
 			"img": "binary_light_off.png",
 			"conditions": [{
 				"service": "urn:upnp-org:serviceId:SwitchPower1",
@@ -35,8 +26,7 @@
 				"value": 0,
 				"category_num": 3
 			}]
-		},
-		{
+		},{
 			"img": "binary_light_on.png",
 			"conditions": [{
 				"service": "urn:upnp-org:serviceId:SwitchPower1",
@@ -44,6 +34,14 @@
 				"operator": "==",
 				"value": 1,
 				"category_num": 3
+			}]
+		},{
+			"img": "https://www.toggledbits.com/assets/reactor/reactorsensor-tripped.png",
+			"conditions": [{
+				"service": "urn:micasaverde-com:serviceId:SecuritySensor1",
+				"variable": "Tripped",
+				"operator": "!=",
+				"value": "0"
 			}]
 		}
 	],

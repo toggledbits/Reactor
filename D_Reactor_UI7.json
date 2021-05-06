@@ -1,5 +1,5 @@
 {
-	"__comment": [ "D_Reactor_UI7.json", "19125" ],
+	"__comment": [ "D_Reactor_UI7.json", "20352" ],
 	"default_icon": "https://www.toggledbits.com/assets/reactor/reactor-default.png",
 	"state_icons": [],
 	"x": 2,
@@ -96,7 +96,7 @@
 					},
 					"Label": {
 						"lang_tag": "tb_reactor_about",
-						"text": "Reactor &#169; 2018,2019 Patrick H. Rigney, All Rights Reserved.<br/><a href=\"https://community.getvera.com/c/plugins-amp-plugin-development/reactor\" target=\"_blank\">Community Forums topic</a> &#149; <a href=\"http://www.toggledbits.com/reactor\" target=\"_blank\">Documentation and license information</a>.<br>&nbsp;<br>Support links are now on <i>Backup and Restore</i> tab."
+						"text": "Reactor &#169; 2018,2019,2020 Patrick H. Rigney, All Rights Reserved.<br/><a href=\"https://community.getvera.com/c/plugins-amp-plugin-development/reactor\" target=\"_blank\">Community Forums topic</a> &#149; <a href=\"http://www.toggledbits.com/reactor\" target=\"_blank\">Documentation and license information</a>.<br>&nbsp;<br>Support links are now on <i>Backup and Restore</i> tab."
 					}
 				}
 			],
@@ -115,10 +115,21 @@
 		},
 		{
 			"Label": {
+				"lang_tag": "tb_reactorsensor_doAbout",
+				"text": "About"
+			},
+			"Position": 2,
+			"TabType": "javascript",
+			"TopNavigationTab": 1,
+			"ScriptName": "J_Reactor_UI7.js",
+			"Function": "Reactor.doAbout"
+		},
+		{
+			"Label": {
 				"lang_tag": "ui7_advanced",
 				"text": "Advanced"
 			},
-			"Position": 2,
+			"Position": 3,
 			"TabType": "javascript",
 			"ScriptName": "shared.js",
 			"Function": "advanced_device"
@@ -128,7 +139,7 @@
 				"lang_tag": "ui7_logs",
 				"text": "Logs"
 			},
-			"Position": 3,
+			"Position": 4,
 			"TabType": "javascript",
 			"ScriptName": "shared.js",
 			"Function": "device_logs"

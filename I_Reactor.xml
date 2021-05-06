@@ -4,8 +4,11 @@
 	<functions>
 		-- --------------------------------------------------------------------
 		-- Reactor
-		-- Copyright 2018,2019 Patrick H. Rigney, All Rights Reserved.
+		-- Copyright 2018,2019,2020 Patrick H. Rigney, All Rights Reserved.
 		-- https://www.toggledbits.com/reactor
+		--
+		-- This file is part of Reactor. Use subject to license; please see
+		-- license details at https://www.toggledbits.com/static/reactor/docs/Installation#license-and-use-restrictions
 		-- --------------------------------------------------------------------
 		function startupReactor(devNum)
 			local f = io.open( "/etc/cmh-ludl/Z_Reactor.zzz", "r" )

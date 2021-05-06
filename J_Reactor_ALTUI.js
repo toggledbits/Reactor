@@ -19,8 +19,8 @@ var Reactor_ALTUI = ( function( window, undefined ) {
 
 	function _draw( device ) {
 			var html ="";
-			var message = MultiBox.getStatus( device, "urn:toggledbits-com:serviceId:Reactor", "Message");
-			html += '<div>' + message + '</div>';
+			var message = MultiBox.getStatus( device, "urn:toggledbits-com:serviceId:Reactor", "Message" );
+			html += '<div>' + String(message) + '</div>';
 			return html;
 	}
 
