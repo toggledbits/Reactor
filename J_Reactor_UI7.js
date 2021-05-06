@@ -507,88 +507,92 @@ var Reactor = (function(api, $) {
 			html = '<div id="tab-about" class="reactortab"></div>';
 			html += footer();
 			api.setCpanelContent( html );
-            var $body = $( 'div#tab-about.reactortab' );
+			var $body = $( 'div#tab-about.reactortab' );
 
-            $( '<h3></h3>' ).text( 'Reactor ' + pluginVersion ).appendTo( $body );
-            $( '<div></div>' )
-                .html( '&#169; 2018-2021 Patrick H. Rigney, All Rights Reserved<br/> \
+			$( '<h3></h3>' ).text( 'Reactor ' + pluginVersion ).appendTo( $body );
+			$( '<div></div>' )
+				.html( '&#169; 2018-2021 Patrick H. Rigney, All Rights Reserved<br/> \
 The Reactor Plugin for Vera is a community-supported project. If you find Reactor useful, please consider \
 making a donation via PayPal or crypto <a href="https://www.toggledbits.com/donate" target="_blank">here</a>. \
 ' )
-                .appendTo( $body );
-            $( '<hr></hr>' ).appendTo( $body );
-            var $list = $( '<ul id="re-releases"><li>Loading release information...</li></ul>' )
-                .appendTo( $body );
-            $.ajax({
-                url: api.getDataRequestURL(),
-                data: {
-                    id: "lr_Reactor",
-                    action: "updateplugin",
-                    r: Math.random()
-                },
-                dataType: "json",
-                cache: false,
-                timeout: 15000
-            }).done( function( data ) {
-                $list.empty();
-                if ( data.status ) {
-                    data.data.forEach( function( rel ) {
-                        var $el = $( '<li></li>' ).attr( 'id', 're-rel-' + rel.id ).appendTo( $list );
-                        $( '<button class="btn btn-sm btn-success re-rel-install">Install</button>' ).appendTo( $el );
-                        $( '<span class="re-rel-name">name</span>' ).text( rel.name ).appendTo( $el );
-                        $( '<span class="re-rel-status"></span>').appendTo( $el );
-                        $( '<pre></pre>' ).text( rel.body ).appendTo( $el );
-                    });
-                    $( 'button.re-rel-install', $list ).on( 'click.reactor', function( event ) {
-                        var $el = $( event.currentTarget ).closest( 'li' );
-                        var rel = $el.attr( 'id' ).replace( /^re-rel-/, "" );
-                        $( 'button', $el ).prop( 'disabled', true );
-                        $( 'li', $list ).not( 'li#' + $el.attr( 'id' ) ).remove();
-                        $( '.re-rel-status', $el ).text( 'Installing... please wait...' );
-                        $.ajax({
-                            url: api.getDataRequestURL(),
-                            data: {
-                                id: "lr_Reactor",
-                                action: "updateplugin",
-                                release: rel,
-                                r: Math.random()
-                            },
-                            dataType: 'json',
-                            cache: false,
-                            timeout: 32000
-                        }).done( function( res ) {
-                            if ( res.status ) {
-                                $( '.re-rel-status', $el ).text( "" );
-                                $( 'pre', $el ).remove();
-                                $( '<div class="re-rel-note"><h4>Install Finalizing!</h4><p>The installation is finalizing \
+				.appendTo( $body );
+			$( '<hr></hr>' ).appendTo( $body );
+			var $list = $( '<ul id="re-releases"><li>Loading release information...</li></ul>' )
+				.appendTo( $body );
+			$.ajax({
+				url: api.getDataRequestURL(),
+				data: {
+					id: "lr_Reactor",
+					action: "updateplugin",
+					r: Math.random()
+				},
+				dataType: "json",
+				cache: false,
+				timeout: 15000
+			}).done( function( data ) {
+				$list.empty();
+				if ( data.status ) {
+					data.data.forEach( function( rel ) {
+						var pubtime = Date.parse( rel.published_at );
+						if ( pubtime < 1600616760000 ) { // v3.8 2020-09-20T15:46:00Z
+							return;
+						}
+						var $el = $( '<li></li>' ).attr( 'id', 're-rel-' + rel.id ).appendTo( $list );
+						$( '<button class="btn btn-sm btn-success re-rel-install">Install</button>' ).appendTo( $el );
+						$( '<span class="re-rel-name">name</span>' ).text( rel.name ).appendTo( $el );
+						$( '<span class="re-rel-status"></span>').appendTo( $el );
+						$( '<pre></pre>' ).text( rel.body ).appendTo( $el );
+					});
+					$( 'button.re-rel-install', $list ).on( 'click.reactor', function( event ) {
+						var $el = $( event.currentTarget ).closest( 'li' );
+						var rel = $el.attr( 'id' ).replace( /^re-rel-/, "" );
+						$( 'button', $el ).prop( 'disabled', true );
+						$( 'li', $list ).not( 'li#' + $el.attr( 'id' ) ).remove();
+						$( '.re-rel-status', $el ).text( 'Installing... please wait...' );
+						$.ajax({
+							url: api.getDataRequestURL(),
+							data: {
+								id: "lr_Reactor",
+								action: "updateplugin",
+								release: rel,
+								r: Math.random()
+							},
+							dataType: 'json',
+							cache: false,
+							timeout: 32000
+						}).done( function( res ) {
+							if ( res.status ) {
+								$( '.re-rel-status', $el ).text( "" );
+								$( 'pre', $el ).remove();
+								$( '<div class="re-rel-note"><h4>Install Finalizing!</h4><p>The installation is finalizing \
 in the background with a Luup reload. You must now \
 <a href="https://www.howtogeek.com/672607/how-to-hard-refresh-your-web-browser-to-bypass-your-cache/" target="_blank">hard-refresh \
 your browser</a> to make sure that the correct UI implementation files load to match the installed Reactor core. Please do it now.</p>\
 </div>' )
-                                    .appendTo( $el );
-                            } else {
-                                $( 'span.re-rel-status', $el ).css( 'color', 'red' ).text( 'Update failed; ' + res.message );
-                            }
-                        }).fail( function( jqXHR, textStatus, textM ) {
-                            console.log( jqXHR, textStatus, textM );
-                            $( 'span.re-rel-status', $el ).css( 'color', 'red' ).text( 'Update failed; try again later.' );
-                        });
-                    });
-                } else {
-                    $list.text( 'Release information is not available right now; try again later. ' + data.message );
-                }
-            }).fail( function( /* jqXHR, textStatus, errorThrown */ ) {
-                $list.empty().text( "Can't load release information. " );
-            });
-        } catch( err ) {
-            console.error( err );
-        }
-    }
+									.appendTo( $el );
+							} else {
+								$( 'span.re-rel-status', $el ).css( 'color', 'red' ).text( 'Update failed; ' + res.message );
+							}
+						}).fail( function( jqXHR, textStatus, textM ) {
+							console.log( jqXHR, textStatus, textM );
+							$( 'span.re-rel-status', $el ).css( 'color', 'red' ).text( 'Update failed; try again later.' );
+						});
+					});
+				} else {
+					$list.text( 'Release information is not available right now; try again later. ' + data.message );
+				}
+			}).fail( function( /* jqXHR, textStatus, errorThrown */ ) {
+				$list.empty().text( "Can't load release information. " );
+			});
+		} catch( err ) {
+			console.error( err );
+		}
+	}
 
 	myModule = {
 		uuid: uuid,
 		doBackupRestore: doBackupRestore,
-        doAbout: doAbout
+		doAbout: doAbout
 	};
 	return myModule;
 })(api, $ || jQuery);
