@@ -10,7 +10,7 @@ NOTE TO ALTUI USERS: All current versions of Reactor REQUIRE AltUI 2536 to 2552;
 
 **DEPRECATION NOTICE:** The `Reactor.groups` table is now deprecated; use `Reactor.conditions` instead (just change the name in your code, it works the same). See [the Reactor documentation](https://www.toggledbits.com/static/reactor/docs/Run-Lua-Action/) for more information.
 
-## Version 3.9 development (21091)
+## Version 3.9 development (21126)
 
 * DEPRECATION: The `Reactor.groups` table is now deprecated; use `Reactor.conditions` instead (just change the name in your code, it works the same). See [the Reactor documentation](https://www.toggledbits.com/static/reactor/docs/Run-Lua-Action/) for more information.
 * Enhancement: There is now a "group copy/import" on (sub)groups to allow the contents of another group to be copied into the current group.
@@ -19,6 +19,7 @@ NOTE TO ALTUI USERS: All current versions of Reactor REQUIRE AltUI 2536 to 2552;
 * Enhancement: Notifications via Pushover are now supported by the Notify action. DOCS NEED: sign up and verify your email address; copy user key to PushoverUser; go to "Your Applications" and create a new application; put API token in PushoverToken.
 * Enhancement: Allow interval "relative to" time to include absolute date.
 * Enhancement: Loadable functions can be used to create user-specific/custom functions for expressions. See the docs.
+* Enhancement: Built-in updater from Github via the About tab on the Reactor master device.
 * Fix: Only enforce ALTUI version when running the Reactor UI from the ALTUI UI (i.e. if ALTUI is installed on Vera and the user is using the Reactor UI from the Vera UI, don't worry about ALTUI).
 * Fix: Try to clean up field placement/formatting on Firefox Android under ALTUI.
 * Fix: Try to resolve more inconsistencies between the ancient jQuery and Bootstrap-ish stylesheet on Vera vs the more current used on ALTUI. They just don't have much in common any more, and it's getting very difficult to work out combinations of published and custom styles that work out cleanly for both. If ALTUI continues to press forward, it will eventually diverge enough from Vera's environment that separate UI code bases will be needed. Given that more than 50% of Reactor's code is in its configuration UI, if it comes to that, I'll likely stop supporting the Luup plugin Reactor for openLuup/ALTUI, because it just doesn't make sense to maintain two very large, separate code bases for different platforms. Multi-System Reactor would be the go-to alternative at that point (and is going to work even better anyway).

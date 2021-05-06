@@ -18,9 +18,9 @@ var Reactor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '72acc6ea-f24d-11e8-bd87-74d4351650de';
 
-	var pluginVersion = "3.9develop-21111.1925";
+	var pluginVersion = "3.9 (21126)";
 
-	var _UIVERSION = 21091;     /* must coincide with Lua core */
+	var _UIVERSION = 21126;     /* must coincide with Lua core */
 
 	var _DOCURL = "https://www.toggledbits.com/static/reactor/docs/3.9/";
 
@@ -109,7 +109,7 @@ var Reactor = (function(api, $) {
 		var html = '';
 		html += '<div class="clearfix">';
 		html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
-		html += '<div id="tbcopyright">Reactor ver ' + pluginVersion + ' &copy; 2018,2019 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
+		html += '<div id="tbcopyright">Reactor ver ' + pluginVersion + ' &copy; 2018-2021 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
 			' All Rights Reserved. Please check out the <a href="' + _DOCURL + '" target="_blank">online documentation</a>' +
 			' and <a href="https://community.getvera.com/c/plugins-amp-plugin-development/reactor" target="_blank">Vera Community Forum</a> for support. Double-ring spinner by <a href="https://loading.io/spinner/double-ring" target="_blank">loading.io</a>.</div>';
 		html += '<div id="supportlinks">Support links: ' +
@@ -483,9 +483,112 @@ var Reactor = (function(api, $) {
 		}
 	}
 
+	function doAbout() {
+		if ( ! initModule() ) {
+			return;
+		}
+
+		try {
+			/* Our styles. */
+			var html = "<style>";
+			html += 'div#tab-about.reactortab div#restorestatus { border: 1px solid #666; border-radius: 8px; padding: 8px 8px; background-color: #eef; }';
+			html += 'div#tab-about.reactortab p.attn { color: #000; background-color: #ff0; }';
+			html += 'div#tab-about.reactortab div.lastbackup { font-weight: bold; color: #008040; }';
+			html += 'div#tab-about.reactortab ul#re-releases { list-style: none; }';
+			html += 'div#tab-about.reactortab span.re-rel-name { font-size: 1.5em; font-weight: bold; margin-left: 8px; }';
+			html += 'div#tab-about.reactortab span.re-rel-status { margin-left: 8px; }';
+			html += 'div#tab-about.reactortab div.re-rel-note { border: 2px solid #f80; padding: 8px 8px; }';
+			html += 'div#tbcopyright { display: block; margin: 12px 0 12px; 0; }';
+			html += 'div#tbbegging { display: block; font-size: 1.25em; line-height: 1.4em; color: #ff6600; margin-top: 12px; }';
+			html += "</style>";
+			$("head").append( html );
+
+			/* Body content */
+			html = '<div id="tab-about" class="reactortab"></div>';
+			html += footer();
+			api.setCpanelContent( html );
+            var $body = $( 'div#tab-about.reactortab' );
+
+            $( '<h3></h3>' ).text( 'Reactor ' + pluginVersion ).appendTo( $body );
+            $( '<div></div>' )
+                .html( '&#169; 2018-2021 Patrick H. Rigney, All Rights Reserved<br/> \
+The Reactor Plugin for Vera is a community-supported project. If you find Reactor useful, please consider \
+making a donation via PayPal or crypto <a href="https://www.toggledbits.com/donate" target="_blank">here</a>. \
+' )
+                .appendTo( $body );
+            $( '<hr></hr>' ).appendTo( $body );
+            var $list = $( '<ul id="re-releases"><li>Loading release information...</li></ul>' )
+                .appendTo( $body );
+            $.ajax({
+                url: api.getDataRequestURL(),
+                data: {
+                    id: "lr_Reactor",
+                    action: "updateplugin",
+                    r: Math.random()
+                },
+                dataType: "json",
+                cache: false,
+                timeout: 15000
+            }).done( function( data ) {
+                $list.empty();
+                if ( data.status ) {
+                    data.data.forEach( function( rel ) {
+                        var $el = $( '<li></li>' ).attr( 'id', 're-rel-' + rel.id ).appendTo( $list );
+                        $( '<button class="btn btn-sm btn-success re-rel-install">Install</button>' ).appendTo( $el );
+                        $( '<span class="re-rel-name">name</span>' ).text( rel.name ).appendTo( $el );
+                        $( '<span class="re-rel-status"></span>').appendTo( $el );
+                        $( '<pre></pre>' ).text( rel.body ).appendTo( $el );
+                    });
+                    $( 'button.re-rel-install', $list ).on( 'click.reactor', function( event ) {
+                        var $el = $( event.currentTarget ).closest( 'li' );
+                        var rel = $el.attr( 'id' ).replace( /^re-rel-/, "" );
+                        $( 'button', $el ).prop( 'disabled', true );
+                        $( 'li', $list ).not( 'li#' + $el.attr( 'id' ) ).remove();
+                        $( '.re-rel-status', $el ).text( 'Installing... please wait...' );
+                        $.ajax({
+                            url: api.getDataRequestURL(),
+                            data: {
+                                id: "lr_Reactor",
+                                action: "updateplugin",
+                                release: rel,
+                                r: Math.random()
+                            },
+                            dataType: 'json',
+                            cache: false,
+                            timeout: 32000
+                        }).done( function( res ) {
+                            if ( res.status ) {
+                                $( '.re-rel-status', $el ).text( "" );
+                                $( 'pre', $el ).remove();
+                                $( '<div class="re-rel-note"><h4>Install Finalizing!</h4><p>The installation is finalizing \
+in the background with a Luup reload. You must now \
+<a href="https://www.howtogeek.com/672607/how-to-hard-refresh-your-web-browser-to-bypass-your-cache/" target="_blank">hard-refresh \
+your browser</a> to make sure that the correct UI implementation files load to match the installed Reactor core. Please do it now.</p>\
+</div>' )
+                                    .appendTo( $el );
+                            } else {
+                                $( 'span.re-rel-status', $el ).css( 'color', 'red' ).text( 'Update failed; ' + res.message );
+                            }
+                        }).fail( function( jqXHR, textStatus, textM ) {
+                            console.log( jqXHR, textStatus, textM );
+                            $( 'span.re-rel-status', $el ).css( 'color', 'red' ).text( 'Update failed; try again later.' );
+                        });
+                    });
+                } else {
+                    $list.text( 'Release information is not available right now; try again later. ' + data.message );
+                }
+            }).fail( function( /* jqXHR, textStatus, errorThrown */ ) {
+                $list.empty().text( "Can't load release information. " );
+            });
+        } catch( err ) {
+            console.error( err );
+        }
+    }
+
 	myModule = {
 		uuid: uuid,
-		doBackupRestore: doBackupRestore
+		doBackupRestore: doBackupRestore,
+        doAbout: doAbout
 	};
 	return myModule;
 })(api, $ || jQuery);

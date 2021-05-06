@@ -115,10 +115,21 @@
 		},
 		{
 			"Label": {
+				"lang_tag": "tb_reactorsensor_doAbout",
+				"text": "About"
+			},
+			"Position": 2,
+			"TabType": "javascript",
+			"TopNavigationTab": 1,
+			"ScriptName": "J_Reactor_UI7.js",
+			"Function": "Reactor.doAbout"
+		},
+		{
+			"Label": {
 				"lang_tag": "ui7_advanced",
 				"text": "Advanced"
 			},
-			"Position": 2,
+			"Position": 3,
 			"TabType": "javascript",
 			"ScriptName": "shared.js",
 			"Function": "advanced_device"
@@ -128,7 +139,7 @@
 				"lang_tag": "ui7_logs",
 				"text": "Logs"
 			},
-			"Position": 3,
+			"Position": 4,
 			"TabType": "javascript",
 			"ScriptName": "shared.js",
 			"Function": "device_logs"

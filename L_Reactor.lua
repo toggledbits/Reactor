@@ -1,6 +1,6 @@
 --[[
 	L_Reactor.lua - Core module for Reactor
-	Copyright 2018,2019,2020 Patrick H. Rigney, All Rights Reserved.
+	Copyright 2018,2019,2020,2021 Patrick H. Rigney, All Rights Reserved.
 	This file is part of Reactor.
 
 	RESTRICTED USE LICENSE
@@ -42,13 +42,13 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.9develop-21111.1925"
+local _PLUGIN_VERSION = "3.9 (21126)"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.9/"
 
 local _CONFIGVERSION	= 20263
 local _CDATAVERSION		= 20045	-- must coincide with JS
-local _UIVERSION		= 21091	-- must coincide with JS
+local _UIVERSION		= 21126	-- must coincide with JS
 	  _SVCVERSION		= 20185	-- must coincide with impl file (not local)
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
@@ -7375,28 +7375,38 @@ function request( lul_request, lul_parameters, lul_outputformat )
 
 	elseif action == "updateplugin" then
 		D("request() update %1", lul_parameters)
-		assert(lul_parameters.release ~= nil, "Invalid release ID")
+		local apibase = "https://api.github.com/repos/toggledbits/Reactor"
 		assert(not isOpenLuup, "Use AltAppStore to update Reactor on openLuup")
-		local lfs = require "lfs"
-		local f = io.popen(
-			'curl -s -L -o - -m 15 https://api.github.com/repos/toggledbits/Reactor/releases/' ..
-			lul_parameters.release )
-		if not f then
-			return json.encode( { status=false, message="Unable to fetch Github releases" } ), MIMETYPE_JSON
-		end
-		local p = f:read("*a")
-		f:close()
-		local d,dpos,derr = json.decode( p )
-		if d then
-			if d.tag_name ~= getVar( "grelease", "", pluginDevice, MYSID ) then
+		if lul_parameters.release == nil then
+			local f = io.popen( 'curl -s -L -o - -m 15 ' .. apibase .. '/releases' )
+			local p = f:read("*a")
+			f:close();
+			local data, dpos, derr = json.decode( p )
+			if not derr then
+				return json.encode{ status=true, message="OK", ['type']="release", data=data }, MIMETYPE_JSON
+			else
+				return json.encode{ status=false, message="Can't parse Github response: " .. derr }, MIMETYPE_JSON
+			end
+		else
+			local lfs = require "lfs"
+			local f = io.popen(
+				'curl -s -L -o - -m 15 ' .. apibase .. '/releases/' .. lul_parameters.release )
+			if not f then
+				return json.encode( { status=false, message="Unable to fetch Github release " .. lul_parameters.release } ), MIMETYPE_JSON
+			end
+			local p = f:read("*a")
+			f:close()
+			local d,dpos,derr = json.decode( p )
+			if d then
 				L("Performing update to %1 (%2) on branch %3", d.tag_name, d.name, d.target_commitish)
-				os.execute( 'rm -rf /tmp/reactor' )
-				os.execute( 'mkdir -p /tmp/reactor' )
+				local tmpd = "/tmp/reactor-update"
+				os.execute( 'rm -rf ' .. tmpd )
+				os.execute( 'mkdir -p ' .. tmpd )
 				D("request() fetching %1", d.zipball_url)
 				-- N.B. return value of os.execute() from within Luup is unreliable.
-				os.execute( "curl -s -L -o /tmp/reactor/latest.zip -m 30 '" .. d.zipball_url .. "'" )
-				if file_exists( "/tmp/reactor/latest.zip" ) then
-					os.execute( 'unzip -o /tmp/reactor/latest.zip -d /tmp/reactor' )
+				os.execute( "curl -s -L -o " .. tmpd .. "/release.tgz -m 30 '" .. d.tarball_url .. "'" )
+				if file_exists( tmpd .. "/release.tgz" ) then
+					os.execute( 'tar -C ' .. tmpd .. ' -x -z -f ' .. tmpd .. '/release.tgz' )
 					-- Copy/LZO the files
 					local ufiles = {}
 					local postscript = false
@@ -7409,22 +7419,26 @@ function request( lul_request, lul_parameters, lul_outputformat )
 								if s.mode == "directory" then
 									uscan( path .. fn .. "/" )
 								elseif s.mode == "file" then
-									if fn:match( "^[DJILS]_" ) then
+									if fn:match( "^[DIJLS]_" ) then
 										os.execute( "pluto-lzo c '" .. path .. fn .. "' '" .. path .. fn .. ".lzo'" )
 										table.insert( ufiles, { target=fn .. ".lzo", source=path .. fn .. ".lzo" } )
-									elseif fn == "post_install.sh" then
+									elseif "reactor_internet_check.sh" == fn then
+										table.insert( ufiles, { target=fn, source=path .. fn } )
+									elseif "post_install.sh" == fn then
 										postscript = path .. fn
 									end
 								end
 							end
 						end
 					end
-					uscan( "/tmp/reactor/" )
+					uscan( tmpd .. '/' ) -- fills ufiles
 					for _,ff in ipairs( ufiles ) do
 						-- Update each file. If updating a compressed file, force remove any uncompressed version.
 						L("Updating %1", ff.target)
 						os.execute( "mv -f '" .. ff.source .. "' '/etc/cmh-ludl/" .. ff.target .. "'" )
-						if ff.target:match( "%.lzo$" ) then os.remove( "/etc/cmh-ludl/" .. ff.target:gsub( "%.lzo$", "" ) ) end
+						if ff.target:match( "%.lzo$" ) then
+							os.remove( "/etc/cmh-ludl/" .. ff.target:gsub( "%.lzo$", "" ) )
+						end
 					end
 					if postscript then
 						f = io.popen( "sh " .. postscript .. " 2>&1" )
@@ -7435,10 +7449,11 @@ function request( lul_request, lul_parameters, lul_outputformat )
 						end
 						f:close()
 					end
-					setVar( MYSID, "grelease", table.concat( { d.id, d.tag_name, d.target_commitish, d.published_at }, "|" ), pluginDevice )
+					setVar( MYSID, "grelease", table.concat( { d.id, d.tag_name, d.name, d.target_commitish, d.published_at }, "|" ), pluginDevice )
 					luup.attr_set( "plugin", "", pluginDevice ) -- disconnect from App Marketplace
 					L"Update completed; Luup needs to be reloaded for changes to take effect."
-					os.execute( "rm -rf  /tmp/reactor/" )
+					-- os.execute( "rm -rf " .. tmpd )
+					scheduleDelay( { id="reload", func=luup.reload, owner=pluginDevice }, 5 )
 					return json.encode( { status=true, updated=true, message="OK", release=d } ), MIMETYPE_JSON
 				else
 					return json.encode( { status=false, message="Unable to UNZIP update package" } ), MIMETYPE_JSON
@@ -7447,11 +7462,10 @@ function request( lul_request, lul_parameters, lul_outputformat )
 				-- We don't care about this release.
 				return json.encode( { status=true, updated=false, message="No update required", release=d } ), MIMETYPE_JSON
 			end
+			W("Can't parse Github response %1 %2", dpos, derr)
+			luup.log(tostring(p),2)
+			return json.encode( { status=false, message="Unable to parse Github response" } ), MIMETYPE_JSON
 		end
-		W("Can't parse Github response %1 %2", dpos, derr)
-		luup.log(tostring(p),2)
-		return json.encode( { status=false, message="Unable to parse Github response" } ), MIMETYPE_JSON
-
 	else
 		return "%REACTOR-REQUEST-F-NOTIMPL, requested action is not implemented", "text/plain"
 	end
