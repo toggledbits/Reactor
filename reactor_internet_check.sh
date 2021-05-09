@@ -8,7 +8,7 @@
 # KEEP A BACKUP!
 # See: https://www.toggledbits.com/static/reactor/docs/3.9/Network-Status/
 
-VERSION="20303.1645"
+VERSION="21129.0925"
 LOGFILE=/tmp/reactor_internet_check.log
 CONF=
 PING=ping
@@ -41,6 +41,7 @@ StandardError=syslog
 [Install]
 WantedBy=multi-user.target
 SYSD
+		systemctl daemon-reload
 		systemctl enable reactor-internet-check.service
 		systemctl start reactor-internet-check.service
 		return 0
@@ -214,6 +215,7 @@ check() {
 	fi
 }
 
+# NOTE: IF YOU NEED/WANT TO CHANGE THE SERVERS PROBED, CHANGE THE CONF FILE, NOT THIS SCRIPT!
 while [ ! -f /var/run/reactor_internet_check.stop ]; do
 	[ -f "${CONF:=/tmp/reactor_internet_check.conf}" ] && source "$CONF"
 	SERVERS="${SERVERS:-8.8.8.8,8.8.4.4,1.1.1.1,www.facebook.com,www.google.com,www.amazon.com}"
