@@ -18,15 +18,16 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = "3.9 (21126)";
+	var pluginVersion = "3.10develop (21129)";
 
 	var DEVINFO_MINSERIAL = 482;
 
-	var _UIVERSION = 21126;     /* must coincide with Lua core */
+	var _UIVERSION = 21129;     /* must coincide with Lua core */
 
 	var _CDATAVERSION = 20045;  /* must coincide with Lua core */
 
 	var _DOCURL = "https://www.toggledbits.com/static/reactor/docs/3.9/";
+	var _FORUMURL = "https://community.getvera.com/c/plugins-and-plugin-development/reactor/178";
 
 	var _MIN_ALTUI_VERSION = 2536;
 	var	_MAX_ALTUI_VERSION = 2552;
@@ -239,7 +240,7 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 		html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
 		html += '<div id="tbcopyright">Reactor ver ' + pluginVersion + ' &copy; 2018,2019,2020 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
 			' All Rights Reserved. Please check out the <a href="' + _DOCURL + '" target="_blank">online documentation</a>' +
-			' and <a href="https://community.getvera.com/c/plugins-and-plugin-development/reactor" target="_blank">community forums</a> for support.</div>';
+			' and <a href="' + _FORUMURL + '" target="_blank">community forums</a> for support.</div>';
 		try {
 			html += '<div id="browserident">' + navigator.userAgent + '</div>';
 		} catch( e ) {}
@@ -385,9 +386,9 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 	}
 
 	function checkUpdate() {
-        if ( isOpenLuup ) {
-            return Promise.resolve( false );
-        }
+		if ( isOpenLuup ) {
+			return Promise.resolve( false );
+		}
 		return new Promise( function( resolve, reject ) {
 			$.ajax({
 				url: api.getDataRequestURL(),
@@ -3459,9 +3460,10 @@ div.re-updatestatus { margin: 8px 0; padding: 8px 8px; border: 3px solid #0c0; b
 					container.append('<input type="text" class="form-control form-control-sm re-comment" autocomplete="off" placeholder="Type your comment here">');
 					$('input', container).on( 'change.reactor', handleConditionRowChange ).val( cond.comment || "" );
 					if ( "cond0" === cond.id && ( cond.comment || "").match( /^Welcome to your new Reactor/i ) ) {
-						$( '<div><strong>New to Reactor?</strong> Check out the <a href="https://youtu.be/wkdFjwEuF58" target="_blank">tutorial videos</a>. There\'s also <a href="' +
-						_DOCURL + '" target="_blank">the Reactor Documentation</a> and <a href="https://community.getvera.com/c/plugins-and-plugin-development/reactor" target="_blank">Community Forum Category</a>.</div>' )
-							.appendTo( container );
+						$( '<div><strong>New to Reactor?</strong> Check out the <a href="https://youtu.be/wkdFjwEuF58" target="_blank">tutorial videos</a>. ' +
+							'There\'s also <a href="' + _DOCURL + '" target="_blank">the Reactor Documentation</a> and <a href="' + _FORUMURL +
+							'" target="_blank">Community Forum Category</a>.</div>'
+						).appendTo( container );
 					}
 					break;
 
