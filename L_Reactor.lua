@@ -42,13 +42,14 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.9 (21126)"
+local _PLUGIN_VERSION = "3.10develop (21129)"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.9/"
+local _FORUM_URL = "https://community.getvera.com/c/plugins-and-plugin-development/reactor/178"
 
-local _CONFIGVERSION	= 20263
+local _CONFIGVERSION	= 21129
 local _CDATAVERSION		= 20045	-- must coincide with JS
-local _UIVERSION		= 21126	-- must coincide with JS
+local _UIVERSION		= 21129	-- must coincide with JS
 	  _SVCVERSION		= 20185	-- must coincide with impl file (not local)
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
@@ -1069,7 +1070,10 @@ local function plugin_runOnce( pdev )
 
 	-- On version change or file missing...
 	if not isOpenLuup and
-		( s < _CONFIGVERSION or not file_exists( "/etc/cmh-ludl/reactor_internet_check.sh" ) ) then
+		( s < _CONFIGVERSION or
+			not file_exists( "/etc/cmh-ludl/reactor_internet_check.sh" ) or
+			not file_exists( "/etc/init.d/reactor_internet_check" )
+		) then
 		-- Install reactor_internet_check daemon
 		L("Updating reactor_internet_check daemon...")
 		os.execute( "pluto-lzo d /etc/cmh-ludl/reactor_internet_check.sh.lzo /etc/cmh-ludl/reactor_internet_check.sh" )
@@ -7420,11 +7424,9 @@ function request( lul_request, lul_parameters, lul_outputformat )
 								if s.mode == "directory" then
 									uscan( path .. fn .. "/" )
 								elseif s.mode == "file" then
-									if fn:match( "^[DIJLS]_" ) then
+									if fn:match( "^[DIJLS]_" ) or "reactor_internet_check.sh" == fn then
 										os.execute( "pluto-lzo c '" .. path .. fn .. "' '" .. path .. fn .. ".lzo'" )
 										table.insert( ufiles, { target=fn .. ".lzo", source=path .. fn .. ".lzo" } )
-									elseif "reactor_internet_check.sh" == fn then
-										table.insert( ufiles, { target=fn, source=path .. fn } )
 									elseif "post_install.sh" == fn then
 										postscript = path .. fn
 									end
