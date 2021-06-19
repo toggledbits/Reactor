@@ -18,13 +18,13 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = "3.10develop (21129)";
+	var pluginVersion = "3.10develop (21170)";
 
-	var DEVINFO_MINSERIAL = 482;
-
-	var _UIVERSION = 21129;     /* must coincide with Lua core */
+	var _UIVERSION = 21170;     /* must coincide with Lua core */
 
 	var _CDATAVERSION = 20045;  /* must coincide with Lua core */
+
+	var DEVINFO_MINSERIAL = 482;
 
 	var _DOCURL = "https://www.toggledbits.com/static/reactor/docs/3.9/";
 	var _FORUMURL = "https://community.getvera.com/c/plugins-and-plugin-development/reactor/178";
@@ -138,8 +138,8 @@ var ReactorSensor = (function(api, $) {
 				{ id: "title", label: "Message Title", placeholder: "blank=this ReactorSensor's name", default: "", optional: true },
 				{ id: "podevice", label: "Device:", placeholder: "optional", default: "", optional: true },
 				{ id: "priority", label: "Priority:", type: "select", default: "0", values: [ "-2=Very low", "-1=Low", "0=Normal", "1=High" ] }, /* 2=Emergency doesn't seem to work, no alert is received 2020-09-23 */
-				{ id: "sound", label: "Sound:", type: "select", default: "", optional: true,
-					values: [
+				{ id: "sound", label: "Sound:", Xtype: "select", default: "", optional: true, placeholder: "blank=device default; select from list or enter your own value",
+					datalist: [
 						"=(device default)", "none=(none/silent)", "vibrate=(vibrate only)", "pushover=Pushover",
 						"bike=Bike", "bugle=Bugle", "cashregister=Cash Register", "classical=Classical", "cosmic=Cosmic", "falling=Falling",
 						"gamelan=Gamelan", "incoming=Incoming", "intermission=Intermission", "magic=Magic", "mechanical=Mechanical",
@@ -6213,6 +6213,24 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				} else {
 					xf = $( '<input class="form-control form-control-sm">' )
 						.attr( 'placeholder', fld.placeholder || "" );
+                    if ( Array.isArray( fld.datalist ) ) {
+                        // if ( undefined !== window.HTMLDataListElement ) {
+                        var dlid = 'notify-' + method + '-' + fld.id;
+                        var $dl = $( 'datalist#' + idSelector( dlid ) );
+                        if ( 0 === $dl.length ) {
+                            /* build datalist */
+                            var $ct = $( 'div#re-activities' );
+                            $dl = $( '<datalist></datalist>' ).attr( 'id', dlid ).appendTo( $ct );
+                            fld.datalist.forEach( function( v ) {
+                                var pm = v.match( "^([^=]*)=(.*)$" );
+                                if ( pm ) {
+                                    $( '<option></option>' ).val( pm[1] ).text( pm[2] )
+                                        .appendTo( $dl );
+                                }
+                            });
+                        }
+                        xf.attr( 'list', dlid );
+                    }
 				}
 				if ( ! isEmpty( fld.default ) ) {
 					xf.val( fld.default );
@@ -6342,7 +6360,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					if ( undefined !== window.HTMLDataListElement ) {
 						/* Use datalist when supported (allows more flexible entry) */
 						var dlid = ("data-" + action.service + '-' + action.name + '-' + parm.name).replace( /[^a-z0-9-]/ig, "-" );
-						if ( 0 == $( 'datalist#' + idSelector( dlid ) ).length ) {
+						if ( 0 === $( 'datalist#' + idSelector( dlid ) ).length ) {
 							/* Datalist doesn't exist yet, create it */
 							inp = $('<datalist class="argdata"></datalist>').attr( 'id', dlid );
 							lj = parm.values.length;

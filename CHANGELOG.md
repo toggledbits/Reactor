@@ -10,8 +10,9 @@ NOTE TO ALTUI USERS: All current versions of Reactor REQUIRE AltUI 2536 to 2552;
 
 **DEPRECATION NOTICE:** The `Reactor.groups` table is now deprecated; use `Reactor.conditions` instead (just change the name in your code, it works the same). See [the Reactor documentation](https://www.toggledbits.com/static/reactor/docs/Run-Lua-Action/) for more information.
 
-## Version 3.10 development (21129)
+## Version 3.10 development (21170)
 
+* Allow non-list data entry in Pushover notification sound;
 * Fix: Broken link to forums in various footers (site is evolving).
 
 ## Version 3.9 (21126)

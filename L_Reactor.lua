@@ -42,14 +42,14 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.10develop (21129)"
+local _PLUGIN_VERSION = "3.10develop (21170)"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.9/"
 local _FORUM_URL = "https://community.getvera.com/c/plugins-and-plugin-development/reactor/178"
 
 local _CONFIGVERSION	= 21129
 local _CDATAVERSION		= 20045	-- must coincide with JS
-local _UIVERSION		= 21129	-- must coincide with JS
+local _UIVERSION		= 21170	-- must coincide with JS
 	  _SVCVERSION		= 20185	-- must coincide with impl file (not local)
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
@@ -583,10 +583,9 @@ end
 local function setHMTModeSetting( hmtdev )
 	local chm = luup.attr_get( 'Mode', 0 ) or "1"
 	local armed = getVarBool( "Armed", false, hmtdev, SENSOR_SID )
-	if ( not isOpenLuup ) and ( luup.version_minor <= 1040 or luup.version_minor >= 5372 ) then
-		-- Ancient Luup does not disarm correctly per ModeSettings, so on each cycle, reset armed state and
+	if ( not isOpenLuup ) and ( luup.version_minor <= 1040 ) then
+		-- Ancient Luup does not disarm correctly per ModeSetting, so on each cycle, reset armed state and
 		-- set/force ModeSettings accordingly.
-		-- PHR 2021-04-21: And they broke it again in 7.32 Beta (5372/3/4). Bozos.
 		luup.call_action( SENSOR_SID, "SetArmed", { newArmedValue="0" }, hmtdev )
 		armed = false
 	end
@@ -4789,6 +4788,8 @@ local function getHouseModeTracker( createit, pdev )
 	if not isOpenLuup then
 		for k,v in childDevices( pdev ) do
 			if v.id == "hmt" then
+				-- Force custom for ModeSetting in Luup root, otherwise arming is funky.
+				luup.attr_set( "ModeSetting", "1:C*;2:C*;3:C*;4:C*", 0 )
 				return k, v -- got it
 			end
 		end
