@@ -42,7 +42,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.10develop (21170)"
+local _PLUGIN_VERSION = "3.10develop (21206)"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.9/"
 local _FORUM_URL = "https://community.getvera.com/c/plugins-and-plugin-development/reactor/178"
@@ -2737,10 +2737,16 @@ local function doActionRequest( action, scid, tdev )
 	end
 
 	local src
-	local body = tostring(action.data or "" ):gsub( "%{[^}]+%}", function( ref )
-		local vv = getValue( ref, nil, tdev )
-		return ( vv ~= nil ) and vv or ref
-	end )
+	local body = tostring( action.data )
+	if body:gsub( '[\r\n\t]+', ' ' ):match( '^{ *"[^"]+" *: *' ) then
+		-- Leave JSON untouched
+		L( "Detected JSON data in request body; not performing inline substitutions" )
+	else
+		body = body:gsub( "%{[^}]+%}", function( ref )
+			local vv = getValue( ref, nil, tdev )
+			return ( vv ~= nil ) and vv or ref
+		end )
+	end
 	if body == "" then
 		src = nil
 	else

@@ -18,7 +18,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = "3.10develop (21170)";
+	var pluginVersion = "3.10develop (21206)";
 
 	var _UIVERSION = 21170;     /* must coincide with Lua core */
 
