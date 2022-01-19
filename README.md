@@ -7,6 +7,8 @@ for scenes and other actions.
 * Easy to configure (no Lua or expression syntax to learn);
 * Powerful features for testing conditions and performing actions.
 
+**This repository is for the Reactor for Vera plugin only. If you are looking for the multi-hub version of Reactor (supports Vera, Ezlo, MQTT, Home Assistant, and Hubitat, with more planned), please see [https://reactor.toggledbits.com/](https://reactor.toggledbits.com).**
+
 ## Background ##
 
 I developed another plugin called DelayLight to address a common use case that
