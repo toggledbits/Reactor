@@ -1,8 +1,8 @@
 # Change Log #
 
-NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04.14b or higher. Version 2021.01.03 is recommended in particular for users of the Vera and eZLO Bridges.
+NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04.14b or higher. Version 2021.01.03 or higher is recommended in particular for users of the Vera and eZLO Bridges.
 
-NOTE TO ALTUI USERS: All current versions of Reactor REQUIRE AltUI 2536 to 2552; versions outside this range *are not supported*. If you are having UI issues and running on a version other than those within the foregoing range, please install a supported version of ALTUI. Since testing of the UI has to happen on a large number of platforms and browsers, it takes time and there necessarily will be a delay in certifying the Reactor UI for new releases of ALTUI.
+NOTE TO ALTUI USERS: All current versions of Reactor REQUIRE AltUI 2536 to 2553; versions outside this range *are not supported*. If you are having UI issues and running on a version other than those within the foregoing range, please install a supported version of ALTUI. Since testing of the UI has to happen on a large number of platforms and browsers, it takes time and there necessarily will be a delay in certifying the Reactor UI for new releases of ALTUI.
 
 **END OF LIFE NOTICE:** Vera Lite and Vera3 systems are hardware/firmware EOL as of this writing. Reactor 3.9 will be the last version of Reactor tested and certified for these systems. Later versions of Reactor may still run on them, but I will not be testing for them and I will no longer fix platform-specific bugs for them.
 
@@ -18,6 +18,8 @@ NOTE TO ALTUI USERS: All current versions of Reactor REQUIRE AltUI 2536 to 2552;
 * Fix: Broken link to forums in various footers (site is evolving).
 
 ## Version 3.9 (21126)
+
+**This is the last version released through the Vera App Marketplace.** The Vera App Marketplace has been poorly supported for some time, and given that the Vera firmware is now in an unannounced state of sunset (Ezlo's major effort is on their new hardware and firmware, with no published updates to Vera firmware since June 2021), further versions of Reactor will not be published to the Vera App Marketplace. You can install newer versions of Reactor directly using the instructions in the README file. If you moving to Ezlo, there is [a multi-hub version of Reactor](https://reactor.toggledbits.com/) available that also allows you to integrate with other HA platforms to get the best and broadest device support.
 
 * DEPRECATION: The `Reactor.groups` table is now deprecated; use `Reactor.conditions` instead (just change the name in your code, it works the same). See [the Reactor documentation](https://www.toggledbits.com/static/reactor/docs/Run-Lua-Action/) for more information.
 * Enhancement: There is now a "group copy/import" on (sub)groups to allow the contents of another group to be copied into the current group.
