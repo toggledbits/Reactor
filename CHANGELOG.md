@@ -19,7 +19,7 @@ NOTE TO ALTUI USERS: All current versions of Reactor REQUIRE AltUI 2536 to 2553;
 
 ## Version 3.9 (21126)
 
-**This is the last version released through the Vera App Marketplace.** The Vera App Marketplace has been poorly supported for some time, and given that the Vera firmware is now in an unannounced state of sunset (Ezlo's major effort is on their new hardware and firmware, with no published updates to Vera firmware since June 2021), further versions of Reactor will not be published to the Vera App Marketplace. You can install newer versions of Reactor directly using the instructions in the README file. If you moving to Ezlo, there is [a multi-hub version of Reactor](https://reactor.toggledbits.com/) available that also allows you to integrate with other HA platforms to get the best and broadest device support.
+**This is the last version released through the Vera App Marketplace.** Please see [the Reactor documentation](https://www.toggledbits.com/static/reactor/docs/Installation/) for information on installing newer versions and updates.
 
 * DEPRECATION: The `Reactor.groups` table is now deprecated; use `Reactor.conditions` instead (just change the name in your code, it works the same). See [the Reactor documentation](https://www.toggledbits.com/static/reactor/docs/Run-Lua-Action/) for more information.
 * Enhancement: There is now a "group copy/import" on (sub)groups to allow the contents of another group to be copied into the current group.
