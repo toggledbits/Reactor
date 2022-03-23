@@ -18,18 +18,19 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = "3.9 (21126)";
+	var pluginVersion = "3.10develop (22082)";
 
-	var DEVINFO_MINSERIAL = 482;
-
-	var _UIVERSION = 21126;     /* must coincide with Lua core */
+	var _UIVERSION = 21170;     /* must coincide with Lua core */
 
 	var _CDATAVERSION = 20045;  /* must coincide with Lua core */
 
+	var DEVINFO_MINSERIAL = 482;
+
 	var _DOCURL = "https://www.toggledbits.com/static/reactor/docs/3.9/";
+	var _FORUMURL = "https://community.getvera.com/c/plugins-and-plugin-development/reactor/178";
 
 	var _MIN_ALTUI_VERSION = 2536;
-	var	_MAX_ALTUI_VERSION = 2552;
+	var	_MAX_ALTUI_VERSION = 2553;
 
 	var myModule = {};
 
@@ -137,8 +138,8 @@ var ReactorSensor = (function(api, $) {
 				{ id: "title", label: "Message Title", placeholder: "blank=this ReactorSensor's name", default: "", optional: true },
 				{ id: "podevice", label: "Device:", placeholder: "optional", default: "", optional: true },
 				{ id: "priority", label: "Priority:", type: "select", default: "0", values: [ "-2=Very low", "-1=Low", "0=Normal", "1=High" ] }, /* 2=Emergency doesn't seem to work, no alert is received 2020-09-23 */
-				{ id: "sound", label: "Sound:", type: "select", default: "", optional: true,
-					values: [
+				{ id: "sound", label: "Sound:", Xtype: "select", default: "", optional: true, placeholder: "blank=device default; select from list or enter your own value",
+					datalist: [
 						"=(device default)", "none=(none/silent)", "vibrate=(vibrate only)", "pushover=Pushover",
 						"bike=Bike", "bugle=Bugle", "cashregister=Cash Register", "classical=Classical", "cosmic=Cosmic", "falling=Falling",
 						"gamelan=Gamelan", "incoming=Incoming", "intermission=Intermission", "magic=Magic", "mechanical=Mechanical",
@@ -239,7 +240,7 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 		html += '<div id="tbbegging"><em>Find Reactor useful?</em> Please consider a small one-time donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
 		html += '<div id="tbcopyright">Reactor ver ' + pluginVersion + ' &copy; 2018,2019,2020 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
 			' All Rights Reserved. Please check out the <a href="' + _DOCURL + '" target="_blank">online documentation</a>' +
-			' and <a href="https://community.getvera.com/c/plugins-and-plugin-development/reactor" target="_blank">community forums</a> for support.</div>';
+			' and <a href="' + _FORUMURL + '" target="_blank">community forums</a> for support.</div>';
 		try {
 			html += '<div id="browserident">' + navigator.userAgent + '</div>';
 		} catch( e ) {}
@@ -385,9 +386,9 @@ div.reactortab .form-inline { display: -ms-flexbox; display: flex; -ms-flex-flow
 	}
 
 	function checkUpdate() {
-        if ( isOpenLuup ) {
-            return Promise.resolve( false );
-        }
+		if ( isOpenLuup ) {
+			return Promise.resolve( false );
+		}
 		return new Promise( function( resolve, reject ) {
 			$.ajax({
 				url: api.getDataRequestURL(),
@@ -3459,9 +3460,10 @@ div.re-updatestatus { margin: 8px 0; padding: 8px 8px; border: 3px solid #0c0; b
 					container.append('<input type="text" class="form-control form-control-sm re-comment" autocomplete="off" placeholder="Type your comment here">');
 					$('input', container).on( 'change.reactor', handleConditionRowChange ).val( cond.comment || "" );
 					if ( "cond0" === cond.id && ( cond.comment || "").match( /^Welcome to your new Reactor/i ) ) {
-						$( '<div><strong>New to Reactor?</strong> Check out the <a href="https://youtu.be/wkdFjwEuF58" target="_blank">tutorial videos</a>. There\'s also <a href="' +
-						_DOCURL + '" target="_blank">the Reactor Documentation</a> and <a href="https://community.getvera.com/c/plugins-and-plugin-development/reactor" target="_blank">Community Forum Category</a>.</div>' )
-							.appendTo( container );
+						$( '<div><strong>New to Reactor?</strong> Check out the <a href="https://youtu.be/wkdFjwEuF58" target="_blank">tutorial videos</a>. ' +
+							'There\'s also <a href="' + _DOCURL + '" target="_blank">the Reactor Documentation</a> and <a href="' + _FORUMURL +
+							'" target="_blank">Community Forum Category</a>.</div>'
+						).appendTo( container );
 					}
 					break;
 
@@ -6211,6 +6213,24 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				} else {
 					xf = $( '<input class="form-control form-control-sm">' )
 						.attr( 'placeholder', fld.placeholder || "" );
+                    if ( Array.isArray( fld.datalist ) ) {
+                        // if ( undefined !== window.HTMLDataListElement ) {
+                        var dlid = 'notify-' + method + '-' + fld.id;
+                        var $dl = $( 'datalist#' + idSelector( dlid ) );
+                        if ( 0 === $dl.length ) {
+                            /* build datalist */
+                            var $ct = $( 'div#re-activities' );
+                            $dl = $( '<datalist></datalist>' ).attr( 'id', dlid ).appendTo( $ct );
+                            fld.datalist.forEach( function( v ) {
+                                var pm = v.match( "^([^=]*)=(.*)$" );
+                                if ( pm ) {
+                                    $( '<option></option>' ).val( pm[1] ).text( pm[2] )
+                                        .appendTo( $dl );
+                                }
+                            });
+                        }
+                        xf.attr( 'list', dlid );
+                    }
 				}
 				if ( ! isEmpty( fld.default ) ) {
 					xf.val( fld.default );
@@ -6340,7 +6360,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					if ( undefined !== window.HTMLDataListElement ) {
 						/* Use datalist when supported (allows more flexible entry) */
 						var dlid = ("data-" + action.service + '-' + action.name + '-' + parm.name).replace( /[^a-z0-9-]/ig, "-" );
-						if ( 0 == $( 'datalist#' + idSelector( dlid ) ).length ) {
+						if ( 0 === $( 'datalist#' + idSelector( dlid ) ).length ) {
 							/* Datalist doesn't exist yet, create it */
 							inp = $('<datalist class="argdata"></datalist>').attr( 'id', dlid );
 							lj = parm.values.length;

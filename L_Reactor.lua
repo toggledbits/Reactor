@@ -42,13 +42,14 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.9 (21126)"
+local _PLUGIN_VERSION = "3.10develop (22082)"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.9/"
+local _FORUM_URL = "https://community.getvera.com/c/plugins-and-plugin-development/reactor/178"
 
-local _CONFIGVERSION	= 20263
+local _CONFIGVERSION	= 21129
 local _CDATAVERSION		= 20045	-- must coincide with JS
-local _UIVERSION		= 21126	-- must coincide with JS
+local _UIVERSION		= 21170	-- must coincide with JS
 	  _SVCVERSION		= 20185	-- must coincide with impl file (not local)
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
@@ -582,10 +583,9 @@ end
 local function setHMTModeSetting( hmtdev )
 	local chm = luup.attr_get( 'Mode', 0 ) or "1"
 	local armed = getVarBool( "Armed", false, hmtdev, SENSOR_SID )
-	if ( not isOpenLuup ) and ( luup.version_minor <= 1040 or luup.version_minor >= 5372 ) then
-		-- Ancient Luup does not disarm correctly per ModeSettings, so on each cycle, reset armed state and
+	if ( not isOpenLuup ) and ( luup.version_minor <= 1040 ) then
+		-- Ancient Luup does not disarm correctly per ModeSetting, so on each cycle, reset armed state and
 		-- set/force ModeSettings accordingly.
-		-- PHR 2021-04-21: And they broke it again in 7.32 Beta (5372/3/4). Bozos.
 		luup.call_action( SENSOR_SID, "SetArmed", { newArmedValue="0" }, hmtdev )
 		armed = false
 	end
@@ -1069,7 +1069,10 @@ local function plugin_runOnce( pdev )
 
 	-- On version change or file missing...
 	if not isOpenLuup and
-		( s < _CONFIGVERSION or not file_exists( "/etc/cmh-ludl/reactor_internet_check.sh" ) ) then
+		( s < _CONFIGVERSION or
+			not file_exists( "/etc/cmh-ludl/reactor_internet_check.sh" ) or
+			not file_exists( "/etc/init.d/reactor_internet_check" )
+		) then
 		-- Install reactor_internet_check daemon
 		L("Updating reactor_internet_check daemon...")
 		os.execute( "pluto-lzo d /etc/cmh-ludl/reactor_internet_check.sh.lzo /etc/cmh-ludl/reactor_internet_check.sh" )
@@ -2734,10 +2737,17 @@ local function doActionRequest( action, scid, tdev )
 	end
 
 	local src
-	local body = tostring(action.data or "" ):gsub( "%{[^}]+%}", function( ref )
-		local vv = getValue( ref, nil, tdev )
-		return ( vv ~= nil ) and vv or ref
-	end )
+	local body = tostring( action.data )
+	if body:gsub( '[\r\n\t]+', ' ' ):match( '^ *{ *"[^"]+" *: *' ) then
+		-- Looks like a JSON string, which unfortunately has a similar pattern to our
+		-- substitutions, so just take it as JSON with not substitutions.
+		L( "Detected JSON data in request body; not performing inline substitutions" )
+	else
+		body = body:gsub( "%{[^}]+%}", function( ref )
+			local vv = getValue( ref, nil, tdev )
+			return ( vv ~= nil ) and vv or ref
+		end )
+	end
 	if body == "" then
 		src = nil
 	else
@@ -4785,6 +4795,8 @@ local function getHouseModeTracker( createit, pdev )
 	if not isOpenLuup then
 		for k,v in childDevices( pdev ) do
 			if v.id == "hmt" then
+				-- Force custom for ModeSetting in Luup root, otherwise arming is funky.
+				luup.attr_set( "ModeSetting", "1:C*;2:C*;3:C*;4:C*", 0 )
 				return k, v -- got it
 			end
 		end
@@ -7023,6 +7035,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 	D("request(%1,%2,%3) luup.device=%4", lul_request, lul_parameters, lul_outputformat, luup.device)
 	local action = lul_parameters['action'] or lul_parameters['command'] or ""
 	local deviceNum = tonumber( lul_parameters['device'] )
+
 	if action == "debug" then
 		if lul_parameters.debug ~= nil then
 			debugMode = TRUESTRINGS:match( lul_parameters.debug )
@@ -7149,6 +7162,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			respBody = httpStatus
 			httpStatus = 500
 		end
+
 		if httpStatus == 200 then
 			if isOpenLuup then
 				-- openLuup just copies file, no compression.
@@ -7374,99 +7388,117 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		updateNetworkStatusHistory( flag, pluginDevice )
 		return "OK:"..newstate..":", "text/plain"
 
-	elseif action == "updateplugin" then
-		D("request() update %1", lul_parameters)
+	elseif action == "updateinfo" then
 		local apibase = "https://api.github.com/repos/toggledbits/Reactor"
-		assert(not isOpenLuup, "Use AltAppStore to update Reactor on openLuup")
-		if lul_parameters.release == nil then
-			local f = io.popen( 'curl -s -L -o - -m 15 ' .. apibase .. '/releases' )
+		if lul_parameters.branch then
+			local f = io.popen( "curl -s -L -o - -m 15 '" .. apibase .. "/branches/" .. lul_parameters.branch .. "'" )
 			local p = f:read("*a")
-			f:close();
+			f:close()
 			local data, dpos, derr = json.decode( p )
 			if not derr then
-				return json.encode{ status=true, message="OK", ['type']="release", data=data }, MIMETYPE_JSON
+				return json.encode{ status=true, ['type']='branch', branch=lul_parameters.branch,
+					sha=data.commit.sha, timestamp=data.commit.commit.author.date  }, MIMETYPE_JSON
+			else
+				return json.encode{ status=false, message="Can't parse Github response: " .. derr }, MIMETYPE_JSON
+			end
+		elseif lul_parameters.release then
+			local f = io.popen( "curl -s -L -o - -m 15 '" .. apibase .. "/releases'" )
+			local p = f:read("*a")
+			f:close()
+			local data, dpos, derr = json.decode( p )
+			local res = {};
+			if not derr then
+				for _,v in ipairs( data ) do
+					if v.target_commitish == "master" and "" ~= ( v.tag_name or "" ) and not ( v.prerelease or v.draft ) then
+						table.insert( res, { id=v.id, tag=v.tag_name, name=v.name, url=v.zipball_url, timestamp=v.published_at,
+							body=v.body } )
+					end
+				end
+				return json.encode{ status=true, message="OK", releases=res }, MIMETYPE_JSON
 			else
 				return json.encode{ status=false, message="Can't parse Github response: " .. derr }, MIMETYPE_JSON
 			end
 		else
+			return json.encode{ status=false, message="Invalid request parameters" }, MIMETYPE_JSON
+		end
+
+	elseif action == "updateplugin" then
+		D("request() update %1", lul_parameters)
+		local apibase = "https://api.github.com/repos/toggledbits/Reactor"
+		assert(not isOpenLuup, "Use AltAppStore to update Reactor on openLuup")
+		local grelease = ""
+		local tmpd = "/tmp/reactor-update"
+		os.execute( 'rm -rf ' .. tmpd )
+		os.execute( 'mkdir -p ' .. tmpd )
+		if lul_parameters.branch then
+			os.execute( "curl -s -L -o '" .. tmpd ..
+				"/reactor.zip' -m 30 'https://github.com/toggledbits/Reactor/archive/refs/heads/" ..
+				lul_parameters.branch .. ".zip'" )
+			grelease = table.concat( { "branch", lul_parameters.branch, os.time() } )
+		elseif lul_parameters.release then
+			os.execute( "curl -s -L -o '" .. tmpd ..
+				"/reactor.zip' -m 30 '" .. lul_parameters.url .. "'" )
+			grelease = table.concat( { "release", lul_parameters.release } )
+		else
+			return json.encode( { status=false, message="Invalid request parameters" } ), MIMETYPE_JSON
+		end
+		if file_exists( tmpd .. "/reactor.zip" ) then
 			local lfs = require "lfs"
-			local f = io.popen(
-				'curl -s -L -o - -m 15 ' .. apibase .. '/releases/' .. lul_parameters.release )
-			if not f then
-				return json.encode( { status=false, message="Unable to fetch Github release " .. lul_parameters.release } ), MIMETYPE_JSON
-			end
-			local p = f:read("*a")
-			f:close()
-			local d,dpos,derr = json.decode( p )
-			if d then
-				L("Performing update to %1 (%2) on branch %3", d.tag_name, d.name, d.target_commitish)
-				local tmpd = "/tmp/reactor-update"
-				os.execute( 'rm -rf ' .. tmpd )
-				os.execute( 'mkdir -p ' .. tmpd )
-				D("request() fetching %1", d.zipball_url)
-				-- N.B. return value of os.execute() from within Luup is unreliable.
-				os.execute( "curl -s -L -o " .. tmpd .. "/release.tgz -m 30 '" .. d.tarball_url .. "'" )
-				if file_exists( tmpd .. "/release.tgz" ) then
-					os.execute( 'tar -C ' .. tmpd .. ' -x -z -f ' .. tmpd .. '/release.tgz' )
-					-- Copy/LZO the files
-					local ufiles = {}
-					local postscript = false
-					local function uscan( path )
-						D("request() scanning %1", path)
-						for fn in lfs.dir( path ) do
-							D("request() evaluating %1", fn)
-							if not fn:match( "^%." ) then
-								local s = lfs.attributes( path .. fn )
-								if s.mode == "directory" then
-									uscan( path .. fn .. "/" )
-								elseif s.mode == "file" then
-									if fn:match( "^[DIJLS]_" ) then
-										os.execute( "pluto-lzo c '" .. path .. fn .. "' '" .. path .. fn .. ".lzo'" )
-										table.insert( ufiles, { target=fn .. ".lzo", source=path .. fn .. ".lzo" } )
-									elseif "reactor_internet_check.sh" == fn then
-										table.insert( ufiles, { target=fn, source=path .. fn } )
-									elseif "post_install.sh" == fn then
-										postscript = path .. fn
-									end
+			os.execute( "unzip -q -o '" .. tmpd .. "/reactor.zip' -d '" .. tmpd .. "'" )
+			-- Copy/LZO the files
+			local ufiles = {}
+			local postscript = false
+			local function uscan( path )
+				D("request() scanning %1", path)
+				for fn in lfs.dir( path ) do
+					D("request() evaluating %1", fn)
+					if not fn:match( "^%." ) then
+						local s = lfs.attributes( path .. fn )
+						if s.mode == "directory" then
+							uscan( path .. fn .. "/" )
+						elseif s.mode == "file" then
+							if fn:match( "^[DIJLS]_" ) or "reactor_internet_check.sh" == fn then
+								os.execute( "pluto-lzo c '" .. path .. fn .. "' '" .. path .. fn .. ".lzo'" )
+								if file_exists( path .. fn .. '.lzo' ) then
+									table.insert( ufiles, { target=fn .. ".lzo", source=path .. fn .. ".lzo" } )
+								else
+									table.insert( ufiles, { target=fn, sourcepath=path .. fn } )
 								end
+							elseif "post_install.sh" == fn then
+								postscript = path .. fn
 							end
 						end
 					end
-					uscan( tmpd .. '/' ) -- fills ufiles
-					for _,ff in ipairs( ufiles ) do
-						-- Update each file. If updating a compressed file, force remove any uncompressed version.
-						L("Updating %1", ff.target)
-						os.execute( "mv -f '" .. ff.source .. "' '/etc/cmh-ludl/" .. ff.target .. "'" )
-						if ff.target:match( "%.lzo$" ) then
-							os.remove( "/etc/cmh-ludl/" .. ff.target:gsub( "%.lzo$", "" ) )
-						end
-					end
-					if postscript then
-						f = io.popen( "sh " .. postscript .. " 2>&1" )
-						while true do
-							l = f:read("*l")
-							if not l then break end
-							L("Post-install script output: %1", l )
-						end
-						f:close()
-					end
-					setVar( MYSID, "grelease", table.concat( { d.id, d.tag_name, d.name, d.target_commitish, d.published_at }, "|" ), pluginDevice )
-					luup.attr_set( "plugin", "", pluginDevice ) -- disconnect from App Marketplace
-					L"Update completed; Luup needs to be reloaded for changes to take effect."
-					-- os.execute( "rm -rf " .. tmpd )
-					scheduleDelay( { id="reload", func=luup.reload, owner=pluginDevice }, 5 )
-					return json.encode( { status=true, updated=true, message="OK", release=d } ), MIMETYPE_JSON
-				else
-					return json.encode( { status=false, message="Unable to UNZIP update package" } ), MIMETYPE_JSON
 				end
-			else
-				-- We don't care about this release.
-				return json.encode( { status=true, updated=false, message="No update required", release=d } ), MIMETYPE_JSON
 			end
-			W("Can't parse Github response %1 %2", dpos, derr)
-			luup.log(tostring(p),2)
-			return json.encode( { status=false, message="Unable to parse Github response" } ), MIMETYPE_JSON
+			uscan( tmpd .. '/' ) -- fills ufiles
+			for _,ff in ipairs( ufiles ) do
+				-- Update each file. If updating a compressed file, force remove any uncompressed version.
+				L("Updating %1", ff.target)
+				os.execute( "mv -f '" .. ff.source .. "' '/etc/cmh-ludl/" .. ff.target .. "'" )
+				if ff.target:match( "%.lzo$" ) then
+					os.remove( "/etc/cmh-ludl/" .. ff.target:gsub( "%.lzo$", "" ) )
+				end
+			end
+			if postscript then
+				f = io.popen( "sh " .. postscript .. " 2>&1" )
+				while true do
+					l = f:read("*l")
+					if not l then break end
+					L("Post-install script output: %1", l )
+				end
+				f:close()
+			end
+			setVar( MYSID, "grelease", grelease, pluginDevice )
+			luup.attr_set( "plugin", "", pluginDevice ) -- disconnect from App Marketplace
+			L"Update completed; Luup needs to be reloaded for changes to take effect."
+			-- os.execute( "rm -rf " .. tmpd )
+			scheduleDelay( { id="reload", func=luup.reload, owner=pluginDevice }, 5 )
+			return json.encode( { status=true, updated=true, message="OK" } ), MIMETYPE_JSON
+		else
+			return json.encode( { status=false, message="Unable to download update package" } ), MIMETYPE_JSON
 		end
+
 	else
 		return "%REACTOR-REQUEST-F-NOTIMPL, requested action is not implemented", "text/plain"
 	end

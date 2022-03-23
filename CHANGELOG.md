@@ -13,8 +13,11 @@ NOTE TO ALTUI USERS: All current versions of Reactor REQUIRE AltUI 2536 to 2552;
 ## Version 3.10 (22082)
 
 * ALTUI version 2553 allowed on reliance from user (not tested by author). YMMV.
+* Suppress parameter substitution in pure-JSON body for HTTP Request action;
+* Allow non-list data entry in Pushover notification sound;
+* Fix: Broken link to forums in various footers (site is evolving).
 
-## Version 3.9 development (21126)
+## Version 3.9 (21126)
 
 * DEPRECATION: The `Reactor.groups` table is now deprecated; use `Reactor.conditions` instead (just change the name in your code, it works the same). See [the Reactor documentation](https://www.toggledbits.com/static/reactor/docs/Run-Lua-Action/) for more information.
 * Enhancement: There is now a "group copy/import" on (sub)groups to allow the contents of another group to be copied into the current group.
