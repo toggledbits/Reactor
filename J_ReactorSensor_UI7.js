@@ -18,7 +18,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = "3.10develop (21206)";
+	var pluginVersion = "3.10develop (22082)";
 
 	var _UIVERSION = 21170;     /* must coincide with Lua core */
 
@@ -30,7 +30,7 @@ var ReactorSensor = (function(api, $) {
 	var _FORUMURL = "https://community.getvera.com/c/plugins-and-plugin-development/reactor/178";
 
 	var _MIN_ALTUI_VERSION = 2536;
-	var	_MAX_ALTUI_VERSION = 2552;
+	var	_MAX_ALTUI_VERSION = 2553;
 
 	var myModule = {};
 
