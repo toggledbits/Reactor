@@ -42,7 +42,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.10develop (21207)"
+local _PLUGIN_VERSION = "3.10develop (22082)"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.9/"
 local _FORUM_URL = "https://community.getvera.com/c/plugins-and-plugin-development/reactor/178"
@@ -7035,6 +7035,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 	D("request(%1,%2,%3) luup.device=%4", lul_request, lul_parameters, lul_outputformat, luup.device)
 	local action = lul_parameters['action'] or lul_parameters['command'] or ""
 	local deviceNum = tonumber( lul_parameters['device'] )
+
 	if action == "debug" then
 		if lul_parameters.debug ~= nil then
 			debugMode = TRUESTRINGS:match( lul_parameters.debug )
@@ -7161,6 +7162,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 			respBody = httpStatus
 			httpStatus = 500
 		end
+
 		if httpStatus == 200 then
 			if isOpenLuup then
 				-- openLuup just copies file, no compression.
@@ -7429,15 +7431,15 @@ function request( lul_request, lul_parameters, lul_outputformat )
 		os.execute( 'rm -rf ' .. tmpd )
 		os.execute( 'mkdir -p ' .. tmpd )
 		if lul_parameters.branch then
-			os.execute( "curl -s -L -o '" .. tmpd .. 
+			os.execute( "curl -s -L -o '" .. tmpd ..
 				"/reactor.zip' -m 30 'https://github.com/toggledbits/Reactor/archive/refs/heads/" ..
 				lul_parameters.branch .. ".zip'" )
 			grelease = table.concat( { "branch", lul_parameters.branch, os.time() } )
 		elseif lul_parameters.release then
-			os.execute( "curl -s -L -o '" .. tmpd .. 
+			os.execute( "curl -s -L -o '" .. tmpd ..
 				"/reactor.zip' -m 30 '" .. lul_parameters.url .. "'" )
 			grelease = table.concat( { "release", lul_parameters.release } )
-		else 
+		else
 			return json.encode( { status=false, message="Invalid request parameters" } ), MIMETYPE_JSON
 		end
 		if file_exists( tmpd .. "/reactor.zip" ) then
