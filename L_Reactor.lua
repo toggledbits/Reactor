@@ -5549,6 +5549,9 @@ function startPlugin( pdev, ptask ) -- N.B. can be run as task
 			end
 			package.loaded[v] = nil
 		end
+	else
+		-- On Vera systems, disconnect this version from App Marketplace.
+		luup.attr_set( "plugin", "", pluginDevice )
 	end
 
 	-- Check for hard system restart loop; stand off if it's happening. Not
