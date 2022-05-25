@@ -1,6 +1,6 @@
 --[[
 	L_Reactor.lua - Core module for Reactor
-	Copyright 2018,2019,2020,2021 Patrick H. Rigney, All Rights Reserved.
+	Copyright 2018-2022 Patrick H. Rigney, All Rights Reserved.
 	This file is part of Reactor.
 
 	RESTRICTED USE LICENSE
@@ -42,12 +42,12 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.10develop (22082)"
+local _PLUGIN_VERSION = "3.10 (22145)"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.9/"
 local _FORUM_URL = "https://community.getvera.com/c/plugins-and-plugin-development/reactor/178"
 
-local _CONFIGVERSION	= 21129
+local _CONFIGVERSION	= 22145
 local _CDATAVERSION		= 20045	-- must coincide with JS
 local _UIVERSION		= 21170	-- must coincide with JS
 	  _SVCVERSION		= 20185	-- must coincide with impl file (not local)
@@ -995,6 +995,10 @@ local function sensor_runOnce( tdev )
 	deleteVar( RSSID, "Invert", tdev )
 	deleteVar( RSSID, "ValueChangeHoldTime", tdev )
 	deleteVar( RSSID, "ReloadConditionHoldTime", tdev )
+
+	if s < 22145 then
+		setVar( RSSID, "WatchResponseHoldOff", "", tdev )
+	end
 
 	-- Update version last.
 	if s < _CONFIGVERSION then
@@ -7439,8 +7443,7 @@ function request( lul_request, lul_parameters, lul_outputformat )
 				lul_parameters.branch .. ".zip'" )
 			grelease = table.concat( { "branch", lul_parameters.branch, os.time() } )
 		elseif lul_parameters.release then
-			os.execute( "curl -s -L -o '" .. tmpd ..
-				"/reactor.zip' -m 30 '" .. lul_parameters.url .. "'" )
+			os.execute( "curl -s -L -o '" .. tmpd .. "/reactor.zip' -m 30 '" .. lul_parameters.url .. "'" )
 			grelease = table.concat( { "release", lul_parameters.release } )
 		else
 			return json.encode( { status=false, message="Invalid request parameters" } ), MIMETYPE_JSON

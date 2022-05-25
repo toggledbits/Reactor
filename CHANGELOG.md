@@ -1,5 +1,9 @@
 # Change Log #
 
+**As of June 2021, the Reactor Plugin for Vera/Luup (this project) is no longer released through the Vera App Marketplace. This Github repository is the only official repository for this plugin.**
+
+**If you are looking for information about my Multi-Hub Reactor project for Vera, Ezlo, Home Assistant, Hubitat, MQTT, and ZWave-JS, please go to [https://reactor.toggledbits.com/](https://reactor.toggledbits.com/).**
+
 NOTE TO OPENLUUP USERS: All current versions of Reactor REQUIRE openLuup 2020.04.14b or higher. Version 2021.01.03 or higher is recommended in particular for users of the Vera and eZLO Bridges.
 
 NOTE TO ALTUI USERS: All current versions of Reactor REQUIRE AltUI 2536 to 2553; versions outside this range *are not supported*. If you are having UI issues and running on a version other than those within the foregoing range, please install a supported version of ALTUI. Since testing of the UI has to happen on a large number of platforms and browsers, it takes time and there necessarily will be a delay in certifying the Reactor UI for new releases of ALTUI.
@@ -10,7 +14,7 @@ NOTE TO ALTUI USERS: All current versions of Reactor REQUIRE AltUI 2536 to 2553;
 
 **DEPRECATION NOTICE:** The `Reactor.groups` table is now deprecated; use `Reactor.conditions` instead (just change the name in your code, it works the same). See [the Reactor documentation](https://www.toggledbits.com/static/reactor/docs/Run-Lua-Action/) for more information.
 
-## Version 3.10 (22082)
+## Version 3.10 (22145)
 
 * ALTUI version 2553 allowed on reliance from user (not tested by author). YMMV.
 * Suppress parameter substitution in pure-JSON body for HTTP Request action;

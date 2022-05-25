@@ -1,4 +1,4 @@
-# Reactor #
+# Reactor
 
 A programmable logic plugin for Vera home automation systems to enhance the built-in trigger logic
 for scenes and other actions.
@@ -8,7 +8,7 @@ for scenes and other actions.
 * Easy to configure (no Lua or expression syntax to learn);
 * Powerful features for testing conditions and performing actions.
 
-**This repository is for the Reactor for Vera plugin only. If you are looking for the multi-hub version of Reactor (supports Vera, Ezlo, MQTT, Home Assistant, and Hubitat, with more planned), please see [https://reactor.toggledbits.com/](https://reactor.toggledbits.com).**
+**This repository is for the Reactor for Vera/Luup plugin only. If you are looking for the multi-hub version of Reactor (supports Vera, Ezlo, MQTT, Home Assistant, Hubitat, and ZWave-JS, with more planned), please see [https://reactor.toggledbits.com/](https://reactor.toggledbits.com/).**
 
 ## Background ##
 
@@ -53,6 +53,7 @@ My branching strategy for Reactor includes four branches, as follows:
 ## License ##
 
 Reactor currently is copyrighted and all rights are reserved. Although the source code is visible for public
-review, it is not an open source project at this time and the release of derivative works is not permitted.
+review, it is not an open source project at this time and the use of the whole or any part of this project in derivative
+works is expressly forbidden.
 
 Please refer to [the full license in the Reactor documentation](https://www.toggledbits.com/static/reactor/docs/Installation/).

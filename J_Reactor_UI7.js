@@ -3,7 +3,7 @@
  * J_Reactor_UI7.js
  * Configuration interface for Reactor master device
  *
- * Copyright 2018,2019,2020 Patrick H. Rigney, All Rights Reserved.
+ * Copyright 2018-2022 Patrick H. Rigney, All Rights Reserved.
  * This file is part of Reactor. Use subject to license; please see
  * license details at https://www.toggledbits.com/static/reactor/docs/Installation#license-and-use-restrictions
  *
@@ -18,7 +18,7 @@ var Reactor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '72acc6ea-f24d-11e8-bd87-74d4351650de';
 
-	var pluginVersion = "3.10 (22082)";
+	var pluginVersion = "3.10 (22145)";
 
 	var _UIVERSION = 21170;     /* must coincide with Lua core */
 
