@@ -14,6 +14,10 @@ NOTE TO ALTUI USERS: All current versions of Reactor REQUIRE AltUI 2536 to 2553;
 
 **DEPRECATION NOTICE:** The `Reactor.groups` table is now deprecated; use `Reactor.conditions` instead (just change the name in your code, it works the same). See [the Reactor documentation](https://www.toggledbits.com/static/reactor/docs/Run-Lua-Action/) for more information.
 
+## Version 3.11 (22308)
+
+* HTTP Request action: handle SSL/TLS negotation failure, returns nil httpStatus.
+
 ## Version 3.10 (22145)
 
 * ALTUI version 2553 allowed on reliance from user (not tested by author). YMMV.

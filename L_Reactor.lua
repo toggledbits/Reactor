@@ -42,7 +42,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.10 (22145)"
+local _PLUGIN_VERSION = "3.11 (22308)"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.9/"
 local _FORUM_URL = "https://community.getvera.com/c/plugins-and-plugin-development/reactor/178"
@@ -2836,9 +2836,9 @@ local function doActionRequest( action, scid, tdev )
 		D("doRequest() request %1", req)
 		local rh, st
 		respBody, httpStatus, rh, st = requestor.request(req)
-		local hs = tonumber(httpStatus)
-		if getVar( "RequestActionAcceptStatus", "200", tdev, RSSID ):match( httpStatus ) or
-			( hs and hs >= 200 and hs <= 299 ) then
+		local hs = tonumber( httpStatus )
+		if httpStatus and ( getVar( "RequestActionAcceptStatus", "200", tdev, RSSID ):match( httpStatus ) or
+			( hs and hs >= 200 and hs <= 299 ) ) then
 			D("doRequest() request returned httpStatus=%1, respBody=%2, respHeaders=%3, status=%4", httpStatus, respBody, rh, st)
 			-- Since we're using the table sink, concatenate chunks to single string.
 			respBody = table.concat(r, "")
