@@ -42,14 +42,14 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.11 (22308)"
+local _PLUGIN_VERSION = "3.11 (22314)"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.9/"
 local _FORUM_URL = "https://community.getvera.com/c/plugins-and-plugin-development/reactor/178"
 
 local _CONFIGVERSION	= 22145
 local _CDATAVERSION		= 20045	-- must coincide with JS
-local _UIVERSION		= 21170	-- must coincide with JS
+local _UIVERSION		= 22314	-- must coincide with JS
 	  _SVCVERSION		= 20185	-- must coincide with impl file (not local)
 
 local MYSID = "urn:toggledbits-com:serviceId:Reactor"
@@ -998,6 +998,11 @@ local function sensor_runOnce( tdev )
 
 	if s < 22145 then
 		setVar( RSSID, "WatchResponseHoldOff", "", tdev )
+	end
+
+	if s < 22314 then
+		setVar( RSSID, "RequestActionUseCurl", "0", tdev )
+		setVar( RSSID, "RequestActionCurlOptions", "", tdev )
 	end
 
 	-- Update version last.
@@ -2736,42 +2741,57 @@ local function doActionRequest( action, scid, tdev )
 				local vv = getValue( ref, nil, tdev )
 				return ( vv ~= nil ) and vv or ref
 			end )
-			tHeaders[key] = val
+			tHeaders[string.lower(key)] = val
 		end
 	end
 
 	local src
-	local body = tostring( action.data )
-	if body:gsub( '[\r\n\t]+', ' ' ):match( '^ *{ *"[^"]+" *: *' ) then
-		-- Looks like a JSON string, which unfortunately has a similar pattern to our
-		-- substitutions, so just take it as JSON with not substitutions.
-		L( "Detected JSON data in request body; not performing inline substitutions" )
-	else
-		body = body:gsub( "%{[^}]+%}", function( ref )
-			local vv = getValue( ref, nil, tdev )
-			return ( vv ~= nil ) and vv or ref
-		end )
-	end
-	if body == "" then
-		src = nil
-	else
+	local body = tostring( action.data or "" )
+	if "GET" ~= method then
+		if "application/json" == tHeaders['content-type'] then
+			-- Looks like a JSON string, which unfortunately has a similar pattern to our
+			-- substitutions, so just take it as JSON with no substitutions.
+			L( "Detected JSON data in request body; not performing inline substitutions" )
+			addEvent{ dev=tdev, msg="Detected JSON data in request body; not performing inline substitutions." }
+		else
+			body = body:gsub( "%{[^}]+%}", function( ref )
+				local vv = getValue( ref, nil, tdev )
+				return ( vv ~= nil ) and vv or ref
+			end )
+		end
 		src = ltn12.source.string( body )
-		tHeaders["Content-Length"] = string.len( body )
+		tHeaders["content-length"] = string.len( body )
 		D("doActionRequest() body is %1", body)
+	else
+		src = nil
 	end
 
 	local respBody
 	local r = {}
 	if action.usecurl or getVarBool( "RequestActionUseCurl", false, tdev, RSSID ) then
 		local req = string.format( "curl -s -m %d -o -", timeout )
+		if "GET" ~= method then
+			req = req .. " -X " .. method
+		end
 		if getVarBool( "RequestActionFollowRedirects", false, tdev, RSSID ) then
 			req = req .. " -L"
 		end
 		for k,v in pairs( tHeaders or {} ) do
-			req = req .. " -H '" .. k .. ": " .. v:gsub( "'", "''" ) .. "'"
+			if ( "content-length" ~= k ) then
+				req = req .. " -H '" .. k .. ": " .. string.gsub( v, "'", "''" ) .. "'"
+			end
 		end
 		local s = action.curlopts or luup.variable_get( RSSID, "RequestCurlOptions", tdev ) or ""
 		if s ~= "" then req = req .. " " .. s end
+		if "" ~= body then
+			-- To avoid quoting and length issues, write the body to temp file
+			local tf = os.tmpname()
+			local f = io.open( tf, "w" )
+			f:write( body )
+			f:close()
+			req = req .. " -d '@" .. tf .. "'"
+			D("doActionRequest() body written to temporary file %1", tf)
+		end
 		req = req .. " '" .. url .. "'"
 		L("%1 (#%2) request action: %3", luup.devices[tdev].description, tdev, req)
 		addEvent{ dev=tdev, msg="Request via curl: %(req)s", req=req }
@@ -2783,6 +2803,8 @@ local function doActionRequest( action, scid, tdev )
 				if chunk then
 					count = count + #chunk
 					table.insert( r, chunk )
+				else
+					break
 				end
 			until count >= maxResp
 			f:close()

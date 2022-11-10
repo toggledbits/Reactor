@@ -18,9 +18,9 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = "3.10 (22145)";
+	var pluginVersion = "3.11 (22314)";
 
-	var _UIVERSION = 21170;     /* must coincide with Lua core */
+	var _UIVERSION = 22314;     /* must coincide with Lua core */
 
 	var _CDATAVERSION = 20045;  /* must coincide with Lua core */
 
@@ -2018,6 +2018,7 @@ div#reactorstatus div.cond.re-cond-error { border: 3px solid red; } \
 div#reactorstatus div.cond.reactor-timing { animation: pulse 2s infinite; } \
 @keyframes pulse { 0% { background-color: #fff; } 50% { background-color: #cfc; } 100% { background-color: #fff; } } \
 div.re-updatestatus { margin: 8px 0; padding: 8px 8px; border: 3px solid #0c0; border-radius: 8px; font-weight: bold; text-align: center; } \
+div.re-msr { margin: 8px 0; padding: 8px 8px; border: 3px solid #0c0; border-radius: 8px; font-weight: bold; text-align: center; } \
 </style>');
 		}
 
@@ -2027,6 +2028,9 @@ div.re-updatestatus { margin: 8px 0; padding: 8px 8px; border: 3px solid #0c0; b
 		captureControlPanelClose( $('div#reactorstatus') );
 
 		try {
+            $( `<div class="re-msr">If you are considering moving to Home Assistant or Hubitat, check out my <a href="https://reactor.toggledbits.com/docs/" target="_blank">Multi-Hub Reactor</a> project. It's an evolution of Reactor for Vera that supports multiple home automation hubs including Vera, to ease your transition between them -- take your time moving devices from one platform to another, rather than trying to do a "fork lift upgrade" of your entire home automation system and devices at once. It also works with MQTT, giving you accecss to its universe of supported devices and integrations, including a ton of inexpensive WiFi devices. And yes, it even supports Ezlo hubs, too.</div>` )
+                .insertBefore( $( 'div#reactorstatus' ) );
+
 			updateStatus( myid );
 
 			checkUpdate().then( function( data ) {
@@ -6032,6 +6036,11 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					} else {
 						action.data = t;
 					}
+					if ( $( 'input#' + idSelector( pfx + 'usecurl' ), row ).prop( "checked" ) ) {
+						action.usecurl = 1;
+					} else {
+						delete action.usecurl;
+					}
 					break;
 
 				default:
@@ -6213,24 +6222,24 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				} else {
 					xf = $( '<input class="form-control form-control-sm">' )
 						.attr( 'placeholder', fld.placeholder || "" );
-                    if ( Array.isArray( fld.datalist ) ) {
-                        // if ( undefined !== window.HTMLDataListElement ) {
-                        var dlid = 'notify-' + method + '-' + fld.id;
-                        var $dl = $( 'datalist#' + idSelector( dlid ) );
-                        if ( 0 === $dl.length ) {
-                            /* build datalist */
-                            var $ct = $( 'div#re-activities' );
-                            $dl = $( '<datalist></datalist>' ).attr( 'id', dlid ).appendTo( $ct );
-                            fld.datalist.forEach( function( v ) {
-                                var pm = v.match( "^([^=]*)=(.*)$" );
-                                if ( pm ) {
-                                    $( '<option></option>' ).val( pm[1] ).text( pm[2] )
-                                        .appendTo( $dl );
-                                }
-                            });
-                        }
-                        xf.attr( 'list', dlid );
-                    }
+					if ( Array.isArray( fld.datalist ) ) {
+						// if ( undefined !== window.HTMLDataListElement ) {
+						var dlid = 'notify-' + method + '-' + fld.id;
+						var $dl = $( 'datalist#' + idSelector( dlid ) );
+						if ( 0 === $dl.length ) {
+							/* build datalist */
+							var $ct = $( 'div#re-activities' );
+							$dl = $( '<datalist></datalist>' ).attr( 'id', dlid ).appendTo( $ct );
+							fld.datalist.forEach( function( v ) {
+								var pm = v.match( "^([^=]*)=(.*)$" );
+								if ( pm ) {
+									$( '<option></option>' ).val( pm[1] ).text( pm[2] )
+										.appendTo( $dl );
+								}
+							});
+						}
+						xf.attr( 'list', dlid );
+					}
 				}
 				if ( ! isEmpty( fld.default ) ) {
 					xf.val( fld.default );
@@ -7291,7 +7300,12 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 				}
 				$m.appendTo( $lb );
 
-				$('<div></div>').html("Substitutions are available in all request fields using <tt>{expr}</tt> syntax.")
+				$fs = $( '<div></div>' ).appendTo( ct );
+				getCheckbox( pfx + 'usecurl', 1, "Use \"curl\" instead of Lua http/https libraries" )
+					.on( 'change.reactor', handleActionValueChange )
+					.appendTo( $fs );
+
+				$('<div></div>').html("Substitutions are available in all request fields using <tt>{expr}</tt> syntax. Using <tt>curl</tt> instead of the aging Lua libraries in the Vera firmware may resolves some SSL/TLS connection issues.")
 					.appendTo( ct );
 				break;
 
@@ -7823,6 +7837,7 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 								.appendTo( $( 'select.re-reqtarget', newRow ) );
 						}
 						$( 'select.re-reqtarget', newRow ).val( act.target || "" );
+						$( 'input#' + idSelector( rid + '-usecurl' ), newRow ).prop( "checked", !!act.usecurl );
 						break;
 
 					default:

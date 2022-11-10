@@ -18,9 +18,9 @@ var Reactor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '72acc6ea-f24d-11e8-bd87-74d4351650de';
 
-	var pluginVersion = "3.10 (22145)";
+	var pluginVersion = "3.11 (22314)";
 
-	var _UIVERSION = 21170;     /* must coincide with Lua core */
+	var _UIVERSION = 22314;     /* must coincide with Lua core */
 
 	var _DOCURL = "https://www.toggledbits.com/static/reactor/docs/3.9/";
 	var _FORUMURL = "https://community.getvera.com/c/plugins-and-plugin-development/reactor/178";
