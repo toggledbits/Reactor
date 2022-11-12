@@ -11,7 +11,7 @@
 
 var ReactorSensor_ALTUI = ( function( window, undefined ) {
 
-	var pluginVersion = "3.11 (22314)";
+	var pluginVersion = "3.12 (22316)";
 
 	var _UIVERSION = 22314;
 

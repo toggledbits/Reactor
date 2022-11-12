@@ -18,7 +18,7 @@ var ReactorSensor = (function(api, $) {
 	/* unique identifier for this plugin... */
 	var uuid = '21b5725a-6dcd-11e8-8342-74d4351650de';
 
-	var pluginVersion = "3.11 (22314)";
+	var pluginVersion = "3.12 (22316)";
 
 	var _UIVERSION = 22314;     /* must coincide with Lua core */
 
@@ -2028,8 +2028,8 @@ div.re-msr { margin: 8px 0; padding: 8px 8px; border: 3px solid #0c0; border-rad
 		captureControlPanelClose( $('div#reactorstatus') );
 
 		try {
-            $( `<div class="re-msr">If you are considering moving to Home Assistant or Hubitat, check out my <a href="https://reactor.toggledbits.com/docs/" target="_blank">Multi-Hub Reactor</a> project. It's an evolution of Reactor for Vera that supports multiple home automation hubs including Vera, to ease your transition between them -- take your time moving devices from one platform to another, rather than trying to do a "fork lift upgrade" of your entire home automation system and devices at once. It also works with MQTT, giving you accecss to its universe of supported devices and integrations, including a ton of inexpensive WiFi devices. And yes, it even supports Ezlo hubs, too.</div>` )
-                .insertBefore( $( 'div#reactorstatus' ) );
+			$( `<div class="re-msr">If you are considering moving to Home Assistant or Hubitat, check out my <a href="https://reactor.toggledbits.com/docs/" target="_blank">Multi-Hub Reactor</a> project. It's an evolution of Reactor for Vera that supports multiple home automation hubs including Vera, to ease your transition between them -- take your time moving devices from one platform to another, rather than trying to do a "fork lift upgrade" of your entire home automation system and devices at once. It also works with MQTT, giving you accecss to its universe of supported devices and integrations, including a ton of inexpensive WiFi devices. And yes, it even supports Ezlo hubs, too.</div>` )
+				.insertBefore( $( 'div#reactorstatus' ) );
 
 			updateStatus( myid );
 
@@ -6037,9 +6037,16 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						action.data = t;
 					}
 					if ( $( 'input#' + idSelector( pfx + 'usecurl' ), row ).prop( "checked" ) ) {
-						action.usecurl = 1;
+						action.usecurl = true;
 					} else {
 						delete action.usecurl;
+					}
+					/* Always set ignorecerts in data to remove ambiguity */
+					action.ignorecerts = $( 'input#' + idSelector( pfx + 'ignorecerts' ), row ).prop( "checked" );
+					if ( $( 'input#' + idSelector( pfx + 'followredirects' ), row ).prop( "checked" ) ) {
+						action.followredirects = true;
+					} else {
+						delete action.followredirects;
 					}
 					break;
 
@@ -7305,7 +7312,18 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 					.on( 'change.reactor', handleActionValueChange )
 					.appendTo( $fs );
 
-				$('<div></div>').html("Substitutions are available in all request fields using <tt>{expr}</tt> syntax. Using <tt>curl</tt> instead of the aging Lua libraries in the Vera firmware may resolves some SSL/TLS connection issues.")
+				$fs = $( '<div></div>' ).appendTo( ct );
+				getCheckbox( pfx + 'ignorecerts', 1, "Ignore server certificates (see caution below)" )
+					.val( "1" )
+					.on( 'change.reactor', handleActionValueChange )
+					.appendTo( $fs );
+
+				$fs = $( '<div></div>' ).appendTo( ct );
+				getCheckbox( pfx + 'followredirects', 1, "Follow redirects (see caution below)" )
+					.on( 'change.reactor', handleActionValueChange )
+					.appendTo( $fs );
+
+				$('<div></div>').html("Substitutions are available in all request fields using <tt>{expr}</tt> syntax. Using <tt>curl</tt> instead of the aging Lua libraries in the Vera firmware may resolves some SSL/TLS connection issues. Ignoring server certificates may be necessary when connecting to endpoints that use self-signed certificates, but could be a security risk. Following redirects may take your request to another endpoint at the server's direction, which could be a security risk.")
 					.appendTo( ct );
 				break;
 
@@ -7838,6 +7856,10 @@ div#tab-vars.reactortab button.md-btn.attn { background-color: #ff8; background-
 						}
 						$( 'select.re-reqtarget', newRow ).val( act.target || "" );
 						$( 'input#' + idSelector( rid + '-usecurl' ), newRow ).prop( "checked", !!act.usecurl );
+						$( 'input#' + idSelector( rid + '-ignorecerts' ), newRow ).prop( "checked",
+							act.ignorecerts === undefined || !!act.ignorecerts );
+						$( 'input#' + idSelector( rid + '-followredirects' ), newRow ).prop( "checked",
+							!!act.followredirects );
 						break;
 
 					default:

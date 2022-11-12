@@ -42,12 +42,12 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.11 (22314)"
+local _PLUGIN_VERSION = "3.12 (22316)"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.9/"
 local _FORUM_URL = "https://community.getvera.com/c/plugins-and-plugin-development/reactor/178"
 
-local _CONFIGVERSION	= 22145
+local _CONFIGVERSION	= 22316
 local _CDATAVERSION		= 20045	-- must coincide with JS
 local _UIVERSION		= 22314	-- must coincide with JS
 	  _SVCVERSION		= 20185	-- must coincide with impl file (not local)
@@ -976,6 +976,23 @@ local function sensor_runOnce( tdev )
 	initVar( "TestTime", "", tdev, RSSID )
 	initVar( "TestHouseMode", "", tdev, RSSID )
 
+	initVar( "RequestActionUseCurl", "", tdev, RSSID )
+	initVar( "RequestActionCurlOptions", "", tdev, RSSID )
+	initVar( "RequestActionResponseLimit", "", tdev, RSSID )
+	initVar( "RequestActionTimeout", "", tdev, RSSID )
+	initVar( "RequestActionFollowRedirects", "", tdev, RSSID )
+	initVar( "RequestActionAcceptStatus", "", tdev, RSSID )
+	initVar( "RequestSSLParams", "", tdev, RSSID )
+	initVar( "RequestSSLProtocol", "", tdev, RSSID )
+	initVar( "RequestSSLMode", "", tdev, RSSID )
+	initVar( "RequestSSLVerify", "", tdev, RSSID )
+	initVar( "RequestSSLOptions", "", tdev, RSSID )
+	initVar( "SMTPSSLParams", "", tdev, RSSID )
+	initVar( "SMTPSSLProtocol", "", tdev, RSSID )
+	initVar( "SMTPSSLMode", "", tdev, RSSID )
+	initVar( "SMTPSSLVerify", "", tdev, RSSID )
+	initVar( "SMTPSSLOptions", "", tdev, RSSID )
+
 	initVar( "Armed", 0, tdev, SENSOR_SID )
 	initVar( "Tripped", 0, tdev, SENSOR_SID )
 	initVar( "ArmedTripped", 0, tdev, SENSOR_SID )
@@ -998,11 +1015,6 @@ local function sensor_runOnce( tdev )
 
 	if s < 22145 then
 		setVar( RSSID, "WatchResponseHoldOff", "", tdev )
-	end
-
-	if s < 22314 then
-		setVar( RSSID, "RequestActionUseCurl", "0", tdev )
-		setVar( RSSID, "RequestActionCurlOptions", "", tdev )
 	end
 
 	-- Update version last.
@@ -2773,7 +2785,8 @@ local function doActionRequest( action, scid, tdev )
 		if "GET" ~= method then
 			req = req .. " -X " .. method
 		end
-		if getVarBool( "RequestActionFollowRedirects", false, tdev, RSSID ) then
+		if action.ignorecerts then req = req .. " -k" end
+		if action.followredirects or getVarBool( "RequestActionFollowRedirects", false, tdev, RSSID ) then
 			req = req .. " -L"
 		end
 		for k,v in pairs( tHeaders or {} ) do
@@ -2833,7 +2846,7 @@ local function doActionRequest( action, scid, tdev )
 			sink = ltn12.sink.chain( getCountFilter( countParam ), tsink ),
 			method = method,
 			headers = tHeaders,
-			redirect = getVarBool( "RequestActionFollowRedirects", false, tdev, RSSID )
+			redirect = action.followredirects or getVarBool( "RequestActionFollowRedirects", false, tdev, RSSID )
 		}
 
 		-- HTTP or HTTPS?
@@ -2842,6 +2855,9 @@ local function doActionRequest( action, scid, tdev )
 			local https = require "ssl.https"
 			requestor = https
 			local rp = getSSLParams( "Request" )
+			if action.ignorecerts ~= nil then -- don't change if undefined
+				rp.verify = action.ignorecerts and "none" or "peer"
+			end
 			for k,v in pairs( rp ) do
 				req[k] = v
 			end
@@ -7028,8 +7044,7 @@ SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 				"ActivityCheckpoint", "ActivityMaxExecTime", "WatchResponseHoldOff",
 				"UseLegacyTripBehavior", "SSLProtocol", "SSLVerify", "SSLOptions",
 				"RequestActionResponseLimit", "RequestActionTimeout", "RequestActionUseCurl",
-				"RequestActionCurlOptions", "RequestActionTimeout",
-				"RequestActionFollowRedirects", "RequestActionAcceptStatus",
+				"RequestActionCurlOptions", "RequestActionFollowRedirects", "RequestActionAcceptStatus",
 				"SMTPSSLParams", "SMTPSSLProtocol", "SMTPSSLMode", "SMTPSSLVerify", "SMTPSSLOptions" } ) do
 				local val = luup.variable_get( RSSID, v, deviceNum ) or ""
 				if val ~= "" then
