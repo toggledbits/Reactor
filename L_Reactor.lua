@@ -42,7 +42,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9086
 local _PLUGIN_NAME = "Reactor"
-local _PLUGIN_VERSION = "3.12 (22316)"
+local _PLUGIN_VERSION = "3.12 (22321)"
 local _PLUGIN_URL = "https://www.toggledbits.com/reactor"
 local _DOC_URL = "https://www.toggledbits.com/static/reactor/docs/3.9/"
 local _FORUM_URL = "https://community.getvera.com/c/plugins-and-plugin-development/reactor/178"
@@ -786,6 +786,8 @@ local function scheduleTick( tinfo, timeTick, flags )
 		tickTasks[tkey].func = tinfo.func or tickTasks[tkey].func
 		tickTasks[tkey].args = tinfo.args or tickTasks[tkey].args
 		tickTasks[tkey].info = tinfo.info or tickTasks[tkey].info
+		tickTasks[tkey].autoclose = flags.autoclose or false
+		tickTasks[tkey].onerr = tinfo.onerr or tickTasks[tkey].onerr
 		if timeTick == nil or tickTasks[tkey].when == nil or timeTick < tickTasks[tkey].when or flags.replace then
 			-- Not scheduled, requested sooner than currently scheduled, or forced replacement
 			tickTasks[tkey].when = timeTick
@@ -796,7 +798,8 @@ local function scheduleTick( tinfo, timeTick, flags )
 		assert(tinfo.func ~= nil) -- required for new task
 		tickTasks[tkey] = { id=tostring(tinfo.id), owner=tinfo.owner,
 			when=timeTick, func=tinfo.func, args=tinfo.args or {},
-			info=tinfo.info or "" }
+			info=tinfo.info or "", autoclose=flags.autoclose or false,
+			onerr=flags.onerr or false }
 		D("scheduleTick() new task %1 at %2", tinfo, timeTick)
 	end
 	if timeTick == nil then return end -- no next tick for task
@@ -970,6 +973,7 @@ local function sensor_runOnce( tdev )
 	initVar( "MaxChangeRate", "", tdev, RSSID )
 	initVar( "UseReactorScenes", "", tdev, RSSID )
 	initVar( "FailOnTrouble", "", tdev, RSSID )
+	initVar( "RunBackgroundActivities", "", tdev, RSSID )
 	initVar( "WatchResponseHoldOff", "", tdev, RSSID )
 	initVar( "LogEventsToFile", "", tdev, RSSID )
 	initVar( "EventLogMaxKB", "", tdev, RSSID )
@@ -1643,12 +1647,13 @@ local function stopScene( ctx, taskid, tdev, scene )
 		if ( ctx == nil or ctx == d.context ) and ( taskid == nil or taskid == tid ) and ( scene == nil or d.scene == scene) then
 			D("stopScene() stopping scene task %1", tid)
 			if d.context ~= tdev then
-				addEvent{ dev=tdev, msg="Stopping activity %(scname)q on %(ctxdev)s",
+				addEvent{ dev=tdev, msg="Stopping running activity %(scname)q on %(ctxdev)s",
 					scname=d.scene, d.context }
-				addEvent{ dev=d.context, msg="Stopping activity %(scname)q from %(tdev)s",
+				addEvent{ dev=d.context, msg="Stopping running activity %(scname)q from %(tdev)s",
 					scname=d.scene, tdev=tdev }
 			else
-				addEvent{ dev=tdev, msg="Stopping activity %(scname)q", scname=d.scene }
+				addEvent{ dev=tdev, msg="Stopping running activity %(scname)q at %(group)s/%(step)s", scname=d.scene,
+					group=d.currgroup, step=d.currstep }
 			end
 			clearTask( tid )
 			sceneState[tid] = nil
@@ -2966,7 +2971,8 @@ local function execSceneGroups( tdev, taskid, scd )
 			msg="Deferring scene execution, system not ready (%(sceneName)s:%(group)s:%(step)s)",
 			event="runscene", scene=sst.scene, sceneName=(scd or {}).name or sst.scene,
 			group=sst.currgroup, step=sst.currstep }
-		scheduleDelay( { id=sst.taskid, owner=sst.owner, func=execSceneGroups, args={ scd } }, 5 )
+		scheduleDelay( { id=sst.taskid, owner=sst.owner, func=execSceneGroups, args={ scd } }, 5,
+			{ onerr=function(owner, tid, err) stopScene(nil, tid, owner) end } )
 		return taskid
 	end
 
@@ -3292,7 +3298,8 @@ local function execSceneGroups( tdev, taskid, scd )
 				D("execSceneGroups() taking a break from scene %1 group %2 at step %3; last exec %4s >= limit",
 					scd.name or scd.id, sst.currgroup, sst.currstep, os.time()-execBegin)
 				luup.variable_set( MYSID, "runscene", json.encode(sceneState), pluginDevice )
-				scheduleDelay( { id=sst.taskid, owner=sst.owner, func=execSceneGroups, args={ scd } }, 0 )
+				scheduleDelay( { id=sst.taskid, owner=sst.owner, func=execSceneGroups, args={ scd } }, 0,
+					{ onerr=function(owner, tid, err) stopScene(nil, tid, owner) end } )
 				return taskid
 			end
 
@@ -3339,8 +3346,9 @@ local function execScene( scd, tdev, options )
 
 	-- And here ve go...
 	addEvent{ dev=tdev,
-		msg="Launching scene/activity %(sceneName)q",
-		event="startscene", scene=scd.id, sceneName=scd.name or scd.id}
+		msg="Launching scene/activity %(sceneName)q%(opt)s",
+		event="startscene", scene=scd.id, sceneName=scd.name or scd.id,
+		opt=options.background and " in background" or ""}
 
 	-- If there's (Luup) scene lua, try to run it.
 	if ( scd.lua or "" ) ~= "" then
@@ -3400,8 +3408,15 @@ local function execScene( scd, tdev, options )
 	}
 	luup.variable_set( MYSID, "runscene", json.encode(sceneState), pluginDevice )
 
+	-- Start in foreground (default) or background with option.
 	-- execSceneGroups returns the taskid if delayed groups are pending, otherwise nil
-	return execSceneGroups( tdev, taskid, scd )
+	if options.background then
+		scheduleDelay( { id=taskid, owner=tdev, func=execSceneGroups, args={ scd } }, -- tdev always first arg
+			tonumber(options.background) or 0, { onerr=function(owner, tid, err) stopScene(nil, tid, owner) end } )
+		return taskid
+	else
+		return execSceneGroups( tdev, taskid, scd )
+	end
 end
 
 -- Continue running scenes on restart.
@@ -3420,7 +3435,8 @@ local function resumeScenes()
 				data.owner)
 			addEvent{ dev=data.owner, msg="Resuming run after reload (%(scene)s:%(group)s:%(step)s)",
 				event="runscene", scene=data.scene, group=data.currgroup, step=data.currstep }
-			scheduleDelay( { id=data.taskid, owner=data.owner, func=execSceneGroups, args={} }, 1 )
+			scheduleDelay( { id=data.taskid, owner=data.owner, func=execSceneGroups, args={} }, 1,
+				{ onerr=function(owner, tid, err) stopScene(nil, tid, owner) end } )
 		else
 			D("resumeScenes() skipping resume of %1 for %2; RS no longer exists",
 				data.scene, data.owner)
@@ -3479,8 +3495,14 @@ local function trip( state, tdev )
 			if not isSceneEmpty( scd ) then
 				-- Note we only stop trip actions if there are untrip actions.
 				addEvent{ dev=tdev, msg="Launching root.false activity (legacy mode)" }
-				stopScene( tdev, nil, tdev, 'root.true' ) -- stop contra-activity
-				execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } )
+				local st,err = pcall( stopScene, tdev, nil, tdev, 'root.true' )
+				if not st then
+					addEvent{ dev=tdev,msg="Failed to stop legacy contra-activity root.true: %(err)s", err=err }
+				end
+				st, err = pcall( execScene, scd, tdev, { contextDevice=tdev, stopPriorScenes=false } )
+				if not st then
+					addEvent{ dev=tdev, msg="Failed to run legacy root.false: %(err)s", err=err }
+				end
 			end
 		end
 	else
@@ -3492,8 +3514,14 @@ local function trip( state, tdev )
 			if not isSceneEmpty( scd ) then
 				-- Note we only stop untrip actions if there are trip actions.
 				addEvent{ dev=tdev, msg="Launching root.true activity (legacy mode)" }
-				stopScene( tdev, nil, tdev, 'root.false' ) -- stop contra-activity
-				execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } )
+				local st,err = pcall( stopScene, tdev, nil, tdev, 'root.false' )
+				if not st then
+					addEvent{ dev=tdev,msg="Failed to stop legacy contra-activity root.false: %(err)s", err=err }
+				end
+				st, err = pcall( execScene, scd, tdev, { contextDevice=tdev, stopPriorScenes=false } )
+				if not st then
+					addEvent{ dev=tdev, msg="Failed to run legacy root.true: %(err)s", err=err }
+				end
 			end
 		end
 	end
@@ -4700,6 +4728,7 @@ local function processSensorUpdate( tdev, sst )
 		-- in which case it's handled by trip() below.
 		D("processSensorUpdate() checking groups for state changes")
 		local gs
+		local bg = getVarBool( "RunBackgroundActivities", true, tdev, RSSID )
 		for grp in conditionGroups( cdata.conditions.root ) do
 			D("processSensorUpdate() checking group %1 for state change", grp.id)
 			gs = sst.condState[ grp.id ] or {}
@@ -4709,15 +4738,26 @@ local function processSensorUpdate( tdev, sst )
 				D("processSensorUpdate() group %1 <%2> state changed to %3, looking for activity %4",
 					grp.name or grp.id, grp.id, gs.evalstate, activity)
 				local scd = getSceneData( activity, tdev )
-				if not isSceneEmpty( scd ) then
+				if not scd then
+					E("%1 (%2) failed to find scene data for %3", luup.devices[tdev].description, tdev, activity )
+					addEvent{ dev=tdev, msg="Failed to find scene data for %(activity)q", activity=activity }
+				elseif not isSceneEmpty( scd ) then
 					-- Note we only stop contra-actions if we have actions to perform.
 					D("processSensorUpdate() running %1 activities", activity)
 					addEvent{ dev=tdev, msg="Preparing " .. tostring(grp.name or grp.id) ..
 						( gs.evalstate and ".true" or ".false" ) .. " (%(scid)s) activity",
 						activity=activity, scid=grp.id..(gs.evalstate and ".true" or ".false") }
 					local contra = grp.id .. ( gs.evalstate and ".false" or ".true" )
-					stopScene( tdev, nil, tdev, contra )
-					execScene( scd, tdev, { contextDevice=tdev, stopPriorScenes=false } )
+					local st, err = pcall( stopScene, tdev, nil, tdev, contra )
+					if not st then
+						addEvent{ dev=tdev, msg="Failed to stop %(scene)q: %(err)s", scene=contra, err=err }
+						E("%1 (%2) failed to stop/preempt %3: %4", luup.devices[tdev].description, tdev, contra, err)
+					end
+					st, err = pcall( execScene, scd, tdev, { contextDevice=tdev, stopPriorScenes=false, background=bg } )
+					if not st then
+						E("%1 (%2) failed to run %3: %4", luup.devices[tdev].description, tdev, activity, err)
+						addEvent{ dev=tdev, msg="Failed to run %(scene)q: %(err)s", scene=activity, err=err }
+					end
 				end
 			end
 			-- Update GroupState state variables here, after cstate is written.
@@ -6284,12 +6324,17 @@ function tick(p)
 				v.lasterr = er
 				T({level=1,msg="%1 (#%2) tick failed: %3"},
 					(luup.devices[v.owner] or {}).description, v.owner, er)
+				return er
 			end
 		)
 		v.lastrun = now
 		D("tick() return %2 from task %1, err=%3", v.id, success, err)
 		if not success then
 			addEvent{ dev=v.owner, event="error", message="tick failed", reason=err }
+			if v.onerr then
+				D("tick() calling error handler for task %1", v.id )
+				pcall( v.onerr, v.owner, v.id, err )
+			end
 		else
 			D("tick() task %1 next run %2", v.id, v.when)
 		end
@@ -6297,12 +6342,23 @@ function tick(p)
 
 	-- Things change while we work. Take another pass to find next task.
 	local nextTick = nil
+	local del = {}
 	for t,v in pairs(tickTasks) do
-		if t ~= "_plugin" and v.when then
-			if not nextTick or v.when < nextTick then
-				nextTick = v.when
+		if t ~= "_plugin" then
+			if v.when then
+				if not nextTick or v.when < nextTick then
+					nextTick = v.when
+				end
+			elseif v.autoclose then
+				-- If task is not rescheduled and autoclose, mark for removal.
+				table.insert( del, t )
 			end
 		end
+	end
+	for k,t in ipairs(del) do
+		tickTasks[t] = nil -- or call clearTask()?
+		D("tick() auto-closed task %1", t )
+		addEvent{ dev=v.owner, msg="auto-closed task %(taskid)s", taskid=t }
 	end
 
 	-- Figure out next master tick, or don't resched if no tasks waiting.
@@ -6483,7 +6539,7 @@ local function getReactorScene( t, s, tdev, runscenes, cf )
 					resp = resp .. pfx .. "Run Lua:" .. EOL
 					resp = resp .. getLuaSummary( act.lua, act.encoded_lua, pfx .. "%6d: %s" )
 				elseif act.type == "runscene" then
-					resp = resp .. pfx .. "Run scene " .. tostring(act.scene) .. " " .. ((luup.scenes[act.scene] or {}).description or (act.sceneName or "").."?")
+					resp = resp .. pfx .. "Run scene " .. tostring(act.scene) .. " " .. ((luup.scenes[act.scene] or {}).description or ((act.sceneName or "").."?"))
 					resp = resp .. ( ( ( act.usevera or 0 ) ~= 0 ) and " (via luup)" or " (via int exec)" )
 					resp = resp .. EOL
 					if not runscenes[tostring(act.scene)] then
@@ -7011,7 +7067,7 @@ SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 									local dd = split( kk, '/' )
 									r = r .. string.format("        Device #%s %s service %s variable %s%s",
 										dd[1] or "nil",
-										( luup.devices[tonumber(dd[1]) or -1] or {} ).description or "(deleted/unknown",
+										( luup.devices[tonumber(dd[1]) or -1] or {} ).description or "(deleted/unknown)",
 										dd[2] or "nil", dd[3] or nil,
 										EOL )
 								end, key )
@@ -7041,7 +7097,7 @@ SO YOUR DILIGENCE REALLY HELPS ME WORK AS QUICKLY AND EFFICIENTLY AS POSSIBLE.
 			for _,v in ipairs( { "UseReactorScenes", "LogEventsToFile", "EventLogMaxKB", "Retrigger",
 				"AutoUntrip", "MaxUpdateRate", "MaxChangeRate", "FailOnTrouble", "ContinuousTimer",
 				"ForceGeofenceMode", "StateCacheExpiry", "SuppressLuupRestartUpdate",
-				"ActivityCheckpoint", "ActivityMaxExecTime", "WatchResponseHoldOff",
+				"ActivityCheckpoint", "ActivityMaxExecTime", "RunBackgroundActivities", "WatchResponseHoldOff",
 				"UseLegacyTripBehavior", "SSLProtocol", "SSLVerify", "SSLOptions",
 				"RequestActionResponseLimit", "RequestActionTimeout", "RequestActionUseCurl",
 				"RequestActionCurlOptions", "RequestActionFollowRedirects", "RequestActionAcceptStatus",
